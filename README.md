@@ -128,3 +128,5 @@ Executa testes no container via ambiente dev:
 ```bash
 ./executar_testes_docker.sh
 ```
+
+O script executa cobertura com `coverage` e exige mínimo de `80%`.

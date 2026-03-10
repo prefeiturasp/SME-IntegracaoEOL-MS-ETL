@@ -24,6 +24,7 @@ dev = [
   "black>=24.8,<25",
   "ruff>=0.6,<1",
   "mypy>=1.11,<2",
+  "coverage>=7.6,<8",
 ]
 
 [tool.setuptools]
