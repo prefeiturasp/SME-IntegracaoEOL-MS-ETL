@@ -1,0 +1,21 @@
+"""Serializers DRF para controle de auditoria."""
+
+from rest_framework import serializers
+
+from apps.controle_auditoria.models import EtlCheckpointDominio, EtlExecucao
+
+
+class EtlCheckpointDominioSerializer(serializers.ModelSerializer):
+    """Serializa checkpoint por dominio."""
+
+    class Meta:
+        model = EtlCheckpointDominio
+        fields = "__all__"
+
+
+class EtlExecucaoSerializer(serializers.ModelSerializer):
+    """Serializa execucoes ETL."""
+
+    class Meta:
+        model = EtlExecucao
+        fields = "__all__"
