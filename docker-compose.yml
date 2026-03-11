@@ -1,0 +1,62 @@
+services:
+  keydb:
+    image: eqalpha/keydb:latest
+    container_name: sme_sgp_ms_etl_keydb
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "keydb-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  etl:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: sme_sgp_ms_etl_etl
+    env_file:
+      - .env
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings
+      POSTGRES_HOST: ${POSTGRES_HOST:-host.docker.internal}
+      URL_KEYDB: redis://keydb:6379/0
+      EOL_DB: ${EOL_DB:-}
+      NIVEL_LOG: ${NIVEL_LOG:-INFO}
+    volumes:
+      - .:/app
+    command: >
+      sh -c "python -m watchdog.watchmedo auto-restart
+      --directory=/app/apps
+      --directory=/app/config
+      --pattern='*.py'
+      --recursive
+      --
+      celery -A apps.controle_auditoria.libs.celery_app:aplicacao_celery
+      worker --loglevel=INFO"
+    restart: unless-stopped
+    depends_on:
+      keydb:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: sme_sgp_ms_etl_web
+    env_file:
+      - .env
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings
+      POSTGRES_HOST: ${POSTGRES_HOST:-host.docker.internal}
+      URL_KEYDB: redis://keydb:6379/0
+      EOL_DB: ${EOL_DB:-}
+    volumes:
+      - .:/app
+    command: ["python", "manage.py", "runserver", "0.0.0.0:8000"]
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+    depends_on:
+      keydb:
+        condition: service_healthy

@@ -1,0 +1,91 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: sme_sgp_ms_etl_postgres
+    env_file:
+      - .env
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_etl_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  keydb:
+    image: eqalpha/keydb:latest
+    container_name: sme_sgp_ms_etl_keydb
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "keydb-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  etl:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: sme_sgp_ms_etl_etl
+    env_file:
+      - .env
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings
+      POSTGRES_HOST: postgres
+      URL_KEYDB: redis://keydb:6379/0
+      EOL_DB: ${EOL_DB:-}
+      NIVEL_LOG: ${NIVEL_LOG:-INFO}
+    volumes:
+      - .:/app
+    command: >
+      sh -c "python -m watchdog.watchmedo auto-restart
+      --directory=/app/apps
+      --directory=/app/config
+      --pattern='*.py'
+      --recursive
+      --
+      celery -A apps.controle_auditoria.libs.celery_app:aplicacao_celery
+      worker --loglevel=INFO"
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keydb:
+        condition: service_healthy
+
+  web_debug:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: sme_sgp_ms_etl_web_debug
+    env_file:
+      - .env
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings
+      POSTGRES_HOST: postgres
+      URL_KEYDB: redis://keydb:6379/0
+      EOL_DB: ${EOL_DB:-}
+    volumes:
+      - .:/app
+    command: >
+      python -Xfrozen_modules=off -m debugpy --wait-for-client
+      --listen 0.0.0.0:5678 manage.py runserver 0.0.0.0:8000
+    ports:
+      - "8000:8000"
+      - "5678:5678"
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keydb:
+        condition: service_healthy
+
+volumes:
+  postgres_etl_data:
