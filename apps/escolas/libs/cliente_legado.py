@@ -10,6 +10,7 @@ class ClienteLegadoEscolas:
     """Acesso somente leitura a escolas no banco legado."""
 
     def __init__(self) -> None:
+        """Inicia o servico de consulta de escolas."""
         self._string_conexao = settings.EOL_DB
 
     def listar_por_offset(self, limite: int, offset: int) -> list[dict[str, Any]]:

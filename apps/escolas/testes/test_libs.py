@@ -14,7 +14,7 @@ class ClienteLegadoEscolasTestCase(TestCase):
 
     @override_settings(EOL_DB="DRIVER={Fake};SERVER=localhost;")
     @patch("apps.escolas.libs.cliente_legado.pyodbc.connect")
-    def test_deve_listar_por_offset(self, connect_mock) -> None:
+    def test_deve_listar_por_offset(self, connect_mock: MagicMock) -> None:
         """Converte linhas do cursor em lista de dicionários."""
         cursor = MagicMock()
         cursor.description = [("codigo_escola",), ("nome_escola",)]
@@ -43,7 +43,7 @@ class ServicoEscolasOffsetTestCase(TestCase):
     """Valida paginação e logs de execução do serviço."""
 
     @patch("apps.escolas.libs.servico_offset.ClienteLegadoEscolas")
-    def test_deve_parar_quando_lote_vazio(self, cliente_cls_mock) -> None:
+    def test_deve_parar_quando_lote_vazio(self, cliente_cls_mock: MagicMock) -> None:
         """Quando cliente retorna vazio, serviço finaliza sem logs."""
         cliente = MagicMock()
         cliente.listar_por_offset.return_value = []
@@ -56,7 +56,7 @@ class ServicoEscolasOffsetTestCase(TestCase):
         self.assertEqual(ConsultaEscolasLog.objects.count(), 0)
 
     @patch("apps.escolas.libs.servico_offset.ClienteLegadoEscolas")
-    def test_deve_ler_em_multiplas_paginas(self, cliente_cls_mock) -> None:
+    def test_deve_ler_em_multiplas_paginas(self, cliente_cls_mock: MagicMock) -> None:
         """Lê em blocos e cria log para cada bloco."""
         cliente = MagicMock()
         cliente.listar_por_offset.side_effect = [
@@ -75,7 +75,9 @@ class ServicoEscolasOffsetTestCase(TestCase):
         self.assertEqual(primeiro_log.limite, 100)
 
     @patch("apps.escolas.libs.servico_offset.ClienteLegadoEscolas")
-    def test_deve_parar_quando_lote_menor_que_limite(self, cliente_cls_mock) -> None:
+    def test_deve_parar_quando_lote_menor_que_limite(
+        self, cliente_cls_mock: MagicMock
+    ) -> None:
         """Interrompe quando retorna menos registros do que o limite."""
         cliente = MagicMock()
         cliente.listar_por_offset.return_value = [{"codigo_escola": "1"}] * 30

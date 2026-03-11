@@ -1,11 +1,10 @@
 """Testes dos endpoints e autenticacao da API de controle_auditoria."""
 
-from datetime import datetime
+from typing import Any
 from unittest.mock import patch
 from uuid import uuid4
 
 from django.test import TestCase, override_settings
-from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient
 
@@ -17,6 +16,7 @@ class ApiKeyAuthenticationTestCase(TestCase):
     """Valida autenticação por API key."""
 
     def setUp(self) -> None:
+        """Configura autenticação."""
         self.authentication = ApiKeyAuthentication()
 
     @override_settings(API_KEY="")
@@ -51,7 +51,10 @@ class ApiKeyAuthenticationTestCase(TestCase):
             (),
             {"headers": {"X-API-Key": "segredo"}},
         )()
-        usuario, _ = self.authentication.authenticate(request)
+        resultado = self.authentication.authenticate(request)
+        assert resultado is not None
+
+        usuario, _ = resultado
         self.assertTrue(usuario.is_authenticated)
 
 
@@ -60,6 +63,7 @@ class ViewsApiControleAuditoriaTestCase(TestCase):
     """Valida endpoints DRF de checkpoints, execuções e disparo."""
 
     def setUp(self) -> None:
+        """Configura client e headers de autenticação."""
         self.client = APIClient()
         self.headers = {"HTTP_X_API_KEY": "segredo"}
 
@@ -92,7 +96,7 @@ class ViewsApiControleAuditoriaTestCase(TestCase):
         self.assertEqual(len(resposta.json()), 1)
 
     @patch("apps.controle_auditoria.api.views.executar_dominio_task")
-    def test_deve_enfileirar_execucao_imediata(self, tarefa_mock) -> None:
+    def test_deve_enfileirar_execucao_imediata(self, tarefa_mock: Any) -> None:
         """POST sem data agenda em execução imediata (delay)."""
         tarefa_mock.delay.return_value = type("Result", (), {"id": "task-1"})()
         resposta = self.client.post(
@@ -111,7 +115,7 @@ class ViewsApiControleAuditoriaTestCase(TestCase):
         )
 
     @patch("apps.controle_auditoria.api.views.executar_dominio_task")
-    def test_deve_agendar_execucao_com_data_hora(self, tarefa_mock) -> None:
+    def test_deve_agendar_execucao_com_data_hora(self, tarefa_mock: Any) -> None:
         """POST com executar_em usa apply_async com eta."""
         tarefa_mock.apply_async.return_value = type(
             "Result",
@@ -134,7 +138,7 @@ class ViewsApiControleAuditoriaTestCase(TestCase):
         self.assertTrue(tarefa_mock.apply_async.called)
 
     @patch("apps.controle_auditoria.api.views.executar_dominio_task")
-    def test_deve_rejeitar_data_hora_invalida(self, tarefa_mock) -> None:
+    def test_deve_rejeitar_data_hora_invalida(self, tarefa_mock: Any) -> None:
         """Retorna 400 quando executar_em está inválido."""
         resposta = self.client.post(
             "/api/v1/dominios/escola/executar/",

@@ -1,7 +1,7 @@
 """Configuracoes Django do SME-SGP-MS-ETL."""
 
-from pathlib import Path
 import os
+from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -11,8 +11,7 @@ SECRET_KEY = os.getenv(
 )
 DEBUG = os.getenv("DJANGO_DEBUG", "1") == "1"
 ALLOWED_HOSTS = [
-    host.strip()
-    for host in os.getenv("DJANGO_ALLOWED_HOSTS", "*").split(",")
+    host.strip() for host in os.getenv("DJANGO_ALLOWED_HOSTS", "*").split(",")
 ]
 
 INSTALLED_APPS = [
@@ -69,7 +68,7 @@ DATABASES = {
     }
 }
 
-AUTH_PASSWORD_VALIDATORS = []
+AUTH_PASSWORD_VALIDATORS: list[dict[str, object]] = []
 
 LANGUAGE_CODE = "pt-br"
 TIME_ZONE = "America/Sao_Paulo"

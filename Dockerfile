@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -18,8 +18,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY pyproject.toml README.md manage.py /app/
 COPY config /app/config
 COPY apps /app/apps
+COPY requirements /app/requirements
 
 RUN pip install --upgrade pip \
-    && pip install -e .
-
-CMD ["python", "manage.py", "executar_dominios_loop", "--continuar"]
+    && pip install -r /app/requirements/base.txt

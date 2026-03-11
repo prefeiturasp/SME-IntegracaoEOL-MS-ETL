@@ -1,7 +1,7 @@
 """Testes dos commands do app escolas."""
 
-from uuid import uuid4
 from unittest.mock import MagicMock, patch
+from uuid import uuid4
 
 from django.core.management import call_command
 from django.core.management.base import CommandError
@@ -11,15 +11,17 @@ from django.test import TestCase
 class ListarEscolasOffsetCommandTestCase(TestCase):
     """Valida comportamento do command listar_escolas_offset."""
 
-    @patch("apps.escolas.management.commands.listar_escolas_offset.ServicoEscolasOffset")
+    @patch(
+        "apps.escolas.management.commands.listar_escolas_offset.ServicoEscolasOffset"
+    )
     @patch(
         "apps.escolas.management.commands."
         "listar_escolas_offset.RepositorioAuditoriaPostgres"
     )
     def test_deve_processar_volume_e_atualizar_checkpoint(
         self,
-        repositorio_cls_mock,
-        servico_cls_mock,
+        repositorio_cls_mock: MagicMock,
+        servico_cls_mock: MagicMock,
     ) -> None:
         """Executa fluxo de sucesso e valida chamadas principais."""
         id_execucao = uuid4()
@@ -30,9 +32,12 @@ class ListarEscolasOffsetCommandTestCase(TestCase):
         repositorio_cls_mock.return_value = repositorio
 
         servico = MagicMock()
-        servico.listar_volume.return_value = [
-            {"codigo_escola": "000001"},
-            {"codigo_escola": "000002"},
+        servico.TAMANHO_PAGINA_PADRAO = 100
+        servico.listar_pagina.side_effect = [
+            [
+                {"codigo_escola": "000001"},
+                {"codigo_escola": "000002"},
+            ]
         ]
         servico_cls_mock.return_value = servico
 
@@ -44,12 +49,10 @@ class ListarEscolasOffsetCommandTestCase(TestCase):
             "0",
         )
 
-        servico.listar_volume.assert_called_once_with(
-            volume=2,
-            offset_inicial=0,
-        )
+        servico.listar_pagina.assert_called_once_with(limite=2, offset=0)
         repositorio.registrar_tabela_lida.assert_called_once()
-        repositorio.atualizar_checkpoint_dominio.assert_called_once()
+        self.assertEqual(repositorio.atualizar_checkpoint_dominio.call_count, 2)
+        repositorio.registrar_tabela_escrita.assert_called_once()
         repositorio.finalizar_execucao.assert_called_once_with(
             id_execucao=id_execucao,
             situacao="sucesso",
@@ -70,10 +73,11 @@ class TestarContinuidadeEscolasCommandTestCase(TestCase):
     """Valida command de continuidade do dominio escolas."""
 
     @patch(
-        "apps.escolas.management.commands."
-        "testar_continuidade_escolas.call_command"
+        "apps.escolas.management.commands." "testar_continuidade_escolas.call_command"
     )
-    def test_deve_chamar_listagem_duas_vezes(self, call_command_mock) -> None:
+    def test_deve_chamar_listagem_duas_vezes(
+        self, call_command_mock: MagicMock
+    ) -> None:
         """Executa command e valida chamadas sequenciais."""
         call_command("testar_continuidade_escolas", "--volume", "25")
 

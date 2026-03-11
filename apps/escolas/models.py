@@ -13,9 +13,12 @@ class ConsultaEscolasLog(models.Model):
     executado_em = models.DateTimeField(auto_now_add=True)
 
     class Meta:
+        """Configuração de metadados do modelo."""
+
         db_table = "escolas_consulta_log"
         verbose_name = "consulta de escolas"
         verbose_name_plural = "consultas de escolas"
 
     def __str__(self) -> str:
+        """Representação do modelo como string."""
         return f"offset={self.offset_inicial} limite={self.limite}"

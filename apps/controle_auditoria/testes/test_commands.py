@@ -1,6 +1,6 @@
 """Testes dos commands do app controle_auditoria."""
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from django.core.management import call_command
 from django.core.management.base import CommandError
@@ -11,7 +11,7 @@ class ExecutarDominioCommandTestCase(TestCase):
     """Valida o roteamento do command executar_dominio."""
 
     @patch("apps.controle_auditoria.management.commands.executar_dominio.call_command")
-    def test_deve_executar_dominio_escola(self, call_command_mock) -> None:
+    def test_deve_executar_dominio_escola(self, call_command_mock: MagicMock) -> None:
         """Encaminha para listar_escolas_offset com argumentos."""
         call_command(
             "executar_dominio",
@@ -38,7 +38,7 @@ class ExecutarDominioCommandTestCase(TestCase):
     )
     def test_deve_executar_dominio_sinc_rec_db(
         self,
-        validacao_mock,
+        validacao_mock: MagicMock,
     ) -> None:
         """Executa validacao do dominio de controle."""
         call_command("executar_dominio", "--dominio", "sinc_rec_db")
@@ -48,3 +48,209 @@ class ExecutarDominioCommandTestCase(TestCase):
         """Retorna erro quando dominio nao e reconhecido."""
         with self.assertRaises(CommandError):
             call_command("executar_dominio", "--dominio", "invalido")
+
+
+class AgendarDominioCommandTestCase(TestCase):
+    """Valida command de agendamento/enfileiramento no Celery."""
+
+    @patch(
+        "apps.controle_auditoria.management.commands.agendar_dominio.executar_dominio_task"
+    )
+    def test_deve_enfileirar_task_imediata(self, task_mock: MagicMock) -> None:
+        """Sem data/hora, usa delay diretamente."""
+        resultado = MagicMock()
+        resultado.id = "task-imediata-1"
+        task_mock.delay.return_value = resultado
+
+        call_command(
+            "agendar_dominio",
+            "--dominio",
+            "escola",
+            "--volume",
+            "120",
+            "--offset",
+            "10",
+            "--continuar",
+        )
+
+        task_mock.delay.assert_called_once_with(
+            dominio="escola",
+            volume=120,
+            offset=10,
+            continuar=True,
+        )
+
+    @patch(
+        "apps.controle_auditoria.management.commands.agendar_dominio.executar_dominio_task"
+    )
+    def test_deve_agendar_task_com_data_hora(self, task_mock: MagicMock) -> None:
+        """Com executar-em, usa apply_async com eta."""
+        resultado = MagicMock()
+        resultado.id = "task-agendada-1"
+        task_mock.apply_async.return_value = resultado
+
+        call_command(
+            "agendar_dominio",
+            "--dominio",
+            "escola",
+            "--executar-em",
+            "2026-03-10T23:00:00-03:00",
+        )
+
+        self.assertTrue(task_mock.apply_async.called)
+        kwargs_apply = task_mock.apply_async.call_args.kwargs
+        self.assertEqual(
+            kwargs_apply["kwargs"],
+            {
+                "dominio": "escola",
+                "volume": 100,
+                "offset": 0,
+                "continuar": False,
+            },
+        )
+        self.assertIn("eta", kwargs_apply)
+
+    def test_deve_falhar_quando_data_hora_invalida(self) -> None:
+        """Data inválida retorna erro de comando."""
+        with self.assertRaises(CommandError):
+            call_command(
+                "agendar_dominio",
+                "--dominio",
+                "escola",
+                "--executar-em",
+                "data-invalida",
+            )
+
+
+class ExecutarDominiosCommandTestCase(TestCase):
+    """Valida command que executa o conjunto de domínios ativos."""
+
+    @patch("apps.controle_auditoria.management.commands.executar_dominios.call_command")
+    def test_deve_executar_dominios_sem_continuar(
+        self, call_command_mock: MagicMock
+    ) -> None:
+        """Executa sinc_rec_db e escola sem flag continuar."""
+        call_command("executar_dominios", "--volume", "200")
+
+        self.assertEqual(call_command_mock.call_count, 2)
+        self.assertEqual(
+            call_command_mock.call_args_list[0].args,
+            ("executar_dominio", "--dominio", "sinc_rec_db"),
+        )
+        self.assertEqual(
+            call_command_mock.call_args_list[1].args,
+            (
+                "executar_dominio",
+                "--dominio",
+                "escola",
+                "--volume",
+                "200",
+            ),
+        )
+
+    @patch("apps.controle_auditoria.management.commands.executar_dominios.call_command")
+    def test_deve_executar_dominios_com_continuar(
+        self, call_command_mock: MagicMock
+    ) -> None:
+        """Inclui flag continuar no domínio escola."""
+        call_command("executar_dominios", "--volume", "100", "--continuar")
+
+        self.assertEqual(
+            call_command_mock.call_args_list[1].args,
+            (
+                "executar_dominio",
+                "--dominio",
+                "escola",
+                "--volume",
+                "100",
+                "--continuar",
+            ),
+        )
+
+
+class ExecutarDominiosLoopCommandTestCase(TestCase):
+    """Valida command de loop contínuo com checkpoint de progresso."""
+
+    def test_deve_falhar_com_limite_linhas_invalido(self) -> None:
+        """Rejeita limite-linhas menor ou igual a zero."""
+        with self.assertRaises(CommandError):
+            call_command("executar_dominios_loop", "--limite-linhas", "0")
+
+    @patch(
+        "apps.controle_auditoria.management.commands.executar_dominios_loop.time.sleep"
+    )
+    @patch(
+        "apps.controle_auditoria.management.commands.executar_dominios_loop.call_command"
+    )
+    @patch(
+        "apps.controle_auditoria.management.commands."
+        "executar_dominios_loop.RepositorioAuditoriaPostgres"
+    )
+    def test_deve_parar_quando_sem_avanco(
+        self,
+        repositorio_cls_mock: MagicMock,
+        call_command_mock: MagicMock,
+        sleep_mock: MagicMock,
+    ) -> None:
+        """Se token não avança, encerra loop sem aguardar."""
+        repositorio = MagicMock()
+        repositorio.obter_checkpoint_dominio.side_effect = [
+            {"token_parada": "100"},
+            {"token_parada": "100"},
+        ]
+        repositorio_cls_mock.return_value = repositorio
+
+        call_command("executar_dominios_loop", "--volume", "100", "--intervalo", "1")
+
+        call_command_mock.assert_called_once_with(
+            "executar_dominios", "--volume", "100"
+        )
+        sleep_mock.assert_not_called()
+
+    @patch(
+        "apps.controle_auditoria.management.commands.executar_dominios_loop.time.sleep"
+    )
+    @patch(
+        "apps.controle_auditoria.management.commands.executar_dominios_loop.call_command"
+    )
+    @patch(
+        "apps.controle_auditoria.management.commands."
+        "executar_dominios_loop.RepositorioAuditoriaPostgres"
+    )
+    def test_deve_respeitar_limite_linhas_com_paginacao(
+        self,
+        repositorio_cls_mock: MagicMock,
+        call_command_mock: MagicMock,
+        sleep_mock: MagicMock,
+    ) -> None:
+        """Calcula volume da execução com base no restante do limite."""
+        repositorio = MagicMock()
+        repositorio.obter_checkpoint_dominio.side_effect = [
+            {"token_parada": "0"},
+            {"token_parada": "100"},
+            {"token_parada": "100"},
+            {"token_parada": "150"},
+        ]
+        repositorio_cls_mock.return_value = repositorio
+
+        call_command(
+            "executar_dominios_loop",
+            "--volume",
+            "100",
+            "--intervalo",
+            "1",
+            "--limite-linhas",
+            "150",
+            "--continuar",
+        )
+
+        self.assertEqual(call_command_mock.call_count, 2)
+        self.assertEqual(
+            call_command_mock.call_args_list[0].args,
+            ("executar_dominios", "--volume", "100", "--continuar"),
+        )
+        self.assertEqual(
+            call_command_mock.call_args_list[1].args,
+            ("executar_dominios", "--volume", "50", "--continuar"),
+        )
+        sleep_mock.assert_called_once_with(1)

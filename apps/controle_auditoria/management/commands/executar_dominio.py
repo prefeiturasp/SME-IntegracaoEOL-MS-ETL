@@ -1,5 +1,7 @@
 """Comando Django para executar dominio ETL por app."""
 
+from typing import Any
+
 from django.core.management import call_command
 from django.core.management.base import BaseCommand, CommandError
 
@@ -13,13 +15,15 @@ class Command(BaseCommand):
 
     help = "Executa dominio ETL: sinc_rec_db, escola"
 
-    def add_arguments(self, parser):
+    def add_arguments(self, parser: Any) -> None:
+        """Adiciona argumentos ao comando."""
         parser.add_argument("--dominio", required=True, type=str)
         parser.add_argument("--volume", type=int, default=100)
         parser.add_argument("--offset", type=int, default=0)
         parser.add_argument("--continuar", action="store_true")
 
-    def handle(self, *args, **options):
+    def handle(self, *args: Any, **options: Any) -> None:
+        """Executa o ETL do dominio especificado."""
         dominio = options["dominio"]
         volume = options["volume"]
         offset = options["offset"]

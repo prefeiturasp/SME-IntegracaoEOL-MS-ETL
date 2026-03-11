@@ -1,5 +1,7 @@
 """Comando para registrar execução de domínio na fila Celery."""
 
+from typing import Any
+
 from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
@@ -10,18 +12,18 @@ from apps.controle_auditoria.libs.tasks import executar_dominio_task
 class Command(BaseCommand):
     """Agenda ou enfileira execução de domínio ETL."""
 
-    help = (
-        "Registra execução na fila Celery (imediata ou com data/hora futura)"
-    )
+    help = "Registra execução na fila Celery (imediata ou com data/hora futura)"
 
-    def add_arguments(self, parser):
+    def add_arguments(self, parser: Any) -> None:
+        """Adiciona argumentos ao comando."""
         parser.add_argument("--dominio", required=True, type=str)
         parser.add_argument("--volume", type=int, default=100)
         parser.add_argument("--offset", type=int, default=0)
         parser.add_argument("--continuar", action="store_true")
         parser.add_argument("--executar-em", type=str, default=None)
 
-    def handle(self, *args, **options):
+    def handle(self, *args: Any, **options: Any) -> None:
+        """Executa o agendador ETL para todos o dominios."""
         dominio = options["dominio"]
         volume = options["volume"]
         offset = options["offset"]

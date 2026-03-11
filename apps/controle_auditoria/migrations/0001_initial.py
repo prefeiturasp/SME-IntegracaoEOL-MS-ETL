@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
     initial = True
 
-    dependencies = []
+    dependencies: list[tuple[str, str]] = []
 
     operations = [
         migrations.CreateModel(
@@ -42,7 +42,10 @@ class Migration(migrations.Migration):
                 ("id_execucao", models.UUIDField()),
                 ("tabela_destino", models.CharField(max_length=200)),
                 ("linhas_escritas", models.IntegerField(default=0)),
-                ("modo_escrita", models.CharField(default="upsert", max_length=30)),
+                (
+                    "modo_escrita",
+                    models.CharField(default="upsert", max_length=30),
+                ),
                 ("escrito_em", models.DateTimeField(auto_now_add=True)),
             ],
             options={"db_table": "etl_execucao_tabela_escrita"},

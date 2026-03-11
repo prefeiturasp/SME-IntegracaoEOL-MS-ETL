@@ -1,11 +1,11 @@
 """Autenticacao por API key para endpoints DRF."""
 
-from dataclasses import dataclass
 import secrets
+from dataclasses import dataclass
 
 from django.conf import settings
-from rest_framework import authentication
-from rest_framework import exceptions
+from rest_framework import authentication, exceptions
+from rest_framework.request import Request
 
 
 @dataclass
@@ -22,7 +22,8 @@ class ApiKeyAuthentication(authentication.BaseAuthentication):
 
     keyword = "X-API-Key"
 
-    def authenticate(self, request):
+    def authenticate(self, request: Request) -> tuple[UsuarioApiKey, None] | None:
+        """Autentica request via header de API key."""
         chave_esperada = settings.API_KEY
         if not chave_esperada:
             raise exceptions.AuthenticationFailed("API key nao configurada")

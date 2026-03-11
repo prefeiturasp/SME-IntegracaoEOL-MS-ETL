@@ -16,6 +16,8 @@ class EtlExecucao(models.Model):
     criado_em = models.DateTimeField(auto_now_add=True)
 
     class Meta:
+        """Configuração de metadados do modelo."""
+
         db_table = "etl_execucao"
 
 
@@ -30,6 +32,8 @@ class EtlExecucaoTabelaLida(models.Model):
     lido_em = models.DateTimeField(auto_now_add=True)
 
     class Meta:
+        """Configuração de metadados do modelo."""
+
         db_table = "etl_execucao_tabela_lida"
 
 
@@ -44,6 +48,8 @@ class EtlExecucaoTabelaEscrita(models.Model):
     escrito_em = models.DateTimeField(auto_now_add=True)
 
     class Meta:
+        """Configuração de metadados do modelo."""
+
         db_table = "etl_execucao_tabela_escrita"
 
 
@@ -61,4 +67,6 @@ class EtlCheckpointDominio(models.Model):
     atualizado_em = models.DateTimeField(auto_now=True)
 
     class Meta:
+        """Configuração de metadados do modelo."""
+
         db_table = "etl_checkpoint_dominio"

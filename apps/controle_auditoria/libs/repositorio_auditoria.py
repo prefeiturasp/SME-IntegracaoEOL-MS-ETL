@@ -1,5 +1,6 @@
 """Repositorio de auditoria ETL baseado em ORM Django."""
 
+from typing import cast
 from uuid import UUID, uuid4
 
 from django.db import transaction
@@ -8,6 +9,7 @@ from django.utils import timezone
 from apps.controle_auditoria.models import (
     EtlCheckpointDominio,
     EtlExecucao,
+    EtlExecucaoTabelaEscrita,
     EtlExecucaoTabelaLida,
 )
 
@@ -54,18 +56,39 @@ class RepositorioAuditoriaPostgres:
             linhas_lidas=linhas_lidas,
         )
 
+    def registrar_tabela_escrita(
+        self,
+        id_execucao: UUID,
+        tabela_destino: str,
+        linhas_escritas: int,
+        modo_escrita: str = "upsert",
+    ) -> None:
+        """Registra metadados de escrita no log de execucao."""
+        EtlExecucaoTabelaEscrita.objects.create(
+            id_execucao=id_execucao,
+            tabela_destino=tabela_destino,
+            linhas_escritas=linhas_escritas,
+            modo_escrita=modo_escrita,
+        )
+
     def obter_checkpoint_dominio(self, dominio: str) -> dict[str, object] | None:
         """Retorna checkpoint atual do dominio."""
-        return EtlCheckpointDominio.objects.filter(dominio=dominio).values(
-            "dominio",
-            "ultimo_id_execucao",
-            "ultima_pagina",
-            "token_parada",
-            "indice_sincronizacao",
-            "ultima_situacao",
-            "ultimo_sucesso_em",
-            "atualizado_em",
-        ).first()
+        resultado = (
+            EtlCheckpointDominio.objects.filter(dominio=dominio)
+            .values(
+                "dominio",
+                "ultimo_id_execucao",
+                "ultima_pagina",
+                "token_parada",
+                "indice_sincronizacao",
+                "ultima_situacao",
+                "ultimo_sucesso_em",
+                "atualizado_em",
+            )
+            .first()
+        )
+
+        return cast(dict[str, object] | None, resultado)
 
     @transaction.atomic
     def atualizar_checkpoint_dominio(
@@ -79,7 +102,10 @@ class RepositorioAuditoriaPostgres:
         sucesso: bool,
     ) -> None:
         """Atualiza checkpoint do dominio com upsert transacional."""
-        checkpoint, criado = EtlCheckpointDominio.objects.select_for_update().get_or_create(
+        (
+            checkpoint,
+            criado,
+        ) = EtlCheckpointDominio.objects.select_for_update().get_or_create(
             dominio=dominio,
             defaults={
                 "ultimo_id_execucao": ultimo_id_execucao,

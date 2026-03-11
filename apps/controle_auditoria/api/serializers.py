@@ -9,6 +9,8 @@ class EtlCheckpointDominioSerializer(serializers.ModelSerializer):
     """Serializa checkpoint por dominio."""
 
     class Meta:
+        """Configuração de metadados do modelo."""
+
         model = EtlCheckpointDominio
         fields = "__all__"
 
@@ -17,5 +19,7 @@ class EtlExecucaoSerializer(serializers.ModelSerializer):
     """Serializa execucoes ETL."""
 
     class Meta:
+        """Configuração de metadados do modelo."""
+
         model = EtlExecucao
         fields = "__all__"

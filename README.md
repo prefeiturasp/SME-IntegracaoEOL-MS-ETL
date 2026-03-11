@@ -3,6 +3,10 @@
 Microsserviço ETL em Django com execução assíncrona via Celery, usando KeyDB
 como broker.
 
+## Versão de Python
+
+- Python alvo do projeto: `3.12`
+
 ## Regra de Execução
 
 - O ETL não executa sozinho na inicialização.
