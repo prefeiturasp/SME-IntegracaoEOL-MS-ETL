@@ -1,5 +1,6 @@
 """Views DRF para controle e auditoria de execuções ETL."""
 
+from django.utils.dateparse import parse_datetime
 from rest_framework import status
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -36,21 +37,35 @@ class ExecucoesView(APIView):
 
 
 class ExecutarDominioView(APIView):
-    """Endpoint para disparar execução manual de um domínio ETL."""
+    """Dispara execução de domínio ETL."""
 
-    def post(self, request: Request) -> Response:
-        """Executa um domínio ETL manualmente via task assíncrona."""
-        dominio: str | None = request.data.get("dominio")
+    def post(self, request: Request, dominio: str) -> Response:
+        """POST sem data agenda em execução imediata (delay)."""
+        volume = request.data.get("volume", 100)
+        offset = request.data.get("offset", 0)
+        continuar = request.data.get("continuar", False)
+        executar_em = request.data.get("executar_em")
 
-        if not dominio:
-            return Response(
-                {"erro": "Parametro 'dominio' é obrigatório."},
-                status=status.HTTP_400_BAD_REQUEST,
+        if executar_em:
+            eta = parse_datetime(executar_em)
+            if eta is None:
+                return Response({"erro": "data inválida"}, status=400)
+
+            resultado = executar_dominio_task.apply_async(
+                kwargs={
+                    "dominio": dominio,
+                    "volume": volume,
+                    "offset": offset,
+                    "continuar": continuar,
+                },
+                eta=eta,
+            )
+        else:
+            resultado = executar_dominio_task.delay(
+                dominio=dominio,
+                volume=volume,
+                offset=offset,
+                continuar=continuar,
             )
 
-        executar_dominio_task.delay(dominio)
-
-        return Response(
-            {"mensagem": f"Execução do domínio '{dominio}' iniciada."},
-            status=status.HTTP_202_ACCEPTED,
-        )
+        return Response({"task_id": resultado.id}, status=202)
