@@ -1,12 +1,16 @@
 """Comando para registrar execução de domínio na fila Celery."""
 
+import logging
 from typing import Any
 
 from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
+from kombu.exceptions import OperationalError
 
 from apps.controle_auditoria.libs.tasks import executar_dominio_task
+
+logger = logging.getLogger(__name__)
 
 
 class Command(BaseCommand):
@@ -46,10 +50,16 @@ class Command(BaseCommand):
                     data_hora,
                     timezone.get_current_timezone(),
                 )
-            resultado = executar_dominio_task.apply_async(
-                kwargs=kwargs_tarefa,
-                eta=data_hora,
-            )
+            try:
+                resultado = executar_dominio_task.apply_async(
+                    kwargs=kwargs_tarefa,
+                    eta=data_hora,
+                )
+            except OperationalError as erro:
+                logger.error(
+                    "Broker indisponível ao agendar domínio '%s': %s", dominio, erro
+                )
+                raise CommandError(f"Broker indisponível: {erro}") from erro
             self.stdout.write(
                 self.style.SUCCESS(
                     f"Task agendada: {resultado.id} para {data_hora.isoformat()}"
@@ -57,5 +67,11 @@ class Command(BaseCommand):
             )
             return
 
-        resultado = executar_dominio_task.delay(**kwargs_tarefa)
+        try:
+            resultado = executar_dominio_task.delay(**kwargs_tarefa)
+        except OperationalError as erro:
+            logger.error(
+                "Broker indisponível ao enfileirar domínio '%s': %s", dominio, erro
+            )
+            raise CommandError(f"Broker indisponível: {erro}") from erro
         self.stdout.write(self.style.SUCCESS(f"Task enfileirada: {resultado.id}"))
