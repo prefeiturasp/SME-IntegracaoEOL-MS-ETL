@@ -25,6 +25,7 @@ INSTALLED_APPS = [
     "drf_spectacular",
     "apps.controle_auditoria",
     "apps.escolas",
+    "apps.eol_connection",
 ]
 
 MIDDLEWARE = [

@@ -2,7 +2,7 @@
 
 from unittest.mock import MagicMock, patch
 
-from django.test import TestCase, override_settings
+from django.test import TestCase
 
 from apps.escolas.libs.cliente_legado import ClienteLegadoEscolas
 from apps.escolas.libs.servico_offset import ServicoEscolasOffset
@@ -12,9 +12,8 @@ from apps.escolas.models import ConsultaEscolasLog
 class ClienteLegadoEscolasTestCase(TestCase):
     """Valida cliente de leitura no banco legado."""
 
-    @override_settings(EOL_DB="DRIVER={Fake};SERVER=localhost;")
-    @patch("apps.escolas.libs.cliente_legado.pyodbc.connect")
-    def test_deve_listar_por_offset(self, connect_mock: MagicMock) -> None:
+    @patch("apps.escolas.libs.cliente_legado.EOLConnectionFactory")
+    def test_deve_listar_por_offset(self, factory_mock: MagicMock) -> None:
         """Converte linhas do cursor em lista de dicionários."""
         cursor = MagicMock()
         cursor.description = [("codigo_escola",), ("nome_escola",)]
@@ -25,7 +24,11 @@ class ClienteLegadoEscolasTestCase(TestCase):
 
         conexao = MagicMock()
         conexao.cursor.return_value = cursor
-        connect_mock.return_value.__enter__.return_value = conexao
+
+        factory = MagicMock()
+        factory.obter_conexao.return_value.__enter__.return_value = conexao
+
+        factory_mock.return_value = factory
 
         cliente = ClienteLegadoEscolas()
         resultado = cliente.listar_por_offset(limite=2, offset=0)
