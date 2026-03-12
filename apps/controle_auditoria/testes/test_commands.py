@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.test import TestCase
+from kombu.exceptions import OperationalError
 
 
 class ExecutarDominioCommandTestCase(TestCase):
@@ -119,6 +120,36 @@ class AgendarDominioCommandTestCase(TestCase):
                 "escola",
                 "--executar-em",
                 "data-invalida",
+            )
+
+    @patch(
+        "apps.controle_auditoria.management.commands.agendar_dominio.executar_dominio_task"
+    )
+    def test_falha_broker_delay_nao_derruba_processo(
+        self, task_mock: MagicMock
+    ) -> None:
+        """OperationalError no broker vira CommandError, não exception fatal."""
+        task_mock.delay.side_effect = OperationalError("broker indisponível")
+
+        with self.assertRaises(CommandError):
+            call_command("agendar_dominio", "--dominio", "escola")
+
+    @patch(
+        "apps.controle_auditoria.management.commands.agendar_dominio.executar_dominio_task"
+    )
+    def test_falha_broker_apply_async_nao_derruba_processo(
+        self, task_mock: MagicMock
+    ) -> None:
+        """OperationalError no broker ao agendar vira CommandError."""
+        task_mock.apply_async.side_effect = OperationalError("broker indisponível")
+
+        with self.assertRaises(CommandError):
+            call_command(
+                "agendar_dominio",
+                "--dominio",
+                "escola",
+                "--executar-em",
+                "2026-03-10T23:00:00-03:00",
             )
 
 

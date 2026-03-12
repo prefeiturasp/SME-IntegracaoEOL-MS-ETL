@@ -6,10 +6,14 @@ from uuid import UUID
 
 from django.test import TestCase
 
+from apps.controle_auditoria.libs.celery_app import aplicacao_celery
 from apps.controle_auditoria.libs.repositorio_auditoria import (
     RepositorioAuditoriaPostgres,
 )
-from apps.controle_auditoria.libs.tasks import executar_dominio_task, verificar_saude
+from apps.controle_auditoria.libs.tasks import (
+    executar_dominio_task,
+    verificar_saude,
+)
 from apps.controle_auditoria.models import EtlCheckpointDominio
 
 
@@ -130,6 +134,10 @@ class TasksControleAuditoriaTestCase(TestCase):
         """Task de saude retorna ok."""
         self.assertEqual(verificar_saude(), "ok")
 
+    def test_executar_dominio_task_com_continuar_possui_max_retries(self) -> None:
+        """Task configurada para retry automático em falhas transientes."""
+        self.assertEqual(executar_dominio_task.max_retries, 5)
+
     @patch("apps.controle_auditoria.libs.tasks.call_command")
     @patch("apps.controle_auditoria.libs.tasks.RepositorioAuditoriaPostgres")
     def test_executar_dominio_task_sem_continuar(
@@ -137,7 +145,7 @@ class TasksControleAuditoriaTestCase(TestCase):
         repositorio_cls_mock: Any,
         call_command_mock: Any,
     ) -> None:
-        """Task executa até o final e força continuidade após primeira página."""
+        """Task executa até o final e força continuidade após primeira página."""  # noqa: E501
         repositorio = MagicMock()
         repositorio.obter_checkpoint_dominio.side_effect = [
             {"token_parada": "0"},
@@ -215,3 +223,19 @@ class TasksControleAuditoriaTestCase(TestCase):
             "0",
             "--continuar",
         )
+
+
+class CeleryBrokerResilienciaTestCase(TestCase):
+    """Valida que a configuração do Celery tolera falhas no broker."""
+
+    def test_broker_connection_retry_habilitado(self) -> None:
+        """Worker reconecta automaticamente ao broker após falha."""
+        self.assertTrue(aplicacao_celery.conf.broker_connection_retry)
+
+    def test_broker_connection_retry_on_startup_habilitado(self) -> None:
+        """Worker não falha fatalmente se broker não estiver pronto na inicialização."""
+        self.assertTrue(aplicacao_celery.conf.broker_connection_retry_on_startup)
+
+    def test_broker_connection_max_retries_configurado(self) -> None:
+        """Limite de tentativas de reconexão definido para evitar loop infinito."""
+        self.assertEqual(aplicacao_celery.conf.broker_connection_max_retries, 10)
