@@ -1,7 +1,11 @@
 """Views DRF para controle e auditoria de execuções ETL."""
 
+import os
+
+from django.db import connections
 from django.utils.dateparse import parse_datetime
 from rest_framework import status
+from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -9,6 +13,7 @@ from rest_framework.views import APIView
 from apps.controle_auditoria.api.serializers import (
     EtlCheckpointDominioSerializer,
     EtlExecucaoSerializer,
+    HealthStatusSerializer,
 )
 from apps.controle_auditoria.libs.tasks import executar_dominio_task
 from apps.controle_auditoria.models import EtlCheckpointDominio, EtlExecucao
@@ -69,3 +74,32 @@ class ExecutarDominioView(APIView):
             )
 
         return Response({"task_id": resultado.id}, status=202)
+
+
+class HealthSincRecView(APIView):
+    """Health do dominio SincRec."""
+
+    authentication_classes: list[type] = []
+    permission_classes = [AllowAny]
+
+    def get(self, request: Request) -> Response:
+        """Retorna o status de saude do dominio SincRec."""
+        resultado = self._check_database()
+
+        status_http = 200 if resultado["status"] == "healthy" else 503
+        serializer = HealthStatusSerializer(resultado)
+        return Response(serializer.data, status=status_http)
+
+    def _check_database(self) -> dict[str, str]:
+        if not os.getenv("URL_BANCO_AUDITORIA"):
+            return {"status": "unhealthy"}
+
+        try:
+            with connections["default"].cursor() as cursor:
+                cursor.execute("SELECT 1")
+                cursor.fetchone()
+
+            return {"status": "healthy"}
+
+        except Exception:
+            return {"status": "unhealthy"}

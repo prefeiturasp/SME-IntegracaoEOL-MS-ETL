@@ -5,5 +5,5 @@ from django.urls import path
 from apps.eol_connection.api.views import HealthCheckEOLView
 
 urlpatterns = [
-    path("eol-healthcheck/", HealthCheckEOLView.as_view(), name="eol-healthcheck"),
+    path("eol/health/", HealthCheckEOLView.as_view(), name="eol"),
 ]

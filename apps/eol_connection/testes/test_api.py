@@ -12,7 +12,7 @@ class TestHealthEndpoint(TestCase):
     def setUp(self) -> None:
         """Prepara cliente e URL para testes."""
         self.client = APIClient()
-        self.url = "/api/v1/eol-healthcheck/"
+        self.url = "/api/v1/eol/health/"
 
     @patch("apps.eol_connection.api.views.healthcheck_eol")
     def test_health_endpoint_healthy(self, health_mock: MagicMock) -> None:

@@ -26,6 +26,7 @@ INSTALLED_APPS = [
     "apps.controle_auditoria",
     "apps.escolas",
     "apps.eol_connection",
+    "apps.institucional",
 ]
 
 MIDDLEWARE = [
@@ -84,7 +85,11 @@ AMBIENTE_APLICACAO = os.getenv("AMBIENTE_APLICACAO", "local")
 NIVEL_LOG = os.getenv("NIVEL_LOG", "INFO")
 URL_BANCO_AUDITORIA = os.getenv(
     "URL_BANCO_AUDITORIA",
-    "postgresql://postgres:postgres@localhost:5432/postgres",
+    "postgresql://postgres:postgres@localhost:5432/sinc_rec_db",
+)
+URL_BANCO_INSTITUCIONAL = os.getenv(
+    "URL_BANCO_INSTITUCIONAL",
+    "postgresql://postgres:postgres@localhost:5432/institucional_db",
 )
 URL_KEYDB = os.getenv("URL_KEYDB", "redis://localhost:6379/0")
 EOL_DB = os.getenv("EOL_DB", "")

@@ -26,4 +26,5 @@ urlpatterns = [
     ),
     path("api/v1/", include("apps.controle_auditoria.api.urls")),
     path("api/v1/", include("apps.eol_connection.api.urls")),
+    path("api/v1/", include("apps.institucional.api.urls")),
 ]
