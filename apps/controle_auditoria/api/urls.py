@@ -11,6 +11,7 @@ from apps.controle_auditoria.api.views import (
     ExecutarDominioView,
     MonitoramentoExecucoesView,
     MonitoramentoResumoView,
+    HealthSincRecView
 )
 
 urlpatterns = [
@@ -48,4 +49,5 @@ urlpatterns = [
         ExecutarDominioView.as_view(),
         name="executar-dominio",
     ),
+    path("sinc_rec/health/", HealthSincRecView.as_view(), name="sync-rec"),
 ]

@@ -1,5 +1,6 @@
 """Testes dos endpoints e autenticacao da API de controle_auditoria."""
 
+import os
 from typing import Any
 from unittest.mock import patch
 from uuid import uuid4
@@ -167,6 +168,7 @@ class ViewsApiControleAuditoriaTestCase(TestCase):
         """Sem API key, endpoints da API devem negar acesso."""
         resposta = self.client.get("/api/v1/checkpoints/")
         self.assertEqual(resposta.status_code, 403)
+
 
     def test_deve_retornar_detalhe_de_execucao_com_tabelas(self) -> None:
         """Retorna execução com tabelas lidas e escritas aninhadas."""
@@ -358,3 +360,36 @@ class DashboardViewTestCase(TestCase):
         EtlExecucao.objects.all().delete()
         resposta = self.client.get("/dashboard/")
         self.assertEqual(resposta.status_code, 200)
+
+class HealthSincRecViewTestCase(TestCase):
+    """Testes para endpoints do HealthSincRecView."""
+
+    def setUp(self) -> None:
+        """Prepara cliente API para testes."""
+        self.client = APIClient()
+
+    @patch.dict(os.environ, {}, clear=True)
+    def test_health_sem_variavel(self) -> None:
+        """Retorna 503 quando URL_BANCO_AUDITORIA nao esta configurada."""
+        response = self.client.get("/api/v1/sinc_rec/health/")
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json()["status"], "unhealthy")
+
+    @patch.dict(os.environ, {"URL_BANCO_AUDITORIA": "postgres://teste"})
+    def test_health_banco_ok(self) -> None:
+        """Retorna 200 quando banco esta acessivel."""
+        response = self.client.get("/api/v1/sinc_rec/health/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["status"], "healthy")
+
+    @patch.dict(os.environ, {"URL_BANCO_AUDITORIA": "postgres://teste"})
+    @patch("apps.controle_auditoria.api.views.connections")
+    def test_health_banco_erro(self, connections_mock: Any) -> None:
+        """Retorna 503 quando banco lança excecao."""
+        connections_mock.__getitem__.return_value.cursor.side_effect = Exception()
+
+        response = self.client.get("/api/v1/sinc_rec/health/")
+
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json()["status"], "unhealthy")
+

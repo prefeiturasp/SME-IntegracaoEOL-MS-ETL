@@ -2,16 +2,15 @@
 
 from typing import Any
 
-import pyodbc
-from django.conf import settings
+from apps.eol_connection.libs.connection import EOLConnectionFactory
 
 
 class ClienteLegadoEscolas:
     """Acesso somente leitura a escolas no banco legado."""
 
-    def __init__(self) -> None:
-        """Inicia o servico de consulta de escolas."""
-        self._string_conexao = settings.EOL_DB
+    def __init__(self, connection: EOLConnectionFactory | None = None) -> None:
+        """Inicializa cliente usando connection factory."""
+        self._connection = connection or EOLConnectionFactory()
 
     def listar_por_offset(self, limite: int, offset: int) -> list[dict[str, Any]]:
         """Lista escolas usando paginacao por offset/limit."""
@@ -28,8 +27,11 @@ class ClienteLegadoEscolas:
             ORDER BY vue.cd_unidade_educacao ASC
             OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
         """
-        with pyodbc.connect(self._string_conexao) as conexao:
+
+        with self._connection.obter_conexao() as conexao:
             cursor = conexao.cursor()
+
             linhas = cursor.execute(sql, [offset, limite]).fetchall()
             colunas = [coluna[0] for coluna in cursor.description]
+
         return [dict(zip(colunas, list(linha), strict=False)) for linha in linhas]
