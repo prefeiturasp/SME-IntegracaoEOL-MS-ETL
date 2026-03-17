@@ -26,4 +26,4 @@ RUN pip install --upgrade pip \
     && pip install -r /app/requirements/local.txt \
     && pip install debugpy==1.8.5
 
-EXPOSE 8068 5668 5679 5680
+EXPOSE 8000 5678 5679 5680
