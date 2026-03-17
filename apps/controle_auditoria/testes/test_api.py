@@ -5,12 +5,17 @@ from typing import Any
 from unittest.mock import patch
 from uuid import uuid4
 
-from django.test import TestCase, override_settings
+from django.test import Client, TestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.controle_auditoria.api.authentication import ApiKeyAuthentication
-from apps.controle_auditoria.models import EtlCheckpointDominio, EtlExecucao
+from apps.controle_auditoria.models import (
+    EtlCheckpointDominio,
+    EtlExecucao,
+    EtlExecucaoTabelaEscrita,
+    EtlExecucaoTabelaLida,
+)
 
 
 class ApiKeyAuthenticationTestCase(TestCase):
@@ -165,6 +170,197 @@ class ViewsApiControleAuditoriaTestCase(TestCase):
         self.assertEqual(resposta.status_code, 403)
 
 
+    def test_deve_retornar_detalhe_de_execucao_com_tabelas(self) -> None:
+        """Retorna execução com tabelas lidas e escritas aninhadas."""
+        id_exec = uuid4()
+        EtlExecucao.objects.create(
+            id_execucao=id_exec,
+            dominio="escola",
+            situacao="sucesso",
+            iniciado_em=timezone.now(),
+        )
+        EtlExecucaoTabelaLida.objects.create(
+            id_execucao=id_exec,
+            tabela_origem="dbo.v_cadastro",
+            numero_pagina=1,
+            linhas_lidas=100,
+        )
+        EtlExecucaoTabelaEscrita.objects.create(
+            id_execucao=id_exec,
+            tabela_destino="escolas",
+            linhas_escritas=100,
+            modo_escrita="upsert",
+        )
+
+        resposta = self.client.get(f"/api/v1/execucoes/{id_exec}/", **self.headers)
+        self.assertEqual(resposta.status_code, 200)
+        dados = resposta.json()
+        self.assertEqual(dados["id_execucao"], str(id_exec))
+        self.assertEqual(len(dados["tabelas_lidas"]), 1)
+        self.assertEqual(len(dados["tabelas_escritas"]), 1)
+        self.assertEqual(dados["tabelas_lidas"][0]["tabela_origem"], "dbo.v_cadastro")
+        self.assertEqual(dados["tabelas_escritas"][0]["tabela_destino"], "escolas")
+
+    def test_deve_retornar_404_para_execucao_inexistente(self) -> None:
+        """Retorna 404 quando id_execucao não existe."""
+        resposta = self.client.get(f"/api/v1/execucoes/{uuid4()}/", **self.headers)
+        self.assertEqual(resposta.status_code, 404)
+        self.assertIn("erro", resposta.json())
+
+    def test_deve_listar_tabelas_lidas(self) -> None:
+        """Retorna registros de tabelas lidas."""
+        EtlExecucaoTabelaLida.objects.create(
+            id_execucao=uuid4(),
+            tabela_origem="dbo.v_cadastro",
+            numero_pagina=1,
+            linhas_lidas=50,
+        )
+
+        resposta = self.client.get("/api/v1/execucoes/tabelas-lidas/", **self.headers)
+        self.assertEqual(resposta.status_code, 200)
+        self.assertEqual(len(resposta.json()), 1)
+
+    def test_deve_listar_tabelas_escritas(self) -> None:
+        """Retorna registros de tabelas escritas."""
+        EtlExecucaoTabelaEscrita.objects.create(
+            id_execucao=uuid4(),
+            tabela_destino="escolas",
+            linhas_escritas=50,
+            modo_escrita="upsert",
+        )
+
+        resposta = self.client.get(
+            "/api/v1/execucoes/tabelas-escritas/", **self.headers
+        )
+        self.assertEqual(resposta.status_code, 200)
+        self.assertEqual(len(resposta.json()), 1)
+
+
+class MonitoramentoViewsTestCase(TestCase):
+    """Valida endpoints públicos de monitoramento."""
+
+    def setUp(self) -> None:
+        """Cria execuções de teste."""
+        self.client = APIClient()
+        self.id_exec_a = uuid4()
+        self.id_exec_b = uuid4()
+        EtlExecucao.objects.create(
+            id_execucao=self.id_exec_a,
+            dominio="escola",
+            situacao="sucesso",
+            iniciado_em=timezone.now(),
+        )
+        EtlExecucao.objects.create(
+            id_execucao=self.id_exec_b,
+            dominio="sinc_rec_db",
+            situacao="erro",
+            iniciado_em=timezone.now(),
+        )
+
+    def test_monitoramento_deve_listar_execucoes_sem_auth(self) -> None:
+        """Endpoint de monitoramento retorna execuções sem autenticação."""
+        resposta = self.client.get("/api/v1/monitoramento/execucoes/")
+        self.assertEqual(resposta.status_code, 200)
+        self.assertEqual(len(resposta.json()), 2)
+
+    def test_monitoramento_deve_filtrar_por_dominio(self) -> None:
+        """Filtro por dominio retorna apenas execuções do domínio."""
+        resposta = self.client.get("/api/v1/monitoramento/execucoes/?dominio=escola")
+        self.assertEqual(resposta.status_code, 200)
+        dados = resposta.json()
+        self.assertEqual(len(dados), 1)
+        self.assertEqual(dados[0]["dominio"], "escola")
+
+    def test_monitoramento_deve_filtrar_por_situacao(self) -> None:
+        """Filtro por situacao retorna apenas execuções com aquela situação."""
+        resposta = self.client.get("/api/v1/monitoramento/execucoes/?situacao=erro")
+        self.assertEqual(resposta.status_code, 200)
+        dados = resposta.json()
+        self.assertEqual(len(dados), 1)
+        self.assertEqual(dados[0]["situacao"], "erro")
+
+    def test_monitoramento_deve_filtrar_por_data_inicio(self) -> None:
+        """Filtro por data_inicio retorna execuções a partir daquela data."""
+        hoje = timezone.now().date().isoformat()
+        resposta = self.client.get(
+            f"/api/v1/monitoramento/execucoes/?data_inicio={hoje}"
+        )
+        self.assertEqual(resposta.status_code, 200)
+        self.assertEqual(len(resposta.json()), 2)
+
+    def test_monitoramento_deve_filtrar_por_data_fim(self) -> None:
+        """Filtro por data_fim retorna execuções até aquela data."""
+        hoje = timezone.now().date().isoformat()
+        resposta = self.client.get(f"/api/v1/monitoramento/execucoes/?data_fim={hoje}")
+        self.assertEqual(resposta.status_code, 200)
+        self.assertEqual(len(resposta.json()), 2)
+
+    def test_monitoramento_deve_retornar_resumo_por_dominio(self) -> None:
+        """Resumo retorna a última execução de cada domínio."""
+        resposta = self.client.get("/api/v1/monitoramento/resumo/")
+        self.assertEqual(resposta.status_code, 200)
+        dados = resposta.json()
+        dominios = [d["dominio"] for d in dados]
+        self.assertIn("escola", dominios)
+        self.assertIn("sinc_rec_db", dominios)
+
+    def test_monitoramento_resumo_retorna_apenas_ultima_por_dominio(self) -> None:
+        """Resumo retorna somente 1 entrada por domínio."""
+        EtlExecucao.objects.create(
+            id_execucao=uuid4(),
+            dominio="escola",
+            situacao="erro",
+            iniciado_em=timezone.now(),
+        )
+        resposta = self.client.get("/api/v1/monitoramento/resumo/")
+        self.assertEqual(resposta.status_code, 200)
+        dominios = [d["dominio"] for d in resposta.json()]
+        self.assertEqual(dominios.count("escola"), 1)
+
+
+class DashboardViewTestCase(TestCase):
+    """Valida o dashboard público."""
+
+    def setUp(self) -> None:
+        """Cria execuções para o dashboard."""
+        self.client = Client()
+        EtlExecucao.objects.create(
+            id_execucao=uuid4(),
+            dominio="escola",
+            situacao="sucesso",
+            iniciado_em=timezone.now(),
+        )
+
+    def test_dashboard_deve_responder_sem_auth(self) -> None:
+        """Dashboard retorna 200 sem autenticação."""
+        resposta = self.client.get("/dashboard/")
+        self.assertEqual(resposta.status_code, 200)
+
+    def test_dashboard_deve_responder_com_filtro_dominio(self) -> None:
+        """Dashboard com filtro de domínio retorna 200."""
+        resposta = self.client.get("/dashboard/?dominio=escola")
+        self.assertEqual(resposta.status_code, 200)
+
+    def test_dashboard_deve_responder_com_filtro_situacao(self) -> None:
+        """Dashboard com filtro de situação retorna 200."""
+        resposta = self.client.get("/dashboard/?situacao=sucesso")
+        self.assertEqual(resposta.status_code, 200)
+
+    def test_dashboard_deve_responder_com_todos_os_filtros(self) -> None:
+        """Dashboard com todos os filtros combinados retorna 200."""
+        hoje = timezone.now().date().isoformat()
+        resposta = self.client.get(
+            f"/dashboard/?dominio=escola&situacao=sucesso"
+            f"&data_inicio={hoje}&data_fim={hoje}"
+        )
+        self.assertEqual(resposta.status_code, 200)
+
+    def test_dashboard_sem_execucoes(self) -> None:
+        """Dashboard responde 200 mesmo sem execuções registradas."""
+        EtlExecucao.objects.all().delete()
+        resposta = self.client.get("/dashboard/")
+        self.assertEqual(resposta.status_code, 200)
+
 class HealthSincRecViewTestCase(TestCase):
     """Testes para endpoints do HealthSincRecView."""
 
@@ -196,3 +392,4 @@ class HealthSincRecViewTestCase(TestCase):
 
         self.assertEqual(response.status_code, 503)
         self.assertEqual(response.json()["status"], "unhealthy")
+

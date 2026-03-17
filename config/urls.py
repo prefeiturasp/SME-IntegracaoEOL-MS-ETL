@@ -5,8 +5,11 @@ from django.urls import include, path
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 from rest_framework.permissions import AllowAny
 
+from apps.controle_auditoria.api.views import DashboardView
+
 urlpatterns = [
     path("admin/", admin.site.urls),
+    path("dashboard/", DashboardView.as_view(), name="dashboard"),
     path(
         "api/v1/schema/",
         SpectacularAPIView.as_view(

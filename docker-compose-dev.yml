@@ -9,7 +9,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: ${POSTGRES_DB:-postgres}
     ports:
-      - "5432:5432"
+      - "5438:5432"
     volumes:
       - postgres_etl_data:/var/lib/postgresql/data
     healthcheck:
@@ -76,16 +76,12 @@ services:
       - .:/app
     command: >
       python -Xfrozen_modules=off -m debugpy --wait-for-client
-      --listen 0.0.0.0:5678 manage.py runserver 0.0.0.0:8000
+      --listen 0.0.0.0:5668 manage.py runserver 0.0.0.0:8068
     ports:
-      - "8000:8000"
-      - "5678:5678"
+      - "${PORT_WEB:-8000}:8000"
+      - "${PORT_DEBUGPY:-5678}:5678"
     restart: unless-stopped
-    depends_on:
-      postgres:
-        condition: service_healthy
-      keydb:
-        condition: service_healthy
+
 
 volumes:
   postgres_etl_data:

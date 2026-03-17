@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="refresh" content="60">
+  <title>ETL Monitor — SME-SGP</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <style>
+    :root {
+      --color-success: #22c55e;
+      --color-error:   #ef4444;
+      --color-running: #3b82f6;
+      --color-pending: #94a3b8;
+      --sidebar-width: 220px;
+    }
+
+    body {
+      background: #0f172a;
+      color: #e2e8f0;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      min-height: 100vh;
+    }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      position: fixed;
+      top: 0; left: 0;
+      width: var(--sidebar-width);
+      height: 100vh;
+      background: #1e293b;
+      border-right: 1px solid #334155;
+      display: flex;
+      flex-direction: column;
+      padding: 1.5rem 1rem;
+      z-index: 100;
+    }
+    .sidebar-logo {
+      font-size: 1rem;
+      font-weight: 700;
+      color: #f8fafc;
+      letter-spacing: .5px;
+      margin-bottom: .25rem;
+    }
+    .sidebar-sub {
+      font-size: .7rem;
+      color: #64748b;
+      margin-bottom: 2rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .sidebar-label {
+      font-size: .65rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: #475569;
+      margin-bottom: .5rem;
+    }
+    .sidebar-domain {
+      font-size: .8rem;
+      padding: .4rem .75rem;
+      border-radius: 6px;
+      margin-bottom: .25rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+      color: #94a3b8;
+      text-decoration: none;
+      transition: background .15s;
+    }
+    .sidebar-domain:hover { background: #334155; color: #f1f5f9; }
+    .sidebar-domain .dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .dot-concluido    { background: var(--color-success); }
+    .dot-erro         { background: var(--color-error); }
+    .dot-em_andamento { background: var(--color-running); box-shadow: 0 0 6px var(--color-running); }
+    .dot-pendente, .dot-default { background: var(--color-pending); }
+
+    .refresh-badge {
+      margin-top: auto;
+      font-size: .7rem;
+      color: #475569;
+      display: flex;
+      align-items: center;
+      gap: .4rem;
+    }
+    .refresh-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--color-success);
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: .3; }
+    }
+
+    /* ── Main ── */
+    .main {
+      margin-left: var(--sidebar-width);
+      padding: 2rem;
+      min-height: 100vh;
+    }
+
+    .page-title {
+      font-size: 1.35rem;
+      font-weight: 700;
+      color: #f8fafc;
+      margin-bottom: .25rem;
+    }
+    .page-sub {
+      font-size: .8rem;
+      color: #64748b;
+      margin-bottom: 2rem;
+    }
+
+    /* ── Domain Cards ── */
+    .section-title {
+      font-size: .7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: #475569;
+      margin-bottom: 1rem;
+    }
+
+    .domain-card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 1.1rem 1.25rem;
+      position: relative;
+      overflow: hidden;
+      transition: transform .15s, box-shadow .15s;
+    }
+    .domain-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,.35); }
+    .domain-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0;
+      width: 4px; height: 100%;
+    }
+    .domain-card.concluido::before    { background: var(--color-success); }
+    .domain-card.erro::before         { background: var(--color-error); }
+    .domain-card.em_andamento::before { background: var(--color-running); }
+    .domain-card.pendente::before,
+    .domain-card.default::before      { background: var(--color-pending); }
+
+    .domain-name {
+      font-size: .9rem;
+      font-weight: 600;
+      color: #f1f5f9;
+      word-break: break-all;
+      margin-bottom: .5rem;
+    }
+    .domain-meta {
+      font-size: .75rem;
+      color: #64748b;
+      line-height: 1.7;
+    }
+    .domain-meta i { margin-right: .3rem; }
+    .domain-error {
+      font-size: .72rem;
+      color: #f87171;
+      margin-top: .4rem;
+      word-break: break-word;
+    }
+
+    /* ── Pill Status ── */
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: .3rem;
+      font-size: .7rem;
+      font-weight: 600;
+      padding: .2rem .65rem;
+      border-radius: 20px;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+    }
+    .pill.concluido    { background: rgba(34,197,94,.15);  color: #4ade80; }
+    .pill.erro         { background: rgba(239,68,68,.15);  color: #f87171; }
+    .pill.em_andamento { background: rgba(59,130,246,.15); color: #60a5fa; }
+    .pill.pendente     { background: rgba(148,163,184,.15);color: #94a3b8; }
+
+    /* ── Filter Card ── */
+    .filter-card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 1rem 1.25rem;
+      margin-bottom: 1.25rem;
+    }
+    .filter-card .form-control,
+    .filter-card .form-select {
+      background: #0f172a;
+      border: 1px solid #334155;
+      color: #e2e8f0;
+      font-size: .82rem;
+      border-radius: 8px;
+    }
+    .filter-card .form-control:focus,
+    .filter-card .form-select:focus {
+      background: #0f172a;
+      border-color: #3b82f6;
+      color: #f1f5f9;
+      box-shadow: 0 0 0 3px rgba(59,130,246,.2);
+    }
+    .filter-card .form-control::placeholder { color: #475569; }
+    .filter-card option { background: #1e293b; }
+
+    /* ── Table ── */
+    .exec-table-wrap {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .exec-table { width: 100%; border-collapse: collapse; font-size: .82rem; }
+    .exec-table thead tr {
+      background: #0f172a;
+      border-bottom: 1px solid #334155;
+    }
+    .exec-table thead th {
+      padding: .75rem 1rem;
+      font-size: .68rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #475569;
+      white-space: nowrap;
+    }
+    .exec-table tbody tr {
+      border-bottom: 1px solid #1e293b;
+      transition: background .1s;
+    }
+    .exec-table tbody tr:hover { background: #263245; }
+    .exec-table tbody tr:last-child { border-bottom: none; }
+    .exec-table td {
+      padding: .7rem 1rem;
+      color: #cbd5e1;
+      vertical-align: middle;
+    }
+    .exec-table .td-domain { font-weight: 600; color: #f1f5f9; }
+    .exec-table .td-uuid   { font-size: .7rem; color: #475569; font-family: monospace; }
+    .exec-table .td-error  { color: #f87171; font-size: .75rem; max-width: 200px; }
+    .exec-table .text-muted-dim { color: #475569; }
+
+    .empty-state {
+      text-align: center;
+      padding: 3rem;
+      color: #475569;
+    }
+    .empty-state i { font-size: 2rem; display: block; margin-bottom: .75rem; }
+
+    /* ── Responsive ── */
+    @media (max-width: 768px) {
+      .sidebar { display: none; }
+      .main { margin-left: 0; padding: 1rem; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Sidebar -->
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <i class="bi bi-cpu me-1"></i> ETL Monitor
+  </div>
+  <div class="sidebar-sub">SME-SGP</div>
+
+  {% if ultima_por_dominio %}
+  <div class="sidebar-label">Domínios</div>
+  {% for exec in ultima_por_dominio %}
+  <a class="sidebar-domain"
+     href="?dominio={{ exec.dominio }}">
+    <span class="dot dot-{{ exec.situacao }}"></span>
+    {{ exec.dominio|truncatechars:22 }}
+  </a>
+  {% endfor %}
+  {% endif %}
+
+  <div class="refresh-badge">
+    <span class="refresh-dot"></span>
+    Atualiza em 60s
+  </div>
+</aside>
+
+<!-- Main -->
+<main class="main">
+
+  <div class="page-title"><i class="bi bi-activity me-2"></i>Painel de Execuções ETL</div>
+  <div class="page-sub">Monitoramento em tempo real · últimas 100 execuções</div>
+
+  <!-- Cards por domínio -->
+  <div class="section-title">Status atual por domínio</div>
+  {% if ultima_por_dominio %}
+  <div class="row g-3 mb-4">
+    {% for exec in ultima_por_dominio %}
+    <div class="col-12 col-sm-6 col-xl-4">
+      <div class="domain-card {{ exec.situacao }}">
+        <div class="d-flex justify-content-between align-items-start mb-1">
+          <div class="domain-name">{{ exec.dominio }}</div>
+          <span class="pill {{ exec.situacao }} ms-2">
+            {% if exec.situacao == "concluido" %}<i class="bi bi-check-circle-fill"></i>
+            {% elif exec.situacao == "erro" %}<i class="bi bi-x-circle-fill"></i>
+            {% elif exec.situacao == "em_andamento" %}<i class="bi bi-arrow-repeat"></i>
+            {% else %}<i class="bi bi-clock"></i>{% endif %}
+            {{ exec.situacao }}
+          </span>
+        </div>
+        <div class="domain-meta">
+          <div><i class="bi bi-play-fill"></i>{{ exec.iniciado_em|date:"d/m/Y H:i:s" }}</div>
+          {% if exec.finalizado_em %}
+          <div><i class="bi bi-stop-fill"></i>{{ exec.finalizado_em|date:"d/m/Y H:i:s" }}</div>
+          {% endif %}
+          <div class="mt-1" style="font-size:.68rem;color:#334155;font-family:monospace">{{ exec.id_execucao }}</div>
+        </div>
+        {% if exec.mensagem_erro %}
+        <div class="domain-error">
+          <i class="bi bi-exclamation-triangle-fill me-1"></i>{{ exec.mensagem_erro|truncatechars:90 }}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty-state mb-4">
+    <i class="bi bi-inbox"></i>
+    Nenhuma execução registrada ainda.
+  </div>
+  {% endif %}
+
+  <!-- Filtros -->
+  <div class="section-title mt-3">Histórico de execuções</div>
+  <div class="filter-card">
+    <form method="get" class="row g-2 align-items-end">
+      <div class="col-12 col-sm-6 col-md-3">
+        <label class="form-label mb-1" style="font-size:.7rem;color:#64748b;text-transform:uppercase;letter-spacing:1px">Domínio</label>
+        <select name="dominio" class="form-select form-select-sm">
+          <option value="">Todos</option>
+          {% for d in dominios %}
+          <option value="{{ d }}" {% if filtros.dominio == d %}selected{% endif %}>{{ d }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label mb-1" style="font-size:.7rem;color:#64748b;text-transform:uppercase;letter-spacing:1px">De</label>
+        <input type="date" name="data_inicio" class="form-control form-control-sm"
+               value="{{ filtros.data_inicio }}">
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label mb-1" style="font-size:.7rem;color:#64748b;text-transform:uppercase;letter-spacing:1px">Até</label>
+        <input type="date" name="data_fim" class="form-control form-control-sm"
+               value="{{ filtros.data_fim }}">
+      </div>
+      <div class="col-12 col-sm-6 col-md-2">
+        <label class="form-label mb-1" style="font-size:.7rem;color:#64748b;text-transform:uppercase;letter-spacing:1px">Situação</label>
+        <select name="situacao" class="form-select form-select-sm">
+          <option value="">Todas</option>
+          {% for s in situacoes %}
+          <option value="{{ s }}" {% if filtros.situacao == s %}selected{% endif %}>{{ s }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-auto d-flex gap-2">
+        <button type="submit" class="btn btn-sm btn-primary" style="border-radius:8px;font-size:.8rem">
+          <i class="bi bi-funnel-fill me-1"></i>Filtrar
+        </button>
+        <a href="/dashboard/" class="btn btn-sm" style="border-radius:8px;font-size:.8rem;background:#334155;color:#94a3b8;border:none">
+          <i class="bi bi-x-lg me-1"></i>Limpar
+        </a>
+      </div>
+    </form>
+  </div>
+
+  <!-- Tabela -->
+  <div class="exec-table-wrap">
+    <table class="exec-table">
+      <thead>
+        <tr>
+          <th><i class="bi bi-diagram-3 me-1"></i>Domínio</th>
+          <th>Situação</th>
+          <th><i class="bi bi-play me-1"></i>Início</th>
+          <th><i class="bi bi-stop me-1"></i>Fim</th>
+          <th>ID Execução</th>
+          <th>Erro</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for exec in execucoes %}
+        <tr>
+          <td class="td-domain">{{ exec.dominio }}</td>
+          <td>
+            <span class="pill {{ exec.situacao }}">
+              {% if exec.situacao == "concluido" %}<i class="bi bi-check-circle-fill"></i>
+              {% elif exec.situacao == "erro" %}<i class="bi bi-x-circle-fill"></i>
+              {% elif exec.situacao == "em_andamento" %}<i class="bi bi-arrow-repeat"></i>
+              {% else %}<i class="bi bi-clock"></i>{% endif %}
+              {{ exec.situacao }}
+            </span>
+          </td>
+          <td class="text-nowrap">{{ exec.iniciado_em|date:"d/m/Y H:i:s" }}</td>
+          <td class="text-nowrap">
+            {% if exec.finalizado_em %}
+              {{ exec.finalizado_em|date:"d/m/Y H:i:s" }}
+            {% else %}
+              <span class="text-muted-dim">—</span>
+            {% endif %}
+          </td>
+          <td class="td-uuid">{{ exec.id_execucao }}</td>
+          <td class="td-error">{{ exec.mensagem_erro|default:""|truncatechars:60 }}</td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="6">
+            <div class="empty-state">
+              <i class="bi bi-search"></i>
+              Nenhuma execução encontrada com os filtros aplicados.
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+</main>
+
+</body>
+</html>
