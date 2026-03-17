@@ -1,0 +1,1 @@
+"""Aplicativo Django de institucional."""

@@ -23,3 +23,9 @@ class EtlExecucaoSerializer(serializers.ModelSerializer):
 
         model = EtlExecucao
         fields = "__all__"
+
+
+class HealthStatusSerializer(serializers.Serializer):
+    """Serializer para resposta do endpoint de healthcheck."""
+
+    status = serializers.ChoiceField(choices=["healthy", "degraded", "unhealthy"])
