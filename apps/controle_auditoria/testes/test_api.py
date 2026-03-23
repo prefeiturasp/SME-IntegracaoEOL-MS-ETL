@@ -169,7 +169,6 @@ class ViewsApiControleAuditoriaTestCase(TestCase):
         resposta = self.client.get("/api/v1/checkpoints/")
         self.assertEqual(resposta.status_code, 403)
 
-
     def test_deve_retornar_detalhe_de_execucao_com_tabelas(self) -> None:
         """Retorna execução com tabelas lidas e escritas aninhadas."""
         id_exec = uuid4()
@@ -361,6 +360,7 @@ class DashboardViewTestCase(TestCase):
         resposta = self.client.get("/dashboard/")
         self.assertEqual(resposta.status_code, 200)
 
+
 class HealthSincRecViewTestCase(TestCase):
     """Testes para endpoints do HealthSincRecView."""
 
@@ -392,4 +392,3 @@ class HealthSincRecViewTestCase(TestCase):
 
         self.assertEqual(response.status_code, 503)
         self.assertEqual(response.json()["status"], "unhealthy")
-

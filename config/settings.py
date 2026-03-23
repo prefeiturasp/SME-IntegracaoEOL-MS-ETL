@@ -1,7 +1,22 @@
 """Configuracoes Django do SME-SGP-MS-ETL."""
 
 import os
+import urllib.parse
 from pathlib import Path
+
+
+def _parse_db_url(url: str) -> dict:
+    """Faz o parse de uma URL PostgreSQL para dict de configuração Django."""
+    parsed = urllib.parse.urlparse(url)
+    return {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": parsed.path.lstrip("/"),
+        "USER": parsed.username or "postgres",
+        "PASSWORD": parsed.password or "postgres",
+        "HOST": parsed.hostname or "localhost",
+        "PORT": str(parsed.port or 5432),
+    }
+
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -27,6 +42,10 @@ INSTALLED_APPS = [
     "apps.escolas",
     "apps.eol_connection",
     "apps.institucional",
+    "apps.professores",
+    "apps.alunos",
+    "apps.pedagogico",
+    "apps.programas",
 ]
 
 MIDDLEWARE = [
@@ -59,6 +78,26 @@ TEMPLATES = [
 WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = "config.asgi.application"
 
+URL_BANCO_INSTITUCIONAL = os.getenv(
+    "URL_BANCO_INSTITUCIONAL",
+    "postgresql://postgres:postgres@localhost:5432/institucional_db",
+)
+URL_BANCO_PROFESSORES = os.getenv(
+    "URL_BANCO_PROFESSORES",
+    "postgresql://postgres:postgres@localhost:5432/professores_db",
+)
+URL_BANCO_ALUNOS = os.getenv(
+    "URL_BANCO_ALUNOS",
+    "postgresql://postgres:postgres@localhost:5432/alunos_db",
+)
+URL_BANCO_PEDAGOGICO = os.getenv(
+    "URL_BANCO_PEDAGOGICO",
+    "postgresql://postgres:postgres@localhost:5432/pedagogico_db",
+)
+URL_BANCO_PROGRAMAS = os.getenv(
+    "URL_BANCO_PROGRAMAS",
+    "postgresql://postgres:postgres@localhost:5432/programas_db",
+)
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
@@ -67,8 +106,15 @@ DATABASES = {
         "PASSWORD": os.getenv("POSTGRES_PASSWORD", "postgres"),
         "HOST": os.getenv("POSTGRES_HOST", "localhost"),
         "PORT": os.getenv("POSTGRES_PORT", "5432"),
-    }
+    },
+    "institucional_db": _parse_db_url(URL_BANCO_INSTITUCIONAL),
+    "professores_db": _parse_db_url(URL_BANCO_PROFESSORES),
+    "alunos_db": _parse_db_url(URL_BANCO_ALUNOS),
+    "pedagogico_db": _parse_db_url(URL_BANCO_PEDAGOGICO),
+    "programas_db": _parse_db_url(URL_BANCO_PROGRAMAS),
 }
+
+DATABASE_ROUTERS = ["config.db_router.DominioRouter"]
 
 AUTH_PASSWORD_VALIDATORS: list[dict[str, object]] = []
 
@@ -87,10 +133,6 @@ NIVEL_LOG = os.getenv("NIVEL_LOG", "INFO")
 URL_BANCO_AUDITORIA = os.getenv(
     "URL_BANCO_AUDITORIA",
     "postgresql://postgres:postgres@localhost:5432/sinc_rec_db",
-)
-URL_BANCO_INSTITUCIONAL = os.getenv(
-    "URL_BANCO_INSTITUCIONAL",
-    "postgresql://postgres:postgres@localhost:5432/institucional_db",
 )
 URL_KEYDB = os.getenv("URL_KEYDB", "redis://localhost:6379/0")
 EOL_DB = os.getenv("EOL_DB", "")

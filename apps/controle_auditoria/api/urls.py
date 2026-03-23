@@ -9,9 +9,9 @@ from apps.controle_auditoria.api.views import (
     ExecucoesTabelaLidaView,
     ExecucoesView,
     ExecutarDominioView,
+    HealthSincRecView,
     MonitoramentoExecucoesView,
     MonitoramentoResumoView,
-    HealthSincRecView
 )
 
 urlpatterns = [

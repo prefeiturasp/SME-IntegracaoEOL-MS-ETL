@@ -37,6 +37,24 @@ docker compose -f docker-compose-dev.yml exec web_debug \
   python manage.py migrate --noinput --fake-initial
 ```
 
+## Bancos de Dados (dev)
+
+Após subir o ambiente de desenvolvimento, crie os bancos e aplique as migrations:
+
+```bash
+# Recriar containers com o .env atualizado
+docker compose -f docker-compose-dev.yml up -d --force-recreate
+
+# Criar os bancos (se ainda não existirem)
+docker exec -i sme_sgp_ms_etl_postgres psql -U postgres < scripts/criar_bancos.sql
+
+# Rodar migrations
+docker exec sme_sgp_ms_etl_web_debug sh scripts/executar_migrations.sh
+```
+
+> Os URLs dos bancos no `.env` devem usar o nome do serviço Docker `postgres` (porta `5432`), não `localhost`.
+> O mapeamento `5438:5432` no docker-compose é apenas para acesso externo do host.
+
 ## Admin
 
 Base:
@@ -114,6 +132,51 @@ Agendado:
 docker compose exec web python manage.py agendar_dominio \
   --dominio escola --volume 100 --continuar \
   --executar-em 2026-03-10T23:00:00-03:00
+```
+
+### Domínio Professores
+
+O domínio `professores` usa o endpoint genérico de execução. O agendamento passa pela
+fila Celery e executa o ETL completo do `professores_db`.
+
+Cadeia de execução:
+
+```
+POST /api/v1/dominios/professores/executar/
+  → executar_dominio_task (Celery)
+  → management command: executar_dominio --dominio professores
+  → management command: etl_professores
+  → EtlProfessoresService.executar()
+```
+
+Execução imediata via API:
+
+```bash
+curl -X POST http://localhost:8068/api/v1/dominios/professores/executar/ \
+  -H "X-API-Key: sua_chave" \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+
+Execução agendada via API:
+
+```bash
+curl -X POST http://localhost:8068/api/v1/dominios/professores/executar/ \
+  -H "X-API-Key: sua_chave" \
+  -H "Content-Type: application/json" \
+  -d '{"executar_em": "2026-03-23T23:00:00-03:00"}'
+```
+
+Resposta:
+
+```json
+{"task_id": "abc123-..."}
+```
+
+Execução direta via command (dev):
+
+```bash
+docker exec sme_sgp_ms_etl_web_debug python manage.py etl_professores
 ```
 
 ## Debug (dev)

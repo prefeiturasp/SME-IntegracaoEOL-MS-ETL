@@ -1,9 +1,11 @@
 """Views DRF para controle e auditoria de execuções ETL."""
+
+import os
+
+from django.db import connections
 from django.db.models import OuterRef, QuerySet, Subquery
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
-import os
-from django.db import connections
 from django.utils.dateparse import parse_datetime
 from django.views import View
 from drf_spectacular.utils import OpenApiParameter, extend_schema
@@ -19,7 +21,7 @@ from apps.controle_auditoria.api.serializers import (
     EtlExecucaoSerializer,
     EtlExecucaoTabelaEscritaSerializer,
     EtlExecucaoTabelaLidaSerializer,
-    HealthStatusSerializer
+    HealthStatusSerializer,
 )
 from apps.controle_auditoria.libs.tasks import executar_dominio_task
 from apps.controle_auditoria.models import (
@@ -344,8 +346,6 @@ class DashboardView(View):
             },
         )
 
-        return Response({"task_id": resultado.id}, status=202)
-
 
 class HealthSincRecView(APIView):
     """Health do dominio SincRec."""
@@ -374,4 +374,3 @@ class HealthSincRecView(APIView):
 
         except Exception:
             return {"status": "unhealthy"}
-

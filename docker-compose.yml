@@ -38,6 +38,28 @@ services:
     depends_on:
       keydb:
         condition: service_healthy
+  celery-beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sme_sgp_ms_etl_beat
+    env_file:
+      - .env
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings
+      POSTGRES_HOST: ${POSTGRES_HOST:-host.docker.internal}
+      URL_KEYDB: redis://keydb:6379/0
+      EOL_DB: ${EOL_DB:-}
+      NIVEL_LOG: ${NIVEL_LOG:-INFO}
+    volumes:
+      - .:/app
+    command: >
+      celery -A apps.controle_auditoria.libs.celery_app:aplicacao_celery
+      beat --loglevel=INFO
+    restart: unless-stopped
+    depends_on:
+      keydb:
+        condition: service_healthy
 
   web:
     build:
