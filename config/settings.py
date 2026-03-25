@@ -2,6 +2,8 @@
 
 import os
 from pathlib import Path
+from typing import Any
+from urllib.parse import parse_qs, unquote_plus, urlparse
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -59,6 +61,38 @@ TEMPLATES = [
 WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = "config.asgi.application"
 
+def _parse_eol_db(url: str) -> dict[str, object]:
+    """Parseia URL mssql+pyodbc e retorna config para DATABASES."""
+    if not url:
+        return {}
+    parsed = urlparse(url)
+    query = parse_qs(parsed.query)
+    driver = (
+        query.get("driver", ["ODBC Driver 17 for SQL Server"])[0]
+        .replace("+", " ")
+    )
+    trust = query.get("TrustServerCertificate", ["yes"])[0]
+    readonly = query.get("ReadOnly", [""])[0]
+    
+    options: dict[str, Any] = {
+        "driver": driver,
+        "TrustServerCertificate": trust,
+        "Encrypt": False,
+    }
+    if readonly:
+        options["ReadOnly"] = readonly
+
+    return {
+        "ENGINE": "mssql",
+        "NAME": parsed.path.lstrip("/"),
+        "USER": unquote_plus(parsed.username or ""),
+        "PASSWORD": unquote_plus(parsed.password or ""),
+        "HOST": parsed.hostname or "",
+        "PORT": str(parsed.port or 1433),
+        "OPTIONS": options,
+        "TEST": {"MIGRATE": False},
+    }
+
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
@@ -67,7 +101,8 @@ DATABASES = {
         "PASSWORD": os.getenv("POSTGRES_PASSWORD", "postgres"),
         "HOST": os.getenv("POSTGRES_HOST", "localhost"),
         "PORT": os.getenv("POSTGRES_PORT", "5432"),
-    }
+    },
+    "eol_db": _parse_eol_db(os.getenv("EOL_DB", "")),
 }
 
 AUTH_PASSWORD_VALIDATORS: list[dict[str, object]] = []

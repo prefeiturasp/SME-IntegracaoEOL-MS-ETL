@@ -5,4 +5,5 @@ celery[redis]>=5.4,<6
 psycopg[binary]>=3.2,<4
 watchdog>=4.0,<5
 pyodbc>=5.1,<6
+mssql-django>=1.4,<2
 gunicorn>=21.2,<23

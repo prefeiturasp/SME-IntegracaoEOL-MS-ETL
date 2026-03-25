@@ -25,13 +25,12 @@ class ClienteLegadoEscolas:
                 vue.dt_atualizacao_endereco AS atualizado_em
             FROM dbo.v_cadastro_unidade_educacao vue
             ORDER BY vue.cd_unidade_educacao ASC
-            OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
+            OFFSET %s ROWS FETCH NEXT %s ROWS ONLY
         """
 
-        with self._connection.obter_conexao() as conexao:
-            cursor = conexao.cursor()
-
-            linhas = cursor.execute(sql, [offset, limite]).fetchall()
+        with self._connection.obter_conexao().cursor() as cursor:
+            cursor.execute(sql, [offset, limite])
+            linhas = cursor.fetchall()
             colunas = [coluna[0] for coluna in cursor.description]
 
         return [dict(zip(colunas, list(linha), strict=False)) for linha in linhas]
