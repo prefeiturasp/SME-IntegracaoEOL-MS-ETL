@@ -17,16 +17,16 @@ class ClienteLegadoEscolasTestCase(TestCase):
         """Converte linhas do cursor em lista de dicionários."""
         cursor = MagicMock()
         cursor.description = [("codigo_escola",), ("nome_escola",)]
-        cursor.execute.return_value.fetchall.return_value = [
+        cursor.fetchall.return_value = [
             ("000001", "Escola A"),
             ("000002", "Escola B"),
         ]
 
-        conexao = MagicMock()
-        conexao.cursor.return_value = cursor
+        conn = MagicMock()
+        conn.cursor.return_value.__enter__.return_value = cursor
 
         factory = MagicMock()
-        factory.obter_conexao.return_value.__enter__.return_value = conexao
+        factory.obter_conexao.return_value = conn
 
         factory_mock.return_value = factory
 
