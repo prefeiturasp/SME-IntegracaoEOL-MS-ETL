@@ -3,6 +3,7 @@
 import os
 import urllib.parse
 from pathlib import Path
+from typing import Any, Dict
 
 
 def _parse_db_url(url: str) -> dict:
@@ -16,6 +17,11 @@ def _parse_db_url(url: str) -> dict:
         "HOST": parsed.hostname or "localhost",
         "PORT": str(parsed.port or 5432),
     }
+
+SILENCED_SYSTEM_CHECKS = [
+    "models.E030",  # index names duplicados entre models
+    "models.W035",  # db_table duplicado entre apps
+]
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -78,6 +84,40 @@ TEMPLATES = [
 WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = "config.asgi.application"
 
+def _parse_eol_db(url: str) -> Dict[str, Any]:
+    """Faz o parse de uma URL mssql+pyodbc para dict de configuração Django."""
+    if not url:
+        return {}
+
+    parsed = urllib.parse.urlparse(url)
+    query = urllib.parse.parse_qs(parsed.query)
+
+    def _get_param(name: str, default: str = "") -> str:
+        return query.get(name, [default])[0]
+
+    options: Dict[str, Any] = {}
+    driver = _get_param("driver")
+    if driver:
+        options["driver"] = driver.replace("+", " ")
+    trust = _get_param("TrustServerCertificate")
+    if trust:
+        options["TrustServerCertificate"] = trust
+    readonly = _get_param("ReadOnly")
+    if readonly:
+        options["ReadOnly"] = readonly
+    options["Encrypt"] = False
+
+    return {
+        "ENGINE": "mssql",
+        "NAME": parsed.path.lstrip("/"),
+        "USER": urllib.parse.unquote_plus(parsed.username or ""),
+        "PASSWORD": urllib.parse.unquote_plus(parsed.password or ""),
+        "HOST": parsed.hostname or "localhost",
+        "PORT": str(parsed.port or 1433),
+        "OPTIONS": options,
+        "TEST": {"MIGRATE": False},
+    }
+
 URL_BANCO_INSTITUCIONAL = os.getenv(
     "URL_BANCO_INSTITUCIONAL",
     "postgresql://postgres:postgres@localhost:5432/institucional_db",
@@ -107,6 +147,7 @@ DATABASES = {
         "HOST": os.getenv("POSTGRES_HOST", "localhost"),
         "PORT": os.getenv("POSTGRES_PORT", "5432"),
     },
+    "eol_db": _parse_eol_db(os.getenv("EOL_DB", "")),
     "institucional_db": _parse_db_url(URL_BANCO_INSTITUCIONAL),
     "professores_db": _parse_db_url(URL_BANCO_PROFESSORES),
     "alunos_db": _parse_db_url(URL_BANCO_ALUNOS),
