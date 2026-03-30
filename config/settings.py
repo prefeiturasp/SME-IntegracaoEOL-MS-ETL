@@ -1,4 +1,4 @@
-"""Configuracoes Django do SME-SGP-MS-ETL."""
+"""Configuracoes Django do SME-IntegracaoEOL-MS-ETL."""
 
 import os
 import urllib.parse
@@ -186,7 +186,7 @@ STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-NOME_APLICACAO = os.getenv("NOME_APLICACAO", "SME-SGP-MS-ETL")
+NOME_APLICACAO = os.getenv("NOME_APLICACAO", "SME-IntegracaoEOL-MS-ETL")
 AMBIENTE_APLICACAO = os.getenv("AMBIENTE_APLICACAO", "local")
 NIVEL_LOG = os.getenv("NIVEL_LOG", "INFO")
 URL_BANCO_AUDITORIA = os.getenv(
@@ -212,7 +212,7 @@ REST_FRAMEWORK = {
 }
 
 SPECTACULAR_SETTINGS = {
-    "TITLE": "SME-SGP-MS-ETL API",
+    "TITLE": "SME-IntegracaoEOL-MS-ETL API",
     "DESCRIPTION": "API de controle e auditoria do ETL",
     "VERSION": "1.0.0",
     "SERVE_INCLUDE_SCHEMA": False,

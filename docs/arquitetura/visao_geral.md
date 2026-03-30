@@ -54,5 +54,3 @@ A estrutura atual do projeto inclui:
 - execução indireta via `executar_dominio`
 - task assíncrona `executar_dominio_task`
 - agendamento com `agendar_dominio`
-
-Ou seja, **o código atual ainda possui Celery**, mesmo que parte da documentação anterior tenha sido simplificada.

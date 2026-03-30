@@ -19,6 +19,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
+
+
 RUN set -eux; \
     curl -fsSL https://packages.microsoft.com/keys/microsoft.asc \
         | gpg --dearmor > /usr/share/keyrings/microsoft-prod.gpg; \
@@ -37,6 +39,20 @@ RUN pip install --upgrade pip \
     && pip install -r /app/requirements/local.txt \
     && pip install debugpy==1.8.5 \
     && pip install sphinx sphinx-rtd-theme myst-parser
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    graphviz \
+    make \
+    latexmk \
+    texlive-latex-recommended \
+    texlive-latex-extra \
+    texlive-fonts-recommended \
+    texlive-fonts-extra \
+    texlive-xetex \
+    texlive-lang-portuguese \
+    fonts-dejavu \
+    fonts-liberation \
+    && rm -rf /var/lib/apt/lists/*
 
 RUN echo "openssl_conf = default_conf" > /etc/ssl/openssl_custom.cnf \
     && echo "[default_conf]" >> /etc/ssl/openssl_custom.cnf \
