@@ -56,7 +56,6 @@ INSTALLED_APPS = [
     "rest_framework",
     "drf_spectacular",
     "apps.controle_auditoria",
-    "apps.escolas",
     "apps.eol_connection",
     "apps.institucional",
     "apps.professores",

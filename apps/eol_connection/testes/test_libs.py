@@ -20,7 +20,11 @@ class TestParseUrlDb(TestCase):
 
     def test_parse_url_valida(self) -> None:
         """Extrai corretamente os campos de uma URL MSSQL valida."""
-        url = "mssql+pyodbc://user:pass@10.0.0.1:1433/db?driver=ODBC+Driver+17+for+SQL+Server&TrustServerCertificate=yes"
+        url = (
+            "mssql+pyodbc://user:pass@10.0.0.1:1433/db"
+            "?driver=ODBC+Driver+18+for+SQL+Server"
+            "&TrustServerCertificate=yes"
+        )
         config = _parse_eol_db(url)
         self.assertEqual(config["ENGINE"], "mssql")
         self.assertEqual(config["NAME"], "db")
@@ -28,8 +32,12 @@ class TestParseUrlDb(TestCase):
         self.assertEqual(config["PASSWORD"], "pass")
         self.assertEqual(config["HOST"], "10.0.0.1")
         self.assertEqual(config["PORT"], "1433")
-        self.assertEqual(config["OPTIONS"]["driver"], "ODBC Driver 17 for SQL Server")  # type: ignore
-        self.assertEqual(config["OPTIONS"]["TrustServerCertificate"], "yes")  # type: ignore
+        self.assertEqual(  # type: ignore[index]
+            config["OPTIONS"]["driver"], "ODBC Driver 18 for SQL Server"
+        )
+        self.assertEqual(  # type: ignore[index]
+            config["OPTIONS"]["TrustServerCertificate"], "yes"
+        )
         self.assertEqual(config["OPTIONS"]["Encrypt"], False)  # type: ignore
 
 
