@@ -1,7 +1,5 @@
 """Views DRF para controle e auditoria de execuções ETL."""
 
-import os
-
 from django.db import connections
 from django.db.models import OuterRef, QuerySet, Subquery
 from django.http import HttpRequest, HttpResponse
@@ -365,9 +363,7 @@ class HealthSincRecView(APIView):
         return Response(serializer.data, status=status_http)
 
     def _check_database(self) -> dict[str, str]:
-        if not os.getenv("URL_BANCO_AUDITORIA"):
-            return {"status": "unhealthy"}
-
+        """Retorna se esta conectado ao banco de dados default."""
         try:
             with connections["default"].cursor() as cursor:
                 cursor.execute("SELECT 1")
