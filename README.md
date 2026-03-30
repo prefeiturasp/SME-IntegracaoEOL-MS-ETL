@@ -18,7 +18,7 @@ como broker.
 - `docker-compose.yml` (base):
   - `keydb`, `etl`, `web`
 - `docker-compose-dev.yml` (desenvolvimento):
-  - `postgres`, `keydb`, `etl`, `web_debug`
+  - `postgres`, `keydb`, `etl`, `etl_auditoria`
 
 ## Subir Ambiente
 
@@ -33,7 +33,7 @@ Desenvolvimento:
 
 ```bash
 docker compose -f docker-compose-dev.yml up --build -d
-docker compose -f docker-compose-dev.yml exec web_debug \
+docker compose -f docker-compose-dev.yml exec etl_auditoria \
   python manage.py migrate --noinput --fake-initial
 ```
 
@@ -49,7 +49,7 @@ docker compose -f docker-compose-dev.yml up -d --force-recreate
 docker exec -i sme_sgp_ms_etl_postgres psql -U postgres < scripts/criar_bancos.sql
 
 # Rodar migrations
-docker exec sme_sgp_ms_etl_web_debug sh scripts/executar_migrations.sh
+docker exec sme_sgp_ms_etl_etl_auditoria sh scripts/executar_migrations.sh
 ```
 
 > Os URLs dos bancos no `.env` devem usar o nome do serviço Docker `postgres` (porta `5432`), não `localhost`.
@@ -66,7 +66,7 @@ docker compose exec web python manage.py createsuperuser
 Dev:
 
 ```bash
-docker compose -f docker-compose-dev.yml exec web_debug \
+docker compose -f docker-compose-dev.yml exec etl_auditoria \
   python manage.py createsuperuser
 ```
 
@@ -176,17 +176,28 @@ Resposta:
 Execução direta via command (dev):
 
 ```bash
-docker exec sme_sgp_ms_etl_web_debug python manage.py etl_professores
+docker exec sme_sgp_ms_etl_etl_auditoria python manage.py etl_professores
 ```
 
 ## Debug (dev)
 
 ```bash
-docker compose -f docker-compose-dev.yml up --build -d web_debug
+docker compose -f docker-compose-dev.yml up --build -d etl_auditoria
 ```
 
 - App: `http://localhost:8000`
 - Debug attach: `localhost:5678`
+
+## Documentação (Sphinx)
+
+Gera a documentação HTML a partir dos arquivos em `docs/`:
+
+```bash
+docker compose -f docker-compose-dev.yml run --rm etl_auditoria \
+  sphinx-build -b html docs docs/_build
+```
+
+O resultado fica em `docs/_build/index.html` (acessível no host via volume).
 
 ## Testes
 
@@ -197,3 +208,4 @@ Executa testes no container via ambiente dev:
 ```
 
 O script executa cobertura com `coverage` e exige mínimo de `80%`.
+

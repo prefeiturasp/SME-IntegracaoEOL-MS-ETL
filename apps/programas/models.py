@@ -226,9 +226,9 @@ class AgrupamentoAtribuicaoTerritorioSaber(models.Model):
         verbose_name = "agrupamento de atribuição TdS"
         verbose_name_plural = "agrupamentos de atribuições TdS"
         indexes = [
-            models.Index(fields=["rf_professor"], name="idx_aats_professor"),
-            models.Index(fields=["codigo_turma"], name="idx_aats_turma"),
-            models.Index(fields=["ano_letivo"], name="idx_aats_ano"),
+            models.Index(fields=["rf_professor"], name="prog_idx_aats_professor"),
+            models.Index(fields=["codigo_turma"], name="prog_idx_aats_turma"),
+            models.Index(fields=["ano_letivo"], name="prog_idx_aats_ano"),
         ]
 
 

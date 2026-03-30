@@ -35,7 +35,8 @@ COPY requirements /app/requirements
 
 RUN pip install --upgrade pip \
     && pip install -r /app/requirements/local.txt \
-    && pip install debugpy==1.8.5
+    && pip install debugpy==1.8.5 \
+    && pip install sphinx sphinx-rtd-theme myst-parser
 
 RUN echo "openssl_conf = default_conf" > /etc/ssl/openssl_custom.cnf \
     && echo "[default_conf]" >> /etc/ssl/openssl_custom.cnf \

@@ -1,1 +1,0 @@
-"""Commands do app escolas."""

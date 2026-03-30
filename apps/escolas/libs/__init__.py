@@ -1,1 +1,0 @@
-"""Bibliotecas do dominio escolas."""

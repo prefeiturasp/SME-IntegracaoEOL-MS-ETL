@@ -127,8 +127,8 @@ class UnidadeEducacional(models.Model):
         verbose_name = "unidade educacional"
         verbose_name_plural = "unidades educacionais"
         indexes = [
-            models.Index(fields=["codigo_dre"], name="idx_ue_dre"),
-            models.Index(fields=["codigo_tipo_escola"], name="idx_ue_tipo_escola"),
+            models.Index(fields=["codigo_dre"], name="ped_idx_ue_dre"),
+            models.Index(fields=["codigo_tipo_escola"], name="ped_idx_ue_tipo_escola"),
         ]
 
     def __str__(self) -> str:
@@ -287,12 +287,12 @@ class TurmaEscola(models.Model):
         verbose_name = "turma escolar"
         verbose_name_plural = "turmas escolares"
         indexes = [
-            models.Index(fields=["codigo_escola"], name="idx_te_escola"),
-            models.Index(fields=["ano_letivo"], name="idx_te_ano"),
-            models.Index(fields=["status"], name="idx_te_status"),
+            models.Index(fields=["codigo_escola"], name="ped_idx_te_escola"),
+            models.Index(fields=["ano_letivo"], name="ped_idx_te_ano"),
+            models.Index(fields=["status"], name="ped_idx_te_status"),
             models.Index(
                 fields=["codigo_escola", "ano_letivo"],
-                name="idx_te_escola_ano",
+                name="ped_idx_te_escola_ano",
             ),
         ]
 
@@ -322,7 +322,7 @@ class EscolaGrade(models.Model):
         verbose_name = "grade da escola"
         verbose_name_plural = "grades das escolas"
         indexes = [
-            models.Index(fields=["codigo_escola"], name="idx_eg_escola"),
+            models.Index(fields=["codigo_escola"], name="ped_idx_eg_escola"),
         ]
 
 
@@ -438,7 +438,7 @@ class SerieTurmaGrade(models.Model):
         verbose_name = "série-grade da turma"
         verbose_name_plural = "séries-grade das turmas"
         indexes = [
-            models.Index(fields=["dt_fim"], name="idx_stg_dt_fim"),
+            models.Index(fields=["dt_fim"], name="ped_idx_stg_dt_fim"),
         ]
 
 
@@ -510,6 +510,6 @@ class TurmaGradeTerritorioExperiencia(models.Model):
         indexes = [
             models.Index(
                 fields=["codigo_componente_curricular"],
-                name="idx_tgte_componente",
+                name="ped_idx_tgte_componente",
             ),
         ]

@@ -41,7 +41,10 @@ class Command(BaseCommand):
             return
 
         if dominio == "professores":
-            call_command("etl_professores")
+            argumentos = ["--volume", str(volume), "--offset", str(offset)]
+            if continuar:
+                argumentos.append("--continuar")
+            call_command("etl_professores", *argumentos)
             return
 
         raise CommandError("Dominio invalido. Use: sinc_rec_db, escola, professores")

@@ -29,11 +29,13 @@ Cargos de professor reconhecidos pelo EOL:
     3336, 3344, 3840, 3859, 3867, 3874, 3883, 3884
 """
 
+import hashlib
 import logging
 from typing import Any
 
 from django.db import transaction
 
+from apps.controle_auditoria.models import EtlAuditoriaLinha
 from apps.eol_connection.libs.servico_eol import EOLService
 from apps.professores.models import (
     DRE,
@@ -606,24 +608,6 @@ def _row_to_atribuicao_externo(row: tuple[Any, ...]) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-def _upsert(
-    model_class: Any,
-    objs: list[Any],
-    update_fields: list[str],
-) -> int:
-    """bulk_create com update_conflicts — upsert por PK."""
-    if not objs:
-        return 0
-    pk_name = model_class._meta.pk.name
-    criados = model_class.objects.using("professores_db").bulk_create(
-        objs,
-        update_conflicts=True,
-        unique_fields=[pk_name],
-        update_fields=update_fields,
-    )
-    return len(criados)
-
-
 def _full_refresh(model_class: Any, objs: list[Any]) -> int:
     """Delete + bulk_create em transação atômica."""
     if not objs:
@@ -642,6 +626,100 @@ def _params_cargo() -> dict[int, int]:
 
 
 # ---------------------------------------------------------------------------
+# Controle incremental por hash de linha
+# ---------------------------------------------------------------------------
+
+_HASH_LOOKUP_BATCH = 1000
+
+
+def _calcular_hash(campos: dict[str, Any]) -> str:
+    """SHA-256 dos campos relevantes para controle incremental de mudança.
+
+    Serializa pares chave=valor em ordem alfabética e calcula o digest hex.
+    """
+    conteudo = "|".join(f"{k}={v!r}" for k, v in sorted(campos.items()))
+    return hashlib.sha256(conteudo.encode("utf-8")).hexdigest()
+
+
+def _upsert_incremental(
+    model_class: Any,
+    tabela: str,
+    rows: list[dict[str, Any]],
+    update_fields: list[str],
+) -> int:
+    """Upsert apenas registros cujo hash de linha mudou.
+
+    Fluxo:
+        1. Calcula SHA-256 dos ``update_fields`` de cada linha.
+        2. Consulta ``EtlAuditoriaLinha`` para os IDs do lote.
+        3. Filtra apenas linhas com hash divergente (novas ou alteradas).
+        4. Grava no destino via ``bulk_create(update_conflicts=True)``.
+        5. Atualiza ``EtlAuditoriaLinha`` com os novos hashes.
+
+    Retorna:
+        Número de registros efetivamente escritos no destino.
+    """
+    if not rows:
+        return 0
+
+    pk_name: str = model_class._meta.pk.name
+
+    # Construir (id_destino, hash, row_dict) para cada linha
+    linhas: list[tuple[str, str, dict[str, Any]]] = []
+    for row_dict in rows:
+        pk_str = str(row_dict[pk_name])
+        id_destino = f"{tabela}:{pk_str}"
+        campos_hash = {k: row_dict.get(k) for k in update_fields}
+        linhas.append((id_destino, _calcular_hash(campos_hash), row_dict))
+
+    # Buscar hashes existentes em lotes (evita IN query muito grande)
+    ids_destino = [item[0] for item in linhas]
+    hashes_existentes: dict[str, str] = {}
+    for i in range(0, len(ids_destino), _HASH_LOOKUP_BATCH):
+        lote = ids_destino[i : i + _HASH_LOOKUP_BATCH]
+        hashes_existentes.update(
+            EtlAuditoriaLinha.objects.filter(id_destino__in=lote).values_list(
+                "id_destino", "hash_controle"
+            )
+        )
+
+    # Filtrar somente linhas que mudaram
+    objs_para_salvar: list[Any] = []
+    novos_hashes: dict[str, str] = {}
+    for id_destino, novo_hash, row_dict in linhas:
+        if hashes_existentes.get(id_destino) != novo_hash:
+            objs_para_salvar.append(model_class(**row_dict))
+            novos_hashes[id_destino] = novo_hash
+
+    if not objs_para_salvar:
+        return 0
+
+    # Gravar registros alterados no banco destino
+    model_class.objects.using("professores_db").bulk_create(
+        objs_para_salvar,
+        update_conflicts=True,
+        unique_fields=[pk_name],
+        update_fields=update_fields,
+        batch_size=500,
+    )
+
+    # Atualizar hashes no banco de auditoria (default DB)
+    hash_objs = [
+        EtlAuditoriaLinha(id_destino=id_d, hash_controle=h)
+        for id_d, h in novos_hashes.items()
+    ]
+    EtlAuditoriaLinha.objects.bulk_create(
+        hash_objs,
+        update_conflicts=True,
+        unique_fields=["id_destino"],
+        update_fields=["hash_controle"],
+        batch_size=500,
+    )
+
+    return len(objs_para_salvar)
+
+
+# ---------------------------------------------------------------------------
 # Servico principal
 # ---------------------------------------------------------------------------
 
@@ -656,6 +734,7 @@ class EtlProfessoresService:
     def __init__(self, eol: EOLService | None = None) -> None:
         """Inicializa o serviço com instância de EOLService."""
         self.eol = eol or EOLService()
+        self.ultima_fase_concluida: int = 0
 
     # ------------------------------------------------------------------
     # Fase 1 — Referências sem dependências internas
@@ -664,62 +743,84 @@ class EtlProfessoresService:
     def popular_dre(self) -> int:
         """Popula a tabela DRE."""
         rows = self.eol.executar_query(SQL_DRE)
-        objs = [DRE(**_row_to_dre(r)) for r in rows]
-        return _upsert(DRE, objs, ["nome", "sigla"])
+        return _upsert_incremental(
+            DRE, "dre", [_row_to_dre(r) for r in rows], ["nome", "sigla"]
+        )
 
     def popular_tipos_escola(self) -> int:
         """Popula a tabela TipoEscola."""
         rows = self.eol.executar_query(SQL_TIPO_ESCOLA)
-        objs = [TipoEscola(**_row_to_tipo_escola(r)) for r in rows]
-        return _upsert(TipoEscola, objs, ["descricao", "sigla"])
+        return _upsert_incremental(
+            TipoEscola,
+            "tipo_escola",
+            [_row_to_tipo_escola(r) for r in rows],
+            ["descricao", "sigla"],
+        )
 
     def popular_componentes_curriculares(self) -> int:
         """Popula a tabela ComponenteCurricular."""
         rows = self.eol.executar_query(SQL_COMPONENTES_CURRICULARES)
-        objs = [ComponenteCurricular(**_row_to_componente_curricular(r)) for r in rows]
-        return _upsert(
+        return _upsert_incremental(
             ComponenteCurricular,
-            objs,
+            "componente_curricular",
+            [_row_to_componente_curricular(r) for r in rows],
             ["descricao", "dt_cancelamento"],
         )
 
     def popular_series_ensino(self) -> int:
         """Popula a tabela SerieEnsino."""
         rows = self.eol.executar_query(SQL_SERIES_ENSINO)
-        objs = [SerieEnsino(**_row_to_serie_ensino(r)) for r in rows]
-        return _upsert(SerieEnsino, objs, ["sigla_resumida"])
+        return _upsert_incremental(
+            SerieEnsino,
+            "serie_ensino",
+            [_row_to_serie_ensino(r) for r in rows],
+            ["sigla_resumida"],
+        )
 
     def popular_territorios_saber(self) -> int:
         """Popula a tabela TerritorioSaber."""
         rows = self.eol.executar_query(SQL_TERRITORIOS_SABER)
-        objs = [TerritorioSaber(**_row_to_territorio_saber(r)) for r in rows]
-        return _upsert(TerritorioSaber, objs, ["descricao"])
+        return _upsert_incremental(
+            TerritorioSaber,
+            "territorio_saber",
+            [_row_to_territorio_saber(r) for r in rows],
+            ["descricao"],
+        )
 
     def popular_tipos_experiencia(self) -> int:
         """Popula a tabela TipoExperienciaPedagogica."""
         rows = self.eol.executar_query(SQL_TIPOS_EXPERIENCIA)
-        objs = [TipoExperienciaPedagogica(**_row_to_tipo_experiencia(r)) for r in rows]
-        return _upsert(TipoExperienciaPedagogica, objs, ["descricao"])
+        return _upsert_incremental(
+            TipoExperienciaPedagogica,
+            "tipo_experiencia_pedagogica",
+            [_row_to_tipo_experiencia(r) for r in rows],
+            ["descricao"],
+        )
 
     def popular_grades(self) -> int:
         """Popula a tabela Grade."""
         rows = self.eol.executar_query(SQL_GRADES)
-        objs = [Grade(**_row_to_grade(r)) for r in rows]
-        return _upsert(Grade, objs, ["codigo_serie_ensino", "codigo_tipo_turno"])
+        return _upsert_incremental(
+            Grade,
+            "grade",
+            [_row_to_grade(r) for r in rows],
+            ["codigo_serie_ensino", "codigo_tipo_turno"],
+        )
 
     def popular_cargos(self) -> int:
         """Popula a tabela Cargo."""
         rows = self.eol.executar_query(SQL_CARGOS, _params_cargo())
-        objs = [Cargo(**_row_to_cargo(r)) for r in rows]
-        return _upsert(Cargo, objs, ["descricao"])
+        return _upsert_incremental(
+            Cargo, "cargo", [_row_to_cargo(r) for r in rows], ["descricao"]
+        )
 
     def popular_funcoes_funcionario_externo(self) -> int:
         """Popula a tabela FuncaoFuncionarioExterno."""
         rows = self.eol.executar_query(SQL_FUNCOES_EXTERNO)
-        objs = [FuncaoFuncionarioExterno(**_row_to_funcao_externo(r)) for r in rows]
-        return _upsert(
+        return _upsert_incremental(
             FuncaoFuncionarioExterno,
-            objs,
+            "funcao_funcionario_externo",
+            [_row_to_funcao_externo(r) for r in rows],
             ["descricao", "dt_cancelamento"],
         )
 
@@ -736,16 +837,20 @@ class EtlProfessoresService:
     def popular_escola_grades(self) -> int:
         """Popula a tabela EscolaGrade."""
         rows = self.eol.executar_query(SQL_ESCOLA_GRADES)
-        objs = [EscolaGrade(**_row_to_escola_grade(r)) for r in rows]
-        return _upsert(EscolaGrade, objs, ["codigo_escola", "grade_id"])
+        return _upsert_incremental(
+            EscolaGrade,
+            "escola_grade",
+            [_row_to_escola_grade(r) for r in rows],
+            ["codigo_escola", "grade_id"],
+        )
 
     def popular_turmas_escola(self) -> int:
         """Popula a tabela TurmaEscola."""
         rows = self.eol.executar_query(SQL_TURMAS_ESCOLA)
-        objs = [TurmaEscola(**_row_to_turma_escola(r)) for r in rows]
-        return _upsert(
+        return _upsert_incremental(
             TurmaEscola,
-            objs,
+            "turma_escola",
+            [_row_to_turma_escola(r) for r in rows],
             [
                 "codigo_escola",
                 "ano_letivo",
@@ -763,14 +868,22 @@ class EtlProfessoresService:
     def popular_professores(self) -> int:
         """Popula a tabela Professor."""
         rows = self.eol.executar_query(SQL_PROFESSORES, _params_cargo())
-        objs = [Professor(**_row_to_professor(r)) for r in rows]
-        return _upsert(Professor, objs, ["nome", "nome_social"])
+        return _upsert_incremental(
+            Professor,
+            "professor",
+            [_row_to_professor(r) for r in rows],
+            ["nome", "nome_social"],
+        )
 
     def popular_pessoas(self) -> int:
         """Popula a tabela Pessoa."""
         rows = self.eol.executar_query(SQL_PESSOAS)
-        objs = [Pessoa(**_row_to_pessoa(r)) for r in rows]
-        return _upsert(Pessoa, objs, ["cpf", "nome", "nome_social"])
+        return _upsert_incremental(
+            Pessoa,
+            "pessoa",
+            [_row_to_pessoa(r) for r in rows],
+            ["cpf", "nome", "nome_social"],
+        )
 
     # ------------------------------------------------------------------
     # Fase 3 — Dependem de fase 2
@@ -779,33 +892,30 @@ class EtlProfessoresService:
     def popular_serie_turma_grade(self) -> int:
         """Popula a tabela SerieTurmaGrade."""
         rows = self.eol.executar_query(SQL_SERIE_TURMA_GRADE)
-        objs = [SerieTurmaGrade(**_row_to_serie_turma_grade(r)) for r in rows]
-        return _upsert(
+        return _upsert_incremental(
             SerieTurmaGrade,
-            objs,
+            "serie_turma_grade",
+            [_row_to_serie_turma_grade(r) for r in rows],
             ["turma_id", "codigo_escola", "escola_grade_id", "dt_fim"],
         )
 
     def popular_turma_escola_grade_programa(self) -> int:
         """Popula a tabela TurmaEscolaGradePrograma."""
         rows = self.eol.executar_query(SQL_TURMA_ESCOLA_GRADE_PROGRAMA)
-        objs = [
-            TurmaEscolaGradePrograma(**_row_to_turma_escola_grade_programa(r))
-            for r in rows
-        ]
-        return _upsert(
+        return _upsert_incremental(
             TurmaEscolaGradePrograma,
-            objs,
+            "turma_escola_grade_programa",
+            [_row_to_turma_escola_grade_programa(r) for r in rows],
             ["turma_id", "escola_grade_id", "dt_fim"],
         )
 
     def popular_cargos_base(self) -> int:
         """Popula a tabela CargoBaseServidor."""
         rows = self.eol.executar_query(SQL_CARGOS_BASE, _params_cargo())
-        objs = [CargoBaseServidor(**_row_to_cargo_base(r)) for r in rows]
-        return _upsert(
+        return _upsert_incremental(
             CargoBaseServidor,
-            objs,
+            "cargo_base_servidor",
+            [_row_to_cargo_base(r) for r in rows],
             [
                 "professor_id",
                 "cargo_id",
@@ -818,10 +928,10 @@ class EtlProfessoresService:
     def popular_contratos_externos(self) -> int:
         """Popula a tabela ContratoExterno."""
         rows = self.eol.executar_query(SQL_CONTRATOS_EXTERNOS)
-        objs = [ContratoExterno(**_row_to_contrato_externo(r)) for r in rows]
-        return _upsert(
+        return _upsert_incremental(
             ContratoExterno,
-            objs,
+            "contrato_externo",
+            [_row_to_contrato_externo(r) for r in rows],
             [
                 "pessoa_id",
                 "tipo_funcao_id",
@@ -871,139 +981,193 @@ class EtlProfessoresService:
         return _full_refresh(LaudoMedico, objs)
 
     def popular_atribuicoes_aula(self) -> int:
-        """Popula a tabela AtribuicaoAula."""
+        """Popula a tabela AtribuicaoAula via hash incremental.
+
+        EOL usa cancelamento lógico (dt_cancelamento), não deleção física,
+        por isso upsert incremental é seguro: registros cancelados têm o
+        campo atualizado e o hash diverge, forçando a escrita.
+        """
         rows = self.eol.executar_query(SQL_ATRIBUICOES_AULA, _params_cargo())
-        objs = [AtribuicaoAula(**_row_to_atribuicao_aula(r)) for r in rows]
-        return _full_refresh(AtribuicaoAula, objs)
+        return _upsert_incremental(
+            AtribuicaoAula,
+            "atribuicao_aula",
+            [_row_to_atribuicao_aula(r) for r in rows],
+            [
+                "cargo_base_id",
+                "codigo_unidade_educacao",
+                "codigo_turma_escola",
+                "codigo_turma_escola_grade_programa",
+                "codigo_grade",
+                "codigo_componente_curricular",
+                "codigo_serie_grade",
+                "ano_atribuicao",
+                "dt_atribuicao_aula",
+                "dt_disponibilizacao_aulas",
+                "codigo_motivo_disponibilizacao",
+                "dt_cancelamento",
+            ],
+        )
 
     def popular_atribuicoes_externo(self) -> int:
-        """Popula a tabela AtribuicaoExterno."""
+        """Popula a tabela AtribuicaoExterno via hash incremental."""
         rows = self.eol.executar_query(SQL_ATRIBUICOES_EXTERNO)
-        objs = [AtribuicaoExterno(**_row_to_atribuicao_externo(r)) for r in rows]
-        return _full_refresh(AtribuicaoExterno, objs)
+        return _upsert_incremental(
+            AtribuicaoExterno,
+            "atribuicao_externo",
+            [_row_to_atribuicao_externo(r) for r in rows],
+            [
+                "contrato_externo_id",
+                "codigo_unidade_educacao",
+                "codigo_grade",
+                "codigo_componente_curricular",
+                "codigo_serie_grade",
+                "codigo_turma_escola_grade_programa",
+                "ano_atribuicao",
+                "dt_atribuicao",
+                "dt_disponibilizacao",
+                "codigo_motivo_disponibilizacao_externo",
+                "dt_cancelamento",
+            ],
+        )
 
     # ------------------------------------------------------------------
     # Execucao completa na ordem correta (respeitando FKs internas)
     # ------------------------------------------------------------------
 
-    def executar(self) -> dict[str, int]:
-        """Executa ETL completo do dominio PROFESSORES_DB.
+    def executar(self, fase_inicial: int = 1) -> dict[str, int]:
+        """Executa ETL do dominio PROFESSORES_DB a partir de ``fase_inicial``.
 
-        Retorna dict com contagem de registros escritos por tabela.
-        AgrupamentoAtribuicaoTerritorioSaber está pendente —
-        requer ApiEolConnection (PostgreSQL separado).
+        Args:
+            fase_inicial: Fase de início (1–4). Use > 1 para retomar após falha.
+                - 1: Referências sem dependências (DRE, Cargo, etc.)
+                - 2: UEs, turmas, professores (dependem da fase 1)
+                - 3: Vínculos cargo/contrato (dependem da fase 2)
+                - 4: Atribuições e bloqueios (dependem da fase 3)
+
+        Retorna:
+            Dict com contagem de registros *alterados* escritos por tabela.
+            Registros sem mudança de hash não são contabilizados.
+
+        Nota:
+            ``ultima_fase_concluida`` é atualizado a cada fase para permitir
+            checkpoint de retomada em caso de exceção.
         """
         r: dict[str, int] = {}
         log = logger.info
 
-        log("[ETL PROF] Iniciando carga...")
+        log("[ETL PROF] Iniciando carga a partir da fase %d...", fase_inicial)
 
-        # Fase 1 — sem dependências
-        r["dre"] = self.popular_dre()
-        log("[ETL PROF] dre: %d", r["dre"])
+        # ------------------------------------------------------------------
+        # Fase 1 — Referências sem dependências internas
+        # ------------------------------------------------------------------
+        if fase_inicial <= 1:
+            log("[ETL PROF] === Fase 1: Referências ===")
+            r["dre"] = self.popular_dre()
+            log("[ETL PROF] dre: %d", r["dre"])
+            r["tipo_escola"] = self.popular_tipos_escola()
+            log("[ETL PROF] tipo_escola: %d", r["tipo_escola"])
+            r["componente_curricular"] = self.popular_componentes_curriculares()
+            log("[ETL PROF] componente_curricular: %d", r["componente_curricular"])
+            r["serie_ensino"] = self.popular_series_ensino()
+            log("[ETL PROF] serie_ensino: %d", r["serie_ensino"])
+            r["territorio_saber"] = self.popular_territorios_saber()
+            log("[ETL PROF] territorio_saber: %d", r["territorio_saber"])
+            r["tipo_experiencia_pedagogica"] = self.popular_tipos_experiencia()
+            log(
+                "[ETL PROF] tipo_experiencia_pedagogica: %d",
+                r["tipo_experiencia_pedagogica"],
+            )
+            r["grade"] = self.popular_grades()
+            log("[ETL PROF] grade: %d", r["grade"])
+            r["cargo"] = self.popular_cargos()
+            log("[ETL PROF] cargo: %d", r["cargo"])
+            r["funcao_funcionario_externo"] = self.popular_funcoes_funcionario_externo()
+            log(
+                "[ETL PROF] funcao_funcionario_externo: %d",
+                r["funcao_funcionario_externo"],
+            )
+            self.ultima_fase_concluida = 1
+            log("[ETL PROF] Fase 1 concluída.")
 
-        r["tipo_escola"] = self.popular_tipos_escola()
-        log("[ETL PROF] tipo_escola: %d", r["tipo_escola"])
+        # ------------------------------------------------------------------
+        # Fase 2 — Dependem de fase 1
+        # ------------------------------------------------------------------
+        if fase_inicial <= 2:
+            log("[ETL PROF] === Fase 2: UEs e Professores ===")
+            r["unidade_educacional"] = self.popular_unidades_educacionais()
+            log("[ETL PROF] unidade_educacional: %d", r["unidade_educacional"])
+            r["escola_grade"] = self.popular_escola_grades()
+            log("[ETL PROF] escola_grade: %d", r["escola_grade"])
+            r["turma_escola"] = self.popular_turmas_escola()
+            log("[ETL PROF] turma_escola: %d", r["turma_escola"])
+            r["professor"] = self.popular_professores()
+            log("[ETL PROF] professor: %d", r["professor"])
+            r["pessoa"] = self.popular_pessoas()
+            log("[ETL PROF] pessoa: %d", r["pessoa"])
+            self.ultima_fase_concluida = 2
+            log("[ETL PROF] Fase 2 concluída.")
 
-        r["componente_curricular"] = self.popular_componentes_curriculares()
-        log(
-            "[ETL PROF] componente_curricular: %d",
-            r["componente_curricular"],
-        )
+        # ------------------------------------------------------------------
+        # Fase 3 — Dependem de fase 2
+        # ------------------------------------------------------------------
+        if fase_inicial <= 3:
+            log("[ETL PROF] === Fase 3: Vínculos ===")
+            r["serie_turma_grade"] = self.popular_serie_turma_grade()
+            log("[ETL PROF] serie_turma_grade: %d", r["serie_turma_grade"])
+            r["turma_escola_grade_programa"] = (
+                self.popular_turma_escola_grade_programa()
+            )
+            log(
+                "[ETL PROF] turma_escola_grade_programa: %d",
+                r["turma_escola_grade_programa"],
+            )
+            r["cargo_base_servidor"] = self.popular_cargos_base()
+            log("[ETL PROF] cargo_base_servidor: %d", r["cargo_base_servidor"])
+            r["contrato_externo"] = self.popular_contratos_externos()
+            log("[ETL PROF] contrato_externo: %d", r["contrato_externo"])
+            self.ultima_fase_concluida = 3
+            log("[ETL PROF] Fase 3 concluída.")
 
-        r["serie_ensino"] = self.popular_series_ensino()
-        log("[ETL PROF] serie_ensino: %d", r["serie_ensino"])
-
-        r["territorio_saber"] = self.popular_territorios_saber()
-        log("[ETL PROF] territorio_saber: %d", r["territorio_saber"])
-
-        r["tipo_experiencia_pedagogica"] = self.popular_tipos_experiencia()
-        log(
-            "[ETL PROF] tipo_experiencia_pedagogica: %d",
-            r["tipo_experiencia_pedagogica"],
-        )
-
-        r["grade"] = self.popular_grades()
-        log("[ETL PROF] grade: %d", r["grade"])
-
-        r["cargo"] = self.popular_cargos()
-        log("[ETL PROF] cargo: %d", r["cargo"])
-
-        r["funcao_funcionario_externo"] = self.popular_funcoes_funcionario_externo()
-        log(
-            "[ETL PROF] funcao_funcionario_externo: %d",
-            r["funcao_funcionario_externo"],
-        )
-
-        # Fase 2 — dependem de fase 1
-        r["unidade_educacional"] = self.popular_unidades_educacionais()
-        log("[ETL PROF] unidade_educacional: %d", r["unidade_educacional"])
-
-        r["escola_grade"] = self.popular_escola_grades()
-        log("[ETL PROF] escola_grade: %d", r["escola_grade"])
-
-        r["turma_escola"] = self.popular_turmas_escola()
-        log("[ETL PROF] turma_escola: %d", r["turma_escola"])
-
-        r["professor"] = self.popular_professores()
-        log("[ETL PROF] professor: %d", r["professor"])
-
-        r["pessoa"] = self.popular_pessoas()
-        log("[ETL PROF] pessoa: %d", r["pessoa"])
-
-        # Fase 3 — dependem de fase 2
-        r["serie_turma_grade"] = self.popular_serie_turma_grade()
-        log("[ETL PROF] serie_turma_grade: %d", r["serie_turma_grade"])
-
-        r["turma_escola_grade_programa"] = self.popular_turma_escola_grade_programa()
-        log(
-            "[ETL PROF] turma_escola_grade_programa: %d",
-            r["turma_escola_grade_programa"],
-        )
-
-        r["cargo_base_servidor"] = self.popular_cargos_base()
-        log("[ETL PROF] cargo_base_servidor: %d", r["cargo_base_servidor"])
-
-        r["contrato_externo"] = self.popular_contratos_externos()
-        log("[ETL PROF] contrato_externo: %d", r["contrato_externo"])
-
-        # Fase 4 — dependem de fase 3
-        r["turma_grade_territorio_experiencia"] = (
-            self.popular_turma_grade_territorio_experiencia()
-        )
-        log(
-            "[ETL PROF] turma_grade_territorio_experiencia: %d",
-            r["turma_grade_territorio_experiencia"],
-        )
-
-        r["lotacao_servidor"] = self.popular_lotacoes()
-        log("[ETL PROF] lotacao_servidor: %d", r["lotacao_servidor"])
-
-        r["cargo_sobreposto_servidor"] = self.popular_cargos_sobrepostos()
-        log(
-            "[ETL PROF] cargo_sobreposto_servidor: %d",
-            r["cargo_sobreposto_servidor"],
-        )
-
-        r["funcao_atividade_cargo_servidor"] = self.popular_funcoes_atividade()
-        log(
-            "[ETL PROF] funcao_atividade_cargo_servidor: %d",
-            r["funcao_atividade_cargo_servidor"],
-        )
-
-        r["laudo_medico"] = self.popular_laudos()
-        log("[ETL PROF] laudo_medico: %d", r["laudo_medico"])
-
-        r["atribuicao_aula"] = self.popular_atribuicoes_aula()
-        log("[ETL PROF] atribuicao_aula: %d", r["atribuicao_aula"])
-
-        r["atribuicao_externo"] = self.popular_atribuicoes_externo()
-        log("[ETL PROF] atribuicao_externo: %d", r["atribuicao_externo"])
+        # ------------------------------------------------------------------
+        # Fase 4 — Dependem de fase 3
+        # ------------------------------------------------------------------
+        if fase_inicial <= 4:
+            log("[ETL PROF] === Fase 4: Atribuições e Bloqueios ===")
+            r["turma_grade_territorio_experiencia"] = (
+                self.popular_turma_grade_territorio_experiencia()
+            )
+            log(
+                "[ETL PROF] turma_grade_territorio_experiencia: %d",
+                r["turma_grade_territorio_experiencia"],
+            )
+            r["lotacao_servidor"] = self.popular_lotacoes()
+            log("[ETL PROF] lotacao_servidor: %d", r["lotacao_servidor"])
+            r["cargo_sobreposto_servidor"] = self.popular_cargos_sobrepostos()
+            log(
+                "[ETL PROF] cargo_sobreposto_servidor: %d",
+                r["cargo_sobreposto_servidor"],
+            )
+            r["funcao_atividade_cargo_servidor"] = self.popular_funcoes_atividade()
+            log(
+                "[ETL PROF] funcao_atividade_cargo_servidor: %d",
+                r["funcao_atividade_cargo_servidor"],
+            )
+            r["laudo_medico"] = self.popular_laudos()
+            log("[ETL PROF] laudo_medico: %d", r["laudo_medico"])
+            r["atribuicao_aula"] = self.popular_atribuicoes_aula()
+            log("[ETL PROF] atribuicao_aula: %d", r["atribuicao_aula"])
+            r["atribuicao_externo"] = self.popular_atribuicoes_externo()
+            log("[ETL PROF] atribuicao_externo: %d", r["atribuicao_externo"])
+            self.ultima_fase_concluida = 4
+            log("[ETL PROF] Fase 4 concluída.")
 
         # Pendente: agrupamento_atribuicao_territorio_saber
         # Requer ApiEolConnection (PostgreSQL API EOL — não implementado).
-        # Implementar quando EtlApiEolService estiver disponível.
 
         total = sum(r.values())
-        log("[ETL PROF] Concluido. Total: %d registros.", total)
+        log(
+            "[ETL PROF] Concluído. Linhas alteradas: %d (fases %d–4).",
+            total,
+            fase_inicial,
+        )
         return r

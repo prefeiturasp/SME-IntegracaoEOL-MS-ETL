@@ -3,20 +3,31 @@
 import os
 import urllib.parse
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
+
+DB_POOL_SIZE = int(os.getenv("DB_POOL_SIZE", "5"))
+_POOL_OPTIONS = {
+    "POOL_SIZE": DB_POOL_SIZE,
+    "MAX_OVERFLOW": 0,
+    "POOL_TIMEOUT": 30,
+    "POOL_RECYCLE": 1800,
+    "PRE_PING": True,
+}
 
 
 def _parse_db_url(url: str) -> dict:
     """Faz o parse de uma URL PostgreSQL para dict de configuração Django."""
     parsed = urllib.parse.urlparse(url)
     return {
-        "ENGINE": "django.db.backends.postgresql",
+        "ENGINE": "dj_db_conn_pool.backends.postgresql",
         "NAME": parsed.path.lstrip("/"),
         "USER": parsed.username or "postgres",
         "PASSWORD": parsed.password or "postgres",
         "HOST": parsed.hostname or "localhost",
         "PORT": str(parsed.port or 5432),
+        "POOL_OPTIONS": _POOL_OPTIONS,
     }
+
 
 SILENCED_SYSTEM_CHECKS = [
     "models.E030",  # index names duplicados entre models
@@ -84,7 +95,8 @@ TEMPLATES = [
 WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = "config.asgi.application"
 
-def _parse_eol_db(url: str) -> Dict[str, Any]:
+
+def _parse_eol_db(url: str) -> dict[str, Any]:
     """Faz o parse de uma URL mssql+pyodbc para dict de configuração Django."""
     if not url:
         return {}
@@ -95,7 +107,7 @@ def _parse_eol_db(url: str) -> Dict[str, Any]:
     def _get_param(name: str, default: str = "") -> str:
         return query.get(name, [default])[0]
 
-    options: Dict[str, Any] = {}
+    options: dict[str, Any] = {}
     driver = _get_param("driver")
     if driver:
         options["driver"] = driver.replace("+", " ")
@@ -117,6 +129,7 @@ def _parse_eol_db(url: str) -> Dict[str, Any]:
         "OPTIONS": options,
         "TEST": {"MIGRATE": False},
     }
+
 
 URL_BANCO_INSTITUCIONAL = os.getenv(
     "URL_BANCO_INSTITUCIONAL",
@@ -140,12 +153,13 @@ URL_BANCO_PROGRAMAS = os.getenv(
 )
 DATABASES = {
     "default": {
-        "ENGINE": "django.db.backends.postgresql",
+        "ENGINE": "dj_db_conn_pool.backends.postgresql",
         "NAME": os.getenv("POSTGRES_DB", "postgres"),
         "USER": os.getenv("POSTGRES_USER", "postgres"),
         "PASSWORD": os.getenv("POSTGRES_PASSWORD", "postgres"),
         "HOST": os.getenv("POSTGRES_HOST", "localhost"),
         "PORT": os.getenv("POSTGRES_PORT", "5432"),
+        "POOL_OPTIONS": _POOL_OPTIONS,
     },
     "eol_db": _parse_eol_db(os.getenv("EOL_DB", "")),
     "institucional_db": _parse_db_url(URL_BANCO_INSTITUCIONAL),
@@ -156,6 +170,11 @@ DATABASES = {
 }
 
 DATABASE_ROUTERS = ["config.db_router.DominioRouter"]
+
+# W035: múltiplos modelos com o mesmo db_table é intencional — cada app
+# roteia para um banco separado via DominioRouter (institucional_db,
+# professores_db, alunos_db, pedagogico_db, programas_db).
+SILENCED_SYSTEM_CHECKS = ["models.W035"]
 
 AUTH_PASSWORD_VALIDATORS: list[dict[str, object]] = []
 

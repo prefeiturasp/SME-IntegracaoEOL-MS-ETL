@@ -192,8 +192,8 @@ class UnidadeEducacional(models.Model):
         verbose_name = "unidade educacional"
         verbose_name_plural = "unidades educacionais"
         indexes = [
-            models.Index(fields=["dre"], name="idx_ue_dre"),
-            models.Index(fields=["tipo_escola"], name="idx_ue_tipo_escola"),
+            models.Index(fields=["dre"], name="prof_idx_ue_dre"),
+            models.Index(fields=["tipo_escola"], name="prof_idx_ue_tipo_escola"),
         ]
 
     def __str__(self) -> str:
@@ -370,7 +370,7 @@ class EscolaGrade(models.Model):
         verbose_name = "grade da escola"
         verbose_name_plural = "grades das escolas"
         indexes = [
-            models.Index(fields=["codigo_escola"], name="idx_eg_escola"),
+            models.Index(fields=["codigo_escola"], name="prof_idx_eg_escola"),
         ]
 
 
@@ -412,12 +412,12 @@ class TurmaEscola(models.Model):
         verbose_name = "turma escolar"
         verbose_name_plural = "turmas escolares"
         indexes = [
-            models.Index(fields=["codigo_escola"], name="idx_te_escola"),
-            models.Index(fields=["ano_letivo"], name="idx_te_ano"),
-            models.Index(fields=["status"], name="idx_te_status"),
+            models.Index(fields=["codigo_escola"], name="prof_idx_te_escola"),
+            models.Index(fields=["ano_letivo"], name="prof_idx_te_ano"),
+            models.Index(fields=["status"], name="prof_idx_te_status"),
             models.Index(
                 fields=["codigo_escola", "ano_letivo"],
-                name="idx_te_escola_ano",
+                name="prof_idx_te_escola_ano",
             ),
         ]
 
@@ -464,8 +464,8 @@ class SerieTurmaGrade(models.Model):
         verbose_name = "série-grade da turma"
         verbose_name_plural = "séries-grade das turmas"
         indexes = [
-            models.Index(fields=["dt_fim"], name="idx_stg_dt_fim"),
-            models.Index(fields=["codigo_escola"], name="idx_stg_escola"),
+            models.Index(fields=["dt_fim"], name="prof_idx_stg_dt_fim"),
+            models.Index(fields=["codigo_escola"], name="prof_idx_stg_escola"),
         ]
 
 
@@ -544,7 +544,7 @@ class TurmaGradeTerritorioExperiencia(models.Model):
         indexes = [
             models.Index(
                 fields=["codigo_componente_curricular"],
-                name="idx_tgte_componente",
+                name="prof_idx_tgte_componente",
             ),
         ]
 
@@ -609,9 +609,9 @@ class AgrupamentoAtribuicaoTerritorioSaber(models.Model):
         verbose_name = "agrupamento de atribuição TdS"
         verbose_name_plural = "agrupamentos de atribuições TdS"
         indexes = [
-            models.Index(fields=["rf_professor"], name="idx_aats_professor"),
-            models.Index(fields=["codigo_turma"], name="idx_aats_turma"),
-            models.Index(fields=["ano_letivo"], name="idx_aats_ano"),
+            models.Index(fields=["rf_professor"], name="prof_idx_aats_professor"),
+            models.Index(fields=["codigo_turma"], name="prof_idx_aats_turma"),
+            models.Index(fields=["ano_letivo"], name="prof_idx_aats_ano"),
         ]
 
 

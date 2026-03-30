@@ -200,6 +200,15 @@ class ExecutarDominioView(APIView):
         offset = request.data.get("offset", 0)
         continuar = request.data.get("continuar", False)
         executar_em = request.data.get("executar_em")
+        # Prioridade: 0 = mais urgente, 9 = menos urgente (padrão: 5)
+        prioridade = int(request.data.get("prioridade", 5))
+
+        kwargs_task = {
+            "dominio": dominio,
+            "volume": volume,
+            "offset": offset,
+            "continuar": continuar,
+        }
 
         if executar_em:
             eta = parse_datetime(executar_em)
@@ -210,20 +219,14 @@ class ExecutarDominioView(APIView):
                 )
 
             resultado = executar_dominio_task.apply_async(
-                kwargs={
-                    "dominio": dominio,
-                    "volume": volume,
-                    "offset": offset,
-                    "continuar": continuar,
-                },
+                kwargs=kwargs_task,
                 eta=eta,
+                priority=prioridade,
             )
         else:
-            resultado = executar_dominio_task.delay(
-                dominio=dominio,
-                volume=volume,
-                offset=offset,
-                continuar=continuar,
+            resultado = executar_dominio_task.apply_async(
+                kwargs=kwargs_task,
+                priority=prioridade,
             )
 
         return Response({"task_id": resultado.id}, status=status.HTTP_202_ACCEPTED)

@@ -135,8 +135,8 @@ class UnidadeEducacional(models.Model):
         verbose_name = "unidade educacional"
         verbose_name_plural = "unidades educacionais"
         indexes = [
-            models.Index(fields=["dre"], name="idx_ue_dre"),
-            models.Index(fields=["tipo_escola"], name="idx_ue_tipo_escola"),
+            models.Index(fields=["dre"], name="inst_idx_ue_dre"),
+            models.Index(fields=["tipo_escola"], name="inst_idx_ue_tipo_escola"),
         ]
 
     def __str__(self) -> str:

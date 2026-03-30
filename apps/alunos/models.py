@@ -121,8 +121,8 @@ class UnidadeEducacional(models.Model):
         verbose_name = "unidade educacional"
         verbose_name_plural = "unidades educacionais"
         indexes = [
-            models.Index(fields=["codigo_dre"], name="idx_ue_dre"),
-            models.Index(fields=["codigo_tipo_escola"], name="idx_ue_tipo_escola"),
+            models.Index(fields=["codigo_dre"], name="alu_idx_ue_dre"),
+            models.Index(fields=["codigo_tipo_escola"], name="alu_idx_ue_tipo_escola"),
         ]
 
     def __str__(self) -> str:
@@ -157,11 +157,11 @@ class TurmaEscola(models.Model):
         verbose_name = "turma escolar"
         verbose_name_plural = "turmas escolares"
         indexes = [
-            models.Index(fields=["codigo_escola"], name="idx_te_escola"),
-            models.Index(fields=["ano_letivo"], name="idx_te_ano"),
+            models.Index(fields=["codigo_escola"], name="alu_idx_te_escola"),
+            models.Index(fields=["ano_letivo"], name="alu_idx_te_ano"),
             models.Index(
                 fields=["codigo_escola", "ano_letivo"],
-                name="idx_te_escola_ano",
+                name="alu_idx_te_escola_ano",
             ),
         ]
 

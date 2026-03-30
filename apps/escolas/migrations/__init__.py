@@ -1,1 +1,0 @@
-"""Migracoes do app escolas."""

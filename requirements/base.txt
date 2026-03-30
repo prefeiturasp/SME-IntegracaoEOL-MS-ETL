@@ -7,3 +7,4 @@ watchdog>=4.0,<5
 pyodbc>=5.1,<6
 mssql-django>=1.4,<2
 gunicorn>=21.2,<23
+django-db-connection-pool>=1.2,<2
