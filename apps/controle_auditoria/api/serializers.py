@@ -87,8 +87,8 @@ class EtlExecucaoDetalheSerializer(serializers.ModelSerializer):
         qs = EtlExecucaoTabelaEscrita.objects.filter(id_execucao=obj.id_execucao)
         return list(EtlExecucaoTabelaEscritaSerializer(qs, many=True).data)
 
+
 class HealthStatusSerializer(serializers.Serializer):
     """Serializer para resposta do endpoint de healthcheck."""
 
     status = serializers.ChoiceField(choices=["healthy", "degraded", "unhealthy"])
-

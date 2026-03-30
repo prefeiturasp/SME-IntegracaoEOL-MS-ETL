@@ -103,8 +103,8 @@ class ViewsApiControleAuditoriaTestCase(TestCase):
 
     @patch("apps.controle_auditoria.api.views.executar_dominio_task")
     def test_deve_enfileirar_execucao_imediata(self, tarefa_mock: Any) -> None:
-        """POST sem data agenda em execução imediata (delay)."""
-        tarefa_mock.delay.return_value = type("Result", (), {"id": "task-1"})()
+        """POST sem data agenda em execução imediata (apply_async sem eta)."""
+        tarefa_mock.apply_async.return_value = type("Result", (), {"id": "task-1"})()
         resposta = self.client.post(
             "/api/v1/dominios/escola/executar/",
             data={"volume": 10, "offset": 1, "continuar": True},
@@ -113,11 +113,9 @@ class ViewsApiControleAuditoriaTestCase(TestCase):
         )
         self.assertEqual(resposta.status_code, 202)
         self.assertEqual(resposta.json()["task_id"], "task-1")
-        tarefa_mock.delay.assert_called_once_with(
-            dominio="escola",
-            volume=10,
-            offset=1,
-            continuar=True,
+        tarefa_mock.apply_async.assert_called_once_with(
+            kwargs={"dominio": "escola", "volume": 10, "offset": 1, "continuar": True},
+            priority=5,
         )
 
     @patch("apps.controle_auditoria.api.views.executar_dominio_task")
@@ -155,7 +153,6 @@ class ViewsApiControleAuditoriaTestCase(TestCase):
         self.assertEqual(resposta.status_code, 400)
         self.assertIn("erro", resposta.json())
         tarefa_mock.apply_async.assert_not_called()
-        tarefa_mock.delay.assert_not_called()
 
     def test_docs_e_schema_devem_ser_publicos(self) -> None:
         """Swagger e schema devem responder sem autenticação."""
@@ -168,7 +165,6 @@ class ViewsApiControleAuditoriaTestCase(TestCase):
         """Sem API key, endpoints da API devem negar acesso."""
         resposta = self.client.get("/api/v1/checkpoints/")
         self.assertEqual(resposta.status_code, 403)
-
 
     def test_deve_retornar_detalhe_de_execucao_com_tabelas(self) -> None:
         """Retorna execução com tabelas lidas e escritas aninhadas."""
@@ -361,6 +357,7 @@ class DashboardViewTestCase(TestCase):
         resposta = self.client.get("/dashboard/")
         self.assertEqual(resposta.status_code, 200)
 
+
 class HealthSincRecViewTestCase(TestCase):
     """Testes para endpoints do HealthSincRecView."""
 
@@ -392,4 +389,3 @@ class HealthSincRecViewTestCase(TestCase):
 
         self.assertEqual(response.status_code, 503)
         self.assertEqual(response.json()["status"], "unhealthy")
-

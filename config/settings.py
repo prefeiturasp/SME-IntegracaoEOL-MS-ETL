@@ -1,9 +1,39 @@
 """Configuracoes Django do SME-SGP-MS-ETL."""
 
 import os
+import urllib.parse
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs, unquote_plus, urlparse
+
+DB_POOL_SIZE = int(os.getenv("DB_POOL_SIZE", "5"))
+_POOL_OPTIONS = {
+    "POOL_SIZE": DB_POOL_SIZE,
+    "MAX_OVERFLOW": 0,
+    "POOL_TIMEOUT": 30,
+    "POOL_RECYCLE": 1800,
+    "PRE_PING": True,
+}
+
+
+def _parse_db_url(url: str) -> dict:
+    """Faz o parse de uma URL PostgreSQL para dict de configuração Django."""
+    parsed = urllib.parse.urlparse(url)
+    return {
+        "ENGINE": "dj_db_conn_pool.backends.postgresql",
+        "NAME": parsed.path.lstrip("/"),
+        "USER": parsed.username or "postgres",
+        "PASSWORD": parsed.password or "postgres",
+        "HOST": parsed.hostname or "localhost",
+        "PORT": str(parsed.port or 5432),
+        "POOL_OPTIONS": _POOL_OPTIONS,
+    }
+
+
+SILENCED_SYSTEM_CHECKS = [
+    "models.E030",  # index names duplicados entre models
+    "models.W035",  # db_table duplicado entre apps
+]
+
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -26,9 +56,12 @@ INSTALLED_APPS = [
     "rest_framework",
     "drf_spectacular",
     "apps.controle_auditoria",
-    "apps.escolas",
     "apps.eol_connection",
     "apps.institucional",
+    "apps.professores",
+    "apps.alunos",
+    "apps.pedagogico",
+    "apps.programas",
 ]
 
 MIDDLEWARE = [
@@ -61,49 +94,86 @@ TEMPLATES = [
 WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = "config.asgi.application"
 
-def _parse_eol_db(url: str) -> dict[str, object]:
-    """Parseia URL mssql+pyodbc e retorna config para DATABASES."""
+
+def _parse_eol_db(url: str) -> dict[str, Any]:
+    """Faz o parse de uma URL mssql+pyodbc para dict de configuração Django."""
     if not url:
         return {}
-    parsed = urlparse(url)
-    query = parse_qs(parsed.query)
-    driver = (
-        query.get("driver", ["ODBC Driver 17 for SQL Server"])[0]
-        .replace("+", " ")
-    )
-    trust = query.get("TrustServerCertificate", ["yes"])[0]
-    readonly = query.get("ReadOnly", [""])[0]
-    
-    options: dict[str, Any] = {
-        "driver": driver,
-        "TrustServerCertificate": trust,
-        "Encrypt": False,
-    }
+
+    parsed = urllib.parse.urlparse(url)
+    query = urllib.parse.parse_qs(parsed.query)
+
+    def _get_param(name: str, default: str = "") -> str:
+        return query.get(name, [default])[0]
+
+    options: dict[str, Any] = {}
+    driver = _get_param("driver")
+    if driver:
+        options["driver"] = driver.replace("+", " ")
+    trust = _get_param("TrustServerCertificate")
+    if trust:
+        options["TrustServerCertificate"] = trust
+    readonly = _get_param("ReadOnly")
     if readonly:
         options["ReadOnly"] = readonly
+    options["Encrypt"] = False
 
     return {
         "ENGINE": "mssql",
         "NAME": parsed.path.lstrip("/"),
-        "USER": unquote_plus(parsed.username or ""),
-        "PASSWORD": unquote_plus(parsed.password or ""),
-        "HOST": parsed.hostname or "",
+        "USER": urllib.parse.unquote_plus(parsed.username or ""),
+        "PASSWORD": urllib.parse.unquote_plus(parsed.password or ""),
+        "HOST": parsed.hostname or "localhost",
         "PORT": str(parsed.port or 1433),
         "OPTIONS": options,
         "TEST": {"MIGRATE": False},
     }
 
+
+URL_BANCO_INSTITUCIONAL = os.getenv(
+    "URL_BANCO_INSTITUCIONAL",
+    "postgresql://postgres:postgres@localhost:5432/institucional_db",
+)
+URL_BANCO_PROFESSORES = os.getenv(
+    "URL_BANCO_PROFESSORES",
+    "postgresql://postgres:postgres@localhost:5432/professores_db",
+)
+URL_BANCO_ALUNOS = os.getenv(
+    "URL_BANCO_ALUNOS",
+    "postgresql://postgres:postgres@localhost:5432/alunos_db",
+)
+URL_BANCO_PEDAGOGICO = os.getenv(
+    "URL_BANCO_PEDAGOGICO",
+    "postgresql://postgres:postgres@localhost:5432/pedagogico_db",
+)
+URL_BANCO_PROGRAMAS = os.getenv(
+    "URL_BANCO_PROGRAMAS",
+    "postgresql://postgres:postgres@localhost:5432/programas_db",
+)
 DATABASES = {
     "default": {
-        "ENGINE": "django.db.backends.postgresql",
+        "ENGINE": "dj_db_conn_pool.backends.postgresql",
         "NAME": os.getenv("POSTGRES_DB", "postgres"),
         "USER": os.getenv("POSTGRES_USER", "postgres"),
         "PASSWORD": os.getenv("POSTGRES_PASSWORD", "postgres"),
         "HOST": os.getenv("POSTGRES_HOST", "localhost"),
         "PORT": os.getenv("POSTGRES_PORT", "5432"),
+        "POOL_OPTIONS": _POOL_OPTIONS,
     },
     "eol_db": _parse_eol_db(os.getenv("EOL_DB", "")),
+    "institucional_db": _parse_db_url(URL_BANCO_INSTITUCIONAL),
+    "professores_db": _parse_db_url(URL_BANCO_PROFESSORES),
+    "alunos_db": _parse_db_url(URL_BANCO_ALUNOS),
+    "pedagogico_db": _parse_db_url(URL_BANCO_PEDAGOGICO),
+    "programas_db": _parse_db_url(URL_BANCO_PROGRAMAS),
 }
+
+DATABASE_ROUTERS = ["config.db_router.DominioRouter"]
+
+# W035: múltiplos modelos com o mesmo db_table é intencional — cada app
+# roteia para um banco separado via DominioRouter (institucional_db,
+# professores_db, alunos_db, pedagogico_db, programas_db).
+SILENCED_SYSTEM_CHECKS = ["models.W035"]
 
 AUTH_PASSWORD_VALIDATORS: list[dict[str, object]] = []
 
@@ -122,10 +192,6 @@ NIVEL_LOG = os.getenv("NIVEL_LOG", "INFO")
 URL_BANCO_AUDITORIA = os.getenv(
     "URL_BANCO_AUDITORIA",
     "postgresql://postgres:postgres@localhost:5432/sinc_rec_db",
-)
-URL_BANCO_INSTITUCIONAL = os.getenv(
-    "URL_BANCO_INSTITUCIONAL",
-    "postgresql://postgres:postgres@localhost:5432/institucional_db",
 )
 URL_KEYDB = os.getenv("URL_KEYDB", "redis://localhost:6379/0")
 EOL_DB = os.getenv("EOL_DB", "")

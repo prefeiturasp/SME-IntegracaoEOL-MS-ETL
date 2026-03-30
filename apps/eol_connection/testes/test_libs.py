@@ -1,6 +1,5 @@
 """Testes unitarios das bibliotecas de eol_connection."""
 
-import os
 from unittest.mock import MagicMock, patch
 
 from django.test import TestCase, override_settings
@@ -16,10 +15,16 @@ class TestParseUrlDb(TestCase):
     """Testes para a funcao _parse_eol_db."""
 
     def test_parse_url_vazia(self) -> None:
+        """Retorna dict vazio para URL vazia."""
         self.assertEqual(_parse_eol_db(""), {})
 
     def test_parse_url_valida(self) -> None:
-        url = "mssql+pyodbc://user:pass@10.0.0.1:1433/db?driver=ODBC+Driver+17+for+SQL+Server&TrustServerCertificate=yes"
+        """Extrai corretamente os campos de uma URL MSSQL valida."""
+        url = (
+            "mssql+pyodbc://user:pass@10.0.0.1:1433/db"
+            "?driver=ODBC+Driver+18+for+SQL+Server"
+            "&TrustServerCertificate=yes"
+        )
         config = _parse_eol_db(url)
         self.assertEqual(config["ENGINE"], "mssql")
         self.assertEqual(config["NAME"], "db")
@@ -27,9 +32,13 @@ class TestParseUrlDb(TestCase):
         self.assertEqual(config["PASSWORD"], "pass")
         self.assertEqual(config["HOST"], "10.0.0.1")
         self.assertEqual(config["PORT"], "1433")
-        self.assertEqual(config["OPTIONS"]["driver"], "ODBC Driver 17 for SQL Server") # type: ignore
-        self.assertEqual(config["OPTIONS"]["TrustServerCertificate"], "yes") # type: ignore
-        self.assertEqual(config["OPTIONS"]["Encrypt"], False) # type: ignore
+        self.assertEqual(  # type: ignore[index]
+            config["OPTIONS"]["driver"], "ODBC Driver 18 for SQL Server"
+        )
+        self.assertEqual(  # type: ignore[index]
+            config["OPTIONS"]["TrustServerCertificate"], "yes"
+        )
+        self.assertEqual(config["OPTIONS"]["Encrypt"], False)  # type: ignore
 
 
 class TestConnectionFactory(TestCase):
@@ -37,9 +46,8 @@ class TestConnectionFactory(TestCase):
 
     def test_banco_nao_configurado(self) -> None:
         """Erro quando banco nao esta configurado no settings.DATABASES."""
-        with override_settings(DATABASES={}):
-            with self.assertRaises(ValueError):
-                EOLConnectionFactory(db_alias="eol_db")
+        with override_settings(DATABASES={}), self.assertRaises(ValueError):
+            EOLConnectionFactory(db_alias="eol_db")
 
     @override_settings(DATABASES={"eol_db": {"ENGINE": "mssql"}})
     @patch("apps.eol_connection.libs.connection.connections")
@@ -60,7 +68,7 @@ class TestConnectionFactory(TestCase):
         """Executa consulta e retorna resultados."""
         mock_cursor = MagicMock()
         mock_cursor.fetchall.return_value = [("ok",)]
-        
+
         mock_conn = MagicMock()
         mock_conn.cursor.return_value.__enter__.return_value = mock_cursor
         mock_connections.__getitem__.return_value = mock_conn
@@ -73,20 +81,26 @@ class TestConnectionFactory(TestCase):
 
     @override_settings(DATABASES={"eol_db": {"ENGINE": "mssql"}})
     @patch("apps.eol_connection.libs.connection.connections")
-    def test_executar_consulta_com_parametros(self, mock_connections: MagicMock) -> None:
+    def test_executar_consulta_com_parametros(
+        self, mock_connections: MagicMock
+    ) -> None:
         """Executa consulta com parametros nomeados."""
         mock_cursor = MagicMock()
         mock_cursor.fetchall.return_value = [(1,)]
-        
+
         mock_conn = MagicMock()
         mock_conn.cursor.return_value.__enter__.return_value = mock_cursor
         mock_connections.__getitem__.return_value = mock_conn
 
         factory = EOLConnectionFactory(db_alias="eol_db")
-        result = factory.executar_consulta("SELECT * FROM tabela WHERE id=:id", {"id": 1})
+        result = factory.executar_consulta(
+            "SELECT * FROM tabela WHERE id=:id", {"id": 1}
+        )
 
         self.assertEqual(result, [(1,)])
-        mock_cursor.execute.assert_called_with("SELECT * FROM tabela WHERE id=:id", {"id": 1})
+        mock_cursor.execute.assert_called_with(
+            "SELECT * FROM tabela WHERE id=:id", {"id": 1}
+        )
 
     @override_settings(DATABASES={"eol_db": {"ENGINE": "mssql"}})
     @patch("apps.eol_connection.libs.connection.connections")
@@ -94,7 +108,7 @@ class TestConnectionFactory(TestCase):
         """Executa comando de leitura (SELECT)."""
         mock_cursor = MagicMock()
         mock_cursor.fetchall.return_value = [(1,)]
-        
+
         mock_conn = MagicMock()
         mock_conn.cursor.return_value.__enter__.return_value = mock_cursor
         mock_connections.__getitem__.return_value = mock_conn
@@ -111,7 +125,7 @@ class TestConnectionFactory(TestCase):
 
         with self.assertRaises(ConexaoSomenteLeituraError):
             factory.executar_comando("INSERT INTO tabela VALUES (1)")
-            
+
     @override_settings(DATABASES={"eol_db": {"ENGINE": "mssql"}})
     @patch("apps.eol_connection.libs.connection.connections")
     def test_executar_consulta_exception(self, mock_connections: MagicMock) -> None:

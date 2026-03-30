@@ -29,11 +29,11 @@ services:
       timeout: 5s
       retries: 5
 
-  etl:
+  etl_auditoria_worker:
     build:
       context: .
       dockerfile: Dockerfile.dev
-    container_name: sme_sgp_ms_etl_etl
+    container_name: sme_sgp_ms_etl_worker
     env_file:
       - .env
     environment:
@@ -44,6 +44,7 @@ services:
       NIVEL_LOG: ${NIVEL_LOG:-INFO}
     volumes:
       - .:/app
+    # concurrency=1: domínios processados sequencialmente, por prioridade da fila
     command: >
       sh -c "python -m watchdog.watchmedo auto-restart
       --directory=/app/apps
@@ -52,7 +53,7 @@ services:
       --recursive
       --
       celery -A apps.controle_auditoria.libs.celery_app:aplicacao_celery
-      worker --loglevel=INFO"
+      worker --loglevel=INFO --concurrency=1"
     restart: unless-stopped
     depends_on:
       postgres:
@@ -60,11 +61,11 @@ services:
       keydb:
         condition: service_healthy
 
-  web_debug:
+  etl_auditoria:
     build:
       context: .
       dockerfile: Dockerfile.dev
-    container_name: sme_sgp_ms_etl_web_debug
+    container_name: sme_sgp_ms_elt_auditoria
     env_file:
       - .env
     environment:
@@ -78,9 +79,10 @@ services:
       python -Xfrozen_modules=off -m debugpy --wait-for-client
       --listen 0.0.0.0:5668 manage.py runserver 0.0.0.0:8068
     ports:
-      - "${PORT_WEB:-8000}:8000"
-      - "${PORT_DEBUGPY:-5678}:5678"
+      - "${PORT_WEB:-8068}:${PORT_WEB:-8068}"
+      - "${PORT_DEBUGPY:-5668}:${PORT_DEBUGPY:-5668}"
     restart: unless-stopped
+
 
 
 volumes:

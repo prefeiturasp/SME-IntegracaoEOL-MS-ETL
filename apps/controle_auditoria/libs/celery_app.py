@@ -10,4 +10,9 @@ aplicacao_celery.conf.update(
     broker_connection_retry=True,
     broker_connection_retry_on_startup=True,
     broker_connection_max_retries=10,
+    # Suporte a prioridade: domínios são processados sequencialmente pelo worker
+    # (--concurrency=1). Prioridade 0 = mais urgente, 9 = menos urgente.
+    task_queue_max_priority=9,
+    task_default_priority=5,
+    broker_transport_options={"priority_steps": list(range(10))},
 )

@@ -70,3 +70,48 @@ class EtlCheckpointDominio(models.Model):
         """Configuração de metadados do modelo."""
 
         db_table = "etl_checkpoint_dominio"
+
+
+class EtlAuditoriaLinha(models.Model):
+    """Controle de hash por linha para atualização incremental no destino.
+
+    Permite que o ETL processe apenas registros que sofreram alteração na origem,
+    evitando reescritas desnecessárias no destino.
+
+    Fluxo de processamento:
+        1. ETL lê batch da origem e calcula SHA-256 dos campos relevantes de cada linha.
+        2. Consulta esta tabela pelo id_destino.
+        3. Se hash_controle diverge (ou id_destino não existe): linha vai para o batch
+           de atualização.
+        4. Destino é atualizado em batch (bulk_create/bulk_update).
+        5. hash_controle é atualizado aqui para refletir o estado atual da origem.
+
+    id_destino:
+        Chave composta no formato "{tabela_destino}:{id_origem}", ex:
+            "professor:0012345"
+            "turma_escola:9988776"
+            "atribuicao_aula:123456"
+
+    hash_controle:
+        SHA-256 (hex, 64 chars) calculado sobre os campos relevantes da linha de origem.
+        Apenas campos que impactam o dado destino devem compor o hash.
+    """
+
+    id_destino = models.CharField(
+        max_length=255,
+        primary_key=True,
+        help_text="Chave composta '{tabela_destino}:{id_origem}'",
+    )
+    hash_controle = models.CharField(
+        max_length=64,
+        help_text="SHA-256 hex dos dados relevantes da linha de origem.",
+    )
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        """Configuração de metadados do modelo."""
+
+        db_table = "etl_auditoria_linha"
+        indexes = [
+            models.Index(fields=["atualizado_em"], name="idx_eal_atualizado"),
+        ]
