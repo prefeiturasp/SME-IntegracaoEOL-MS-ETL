@@ -1,38 +1,42 @@
 # Mapeamento ETL (Origem → Destino)
 
-Esta página documenta o fluxo real implementado nos métodos `popular_*` do serviço.
+Documenta o fluxo real implementado nos métodos `popular_*` do serviço.
 
-| Método | Tabela destino | Estratégia | SQL de origem |
+## Fase 1 — sem dependências internas
+
+| Método | Tabela destino | Estratégia | SQL / Fonte |
 |---|---|---|---|
-| `popular_dre` | `dre` | `upsert_incremental` | `SQL_DRE` |
-| `popular_tipos_escola` | `tipo_escola` | `upsert_incremental` | `SQL_TIPO_ESCOLA` |
-| `popular_componentes_curriculares` | `componente_curricular` | `upsert_incremental` | `SQL_COMPONENTES_CURRICULARES` |
-| `popular_series_ensino` | `serie_ensino` | `upsert_incremental` | `SQL_SERIES_ENSINO` |
-| `popular_territorios_saber` | `territorio_saber` | `upsert_incremental` | `SQL_TERRITORIOS_SABER` |
-| `popular_tipos_experiencia` | `tipo_experiencia_pedagogica` | `upsert_incremental` | `SQL_TIPOS_EXPERIENCIA` |
-| `popular_grades` | `grade` | `upsert_incremental` | `SQL_GRADES` |
-| `popular_cargos` | `cargo` | `upsert_incremental` | `SQL_CARGOS` |
-| `popular_funcoes_funcionario_externo` | `funcao_funcionario_externo` | `upsert_incremental` | `SQL_FUNCOES_EXTERNO` |
-| `popular_unidades_educacionais` | `unidades_educacionais` | `full_refresh` | `SQL_UNIDADES_EDUCACIONAIS` |
-| `popular_escola_grades` | `escola_grade` | `upsert_incremental` | `SQL_ESCOLA_GRADES` |
-| `popular_turmas_escola` | `turma_escola` | `upsert_incremental` | `SQL_TURMAS_ESCOLA` |
-| `popular_professores` | `professor` | `upsert_incremental` | `SQL_PROFESSORES` |
-| `popular_pessoas` | `pessoa` | `upsert_incremental` | `SQL_PESSOAS` |
-| `popular_serie_turma_grade` | `serie_turma_grade` | `upsert_incremental` | `SQL_SERIE_TURMA_GRADE` |
-| `popular_turma_escola_grade_programa` | `turma_escola_grade_programa` | `upsert_incremental` | `SQL_TURMA_ESCOLA_GRADE_PROGRAMA` |
-| `popular_cargos_base` | `cargo_base_servidor` | `upsert_incremental` | `SQL_CARGOS_BASE` |
-| `popular_contratos_externos` | `contrato_externo` | `upsert_incremental` | `SQL_CONTRATOS_EXTERNOS` |
-| `popular_turma_grade_territorio_experiencia` | `turma_grade_territorio_experiencia` | `full_refresh` | `SQL_TURMA_GRADE_TERRITORIO` |
-| `popular_lotacoes` | `lotacoes` | `full_refresh` | `SQL_LOTACOES` |
-| `popular_cargos_sobrepostos` | `cargos_sobrepostos` | `full_refresh` | `SQL_CARGOS_SOBREPOSTOS` |
-| `popular_funcoes_atividade` | `funcoes_atividade` | `full_refresh` | `SQL_FUNCOES_ATIVIDADE` |
-| `popular_laudos` | `laudos` | `full_refresh` | `SQL_LAUDOS` |
-| `popular_atribuicoes_aula` | `atribuicao_aula` | `upsert_incremental` | `SQL_ATRIBUICOES_AULA` |
-| `popular_atribuicoes_externo` | `atribuicao_externo` | `upsert_incremental` | `SQL_ATRIBUICOES_EXTERNO` |
+| `popular_unidades_educacionais` | `unidade_educacional` | `upsert_incremental` | `v_cadastro_unidade_educacao` |
+| `popular_turmas_escola` | `turma_escola` | `upsert_incremental` | `turma_escola` |
+| `popular_professores` | `professor` | `upsert_incremental` | `v_servidor_cotic` |
+| `popular_pessoas` | `pessoa` | `upsert_incremental` | `pessoa` |
 
-## Observações importantes
+## Fase 2 — dependem da Fase 1
 
-- `popular_unidades_educacionais` usa `full_refresh`.
-- `popular_turma_grade_territorio_experiencia`, `popular_lotacoes`, `popular_cargos_sobrepostos`, `popular_funcoes_atividade` e `popular_laudos` usam `full_refresh`.
-- `popular_atribuicoes_aula` e `popular_atribuicoes_externo` usam `upsert_incremental` com hash.
-- a constante `_TABELAS_UPSERT` no comando confirma quais tabelas são tratadas como incremental no log de auditoria.
+| Método | Tabela destino | Estratégia | SQL / Fonte |
+|---|---|---|---|
+| `popular_serie_turma_grade` | `serie_turma_grade` | `upsert_incremental` | `serie_turma_grade` |
+| `popular_turma_escola_grade_programa` | `turma_escola_grade_programa` | `upsert_incremental` | `turma_escola_grade_programa` |
+| `popular_cargos_base` | `cargo_base_servidor` | `upsert_incremental` | `v_cargo_base_cotic` |
+| `popular_contratos_externos` | `contrato_externo` | `upsert_incremental` | `contrato_externo` |
+
+## Fase 3 — dependem da Fase 2
+
+| Método | Tabela destino | Estratégia | SQL / Fonte |
+|---|---|---|---|
+| `popular_turma_grade_territorio_experiencia` | `turma_grade_territorio_experiencia` | `full_refresh` | `turma_grade_territorio_experiencia` |
+| `popular_lotacoes` | `lotacao_servidor` | `full_refresh` | `lotacao_servidor` |
+| `popular_cargos_sobrepostos` | `cargo_sobreposto_servidor` | `full_refresh` | `cargo_sobreposto_servidor` |
+| `popular_funcoes_atividade` | `funcao_atividade_cargo_servidor` | `full_refresh` | `funcao_atividade_cargo_servidor` |
+| `popular_laudos` | `laudo_medico` | `full_refresh` | `laudo_medico` |
+| `popular_atribuicoes_aula` | `atribuicao_aula` | `upsert_incremental` | `atribuicao_aula` |
+| `popular_atribuicoes_externo` | `atribuicao_externo` | `upsert_incremental` | `atribuicao_externo` |
+
+## Observações
+
+- Domínios externos (DRE, TipoEscola, ComponenteCurricular, Cargo, etc.) **não são carregados**.
+  Apenas seus IDs são armazenados nos campos `codigo_*` dos modelos acima.
+- `_TABELAS_UPSERT` no comando `etl_professores` define quais tabelas registram
+  `modo_escrita="upsert"` em `EtlExecucaoTabelaEscrita`.
+- As 5 tabelas `full_refresh` não possuem chave natural para hash por linha —
+  o controle de mudanças é feito via recarga completa em transação.

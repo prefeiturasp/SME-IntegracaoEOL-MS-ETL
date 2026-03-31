@@ -30,6 +30,7 @@ services:
       retries: 5
 
   etl_auditoria_worker:
+    platform: linux/amd64
     build:
       context: .
       dockerfile: Dockerfile.dev
@@ -45,15 +46,8 @@ services:
     volumes:
       - .:/app
     # concurrency=1: domínios processados sequencialmente, por prioridade da fila
-    command: >
-      sh -c "python -m watchdog.watchmedo auto-restart
-      --directory=/app/apps
-      --directory=/app/config
-      --pattern='*.py'
-      --recursive
-      --
-      celery -A apps.controle_auditoria.libs.celery_app:aplicacao_celery
-      worker --loglevel=INFO --concurrency=1"
+    # watch_celery.py usa PollingObserver (inotify não funciona no Docker Desktop/macOS)
+    command: python /app/scripts/watch_celery.py
     restart: unless-stopped
     depends_on:
       postgres:
@@ -62,6 +56,7 @@ services:
         condition: service_healthy
 
   etl_auditoria:
+    platform: linux/amd64
     build:
       context: .
       dockerfile: Dockerfile.dev
@@ -76,7 +71,7 @@ services:
     volumes:
       - .:/app
     command: >
-      python -Xfrozen_modules=off -m debugpy --wait-for-client
+      python -Xfrozen_modules=off -m debugpy
       --listen 0.0.0.0:5668 manage.py runserver 0.0.0.0:8068
     ports:
       - "${PORT_WEB:-8068}:${PORT_WEB:-8068}"

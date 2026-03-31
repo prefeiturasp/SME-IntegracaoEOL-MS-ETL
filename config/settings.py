@@ -116,7 +116,8 @@ def _parse_eol_db(url: str) -> dict[str, Any]:
     readonly = _get_param("ReadOnly")
     if readonly:
         options["ReadOnly"] = readonly
-    options["Encrypt"] = False
+    encrypt_raw = _get_param("Encrypt", "no")
+    options["Encrypt"] = False if encrypt_raw.lower() == "no" else encrypt_raw
 
     return {
         "ENGINE": "mssql",

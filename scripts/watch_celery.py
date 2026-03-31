@@ -1,0 +1,71 @@
+"""Inicia o Celery worker com file watcher baseado em polling.
+
+Substitui `watchmedo auto-restart` para ambientes onde inotify não está
+disponível (ex.: Docker Desktop no macOS / Windows).
+"""
+
+import subprocess
+import sys
+import time
+
+from watchdog.events import FileSystemEventHandler  # type: ignore
+from watchdog.observers.polling import PollingObserver  # type: ignore
+
+_CELERY_CMD = [
+    "celery",
+    "-A",
+    "apps.controle_auditoria.libs.celery_app:aplicacao_celery",
+    "worker",
+    "--loglevel=INFO",
+    "--concurrency=1",
+]
+
+_WATCH_DIRS = ["/app/apps", "/app/config"]
+
+
+class _RestartHandler(FileSystemEventHandler):
+    def __init__(self) -> None:
+        self._proc = subprocess.Popen(_CELERY_CMD)
+
+    def _restart(self) -> None:
+        print("[watch_celery] Alteração detectada — reiniciando worker...", flush=True)
+        self._proc.terminate()
+        self._proc.wait()
+        self._proc = subprocess.Popen(_CELERY_CMD)
+
+    def on_modified(self, event: object) -> None:  # type: ignore[override]
+        if not getattr(event, "is_directory", True) and str(
+            getattr(event, "src_path", "")
+        ).endswith(".py"):
+            self._restart()
+
+    def on_created(self, event: object) -> None:  # type: ignore[override]
+        if not getattr(event, "is_directory", True) and str(
+            getattr(event, "src_path", "")
+        ).endswith(".py"):
+            self._restart()
+
+
+def main() -> None:
+    """Inicia o observer de polling e mantém o worker Celery em execução."""
+    handler = _RestartHandler()
+    observer = PollingObserver()
+    for d in _WATCH_DIRS:
+        observer.schedule(handler, d, recursive=True)
+    observer.start()
+    try:
+        while True:
+            time.sleep(1)
+            rc = handler._proc.poll()
+            if rc is not None:
+                observer.stop()
+                sys.exit(rc)
+    except KeyboardInterrupt:
+        observer.stop()
+        handler._proc.terminate()
+        handler._proc.wait()
+    observer.join()
+
+
+if __name__ == "__main__":
+    main()

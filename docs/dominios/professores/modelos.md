@@ -1,322 +1,306 @@
 # Modelos do App `professores`
 
-A seguir, os modelos atuais de `apps/professores/models.py`.
+Modelos atuais de `apps/professores/models.py`.
 
-## DRE
+> **Princípio:** apenas IDs são armazenados para referências a domínios externos.
+> Descrições e nomes são resolvidos pelo Transition Gateway em tempo de resposta.
 
-- **db_table:** `dre`
+---
 
-| Campo | Tipo | Detalhes |
-|---|---|---|
-| `codigo_dre` | `CharField` | max_length=20; primary_key=True |
-| `nome` | `CharField` | max_length=200 |
-| `sigla` | `CharField` | max_length=20; null=True; blank=True |
+## Tabelas de Suporte
 
-## TipoEscola
-
-- **db_table:** `tipo_escola`
-
-| Campo | Tipo | Detalhes |
-|---|---|---|
-| `codigo_tipo_escola` | `IntegerField` | primary_key=True |
-| `descricao` | `CharField` | max_length=200 |
-| `sigla` | `CharField` | max_length=20; null=True; blank=True |
-
-## UnidadeEducacional
+### UnidadeEducacional
 
 - **db_table:** `unidade_educacional`
+- **Fonte EOL:** `v_cadastro_unidade_educacao`
 
 | Campo | Tipo | Detalhes |
 |---|---|---|
 | `codigo_ue` | `CharField` | max_length=20; primary_key=True |
-| `nome` | `CharField` | max_length=200 |
-| `sigla` | `CharField` | max_length=50; null=True; blank=True |
-| `dre` | `ForeignKey` | DRE; on_delete=models.CASCADE; related_name='unidades'; db_column='codigo_dre' |
-| `nome_dre` | `CharField` | max_length=200 |
-| `sigla_dre` | `CharField` | max_length=20; null=True; blank=True |
-| `tipo_escola` | `ForeignKey` | TipoEscola; on_delete=models.SET_NULL; null=True; blank=True; related_name='unidades'; db_column='codigo_tipo_escola' |
-| `sigla_tipo_escola` | `CharField` | max_length=20; null=True; blank=True |
+| `codigo_dre` | `CharField` | max_length=20; null=True — ID da DRE (domínio institucional) |
+| `codigo_tipo_escola` | `IntegerField` | null=True — ID do tipo de escola |
 
-## ComponenteCurricular
+Índices: `codigo_dre`, `codigo_tipo_escola`.
 
-- **db_table:** `componente_curricular`
+---
 
-| Campo | Tipo | Detalhes |
-|---|---|---|
-| `codigo` | `IntegerField` | primary_key=True |
-| `descricao` | `CharField` | max_length=200 |
-| `dt_cancelamento` | `DateField` | null=True; blank=True |
-
-## SerieEnsino
-
-- **db_table:** `serie_ensino`
-
-| Campo | Tipo | Detalhes |
-|---|---|---|
-| `codigo_serie` | `IntegerField` | primary_key=True |
-| `sigla_resumida` | `CharField` | max_length=20; null=True; blank=True; help_text='sg_resumida_serie — exibida como AnoTurma nas queries.' |
-
-## TerritorioSaber
-
-- **db_table:** `territorio_saber`
-
-| Campo | Tipo | Detalhes |
-|---|---|---|
-| `codigo_territorio` | `IntegerField` | primary_key=True |
-| `descricao` | `CharField` | max_length=200 |
-
-## TipoExperienciaPedagogica
-
-- **db_table:** `tipo_experiencia_pedagogica`
-
-| Campo | Tipo | Detalhes |
-|---|---|---|
-| `codigo_experiencia` | `IntegerField` | primary_key=True |
-| `descricao` | `CharField` | max_length=200 |
-
-## Grade
-
-- **db_table:** `grade`
-
-| Campo | Tipo | Detalhes |
-|---|---|---|
-| `codigo_grade` | `IntegerField` | primary_key=True |
-| `codigo_serie_ensino` | `IntegerField` | help_text='Ref. SerieEnsino.codigo_serie neste DB.' |
-| `codigo_tipo_turno` | `IntegerField` | null=True; blank=True |
-
-## EscolaGrade
-
-- **db_table:** `escola_grade`
-
-| Campo | Tipo | Detalhes |
-|---|---|---|
-| `codigo_escola_grade` | `IntegerField` | primary_key=True |
-| `codigo_escola` | `CharField` | max_length=20; help_text='Ref. UnidadeEducacional.codigo_ue neste DB.' |
-| `grade` | `ForeignKey` | Grade; on_delete=models.CASCADE; related_name='escola_grades'; db_column='codigo_grade' |
-
-## TurmaEscola
+### TurmaEscola
 
 - **db_table:** `turma_escola`
+- **Fonte EOL:** `turma_escola`
 
 | Campo | Tipo | Detalhes |
 |---|---|---|
 | `codigo_turma` | `BigIntegerField` | primary_key=True |
-| `codigo_escola` | `CharField` | max_length=20; help_text='Ref. UnidadeEducacional.codigo_ue neste DB.' |
-| `ano_letivo` | `IntegerField` |  |
-| `nome_turma` | `CharField` | max_length=200 |
-| `codigo_tipo_turma` | `IntegerField` | help_text='1=Regular, 3=Programa.' |
-| `codigo_duracao` | `IntegerField` | null=True; blank=True |
-| `codigo_tipo_turno` | `IntegerField` | null=True; blank=True |
-| `status` | `CharField` | max_length=1; help_text="'O'=Aberta, 'A'=Ativa, 'E'=Extinta, 'C'=Cancelada." |
-| `dt_inicio_turma` | `DateField` | null=True; blank=True |
-| `dt_fim_turma` | `DateField` | null=True; blank=True |
-| `dt_fim` | `DateField` | null=True; blank=True |
+| `codigo_escola` | `CharField` | max_length=20 — ref. `UnidadeEducacional` |
+| `ano_letivo` | `IntegerField` | |
+| `status` | `CharField` | max_length=1 — `'O'`=Aberta, `'A'`=Ativa, `'E'`=Extinta, `'C'`=Cancelada |
+| `dt_fim_turma` | `DateField` | null=True |
+| `dt_fim` | `DateField` | null=True |
 
-## SerieTurmaGrade
+Índices: `codigo_escola`, `ano_letivo`, `status`, `(codigo_escola, ano_letivo)`.
+
+---
+
+### SerieTurmaGrade
 
 - **db_table:** `serie_turma_grade`
+- **Fonte EOL:** `serie_turma_grade`
 
 | Campo | Tipo | Detalhes |
 |---|---|---|
 | `codigo_serie_grade` | `IntegerField` | primary_key=True |
-| `turma` | `ForeignKey` | TurmaEscola; on_delete=models.CASCADE; related_name='serie_grades'; db_column='codigo_turma' |
-| `codigo_escola` | `CharField` | max_length=20; help_text='Ref. UnidadeEducacional.codigo_ue neste DB.' |
-| `escola_grade` | `ForeignKey` | EscolaGrade; on_delete=models.SET_NULL; null=True; blank=True; related_name='serie_turma_grades'; db_column='codigo_escola_grade' |
-| `dt_fim` | `DateField` | null=True; blank=True |
+| `codigo_turma` | `BigIntegerField` | ref. `TurmaEscola` neste DB |
+| `codigo_escola` | `CharField` | max_length=20 — ref. `UnidadeEducacional` |
+| `codigo_escola_grade` | `IntegerField` | ID da escola_grade (domínio pedagógico) |
+| `dt_fim` | `DateField` | null=True — IS NULL = ativo |
 
-## TurmaEscolaGradePrograma
+Índices: `codigo_turma`, `dt_fim`, `codigo_escola`.
+
+---
+
+### TurmaEscolaGradePrograma
 
 - **db_table:** `turma_escola_grade_programa`
+- **Fonte EOL:** `turma_escola_grade_programa`
 
 | Campo | Tipo | Detalhes |
 |---|---|---|
 | `codigo` | `BigIntegerField` | primary_key=True |
-| `turma` | `ForeignKey` | TurmaEscola; on_delete=models.CASCADE; related_name='grade_programas'; db_column='codigo_turma' |
-| `escola_grade` | `ForeignKey` | EscolaGrade; on_delete=models.CASCADE; related_name='turma_programas'; db_column='codigo_escola_grade' |
-| `dt_fim` | `DateField` | null=True; blank=True |
+| `codigo_turma` | `BigIntegerField` | ref. `TurmaEscola` neste DB |
+| `codigo_escola_grade` | `IntegerField` | ID da escola_grade (domínio pedagógico) |
+| `dt_fim` | `DateField` | null=True |
 
-## TurmaGradeTerritorioExperiencia
+Índices: `codigo_turma`.
+
+---
+
+### TurmaGradeTerritorioExperiencia
 
 - **db_table:** `turma_grade_territorio_experiencia`
+- **Fonte EOL:** `turma_grade_territorio_experiencia`
+- **Estratégia:** full_refresh (sem chave natural)
 
 | Campo | Tipo | Detalhes |
 |---|---|---|
 | `id` | `BigAutoField` | primary_key=True |
-| `serie_grade` | `ForeignKey` | SerieTurmaGrade; on_delete=models.CASCADE; related_name='territorios_experiencias'; db_column='codigo_serie_grade' |
-| `codigo_componente_curricular` | `IntegerField` | help_text='Ref. ComponenteCurricular.codigo neste DB.' |
-| `territorio_saber` | `ForeignKey` | TerritorioSaber; on_delete=models.CASCADE; related_name='grade_territorios'; db_column='codigo_territorio' |
-| `experiencia_pedagogica` | `ForeignKey` | TipoExperienciaPedagogica; on_delete=models.CASCADE; related_name='grade_experiencias'; db_column='codigo_experiencia' |
-| `dt_inicio` | `DateField` | null=True; blank=True |
+| `codigo_serie_grade` | `IntegerField` | ref. `SerieTurmaGrade` neste DB |
+| `codigo_componente_curricular` | `IntegerField` | ID do componente (domínio curricular) |
+| `codigo_territorio_saber` | `IntegerField` | ID do território do saber (domínio pedagógico) |
+| `codigo_experiencia_pedagogica` | `IntegerField` | ID da experiência pedagógica (domínio pedagógico) |
+| `dt_inicio` | `DateField` | null=True |
 
-## AgrupamentoAtribuicaoTerritorioSaber
+Índices: `codigo_serie_grade`, `codigo_componente_curricular`.
+
+---
+
+### AgrupamentoAtribuicaoTerritorioSaber
 
 - **db_table:** `agrupamento_atribuicao_territorio_saber`
+- **Fonte:** ApiEolConnection (integração pendente — não carregada pelo ETL atual)
 
 | Campo | Tipo | Detalhes |
 |---|---|---|
 | `codigo_agrupamento` | `BigIntegerField` | primary_key=True |
-| `codigo_territorio_saber` | `IntegerField` | null=True; blank=True |
-| `codigo_experiencia_pedagogica` | `IntegerField` | null=True; blank=True |
-| `dt_inicio_atribuicao` | `DateField` | null=True; blank=True |
-| `ano_atribuicao` | `IntegerField` | null=True; blank=True |
-| `dt_fim_atribuicao` | `DateField` | null=True; blank=True |
-| `dt_fim_turma` | `DateField` | null=True; blank=True |
-| `rf_professor` | `CharField` | max_length=20; null=True; blank=True; help_text='Ref. Professor.codigo_rf neste DB.' |
-| `codigo_turma` | `BigIntegerField` | null=True; blank=True; help_text='Ref. TurmaEscola.codigo_turma neste DB.' |
-| `codigos_componentes_curriculares` | `TextField` | null=True; blank=True; help_text='Lista de códigos separados por vírgula.' |
-| `ano_letivo` | `IntegerField` | null=True; blank=True |
-| `codigo_motivo_disponibilizacao` | `IntegerField` | null=True; blank=True |
-| `descricao_territorio_saber` | `CharField` | max_length=200; null=True; blank=True |
-| `descricao_experiencia_pedagogica` | `CharField` | max_length=200; null=True; blank=True |
-| `encerramento_atribuicao_agrupamento_atualizado` | `BooleanField` | null=True; blank=True |
-| `criado_em` | `DateTimeField` | null=True; blank=True |
-| `alterado_em` | `DateTimeField` | null=True; blank=True |
+| `codigo_territorio_saber` | `IntegerField` | null=True — ID do território |
+| `codigo_experiencia_pedagogica` | `IntegerField` | null=True — ID da experiência |
+| `dt_inicio_atribuicao` | `DateField` | null=True |
+| `ano_atribuicao` | `IntegerField` | null=True |
+| `dt_fim_atribuicao` | `DateField` | null=True |
+| `dt_fim_turma` | `DateField` | null=True |
+| `rf_professor` | `CharField` | max_length=20; null=True — ref. `Professor.codigo_rf` |
+| `codigo_turma` | `BigIntegerField` | null=True — ref. `TurmaEscola` |
+| `codigos_componentes_curriculares` | `TextField` | null=True — IDs separados por vírgula |
+| `ano_letivo` | `IntegerField` | null=True |
+| `codigo_motivo_disponibilizacao` | `IntegerField` | null=True |
+| `encerramento_atribuicao_agrupamento_atualizado` | `BooleanField` | null=True |
+| `criado_em` | `DateTimeField` | null=True |
+| `alterado_em` | `DateTimeField` | null=True |
 
-## Cargo
+Índices: `rf_professor`, `codigo_turma`, `ano_letivo`.
 
-- **db_table:** `cargo`
+---
 
-| Campo | Tipo | Detalhes |
-|---|---|---|
-| `codigo_cargo` | `IntegerField` | primary_key=True |
-| `descricao` | `CharField` | max_length=200 |
+## Servidores Efetivos
 
-## Professor
+### Professor
 
 - **db_table:** `professor`
+- **Fonte EOL:** `v_servidor_cotic`
 
 | Campo | Tipo | Detalhes |
 |---|---|---|
 | `codigo_rf` | `CharField` | max_length=20; primary_key=True |
 | `nome` | `CharField` | max_length=200 |
-| `nome_social` | `CharField` | max_length=200; null=True; blank=True |
+| `nome_social` | `CharField` | max_length=200; null=True |
 
-## CargoBaseServidor
+---
+
+### CargoBaseServidor
 
 - **db_table:** `cargo_base_servidor`
+- **Fonte EOL:** `v_cargo_base_cotic`
 
 | Campo | Tipo | Detalhes |
 |---|---|---|
 | `id` | `BigAutoField` | primary_key=True |
-| `professor` | `ForeignKey` | Professor; on_delete=models.CASCADE; related_name='cargos_base'; db_column='codigo_rf' |
-| `cargo` | `ForeignKey` | Cargo; on_delete=models.CASCADE; related_name='servidores' |
-| `dt_posse` | `DateField` | null=True; blank=True |
-| `dt_fim_nomeacao` | `DateField` | null=True; blank=True |
-| `dt_cancelamento` | `DateField` | null=True; blank=True |
+| `professor` | `ForeignKey` | → Professor; db_column=`codigo_rf` |
+| `codigo_cargo` | `IntegerField` | ID do cargo (domínio RH) |
+| `dt_posse` | `DateField` | null=True |
+| `dt_fim_nomeacao` | `DateField` | null=True — IS NULL = nomeação ativa |
+| `dt_cancelamento` | `DateField` | null=True |
 
-## LotacaoServidor
+Índices: `professor`, `codigo_cargo`, `dt_fim_nomeacao`.
+
+---
+
+### LotacaoServidor
 
 - **db_table:** `lotacao_servidor`
+- **Fonte EOL:** `lotacao_servidor`
+- **Estratégia:** full_refresh
 
 | Campo | Tipo | Detalhes |
 |---|---|---|
 | `id` | `BigAutoField` | primary_key=True |
-| `cargo_base` | `ForeignKey` | CargoBaseServidor; on_delete=models.CASCADE; related_name='lotacoes' |
-| `codigo_unidade_educacao` | `CharField` | max_length=20; help_text='Ref. UnidadeEducacional.codigo_ue neste DB.' |
-| `dt_inicio` | `DateField` | null=True; blank=True |
-| `dt_fim` | `DateField` | null=True; blank=True |
+| `cargo_base` | `ForeignKey` | → CargoBaseServidor |
+| `codigo_unidade_educacao` | `CharField` | max_length=20 — ref. `UnidadeEducacional` |
+| `dt_inicio` | `DateField` | null=True |
+| `dt_fim` | `DateField` | null=True — IS NULL = ativo |
 
-## CargoSobrepostoServidor
+Índices: `codigo_unidade_educacao`, `dt_fim`.
+
+---
+
+### CargoSobrepostoServidor
 
 - **db_table:** `cargo_sobreposto_servidor`
+- **Fonte EOL:** `cargo_sobreposto_servidor`
+- **Estratégia:** full_refresh
 
 | Campo | Tipo | Detalhes |
 |---|---|---|
 | `id` | `BigAutoField` | primary_key=True |
-| `cargo_base` | `ForeignKey` | CargoBaseServidor; on_delete=models.CASCADE; related_name='cargos_sobrepostos' |
-| `cargo` | `ForeignKey` | Cargo; on_delete=models.CASCADE; related_name='sobreposicoes' |
-| `codigo_unidade_local_servico` | `CharField` | max_length=20; help_text='UE onde o cargo sobreposto é exercido.' |
-| `dt_fim_cargo_sobreposto` | `DateField` | null=True; blank=True |
+| `cargo_base` | `ForeignKey` | → CargoBaseServidor |
+| `codigo_cargo` | `IntegerField` | ID do cargo sobreposto (domínio RH) |
+| `codigo_unidade_local_servico` | `CharField` | max_length=20 — UE onde é exercido |
+| `dt_fim_cargo_sobreposto` | `DateField` | null=True — IS NULL = impede atribuição |
 
-## FuncaoAtividadeCargoServidor
+Índices: `dt_fim_cargo_sobreposto`.
+
+> Cargos sobrepostos que **não** impedem atribuição: `3379`, `3085`, `3360`.
+
+---
+
+### FuncaoAtividadeCargoServidor
 
 - **db_table:** `funcao_atividade_cargo_servidor`
+- **Fonte EOL:** `funcao_atividade_cargo_servidor`
+- **Estratégia:** full_refresh
 
 | Campo | Tipo | Detalhes |
 |---|---|---|
 | `id` | `BigAutoField` | primary_key=True |
-| `cargo_base` | `ForeignKey` | CargoBaseServidor; on_delete=models.CASCADE; related_name='funcoes_atividade' |
-| `codigo_unidade_local_servico` | `CharField` | max_length=20; help_text='UE onde a função é exercida.' |
-| `dt_fim_funcao_atividade` | `DateField` | null=True; blank=True |
+| `cargo_base` | `ForeignKey` | → CargoBaseServidor |
+| `codigo_unidade_local_servico` | `CharField` | max_length=20 — UE onde a função é exercida |
+| `dt_fim_funcao_atividade` | `DateField` | null=True — IS NULL = ativo |
 
-## LaudoMedico
+---
+
+### LaudoMedico
 
 - **db_table:** `laudo_medico`
+- **Fonte EOL:** `laudo_medico`
+- **Estratégia:** full_refresh
 
 | Campo | Tipo | Detalhes |
 |---|---|---|
 | `id` | `BigAutoField` | primary_key=True |
-| `cargo_base` | `ForeignKey` | CargoBaseServidor; on_delete=models.CASCADE; related_name='laudos_medicos' |
+| `cargo_base` | `ForeignKey` | → CargoBaseServidor |
 
-## FuncaoFuncionarioExterno
+> Existência de registro = servidor impedido de receber atribuição de aulas.
 
-- **db_table:** `funcao_funcionario_externo`
+---
 
-| Campo | Tipo | Detalhes |
-|---|---|---|
-| `codigo_tipo_funcao` | `IntegerField` | primary_key=True |
-| `descricao` | `CharField` | max_length=200 |
-| `dt_cancelamento` | `DateField` | null=True; blank=True |
+## Contratados Externos
 
-## Pessoa
+### Pessoa
 
 - **db_table:** `pessoa`
+- **Fonte EOL:** `pessoa`
 
 | Campo | Tipo | Detalhes |
 |---|---|---|
 | `codigo_pessoa` | `BigIntegerField` | primary_key=True |
 | `cpf` | `CharField` | max_length=14; unique=True |
 | `nome` | `CharField` | max_length=200 |
-| `nome_social` | `CharField` | max_length=200; null=True; blank=True |
+| `nome_social` | `CharField` | max_length=200; null=True |
 
-## ContratoExterno
+---
+
+### ContratoExterno
 
 - **db_table:** `contrato_externo`
+- **Fonte EOL:** `contrato_externo`
 
 | Campo | Tipo | Detalhes |
 |---|---|---|
 | `codigo_contrato` | `BigIntegerField` | primary_key=True |
-| `pessoa` | `ForeignKey` | Pessoa; on_delete=models.CASCADE; related_name='contratos' |
-| `tipo_funcao` | `ForeignKey` | FuncaoFuncionarioExterno; on_delete=models.CASCADE; related_name='contratos' |
-| `codigo_unidade_educacao` | `CharField` | max_length=20; help_text='Ref. UnidadeEducacional.codigo_ue neste DB.' |
-| `dt_cancelamento` | `DateField` | null=True; blank=True |
-| `codigo_motivo_desligamento` | `IntegerField` | null=True; blank=True |
+| `pessoa` | `ForeignKey` | → Pessoa |
+| `codigo_tipo_funcao` | `IntegerField` | ID do tipo de função (domínio funcional) |
+| `codigo_unidade_educacao` | `CharField` | max_length=20 — ref. `UnidadeEducacional` |
+| `dt_cancelamento` | `DateField` | null=True — IS NULL = ativo |
+| `codigo_motivo_desligamento` | `IntegerField` | null=True |
 
-## AtribuicaoAula
+Índices: `codigo_unidade_educacao`, `dt_cancelamento`.
+
+---
+
+## Atribuições
+
+### AtribuicaoAula
 
 - **db_table:** `atribuicao_aula`
+- **Fonte EOL:** `atribuicao_aula`
 
 | Campo | Tipo | Detalhes |
 |---|---|---|
 | `id` | `BigAutoField` | primary_key=True |
-| `cargo_base` | `ForeignKey` | CargoBaseServidor; on_delete=models.CASCADE; related_name='atribuicoes' |
-| `codigo_unidade_educacao` | `CharField` | max_length=20; help_text='Ref. UnidadeEducacional.codigo_ue neste DB.' |
-| `codigo_turma_escola` | `BigIntegerField` | null=True; blank=True; help_text='Ref. TurmaEscola.codigo_turma neste DB.' |
-| `codigo_turma_escola_grade_programa` | `BigIntegerField` | null=True; blank=True; help_text='Ref. TurmaEscolaGradePrograma.codigo neste DB.' |
-| `codigo_grade` | `IntegerField` | help_text='Ref. Grade.codigo_grade neste DB.' |
-| `codigo_componente_curricular` | `IntegerField` | help_text='Ref. ComponenteCurricular.codigo neste DB.' |
-| `codigo_serie_grade` | `IntegerField` | help_text='Ref. SerieTurmaGrade.codigo_serie_grade neste DB.' |
-| `ano_atribuicao` | `IntegerField` |  |
-| `dt_atribuicao_aula` | `DateField` |  |
-| `dt_disponibilizacao_aulas` | `DateField` | null=True; blank=True |
-| `codigo_motivo_disponibilizacao` | `IntegerField` | null=True; blank=True |
-| `dt_cancelamento` | `DateField` | null=True; blank=True |
+| `cargo_base` | `ForeignKey` | → CargoBaseServidor |
+| `codigo_unidade_educacao` | `CharField` | max_length=20 |
+| `codigo_turma_escola` | `BigIntegerField` | null=True — ref. `TurmaEscola` |
+| `codigo_turma_escola_grade_programa` | `BigIntegerField` | null=True — ref. `TurmaEscolaGradePrograma` |
+| `codigo_grade` | `IntegerField` | ID da grade (domínio pedagógico) |
+| `codigo_componente_curricular` | `IntegerField` | ID do componente curricular |
+| `codigo_serie_grade` | `IntegerField` | ref. `SerieTurmaGrade` |
+| `ano_atribuicao` | `IntegerField` | |
+| `dt_atribuicao_aula` | `DateField` | |
+| `dt_disponibilizacao_aulas` | `DateField` | null=True |
+| `codigo_motivo_disponibilizacao` | `IntegerField` | null=True |
+| `dt_cancelamento` | `DateField` | null=True — IS NULL = ativa |
 
-## AtribuicaoExterno
+Índices: `codigo_unidade_educacao`, `codigo_turma_escola`, `codigo_componente_curricular`, `ano_atribuicao`, `dt_cancelamento`.
+
+---
+
+### AtribuicaoExterno
 
 - **db_table:** `atribuicao_externo`
+- **Fonte EOL:** `atribuicao_externo`
 
 | Campo | Tipo | Detalhes |
 |---|---|---|
 | `id` | `BigAutoField` | primary_key=True |
-| `contrato_externo` | `ForeignKey` | ContratoExterno; on_delete=models.CASCADE; related_name='atribuicoes' |
-| `codigo_unidade_educacao` | `CharField` | max_length=20; help_text='Ref. UnidadeEducacional.codigo_ue neste DB.' |
-| `codigo_grade` | `IntegerField` | help_text='Ref. Grade.codigo_grade neste DB.' |
-| `codigo_componente_curricular` | `IntegerField` | help_text='Ref. ComponenteCurricular.codigo neste DB.' |
-| `codigo_serie_grade` | `IntegerField` | help_text='Ref. SerieTurmaGrade.codigo_serie_grade neste DB.' |
-| `codigo_turma_escola_grade_programa` | `BigIntegerField` | null=True; blank=True; help_text='Ref. TurmaEscolaGradePrograma.codigo neste DB.' |
-| `ano_atribuicao` | `IntegerField` |  |
-| `dt_atribuicao` | `DateField` |  |
-| `dt_disponibilizacao` | `DateField` | null=True; blank=True |
-| `codigo_motivo_disponibilizacao_externo` | `IntegerField` | null=True; blank=True |
-| `dt_cancelamento` | `DateField` | null=True; blank=True |
+| `contrato_externo` | `ForeignKey` | → ContratoExterno |
+| `codigo_unidade_educacao` | `CharField` | max_length=20 |
+| `codigo_grade` | `IntegerField` | ID da grade (domínio pedagógico) |
+| `codigo_componente_curricular` | `IntegerField` | ID do componente curricular |
+| `codigo_serie_grade` | `IntegerField` | ref. `SerieTurmaGrade` |
+| `codigo_turma_escola_grade_programa` | `BigIntegerField` | null=True — ref. `TurmaEscolaGradePrograma` |
+| `ano_atribuicao` | `IntegerField` | |
+| `dt_atribuicao` | `DateField` | |
+| `dt_disponibilizacao` | `DateField` | null=True |
+| `codigo_motivo_disponibilizacao_externo` | `IntegerField` | null=True |
+| `dt_cancelamento` | `DateField` | null=True — IS NULL = ativa |
+
+Índices: `codigo_unidade_educacao`, `codigo_componente_curricular`, `ano_atribuicao`, `dt_cancelamento`.
