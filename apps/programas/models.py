@@ -63,7 +63,7 @@ class TurmaTipoItinerario(models.Model):
 
     id = models.IntegerField(primary_key=True)
     nome = models.CharField(max_length=200)
-    serie = models.CharField(max_length=50, null=True, blank=True)
+    serie = models.CharField(max_length=50, null=True, blank=True)  # NOSONAR programas:models:66 - Manter compatilidade com o legado
 
     class Meta:
         """Metadados do modelo."""
@@ -118,7 +118,7 @@ class ComponenteCurricularPai(models.Model):
         to_field="codigo_componente",
     )
     codigo_componente_pai = models.IntegerField(null=True, blank=True)
-    vigencia = models.CharField(max_length=20, null=True, blank=True)
+    vigencia = models.CharField(max_length=20, null=True, blank=True)  # NOSONAR programas:models:121 - Manter compatilidade com o legado
 
     class Meta:
         """Metadados do modelo."""
@@ -192,7 +192,7 @@ class AgrupamentoAtribuicaoTerritorioSaber(models.Model):
     dt_fim_turma = models.DateField(null=True, blank=True)
     rf_professor = models.CharField(
         max_length=20,
-        null=True,
+        null=True,  # NOSONAR programas:models:195 - Manter compatilidade com o legado
         blank=True,
         help_text="RF do professor — ref. PROFESSORES_DB.",
     )
@@ -202,15 +202,15 @@ class AgrupamentoAtribuicaoTerritorioSaber(models.Model):
         help_text="Código da turma — ref. PEDAGOGICO_DB.",
     )
     codigos_componentes_curriculares = models.TextField(
-        null=True,
+        null=True,  # NOSONAR programas:models:205 - Manter compatilidade com o legado
         blank=True,
         help_text="Lista de códigos separados por vírgula.",
     )
     ano_letivo = models.IntegerField(null=True, blank=True)
     codigo_motivo_disponibilizacao = models.IntegerField(null=True, blank=True)
-    descricao_territorio_saber = models.CharField(max_length=200, null=True, blank=True)
+    descricao_territorio_saber = models.CharField(max_length=200, null=True, blank=True)  # NOSONAR programas:models:211 - Manter compatilidade com o legado
     descricao_experiencia_pedagogica = models.CharField(
-        max_length=200, null=True, blank=True
+        max_length=200, null=True, blank=True  # NOSONAR programas:models:213 - Manter compatilidade com o legado
     )
     encerramento_atribuicao_agrupamento_atualizado = models.BooleanField(
         null=True, blank=True

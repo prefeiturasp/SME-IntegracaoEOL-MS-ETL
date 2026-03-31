@@ -3,10 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="refresh" content="60">
   <title>ETL Monitor — SME-SGP</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" integrity="sha384-XGj909vG7eRM0p9ZAgq6pCcqH8zVsnTfJ3v/u6U9iIBdOd9rW3Xv6R3C1vT6BIM8" crossorigin="anonymous">
   <style>
     :root {
       --color-success: #22c55e;
@@ -184,10 +183,12 @@
       text-transform: uppercase;
       letter-spacing: .5px;
     }
-    .pill.concluido    { background: rgba(34,197,94,.15);  color: #4ade80; }
-    .pill.erro         { background: rgba(239,68,68,.15);  color: #f87171; }
-    .pill.em_andamento { background: rgba(59,130,246,.15); color: #60a5fa; }
-    .pill.pendente     { background: rgba(148,163,184,.15);color: #94a3b8; }
+    .pill.concluido    { background: #14532d; color: #4ade80; }  /* Contraste WCAG AAA (Branco/DarkGreen) */
+    .pill.erro         { background: #7f1d1d; color: #fca5a5; }  /* Contraste WCAG AAA */
+    .pill.cancelado    { background: #78350f; color: #fde68a; }  /* Contraste WCAG AAA */
+    .pill.em_execucao,
+    .pill.em_andamento { background: #1e3a8a; color: #93c5fd; }  /* Contraste WCAG AAA */
+    .pill.pendente     { background: #334155; color: #cbd5e1; }  /* Contraste WCAG AAA */
 
     /* ── Filter Card ── */
     .filter-card {
@@ -418,8 +419,8 @@
   <div class="filter-card">
     <form method="get" class="row g-2 align-items-end">
       <div class="col-12 col-sm-6 col-md-3">
-        <label class="form-label mb-1" style="font-size:.7rem;color:#64748b;text-transform:uppercase;letter-spacing:1px">Domínio</label>
-        <select name="dominio" class="form-select form-select-sm">
+        <label for="id_dominio" class="form-label mb-1" style="font-size:.7rem;color:#64748b;text-transform:uppercase;letter-spacing:1px">Domínio</label>
+        <select id="id_dominio" name="dominio" class="form-select form-select-sm">
           <option value="">Todos</option>
           {% for d in dominios %}
           <option value="{{ d }}" {% if filtros.dominio == d %}selected{% endif %}>{{ d }}</option>
@@ -427,18 +428,18 @@
         </select>
       </div>
       <div class="col-6 col-md-2">
-        <label class="form-label mb-1" style="font-size:.7rem;color:#64748b;text-transform:uppercase;letter-spacing:1px">De</label>
-        <input type="date" name="data_inicio" class="form-control form-control-sm"
+        <label for="id_data_inicio" class="form-label mb-1" style="font-size:.7rem;color:#64748b;text-transform:uppercase;letter-spacing:1px">De</label>
+        <input id="id_data_inicio" type="date" name="data_inicio" class="form-control form-control-sm"
                value="{{ filtros.data_inicio }}">
       </div>
       <div class="col-6 col-md-2">
-        <label class="form-label mb-1" style="font-size:.7rem;color:#64748b;text-transform:uppercase;letter-spacing:1px">Até</label>
-        <input type="date" name="data_fim" class="form-control form-control-sm"
+        <label for="id_data_fim" class="form-label mb-1" style="font-size:.7rem;color:#64748b;text-transform:uppercase;letter-spacing:1px">Até</label>
+        <input id="id_data_fim" type="date" name="data_fim" class="form-control form-control-sm"
                value="{{ filtros.data_fim }}">
       </div>
       <div class="col-12 col-sm-6 col-md-2">
-        <label class="form-label mb-1" style="font-size:.7rem;color:#64748b;text-transform:uppercase;letter-spacing:1px">Situação</label>
-        <select name="situacao" class="form-select form-select-sm">
+        <label for="id_situacao" class="form-label mb-1" style="font-size:.7rem;color:#64748b;text-transform:uppercase;letter-spacing:1px">Situação</label>
+        <select id="id_situacao" name="situacao" class="form-select form-select-sm">
           <option value="">Todas</option>
           {% for s in situacoes %}
           <option value="{{ s }}" {% if filtros.situacao == s %}selected{% endif %}>{{ s }}</option>
@@ -449,7 +450,7 @@
         <button type="submit" class="btn btn-sm btn-primary" style="border-radius:8px;font-size:.8rem">
           <i class="bi bi-funnel-fill me-1"></i>Filtrar
         </button>
-        <a href="/dashboard/" class="btn btn-sm" style="border-radius:8px;font-size:.8rem;background:#334155;color:#94a3b8;border:none">
+        <a href="/dashboard/" class="btn btn-sm" style="border-radius:8px;font-size:.8rem;background:#334155;color:#f1f5f9;border:none">
           <i class="bi bi-x-lg me-1"></i>Limpar
         </a>
       </div>

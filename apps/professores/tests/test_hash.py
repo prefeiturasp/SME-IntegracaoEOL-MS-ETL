@@ -153,3 +153,26 @@ class UpsertIncrementalTest(TestCase):
         ).hash_controle
 
         self.assertNotEqual(hash_v1, hash_v2)
+
+    def test_reinsere_se_registro_sumiu_do_destino_com_hash_igual(self) -> None:
+        """Verifica que registros ausentes no destino são reinseridos mesmo com hash igual.
+        
+        Isso cobre a lógica de _reinsere_se_ausente que evita perda de dados em caso
+        de deleção externa no banco destino sem limpeza da auditoria.
+        """
+        from apps.professores.models import Professor
+
+        rows = [self._make_professor("012345", "ANA SILVA")]
+        # Primeira carga (escrita normal)
+        _upsert_incremental(Professor, "professor", rows, ["nome"])
+        self.assertEqual(Professor.objects.using("professores_db").count(), 1)
+
+        # Deleta registro manualmente do destino APENAS
+        Professor.objects.using("professores_db").filter(codigo_rf="012345").delete()
+        self.assertEqual(Professor.objects.using("professores_db").count(), 0)
+
+        # Segunda carga com os mesmos dados (hash igual)
+        # Deve detectar a ausência no destino e reescrever
+        escritos = _upsert_incremental(Professor, "professor", rows, ["nome"])
+        self.assertEqual(escritos, 1)
+        self.assertEqual(Professor.objects.using("professores_db").count(), 1)

@@ -314,12 +314,6 @@ _UPSERT_PATCH = "apps.professores.services._upsert_incremental"
 _FULL_REFRESH_PATCH = "apps.professores.services._full_refresh_por_lote"
 
 
-def _make_eol_mock(**query_returns):  # type: ignore[no-untyped-def]
-    """Cria mock de EOLService com executar_query retornando listas vazias."""
-    mock = MagicMock()
-    mock.executar_query.return_value = []
-    return mock
-
 
 class EtlProfessoresServiceFase1Test(TestCase):
     """Testes dos métodos de população da fase 1 do EtlProfessoresService."""

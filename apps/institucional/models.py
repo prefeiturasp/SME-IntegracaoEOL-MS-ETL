@@ -30,7 +30,7 @@ class DRE(models.Model):
 
     codigo_dre = models.CharField(max_length=20, primary_key=True)
     nome = models.CharField(max_length=200)
-    sigla = models.CharField(max_length=20, null=True, blank=True)
+    sigla = models.CharField(max_length=20, null=True, blank=True)  # NOSONAR institucional:models:33 - Manter compatilidade com o legado
 
     class Meta:
         """Metadados do modelo."""
@@ -106,7 +106,7 @@ class UnidadeEducacional(models.Model):
 
     codigo_ue = models.CharField(max_length=20, primary_key=True)
     nome = models.CharField(max_length=200)
-    sigla = models.CharField(max_length=50, null=True, blank=True)
+    sigla = models.CharField(max_length=50, null=True, blank=True)  # NOSONAR institucional:models:109 - Manter compatilidade com o legado
     dre = models.ForeignKey(
         DRE,
         on_delete=models.CASCADE,

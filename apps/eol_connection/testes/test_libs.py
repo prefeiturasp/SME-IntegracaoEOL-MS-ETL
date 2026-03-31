@@ -139,6 +139,37 @@ class TestConnectionFactory(TestCase):
         with self.assertRaises(RuntimeError):
             factory.executar_consulta("SELECT 1")
 
+    @override_settings(DATABASES={"eol_db": {"ENGINE": "mssql"}})
+    @patch("apps.eol_connection.libs.connection.connections")
+    def test_iter_consulta(self, mock_connections: MagicMock) -> None:
+        """Iter consulta faz yield de chunks e registra logs."""
+        mock_cursor = MagicMock()
+        # Simula 2 chunks de 1 registro e depois vazio
+        mock_cursor.fetchmany.side_effect = [[(1,)], [(2,)], []]
+
+        mock_conn = MagicMock()
+        mock_conn.cursor.return_value.__enter__.return_value = mock_cursor
+        mock_connections.__getitem__.return_value = mock_conn
+
+        factory = EOLConnectionFactory(db_alias="eol_db")
+        chunks = list(factory.iter_consulta("SELECT 1", chunk_size=1))
+
+        self.assertEqual(len(chunks), 2)
+        self.assertEqual(chunks[0], [(1,)])
+        self.assertEqual(chunks[1], [(2,)])
+
+    @override_settings(DATABASES={"eol_db": {"ENGINE": "mssql"}})
+    @patch("apps.eol_connection.libs.connection.connections")
+    def test_iter_consulta_exception(self, mock_connections: MagicMock) -> None:
+        """Exceções no meio da iteração são propagadas."""
+        mock_conn = MagicMock()
+        mock_conn.cursor.side_effect = RuntimeError("falha no meio")
+        mock_connections.__getitem__.return_value = mock_conn
+
+        factory = EOLConnectionFactory(db_alias="eol_db")
+        with self.assertRaises(RuntimeError):
+            list(factory.iter_consulta("SELECT 1"))
+
 
 class TestEOLService(TestCase):
     """Testes do servico EOL de alto nivel."""
