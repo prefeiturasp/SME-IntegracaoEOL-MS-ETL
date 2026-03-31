@@ -134,26 +134,12 @@ def _parse_eol_db(url: str) -> dict[str, Any]:
     }
 
 
-URL_BANCO_INSTITUCIONAL = os.getenv(
-    "URL_BANCO_INSTITUCIONAL",
-    "postgresql://postgres:postgres@localhost:5432/institucional_db",
-)
-URL_BANCO_PROFESSORES = os.getenv(
-    "URL_BANCO_PROFESSORES",
-    "postgresql://postgres:postgres@localhost:5432/professores_db",
-)
-URL_BANCO_ALUNOS = os.getenv(
-    "URL_BANCO_ALUNOS",
-    "postgresql://postgres:postgres@localhost:5432/alunos_db",
-)
-URL_BANCO_PEDAGOGICO = os.getenv(
-    "URL_BANCO_PEDAGOGICO",
-    "postgresql://postgres:postgres@localhost:5432/pedagogico_db",
-)
-URL_BANCO_PROGRAMAS = os.getenv(
-    "URL_BANCO_PROGRAMAS",
-    "postgresql://postgres:postgres@localhost:5432/programas_db",
-)
+URL_BANCO_INSTITUCIONAL = os.getenv("URL_BANCO_INSTITUCIONAL")
+URL_BANCO_PROFESSORES = os.getenv("URL_BANCO_PROFESSORES")
+URL_BANCO_ALUNOS = os.getenv("URL_BANCO_ALUNOS")
+URL_BANCO_PEDAGOGICO = os.getenv("URL_BANCO_PEDAGOGICO")
+URL_BANCO_PROGRAMAS = os.getenv("URL_BANCO_PROGRAMAS")
+
 DATABASES = {
     "default": {
         "ENGINE": "dj_db_conn_pool.backends.postgresql",
