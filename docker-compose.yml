@@ -26,15 +26,7 @@ services:
     volumes:
       - .:/app
     # concurrency=1: domínios processados sequencialmente, por prioridade da fila
-    command: >
-      sh -c "python -m watchdog.watchmedo auto-restart
-      --directory=/app/apps
-      --directory=/app/config
-      --pattern='*.py'
-      --recursive
-      --
-      celery -A apps.controle_auditoria.libs.celery_app:aplicacao_celery
-      worker --loglevel=INFO --concurrency=1"
+    command: python /app/scripts/watch_celery.py
     restart: unless-stopped
     depends_on:
       keydb:

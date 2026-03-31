@@ -46,6 +46,17 @@ digraph G {
 
 ---
 
+## Princípio de separação de domínios
+
+Cada domínio ETL é autossuficiente: **não replica tabelas de outros domínios**.
+Referências externas (DRE, Cargo, ComponenteCurricular, etc.) são armazenadas apenas como IDs (`IntegerField` / `CharField`).
+
+Descrições e nomes são resolvidos em tempo de resposta pelo **Transition Gateway** — serviço que enriquece as respostas consultando os domínios de origem.
+
+> **Regra prática:** um campo descritivo (`dc_*`) só é persistido se aparecer em cláusula `WHERE` de alguma query do domínio. Caso contrário, não é armazenado.
+
+---
+
 ## Execução atual
 
 A estrutura atual do projeto inclui:
@@ -54,5 +65,3 @@ A estrutura atual do projeto inclui:
 - execução indireta via `executar_dominio`
 - task assíncrona `executar_dominio_task`
 - agendamento com `agendar_dominio`
-
-Ou seja, **o código atual ainda possui Celery**, mesmo que parte da documentação anterior tenha sido simplificada.

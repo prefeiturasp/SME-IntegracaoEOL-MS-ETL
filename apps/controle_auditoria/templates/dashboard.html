@@ -275,8 +275,16 @@
   </div>
   <div class="sidebar-sub">SME-SGP</div>
 
+  <div class="sidebar-label">Navegação</div>
+  <a class="sidebar-domain active" href="/dashboard/" style="color:#f1f5f9;background:#334155">
+    <i class="bi bi-activity" style="width:16px;text-align:center"></i> Execuções
+  </a>
+  <a class="sidebar-domain" href="/dashboard/kanban/">
+    <i class="bi bi-kanban" style="width:16px;text-align:center"></i> Kanban
+  </a>
+
   {% if ultima_por_dominio %}
-  <div class="sidebar-label">Domínios</div>
+  <div class="sidebar-label" style="margin-top:.75rem">Domínios</div>
   {% for exec in ultima_por_dominio %}
   <a class="sidebar-domain"
      href="?dominio={{ exec.dominio }}">
@@ -322,6 +330,10 @@
           {% endif %}
           <div class="mt-1" style="font-size:.68rem;color:#334155;font-family:monospace">{{ exec.id_execucao }}</div>
         </div>
+        <div class="mt-2" style="font-size:.75rem;color:#64748b">
+          <i class="bi bi-database-check me-1"></i>
+          <strong style="color:#f1f5f9">{{ exec.total_processado }}</strong> registros processados
+        </div>
         {% if exec.mensagem_erro %}
         <div class="domain-error">
           <i class="bi bi-exclamation-triangle-fill me-1"></i>{{ exec.mensagem_erro|truncatechars:90 }}
@@ -335,6 +347,69 @@
   <div class="empty-state mb-4">
     <i class="bi bi-inbox"></i>
     Nenhuma execução registrada ainda.
+  </div>
+  {% endif %}
+
+  <!-- Prévia das últimas 10 execuções -->
+  <div class="section-title mt-4">Prévia — últimas 10 execuções</div>
+  {% if ultimas_10 %}
+  <div class="exec-table-wrap mb-4">
+    <table class="exec-table">
+      <thead>
+        <tr>
+          <th><i class="bi bi-diagram-3 me-1"></i>Domínio</th>
+          <th>Situação</th>
+          <th><i class="bi bi-play me-1"></i>Início</th>
+          <th><i class="bi bi-table me-1"></i>Tabela</th>
+          <th style="text-align:right"><i class="bi bi-hash me-1"></i>Linhas escritas</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in ultimas_10 %}
+          {% if item.tabelas %}
+            {% for tabela in item.tabelas %}
+            <tr>
+              {% if forloop.first %}
+              <td class="td-domain" rowspan="{{ item.tabelas|length }}">{{ item.exec.dominio }}</td>
+              <td rowspan="{{ item.tabelas|length }}">
+                <span class="pill {{ item.exec.situacao }}">
+                  {% if item.exec.situacao == "concluido" %}<i class="bi bi-check-circle-fill"></i>
+                  {% elif item.exec.situacao == "erro" %}<i class="bi bi-x-circle-fill"></i>
+                  {% elif item.exec.situacao == "em_andamento" %}<i class="bi bi-arrow-repeat"></i>
+                  {% else %}<i class="bi bi-clock"></i>{% endif %}
+                  {{ item.exec.situacao }}
+                </span>
+              </td>
+              <td class="text-nowrap" rowspan="{{ item.tabelas|length }}">{{ item.exec.iniciado_em|date:"d/m H:i" }}</td>
+              {% endif %}
+              <td style="color:#94a3b8;font-size:.78rem">{{ tabela.tabela_destino }}</td>
+              <td style="text-align:right;font-weight:600;color:#60a5fa">{{ tabela.linhas_escritas }}</td>
+            </tr>
+            {% endfor %}
+          {% else %}
+          <tr>
+            <td class="td-domain">{{ item.exec.dominio }}</td>
+            <td>
+              <span class="pill {{ item.exec.situacao }}">
+                {% if item.exec.situacao == "concluido" %}<i class="bi bi-check-circle-fill"></i>
+                {% elif item.exec.situacao == "erro" %}<i class="bi bi-x-circle-fill"></i>
+                {% elif item.exec.situacao == "em_andamento" %}<i class="bi bi-arrow-repeat"></i>
+                {% else %}<i class="bi bi-clock"></i>{% endif %}
+                {{ item.exec.situacao }}
+              </span>
+            </td>
+            <td class="text-nowrap">{{ item.exec.iniciado_em|date:"d/m H:i" }}</td>
+            <td colspan="2" class="text-muted-dim" style="font-size:.78rem">sem registros escritos</td>
+          </tr>
+          {% endif %}
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty-state mb-4">
+    <i class="bi bi-inbox"></i>
+    Nenhuma execução encontrada.
   </div>
   {% endif %}
 

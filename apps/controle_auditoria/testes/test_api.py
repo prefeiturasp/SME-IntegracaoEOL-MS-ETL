@@ -7,6 +7,7 @@ from uuid import uuid4
 
 from django.test import Client, TestCase, override_settings
 from django.utils import timezone
+from django.utils.timezone import localtime
 from rest_framework.test import APIClient
 
 from apps.controle_auditoria.api.authentication import ApiKeyAuthentication
@@ -277,7 +278,7 @@ class MonitoramentoViewsTestCase(TestCase):
 
     def test_monitoramento_deve_filtrar_por_data_inicio(self) -> None:
         """Filtro por data_inicio retorna execuções a partir daquela data."""
-        hoje = timezone.now().date().isoformat()
+        hoje = localtime(timezone.now()).date().isoformat()
         resposta = self.client.get(
             f"/api/v1/monitoramento/execucoes/?data_inicio={hoje}"
         )

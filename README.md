@@ -1,4 +1,4 @@
-# SME-SGP-MS-ETL
+# SME-IntegracaoEOL-MS-ETL
 
 Microsserviço ETL em Django com execução assíncrona via Celery, usando KeyDB
 como broker.
@@ -195,6 +195,11 @@ Gera a documentação HTML a partir dos arquivos em `docs/`:
 ```bash
 docker compose -f docker-compose-dev.yml run --rm etl_auditoria \
   sphinx-build -b html docs docs/_build
+```
+Gera a documentação PDF a partir dos arquivos em `docs/`:
+``` bash
+docker compose -f docker-compose-dev.yml run --rm etl_auditoria \
+  sh -c "sphinx-build -b latex docs docs/_build/latex && make -C docs/_build/latex"
 ```
 
 O resultado fica em `docs/_build/index.html` (acessível no host via volume).

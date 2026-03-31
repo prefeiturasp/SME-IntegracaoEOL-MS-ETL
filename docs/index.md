@@ -1,4 +1,4 @@
-# SME-SGP-MS-ETL
+# SME-IntegracaoEOL-MS-ETL
 
 Documentação técnica completa baseada na **estrutura atual do código**, com foco em **domínio professores** e **controle/auditoria**.
 
@@ -29,7 +29,7 @@ digraph G {
 
     EOL [label="EOL SQL Server"];
     APIEOL [label="API EOL PostgreSQL"];
-    ETL [label="SME-SGP-MS-ETL"];
+    ETL [label="SME-IntegracaoEOL-MS-ETL"];
     PROF [label="professores_db"];
     AUD [label="default / auditoria_db"];
 

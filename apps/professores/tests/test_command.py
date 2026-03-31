@@ -7,9 +7,8 @@ from django.test import TestCase
 from apps.controle_auditoria.models import EtlCheckpointDominio, EtlExecucao
 
 _RESULTADO_MOCK = {
-    "dre": 10,
-    "tipo_escola": 5,
-    "cargo": 16,
+    "unidade_educacional": 10,
+    "turma_escola": 5,
     "professor": 200,
     "cargo_base_servidor": 350,
     "atribuicao_aula": 1500,
@@ -33,7 +32,7 @@ class EtlProfessoresCommandTest(TestCase):
     ) -> None:
         """Verifica que o command cria uma execução e a finaliza com sucesso."""
         mock_servico.return_value.executar.return_value = _RESULTADO_MOCK
-        mock_servico.return_value.ultima_fase_concluida = 4
+        mock_servico.return_value.ultima_fase_concluida = 3
 
         self._executar()
 
@@ -45,13 +44,13 @@ class EtlProfessoresCommandTest(TestCase):
     def test_cria_checkpoint_apos_sucesso(self, mock_servico: MagicMock) -> None:
         """Verifica que o command cria um checkpoint após execução bem-sucedida."""
         mock_servico.return_value.executar.return_value = _RESULTADO_MOCK
-        mock_servico.return_value.ultima_fase_concluida = 4
+        mock_servico.return_value.ultima_fase_concluida = 3
 
         self._executar()
 
         checkpoint = EtlCheckpointDominio.objects.get(dominio="professores")
         self.assertEqual(checkpoint.ultima_situacao, "concluido")
-        self.assertEqual(checkpoint.ultima_pagina, 4)
+        self.assertEqual(checkpoint.ultima_pagina, 3)
         total = sum(_RESULTADO_MOCK.values())
         self.assertEqual(checkpoint.token_parada, str(total))
 
@@ -59,7 +58,7 @@ class EtlProfessoresCommandTest(TestCase):
     def test_token_acumula_entre_execucoes(self, mock_servico: MagicMock) -> None:
         """Verifica que o token de parada acumula entre execuções consecutivas."""
         mock_servico.return_value.executar.return_value = {"professor": 100}
-        mock_servico.return_value.ultima_fase_concluida = 4
+        mock_servico.return_value.ultima_fase_concluida = 3
 
         self._executar()
         self._executar(["--continuar"])
@@ -100,7 +99,7 @@ class EtlProfessoresCommandTest(TestCase):
         # Retoma: deve iniciar da fase 2
         mock_servico.return_value.executar.side_effect = None
         mock_servico.return_value.executar.return_value = {"professor": 50}
-        mock_servico.return_value.ultima_fase_concluida = 4
+        mock_servico.return_value.ultima_fase_concluida = 3
         self._executar(["--continuar"])
 
         _, kwargs = mock_servico.return_value.executar.call_args
@@ -112,7 +111,7 @@ class EtlProfessoresCommandTest(TestCase):
     ) -> None:
         """Ao usar --continuar após sucesso, reinicia a execução da fase 1."""
         mock_servico.return_value.executar.return_value = _RESULTADO_MOCK
-        mock_servico.return_value.ultima_fase_concluida = 4
+        mock_servico.return_value.ultima_fase_concluida = 3
 
         self._executar()
         self._executar(["--continuar"])

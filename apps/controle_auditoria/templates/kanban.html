@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="refresh" content="30">
+  <title>ETL Kanban — SME-SGP</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <style>
+    :root {
+      --color-success: #22c55e;
+      --color-error:   #ef4444;
+      --color-running: #3b82f6;
+      --color-pending: #94a3b8;
+      --sidebar-width: 220px;
+      --col-read:    #0ea5e9;
+      --col-hash:    #a855f7;
+      --col-write:   #22c55e;
+      --col-check:   #f59e0b;
+    }
+
+    body { background: #0f172a; color: #e2e8f0; font-family: 'Segoe UI', system-ui, sans-serif; min-height: 100vh; }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      position: fixed; top: 0; left: 0;
+      width: var(--sidebar-width); height: 100vh;
+      background: #1e293b; border-right: 1px solid #334155;
+      display: flex; flex-direction: column;
+      padding: 1.5rem 1rem; z-index: 100;
+    }
+    .sidebar-logo { font-size: 1rem; font-weight: 700; color: #f8fafc; margin-bottom: .25rem; }
+    .sidebar-sub  { font-size: .7rem; color: #64748b; margin-bottom: 1.5rem; text-transform: uppercase; letter-spacing: 1px; }
+    .sidebar-label { font-size: .65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; color: #475569; margin-bottom: .5rem; }
+    .sidebar-nav { font-size: .8rem; padding: .4rem .75rem; border-radius: 6px; margin-bottom: .25rem; display: flex; align-items: center; gap: .5rem; color: #94a3b8; text-decoration: none; transition: background .15s; }
+    .sidebar-nav:hover, .sidebar-nav.active { background: #334155; color: #f1f5f9; }
+    .sidebar-nav i { width: 16px; text-align: center; }
+    .sidebar-divider { border-top: 1px solid #334155; margin: .75rem 0; }
+    .sidebar-domain { font-size: .8rem; padding: .35rem .75rem; border-radius: 6px; margin-bottom: .2rem; cursor: pointer; display: flex; align-items: center; gap: .5rem; color: #94a3b8; text-decoration: none; transition: background .15s; }
+    .sidebar-domain:hover { background: #334155; color: #f1f5f9; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .dot-concluido    { background: var(--color-success); }
+    .dot-erro         { background: var(--color-error); }
+    .dot-cancelado    { background: #f59e0b; }
+    .dot-em_execucao, .dot-em_andamento { background: var(--color-running); box-shadow: 0 0 6px var(--color-running); }
+    .dot-pendente, .dot-default { background: var(--color-pending); }
+    .refresh-badge { margin-top: auto; font-size: .7rem; color: #475569; display: flex; align-items: center; gap: .4rem; }
+    .refresh-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--color-success); animation: pulse 2s infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .3; } }
+
+    /* ── Main ── */
+    .main { margin-left: var(--sidebar-width); padding: 2rem; min-height: 100vh; }
+    .page-title { font-size: 1.35rem; font-weight: 700; color: #f8fafc; margin-bottom: .25rem; }
+    .page-sub { font-size: .8rem; color: #64748b; margin-bottom: 2rem; }
+    .section-title { font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; color: #475569; margin-bottom: 1rem; }
+
+    /* ── Filter bar ── */
+    .filter-bar { display: flex; align-items: center; gap: .75rem; margin-bottom: 1.75rem; flex-wrap: wrap; }
+    .filter-bar .form-select { background: #1e293b; border: 1px solid #334155; color: #e2e8f0; font-size: .82rem; border-radius: 8px; padding: .35rem .75rem; }
+    .filter-bar .form-select:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,.2); background: #1e293b; color: #f1f5f9; }
+    .filter-bar option { background: #1e293b; }
+
+    /* ── Domain block ── */
+    .domain-block { margin-bottom: 2.5rem; }
+    .domain-header { display: flex; align-items: center; gap: .75rem; margin-bottom: 1rem; }
+    .domain-title { font-size: 1rem; font-weight: 700; color: #f1f5f9; }
+    .pill { display: inline-flex; align-items: center; gap: .3rem; font-size: .7rem; font-weight: 600; padding: .2rem .65rem; border-radius: 20px; text-transform: uppercase; letter-spacing: .5px; }
+    .pill.concluido    { background: rgba(34,197,94,.15);  color: #4ade80; }
+    .pill.erro         { background: rgba(239,68,68,.15);  color: #f87171; }
+    .pill.cancelado    { background: rgba(245,158,11,.15); color: #fbbf24; }
+    .pill.em_execucao,
+    .pill.em_andamento { background: rgba(59,130,246,.15); color: #60a5fa; }
+    .pill.pendente     { background: rgba(148,163,184,.15);color: #94a3b8; }
+    .exec-meta { font-size: .75rem; color: #64748b; }
+
+    /* ── Kanban columns ── */
+    .kanban-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
+    @media (max-width: 1100px) { .kanban-row { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 600px)  { .kanban-row { grid-template-columns: 1fr; } }
+
+    .kcard {
+      background: #1e293b; border: 1px solid #334155;
+      border-radius: 12px; overflow: hidden;
+    }
+    .kcard-header {
+      padding: .6rem 1rem; display: flex; align-items: center; gap: .5rem;
+      font-size: .72rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 1px; border-bottom: 1px solid #334155;
+    }
+    .kcard-header.read  { color: var(--col-read);  border-left: 3px solid var(--col-read); }
+    .kcard-header.hash  { color: var(--col-hash);  border-left: 3px solid var(--col-hash); }
+    .kcard-header.write { color: var(--col-write); border-left: 3px solid var(--col-write); }
+    .kcard-header.check { color: var(--col-check); border-left: 3px solid var(--col-check); }
+    .kcard-body  { padding: .75rem 1rem; }
+    .kcard-total { font-size: 1.6rem; font-weight: 700; color: #f1f5f9; line-height: 1; margin-bottom: .35rem; }
+    .kcard-label { font-size: .7rem; color: #64748b; margin-bottom: .75rem; }
+
+    /* ── Table rows inside kcard ── */
+    .ktable { width: 100%; border-collapse: collapse; font-size: .78rem; }
+    .ktable tr { border-bottom: 1px solid #263245; }
+    .ktable tr:last-child { border-bottom: none; }
+    .ktable td { padding: .35rem 0; vertical-align: middle; }
+    .ktable .td-name { color: #94a3b8; word-break: break-all; }
+    .ktable .td-val  { text-align: right; font-weight: 600; white-space: nowrap; padding-left: .5rem; }
+    .td-val.read-color  { color: var(--col-read);  }
+    .td-val.hash-color  { color: var(--col-hash);  }
+    .td-val.write-color { color: var(--col-write); }
+
+    /* ── Checkpoint card ── */
+    .cp-row { display: flex; justify-content: space-between; font-size: .78rem; padding: .25rem 0; border-bottom: 1px solid #263245; }
+    .cp-row:last-child { border-bottom: none; }
+    .cp-key { color: #64748b; }
+    .cp-val { color: #f1f5f9; font-weight: 600; font-family: monospace; font-size: .75rem; }
+
+    /* ── JSON toggle ── */
+    .json-toggle { font-size: .7rem; color: #475569; cursor: pointer; display: flex; align-items: center; gap: .3rem; margin-top: .75rem; user-select: none; }
+    .json-toggle:hover { color: #94a3b8; }
+    .json-box { display: none; margin-top: .5rem; background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: .75rem; font-size: .72rem; font-family: monospace; color: #a5f3fc; white-space: pre-wrap; word-break: break-all; max-height: 300px; overflow-y: auto; }
+
+    /* ── Empty ── */
+    .empty-state { text-align: center; padding: 3rem; color: #475569; }
+    .empty-state i { font-size: 2rem; display: block; margin-bottom: .75rem; }
+
+    @media (max-width: 768px) { .sidebar { display: none; } .main { margin-left: 0; padding: 1rem; } }
+  </style>
+</head>
+<body>
+
+<!-- Sidebar -->
+<aside class="sidebar">
+  <div class="sidebar-logo"><i class="bi bi-cpu me-1"></i> ETL Monitor</div>
+  <div class="sidebar-sub">SME-SGP</div>
+
+  <div class="sidebar-label">Navegação</div>
+  <a class="sidebar-nav" href="/dashboard/"><i class="bi bi-activity"></i> Execuções</a>
+  <a class="sidebar-nav active" href="/dashboard/kanban/"><i class="bi bi-kanban"></i> Kanban</a>
+
+  {% if todos_dominios %}
+  <div class="sidebar-divider"></div>
+  <div class="sidebar-label">Domínios</div>
+  {% for d in todos_dominios %}
+  <a class="sidebar-domain" href="?dominio={{ d }}">
+    <span class="dot dot-{% for item in dominios_kanban %}{% if item.exec.dominio == d %}{{ item.exec.situacao }}{% endif %}{% endfor %}"></span>
+    {{ d|truncatechars:22 }}
+  </a>
+  {% endfor %}
+  {% endif %}
+
+  <div class="refresh-badge">
+    <span class="refresh-dot"></span> Atualiza em 30s
+  </div>
+</aside>
+
+<!-- Main -->
+<main class="main">
+  <div class="page-title"><i class="bi bi-kanban me-2"></i>Kanban de Processamento ETL</div>
+  <div class="page-sub">Último lote processado por domínio · leitura → hash → escrita → checkpoint</div>
+
+  <!-- Filter -->
+  <div class="filter-bar">
+    <form method="get" style="display:flex;gap:.5rem;align-items:center">
+      <select name="dominio" class="form-select" style="width:auto" onchange="this.form.submit()">
+        <option value="">Todos os domínios</option>
+        {% for d in todos_dominios %}
+        <option value="{{ d }}" {% if dominio_filtro == d %}selected{% endif %}>{{ d }}</option>
+        {% endfor %}
+      </select>
+      {% if dominio_filtro %}
+      <a href="/dashboard/kanban/" class="btn btn-sm" style="background:#334155;color:#94a3b8;border:none;border-radius:8px;font-size:.8rem">
+        <i class="bi bi-x-lg me-1"></i>Limpar
+      </a>
+      {% endif %}
+    </form>
+  </div>
+
+  {% if dominios_kanban %}
+  {% for item in dominios_kanban %}
+  <div class="domain-block">
+
+    <!-- Domain header -->
+    <div class="domain-header">
+      <span class="dot dot-{{ item.exec.situacao }}"></span>
+      <span class="domain-title">{{ item.exec.dominio }}</span>
+      <span class="pill {{ item.exec.situacao }}">
+        {% if item.exec.situacao == "concluido" %}<i class="bi bi-check-circle-fill"></i>
+        {% elif item.exec.situacao == "erro" %}<i class="bi bi-x-circle-fill"></i>
+        {% elif item.exec.situacao == "cancelado" %}<i class="bi bi-slash-circle-fill"></i>
+        {% elif item.exec.situacao == "em_execucao" or item.exec.situacao == "em_andamento" %}<i class="bi bi-arrow-repeat"></i>
+        {% else %}<i class="bi bi-clock"></i>{% endif %}
+        {{ item.exec.situacao }}
+      </span>
+      <span class="exec-meta">
+        <i class="bi bi-play-fill me-1"></i>{{ item.exec.iniciado_em|date:"d/m/Y H:i:s" }}
+        {% if item.exec.finalizado_em %}
+        &nbsp;·&nbsp;<i class="bi bi-stop-fill me-1"></i>{{ item.exec.finalizado_em|date:"H:i:s" }}
+        {% endif %}
+        &nbsp;·&nbsp;<span style="font-family:monospace;font-size:.68rem;color:#334155">{{ item.exec.id_execucao }}</span>
+      </span>
+    </div>
+
+    <!-- Kanban columns -->
+    <div class="kanban-row">
+
+      <!-- Col 1: Leitura -->
+      <div class="kcard">
+        <div class="kcard-header read"><i class="bi bi-database-down"></i> Leitura EOL</div>
+        <div class="kcard-body">
+          <div class="kcard-total" style="color:var(--col-read)">{{ item.total_lido }}</div>
+          <div class="kcard-label">registros lidos</div>
+          {% if item.tabelas_lidas %}
+          <table class="ktable">
+            {% for tl in item.tabelas_lidas %}
+            <tr>
+              <td class="td-name">{{ tl.tabela_origem }}</td>
+              <td class="td-val read-color">{{ tl.linhas_lidas }}</td>
+            </tr>
+            {% endfor %}
+          </table>
+          {% else %}
+          <div style="font-size:.75rem;color:#475569">sem dados registrados</div>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Col 2: Hash -->
+      <div class="kcard">
+        <div class="kcard-header hash"><i class="bi bi-shield-check"></i> Hash Control</div>
+        <div class="kcard-body">
+          <div class="kcard-total" style="color:var(--col-hash)">{{ item.total_hashes }}</div>
+          <div class="kcard-label">hashes rastreados</div>
+          {% if item.hash_por_tabela %}
+          <table class="ktable">
+            {% for tabela, qtd in item.hash_por_tabela.items %}
+            <tr>
+              <td class="td-name">{{ tabela }}</td>
+              <td class="td-val hash-color">{{ qtd }}</td>
+            </tr>
+            {% endfor %}
+          </table>
+          {% else %}
+          <div style="font-size:.75rem;color:#475569">sem hashes registrados</div>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Col 3: Escrita -->
+      <div class="kcard">
+        <div class="kcard-header write"><i class="bi bi-database-up"></i> Escrita (Upsert)</div>
+        <div class="kcard-body">
+          <div class="kcard-total" style="color:var(--col-write)">{{ item.total_escrito }}</div>
+          <div class="kcard-label">registros escritos</div>
+          {% if item.tabelas_escritas %}
+          <table class="ktable">
+            {% for te in item.tabelas_escritas %}
+            <tr>
+              <td class="td-name">
+                {{ te.tabela_destino }}
+                <span style="font-size:.65rem;color:#475569">({{ te.modo_escrita }})</span>
+              </td>
+              <td class="td-val write-color">{{ te.linhas_escritas }}</td>
+            </tr>
+            {% endfor %}
+          </table>
+          {% else %}
+          <div style="font-size:.75rem;color:#475569">sem escritas registradas</div>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Col 4: Checkpoint -->
+      <div class="kcard">
+        <div class="kcard-header check"><i class="bi bi-bookmark-check"></i> Checkpoint</div>
+        <div class="kcard-body">
+          {% if item.checkpoint %}
+          <div class="kcard-total" style="color:var(--col-check)">{{ item.checkpoint.token_parada|default:"0" }}</div>
+          <div class="kcard-label">token acumulado</div>
+          <div class="cp-row"><span class="cp-key">situação</span><span class="cp-val">{{ item.checkpoint.ultima_situacao }}</span></div>
+          <div class="cp-row"><span class="cp-key">fase</span><span class="cp-val">{{ item.checkpoint.ultima_pagina }}</span></div>
+          <div class="cp-row"><span class="cp-key">atualizado</span><span class="cp-val">{{ item.checkpoint.atualizado_em|date:"d/m H:i:s" }}</span></div>
+          {% if item.checkpoint.ultimo_sucesso_em %}
+          <div class="cp-row"><span class="cp-key">último sucesso</span><span class="cp-val">{{ item.checkpoint.ultimo_sucesso_em|date:"d/m H:i:s" }}</span></div>
+          {% endif %}
+          {% else %}
+          <div style="font-size:.75rem;color:#475569">sem checkpoint</div>
+          {% endif %}
+        </div>
+      </div>
+
+    </div><!-- /kanban-row -->
+
+    <!-- JSON detail toggle -->
+    <div class="json-toggle" onclick="toggleJson('json-{{ forloop.counter }}')">
+      <i class="bi bi-braces"></i> Ver JSON completo da execução
+    </div>
+    <div class="json-box" id="json-{{ forloop.counter }}">{
+  "id_execucao": "{{ item.exec.id_execucao }}",
+  "dominio": "{{ item.exec.dominio }}",
+  "situacao": "{{ item.exec.situacao }}",
+  "iniciado_em": "{{ item.exec.iniciado_em|date:"c" }}",
+  "finalizado_em": "{{ item.exec.finalizado_em|date:"c"|default:"null" }}",
+  "mensagem_erro": {{ item.exec.mensagem_erro|default:"null"|escapejs|default:"null" }},
+  "total_lido": {{ item.total_lido }},
+  "total_escrito": {{ item.total_escrito }},
+  "total_hashes": {{ item.total_hashes }},
+  "tabelas_lidas": [{% for tl in item.tabelas_lidas %}
+    { "tabela": "{{ tl.tabela_origem }}", "linhas_lidas": {{ tl.linhas_lidas }}, "pagina": {{ tl.numero_pagina }} }{% if not forloop.last %},{% endif %}{% endfor %}
+  ],
+  "tabelas_escritas": [{% for te in item.tabelas_escritas %}
+    { "tabela": "{{ te.tabela_destino }}", "linhas_escritas": {{ te.linhas_escritas }}, "modo": "{{ te.modo_escrita }}" }{% if not forloop.last %},{% endif %}{% endfor %}
+  ],
+  "checkpoint": {% if item.checkpoint %}{
+    "token_parada": "{{ item.checkpoint.token_parada|default:"0" }}",
+    "ultima_situacao": "{{ item.checkpoint.ultima_situacao }}",
+    "ultima_pagina": {{ item.checkpoint.ultima_pagina }},
+    "atualizado_em": "{{ item.checkpoint.atualizado_em|date:"c" }}"
+  }{% else %}null{% endif %}
+}</div>
+
+    {% if not forloop.last %}
+    <hr style="border-color:#1e293b;margin:1.5rem 0">
+    {% endif %}
+  </div>
+  {% endfor %}
+
+  {% else %}
+  <div class="empty-state">
+    <i class="bi bi-inbox"></i>
+    Nenhuma execução encontrada.
+  </div>
+  {% endif %}
+
+</main>
+
+<script>
+function toggleJson(id) {
+  const el = document.getElementById(id);
+  el.style.display = el.style.display === 'block' ? 'none' : 'block';
+}
+</script>
+
+</body>
+</html>

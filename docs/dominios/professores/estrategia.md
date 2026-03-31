@@ -2,16 +2,10 @@
 
 ## Incremental (`_upsert_incremental`)
 
-- `dre`
-- `tipo_escola`
-- `componente_curricular`
-- `serie_ensino`
-- `territorio_saber`
-- `tipo_experiencia_pedagogica`
-- `grade`
-- `cargo`
-- `funcao_funcionario_externo`
-- `escola_grade`
+Usa `bulk_create(update_conflicts=True)` com controle de hash SHA-256 por linha.
+Apenas registros novos ou alterados são escritos.
+
+- `unidade_educacional`
 - `turma_escola`
 - `professor`
 - `pessoa`
@@ -24,15 +18,19 @@
 
 ## Full Refresh (`_full_refresh`)
 
-- `unidades_educacionais`
+Faz `delete()` seguido de `bulk_create()` em transação no `professores_db`.
+Usado em tabelas sem chave natural estável para hash por linha.
+
 - `turma_grade_territorio_experiencia`
-- `lotacoes`
-- `cargos_sobrepostos`
-- `funcoes_atividade`
-- `laudos`
+- `lotacao_servidor`
+- `cargo_sobreposto_servidor`
+- `funcao_atividade_cargo_servidor`
+- `laudo_medico`
 
-## Regras reais do código
+## Regras do código
 
-- `_full_refresh` faz `delete()` seguido de `bulk_create()` em transação usando `professores_db`.
-- `_upsert_incremental` calcula hash com SHA-256, consulta `EtlAuditoriaLinha`, filtra apenas o que mudou e faz `bulk_create(update_conflicts=True)`.
-- o comando registra `modo_escrita` como `upsert` ou `full_refresh` em `EtlExecucaoTabelaEscrita`.
+- `_upsert_incremental` calcula hash com SHA-256 dos `update_fields`, consulta
+  `EtlAuditoriaLinha`, filtra apenas o que mudou e faz `bulk_create(update_conflicts=True)`.
+- `_full_refresh` executa `delete()` + `bulk_create()` em transação no `professores_db`.
+- O comando registra `modo_escrita` como `"upsert"` ou `"full_refresh"` em
+  `EtlExecucaoTabelaEscrita` com base na constante `_TABELAS_UPSERT`.

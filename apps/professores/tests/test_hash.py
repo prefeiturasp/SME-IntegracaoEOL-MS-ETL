@@ -1,7 +1,6 @@
 """Testes de _calcular_hash e _upsert_incremental do serviço de professores."""
 
 import hashlib
-from unittest.mock import MagicMock, patch
 
 from django.test import TestCase
 
@@ -58,90 +57,99 @@ class UpsertIncrementalTest(TestCase):
 
     databases = ["default", "professores_db"]
 
-    def _make_cargo(self, codigo: int, descricao: str) -> dict:  # type: ignore[type-arg]
-        """Cria um dicionário representando um cargo com código e descrição."""
-        return {"codigo_cargo": codigo, "descricao": descricao}
+    def _make_professor(self, codigo_rf: str, nome: str) -> dict:  # type: ignore[type-arg]
+        """Cria um dicionário representando um professor com RF e nome."""
+        return {"codigo_rf": codigo_rf, "nome": nome}
 
     def setUp(self) -> None:
         """Configuração base para os testes de upsert incremental."""
 
-    @patch("apps.professores.services.Cargo")
-    def test_lista_vazia_retorna_zero(self, _mock_cargo: MagicMock) -> None:
+    def test_lista_vazia_retorna_zero(self) -> None:
         """Verifica que _upsert_incremental retorna zero para lista vazia."""
-        from apps.professores.models import Cargo
+        from apps.professores.models import Professor
 
-        result = _upsert_incremental(Cargo, "cargo", [], ["descricao"])
+        result = _upsert_incremental(Professor, "professor", [], ["nome"])
         self.assertEqual(result, 0)
 
     def test_registros_novos_sao_escritos(self) -> None:
         """Verifica que novos registros são escritos no banco."""
-        from apps.professores.models import Cargo
+        from apps.professores.models import Professor
 
-        rows = [self._make_cargo(3239, "PEB I"), self._make_cargo(3247, "PEB II")]
-        escritos = _upsert_incremental(Cargo, "cargo", rows, ["descricao"])
+        rows = [
+            self._make_professor("012345", "ANA SILVA"),
+            self._make_professor("054321", "BRUNO SOUZA"),
+        ]
+        escritos = _upsert_incremental(Professor, "professor", rows, ["nome"])
         self.assertEqual(escritos, 2)
-        self.assertEqual(Cargo.objects.using("professores_db").count(), 2)
+        self.assertEqual(Professor.objects.using("professores_db").count(), 2)
 
     def test_hashes_salvos_no_banco_de_auditoria(self) -> None:
         """Verifica que os hashes de auditoria são salvos após upsert."""
-        from apps.professores.models import Cargo
+        from apps.professores.models import Professor
 
-        rows = [self._make_cargo(3239, "PEB I")]
-        _upsert_incremental(Cargo, "cargo", rows, ["descricao"])
+        rows = [self._make_professor("012345", "ANA SILVA")]
+        _upsert_incremental(Professor, "professor", rows, ["nome"])
         self.assertTrue(
-            EtlAuditoriaLinha.objects.filter(id_destino="cargo:3239").exists()
+            EtlAuditoriaLinha.objects.filter(id_destino="professor:012345").exists()
         )
 
     def test_registro_sem_mudanca_nao_e_reescrito(self) -> None:
         """Verifica que registros sem alteração não são reescritos."""
-        from apps.professores.models import Cargo
+        from apps.professores.models import Professor
 
-        rows = [self._make_cargo(3239, "PEB I")]
+        rows = [self._make_professor("012345", "ANA SILVA")]
         # Primeira carga
-        _upsert_incremental(Cargo, "cargo", rows, ["descricao"])
+        _upsert_incremental(Professor, "professor", rows, ["nome"])
         # Segunda carga com os mesmos dados
-        escritos = _upsert_incremental(Cargo, "cargo", rows, ["descricao"])
+        escritos = _upsert_incremental(Professor, "professor", rows, ["nome"])
         self.assertEqual(escritos, 0)
 
     def test_registro_alterado_e_reescrito(self) -> None:
         """Verifica que registros com dados alterados são reescritos."""
-        from apps.professores.models import Cargo
+        from apps.professores.models import Professor
 
-        rows_v1 = [self._make_cargo(3239, "PEB I")]
-        _upsert_incremental(Cargo, "cargo", rows_v1, ["descricao"])
+        rows_v1 = [self._make_professor("012345", "ANA SILVA")]
+        _upsert_incremental(Professor, "professor", rows_v1, ["nome"])
 
-        rows_v2 = [self._make_cargo(3239, "PEB I - Atualizado")]
-        escritos = _upsert_incremental(Cargo, "cargo", rows_v2, ["descricao"])
+        rows_v2 = [self._make_professor("012345", "ANA SILVA ATUALIZADA")]
+        escritos = _upsert_incremental(Professor, "professor", rows_v2, ["nome"])
         self.assertEqual(escritos, 1)
 
-        cargo = Cargo.objects.using("professores_db").get(codigo_cargo=3239)
-        self.assertEqual(cargo.descricao, "PEB I - Atualizado")
+        professor = Professor.objects.using("professores_db").get(codigo_rf="012345")
+        self.assertEqual(professor.nome, "ANA SILVA ATUALIZADA")
 
     def test_mix_novos_e_inalterados(self) -> None:
         """Verifica que apenas registros alterados são reescritos em uma carga mista."""
-        from apps.professores.models import Cargo
+        from apps.professores.models import Professor
 
-        rows_v1 = [self._make_cargo(3239, "PEB I"), self._make_cargo(3247, "PEB II")]
-        _upsert_incremental(Cargo, "cargo", rows_v1, ["descricao"])
+        rows_v1 = [
+            self._make_professor("012345", "ANA SILVA"),
+            self._make_professor("054321", "BRUNO SOUZA"),
+        ]
+        _upsert_incremental(Professor, "professor", rows_v1, ["nome"])
 
         # Apenas o segundo muda
         rows_v2 = [
-            self._make_cargo(3239, "PEB I"),
-            self._make_cargo(3247, "PEB II Modificado"),
+            self._make_professor("012345", "ANA SILVA"),
+            self._make_professor("054321", "BRUNO SOUZA MODIFICADO"),
         ]
-        escritos = _upsert_incremental(Cargo, "cargo", rows_v2, ["descricao"])
+        escritos = _upsert_incremental(Professor, "professor", rows_v2, ["nome"])
         self.assertEqual(escritos, 1)
 
     def test_hash_atualizado_apos_alteracao(self) -> None:
         """Verifica que o hash de auditoria é atualizado após alteração de registro."""
-        from apps.professores.models import Cargo
+        from apps.professores.models import Professor
 
-        rows_v1 = [self._make_cargo(3239, "PEB I")]
-        _upsert_incremental(Cargo, "cargo", rows_v1, ["descricao"])
-        hash_v1 = EtlAuditoriaLinha.objects.get(id_destino="cargo:3239").hash_controle
+        rows_v1 = [self._make_professor("012345", "ANA SILVA")]
+        _upsert_incremental(Professor, "professor", rows_v1, ["nome"])
+        hash_v1 = EtlAuditoriaLinha.objects.get(
+            id_destino="professor:012345"
+        ).hash_controle
 
-        rows_v2 = [self._make_cargo(3239, "PEB I Novo")]
-        _upsert_incremental(Cargo, "cargo", rows_v2, ["descricao"])
-        hash_v2 = EtlAuditoriaLinha.objects.get(id_destino="cargo:3239").hash_controle
+        rows_v2 = [self._make_professor("012345", "ANA SILVA NOVO")]
+        _upsert_incremental(Professor, "professor", rows_v2, ["nome"])
+        hash_v2 = EtlAuditoriaLinha.objects.get(
+            id_destino="professor:012345"
+        ).hash_controle
 
         self.assertNotEqual(hash_v1, hash_v2)

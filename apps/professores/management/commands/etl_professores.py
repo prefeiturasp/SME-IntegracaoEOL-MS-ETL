@@ -33,16 +33,7 @@ from apps.professores.services import EtlProfessoresService
 # As demais usam full-refresh (delete + bulk_create).
 _TABELAS_UPSERT = frozenset(
     {
-        "dre",
-        "tipo_escola",
-        "componente_curricular",
-        "serie_ensino",
-        "territorio_saber",
-        "tipo_experiencia_pedagogica",
-        "grade",
-        "cargo",
-        "funcao_funcionario_externo",
-        "escola_grade",
+        "unidade_educacional",
         "turma_escola",
         "professor",
         "pessoa",

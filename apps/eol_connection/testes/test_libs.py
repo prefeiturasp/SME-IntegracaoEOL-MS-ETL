@@ -67,7 +67,7 @@ class TestConnectionFactory(TestCase):
     def test_executar_consulta(self, mock_connections: MagicMock) -> None:
         """Executa consulta e retorna resultados."""
         mock_cursor = MagicMock()
-        mock_cursor.fetchall.return_value = [("ok",)]
+        mock_cursor.fetchmany.side_effect = [[("ok",)], []]
 
         mock_conn = MagicMock()
         mock_conn.cursor.return_value.__enter__.return_value = mock_cursor
@@ -86,7 +86,7 @@ class TestConnectionFactory(TestCase):
     ) -> None:
         """Executa consulta com parametros nomeados."""
         mock_cursor = MagicMock()
-        mock_cursor.fetchall.return_value = [(1,)]
+        mock_cursor.fetchmany.side_effect = [[(1,)], []]
 
         mock_conn = MagicMock()
         mock_conn.cursor.return_value.__enter__.return_value = mock_cursor
@@ -107,7 +107,7 @@ class TestConnectionFactory(TestCase):
     def test_executar_comando_select(self, mock_connections: MagicMock) -> None:
         """Executa comando de leitura (SELECT)."""
         mock_cursor = MagicMock()
-        mock_cursor.fetchall.return_value = [(1,)]
+        mock_cursor.fetchmany.side_effect = [[(1,)], []]
 
         mock_conn = MagicMock()
         mock_conn.cursor.return_value.__enter__.return_value = mock_cursor

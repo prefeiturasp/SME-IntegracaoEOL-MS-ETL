@@ -25,6 +25,7 @@ from apps.controle_auditoria.api.serializers import (
 )
 from apps.controle_auditoria.libs.tasks import executar_dominio_task
 from apps.controle_auditoria.models import (
+    EtlAuditoriaLinha,
     EtlCheckpointDominio,
     EtlExecucao,
     EtlExecucaoTabelaEscrita,
@@ -306,20 +307,42 @@ class DashboardView(View):
 
     def get(self, request: HttpRequest) -> HttpResponse:
         """Renderiza o dashboard com resumo por domínio e execuções recentes."""
-        ultima_por_dominio = list(_qs_ultima_execucao_por_dominio())
-
         dominio = request.GET.get("dominio", "")
         data_inicio = request.GET.get("data_inicio", "")
         data_fim = request.GET.get("data_fim", "")
         situacao = request.GET.get("situacao", "")
 
-        execucoes = _aplicar_filtros_execucao(
+        # Total de registros processados por domínio via checkpoint
+        checkpoints = {
+            c.dominio: int(c.token_parada or 0)
+            for c in EtlCheckpointDominio.objects.all()
+        }
+        ultima_por_dominio = list(_qs_ultima_execucao_por_dominio())
+        for exec_obj in ultima_por_dominio:
+            exec_obj.total_processado = checkpoints.get(exec_obj.dominio, 0)
+
+        qs_filtrado = _aplicar_filtros_execucao(
             qs=EtlExecucao.objects.all(),
             dominio=dominio,
             data_inicio=data_inicio,
             data_fim=data_fim,
             situacao=situacao,
-        ).order_by("-iniciado_em")[:_LIMITE_MONITORAMENTO]
+        ).order_by("-iniciado_em")
+
+        execucoes = qs_filtrado[:_LIMITE_MONITORAMENTO]
+
+        # Últimas 10 execuções com detalhes de tabelas escritas
+        ultimas_10 = list(qs_filtrado[:10])
+        ids_ultimas_10 = [e.id_execucao for e in ultimas_10]
+        tabelas_map: dict[str, list] = {}
+        for te in EtlExecucaoTabelaEscrita.objects.filter(
+            id_execucao__in=ids_ultimas_10
+        ).order_by("tabela_destino"):
+            tabelas_map.setdefault(str(te.id_execucao), []).append(te)
+        ultimas_10_com_tabelas = [
+            {"exec": e, "tabelas": tabelas_map.get(str(e.id_execucao), [])}
+            for e in ultimas_10
+        ]
 
         dominios_disponiveis = (
             EtlExecucao.objects.values_list("dominio", flat=True)
@@ -338,6 +361,7 @@ class DashboardView(View):
             {
                 "ultima_por_dominio": ultima_por_dominio,
                 "execucoes": execucoes,
+                "ultimas_10": ultimas_10_com_tabelas,
                 "dominios": dominios_disponiveis,
                 "situacoes": situacoes_disponiveis,
                 "filtros": {
@@ -346,6 +370,89 @@ class DashboardView(View):
                     "data_fim": data_fim,
                     "situacao": situacao,
                 },
+            },
+        )
+
+
+class KanbanView(View):
+    """Kanban de processamento ETL por domínio."""
+
+    def get(self, request: HttpRequest) -> HttpResponse:
+        """Renderiza kanban com estágios de leitura, hash, escrita e checkpoint."""
+        dominio_filtro = request.GET.get("dominio", "")
+
+        ultima_por_dominio = list(_qs_ultima_execucao_por_dominio())
+        if dominio_filtro:
+            ultima_por_dominio = [
+                e for e in ultima_por_dominio if e.dominio == dominio_filtro
+            ]
+
+        checkpoints = {c.dominio: c for c in EtlCheckpointDominio.objects.all()}
+
+        ids_execucao = [e.id_execucao for e in ultima_por_dominio]
+
+        lidas_map: dict[str, list] = {}
+        for tl in EtlExecucaoTabelaLida.objects.filter(
+            id_execucao__in=ids_execucao
+        ).order_by("tabela_origem"):
+            lidas_map.setdefault(str(tl.id_execucao), []).append(tl)
+
+        escritas_map: dict[str, list] = {}
+        for te in EtlExecucaoTabelaEscrita.objects.filter(
+            id_execucao__in=ids_execucao
+        ).order_by("tabela_destino"):
+            escritas_map.setdefault(str(te.id_execucao), []).append(te)
+
+        # Contagem de hashes por prefixo de tabela (tabela:id)
+        tabelas_unicas = {
+            te.tabela_destino for lista in escritas_map.values() for te in lista
+        }
+        hash_por_tabela: dict[str, int] = {
+            tabela: EtlAuditoriaLinha.objects.filter(
+                id_destino__startswith=f"{tabela}:"
+            ).count()
+            for tabela in tabelas_unicas
+        }
+
+        dominios_kanban = []
+        for exec_obj in ultima_por_dominio:
+            key = str(exec_obj.id_execucao)
+            tabelas_lidas = lidas_map.get(key, [])
+            tabelas_escritas = escritas_map.get(key, [])
+            cp = checkpoints.get(exec_obj.dominio)
+
+            dominios_kanban.append(
+                {
+                    "exec": exec_obj,
+                    "checkpoint": cp,
+                    "tabelas_lidas": tabelas_lidas,
+                    "tabelas_escritas": tabelas_escritas,
+                    "total_lido": sum(t.linhas_lidas for t in tabelas_lidas),
+                    "total_escrito": sum(t.linhas_escritas for t in tabelas_escritas),
+                    "hash_por_tabela": {
+                        te.tabela_destino: hash_por_tabela.get(te.tabela_destino, 0)
+                        for te in tabelas_escritas
+                    },
+                    "total_hashes": sum(
+                        hash_por_tabela.get(te.tabela_destino, 0)
+                        for te in tabelas_escritas
+                    ),
+                }
+            )
+
+        todos_dominios = list(
+            EtlExecucao.objects.values_list("dominio", flat=True)
+            .distinct()
+            .order_by("dominio")
+        )
+
+        return render(
+            request,
+            "kanban.html",
+            {
+                "dominios_kanban": dominios_kanban,
+                "dominio_filtro": dominio_filtro,
+                "todos_dominios": todos_dominios,
             },
         )
 
@@ -365,9 +472,9 @@ class HealthSincRecView(APIView):
         return Response(serializer.data, status=status_http)
 
     def _check_database(self) -> dict[str, str]:
-        if not os.getenv("URL_BANCO_AUDITORIA"):
+        """Retorna se esta conectado ao banco de dados default."""
+        if not os.environ.get("URL_BANCO_AUDITORIA"):
             return {"status": "unhealthy"}
-
         try:
             with connections["default"].cursor() as cursor:
                 cursor.execute("SELECT 1")
