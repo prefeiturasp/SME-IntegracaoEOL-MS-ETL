@@ -134,11 +134,24 @@ def _parse_eol_db(url: str) -> dict[str, Any]:
     }
 
 
+
 URL_BANCO_INSTITUCIONAL = os.getenv("URL_BANCO_INSTITUCIONAL")
 URL_BANCO_PROFESSORES = os.getenv("URL_BANCO_PROFESSORES")
 URL_BANCO_ALUNOS = os.getenv("URL_BANCO_ALUNOS")
 URL_BANCO_PEDAGOGICO = os.getenv("URL_BANCO_PEDAGOGICO")
 URL_BANCO_PROGRAMAS = os.getenv("URL_BANCO_PROGRAMAS")
+
+if not URL_BANCO_INSTITUCIONAL:
+    raise ValueError("A variável de ambiente URL_BANCO_INSTITUCIONAL não foi definida!")
+if not URL_BANCO_PROFESSORES:
+    raise ValueError("A variável de ambiente URL_BANCO_PROFESSORES não foi definida!")
+if not URL_BANCO_ALUNOS:
+    raise ValueError("A variável de ambiente URL_BANCO_ALUNOS não foi definida!")
+if not URL_BANCO_PEDAGOGICO:
+    raise ValueError("A variável de ambiente URL_BANCO_PEDAGOGICO não foi definida!")
+if not URL_BANCO_PROGRAMAS:
+    raise ValueError("A variável de ambiente URL_BANCO_PROGRAMAS não foi definida!")
+
 
 DATABASES = {
     "default": {
