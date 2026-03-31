@@ -4,6 +4,7 @@ import os
 import urllib.parse
 from pathlib import Path
 from typing import Any
+from django.core.exceptions import ImproperlyConfigured
 
 DB_POOL_SIZE = int(os.getenv("DB_POOL_SIZE", "5"))
 _POOL_OPTIONS = {
@@ -31,16 +32,18 @@ def _parse_db_url(url: str) -> dict:
 
 SILENCED_SYSTEM_CHECKS = [
     "models.E030",  # index names duplicados entre models
-    "models.W035",  # db_table duplicado entre apps
+    "models.W035",  # db_table duplicado entre apps (intencional por multi-db)
 ]
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = os.getenv(
-    "DJANGO_SECRET_KEY",
-    "django-inseguro-apenas-desenvolvimento",
-)
+SECRET_KEY = os.getenv("DJANGO_SECRET_KEY")
+if not SECRET_KEY:
+    if os.getenv("DJANGO_DEBUG", "1") == "0":  # Produção
+        raise ImproperlyConfigured("A variável DJANGO_SECRET_KEY é obrigatória em produção.")
+    # Fallback para desenvolvimento baseado no ambiente para não deixar chave exposta
+    SECRET_KEY = os.getenv("HOSTNAME")
 DEBUG = os.getenv("DJANGO_DEBUG", "1") == "1"
 ALLOWED_HOSTS = [
     host.strip() for host in os.getenv("DJANGO_ALLOWED_HOSTS", "*").split(",")
@@ -171,10 +174,7 @@ DATABASES = {
 
 DATABASE_ROUTERS = ["config.db_router.DominioRouter"]
 
-# W035: múltiplos modelos com o mesmo db_table é intencional — cada app
-# roteia para um banco separado via DominioRouter (institucional_db,
-# professores_db, alunos_db, pedagogico_db, programas_db).
-SILENCED_SYSTEM_CHECKS = ["models.W035"]
+# W035 já silenciado acima.
 
 AUTH_PASSWORD_VALIDATORS: list[dict[str, object]] = []
 

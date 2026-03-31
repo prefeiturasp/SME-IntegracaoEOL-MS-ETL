@@ -9,20 +9,23 @@ from apps.controle_auditoria.models import (
     EtlExecucaoTabelaLida,
 )
 
+_SEARCH_ID = "=id_execucao"
+_ID_EXECUCAO = "id_execucao"
+
 
 @admin.register(EtlExecucaoTabelaLida)
 class EtlExecucaoTabelaLidaAdmin(admin.ModelAdmin):
     """Admin de tabelas lidas por execucao."""
 
     list_display = (
-        "id_execucao",
+        _ID_EXECUCAO,
         "tabela_origem",
         "numero_pagina",
         "linhas_lidas",
         "lido_em",
     )
     list_filter = ("tabela_origem", "lido_em")
-    search_fields = ("=id_execucao", "tabela_origem")
+    search_fields = (_SEARCH_ID, "tabela_origem")
     ordering = ("-lido_em",)
 
 
@@ -31,14 +34,14 @@ class EtlExecucaoAdmin(admin.ModelAdmin):
     """Admin de execucoes ETL."""
 
     list_display = (
-        "id_execucao",
+        _ID_EXECUCAO,
         "dominio",
         "situacao",
         "iniciado_em",
         "finalizado_em",
     )
     list_filter = ("situacao", "iniciado_em", "finalizado_em")
-    search_fields = ("=id_execucao", "dominio")
+    search_fields = (_SEARCH_ID, "dominio")
     ordering = ("-iniciado_em",)
 
 
@@ -67,5 +70,5 @@ class EtlExecucaoTabelaEscritaAdmin(admin.ModelAdmin):
         "modo_escrita",
     )
     list_filter = ("tabela_destino", "modo_escrita", "escrito_em")
-    search_fields = ("=id_execucao", "tabela_destino")
+    search_fields = (_SEARCH_ID, "tabela_destino")
     ordering = ("-escrito_em",)

@@ -59,14 +59,23 @@ ORDEM DE CARGA ETL
     16. AgrupamentoAtribuicaoTerritorioSaber (ref: rf_professor, codigo_turma)
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-CARGOS DE PROFESSOR (cd_cargo):
-    3239, 3247, 3255, 3263, 3271, 3280, 3298, 3301,
-    3336, 3344, 3840, 3859, 3867, 3874, 3883, 3884
 CARGOS QUE NÃO IMPEDEM ATRIBUIÇÃO (cargo_sobreposto):
     3379, 3085, 3360
 """
 
 from django.db import models
+
+# ---------------------------------------------------------------------------
+# Constantes de Descrição (Acessibilidade e DRY)
+# ---------------------------------------------------------------------------
+_BASE_DESC = "ID da {} neste DB."
+_HELP_UE = _BASE_DESC.format("UnidadeEducacional")
+_HELP_TURMA = _BASE_DESC.format("TurmaEscola")
+_HELP_STG = _BASE_DESC.format("SerieTurmaGrade")
+_HELP_GRADE = "ID da escola_grade — ref. domínio pedagógico."
+_HELP_COMP = "ID do componente curricular" + " — ref. domínio curricular."
+_HELP_TERR = "ID do território do saber — ref. domínio pedagógico."
+_HELP_EXP = "ID da experiência pedagógica — ref. domínio pedagógico."
 
 # ===========================================================================
 # TABELAS DE SUPORTE (estruturais — filtros e junções de professor)
@@ -84,7 +93,7 @@ class UnidadeEducacional(models.Model):
     codigo_ue = models.CharField(max_length=20, primary_key=True)
     codigo_dre = models.CharField(
         max_length=20,
-        null=True,
+        null=True,  # NOSONAR professores:models:87 - Manter compatilidade com o legado
         blank=True,
         help_text="ID da DRE — ref. domínio institucional.",
     )
@@ -125,7 +134,7 @@ class TurmaEscola(models.Model):
     codigo_turma = models.BigIntegerField(primary_key=True)
     codigo_escola = models.CharField(
         max_length=20,
-        help_text="ID da UnidadeEducacional neste DB.",
+        help_text=_HELP_UE,
     )
     ano_letivo = models.IntegerField()
     status = models.CharField(
@@ -167,14 +176,14 @@ class SerieTurmaGrade(models.Model):
 
     codigo_serie_grade = models.IntegerField(primary_key=True)
     codigo_turma = models.BigIntegerField(
-        help_text="ID da TurmaEscola neste DB.",
+        help_text=_HELP_TURMA,
     )
     codigo_escola = models.CharField(
         max_length=20,
-        help_text="ID da UnidadeEducacional neste DB.",
+        help_text=_HELP_UE,
     )
     codigo_escola_grade = models.IntegerField(
-        help_text="ID da escola_grade — ref. domínio pedagógico.",
+        help_text=_HELP_GRADE,
     )
     dt_fim = models.DateField(null=True, blank=True)
 
@@ -202,10 +211,10 @@ class TurmaEscolaGradePrograma(models.Model):
 
     codigo = models.BigIntegerField(primary_key=True)
     codigo_turma = models.BigIntegerField(
-        help_text="ID da TurmaEscola neste DB.",
+        help_text=_HELP_TURMA,
     )
     codigo_escola_grade = models.IntegerField(
-        help_text="ID da escola_grade — ref. domínio pedagógico.",
+        help_text=_HELP_GRADE,
     )
     dt_fim = models.DateField(null=True, blank=True)
 
@@ -232,16 +241,16 @@ class TurmaGradeTerritorioExperiencia(models.Model):
 
     id = models.BigAutoField(primary_key=True)
     codigo_serie_grade = models.IntegerField(
-        help_text="ID da SerieTurmaGrade neste DB.",
+        help_text=_HELP_STG,
     )
     codigo_componente_curricular = models.IntegerField(
-        help_text="ID do componente curricular — ref. domínio curricular.",
+        help_text=_HELP_COMP,
     )
     codigo_territorio_saber = models.IntegerField(
-        help_text="ID do território do saber — ref. domínio pedagógico.",
+        help_text=_HELP_TERR,
     )
     codigo_experiencia_pedagogica = models.IntegerField(
-        help_text="ID da experiência pedagógica — ref. domínio pedagógico.",
+        help_text=_HELP_EXP,
     )
     dt_inicio = models.DateField(null=True, blank=True)
 
@@ -284,12 +293,12 @@ class AgrupamentoAtribuicaoTerritorioSaber(models.Model):
     codigo_territorio_saber = models.IntegerField(
         null=True,
         blank=True,
-        help_text="ID do território do saber — ref. domínio pedagógico.",
+        help_text=_HELP_TERR,
     )
     codigo_experiencia_pedagogica = models.IntegerField(
         null=True,
         blank=True,
-        help_text="ID da experiência pedagógica — ref. domínio pedagógico.",
+        help_text=_HELP_EXP,
     )
     dt_inicio_atribuicao = models.DateField(null=True, blank=True)
     ano_atribuicao = models.IntegerField(null=True, blank=True)
@@ -297,17 +306,17 @@ class AgrupamentoAtribuicaoTerritorioSaber(models.Model):
     dt_fim_turma = models.DateField(null=True, blank=True)
     rf_professor = models.CharField(
         max_length=20,
-        null=True,
+        null=True,  # NOSONAR professores:models:300 - Manter compatilidade com o legado
         blank=True,
         help_text="Ref. Professor.codigo_rf neste DB.",
     )
     codigo_turma = models.BigIntegerField(
         null=True,
         blank=True,
-        help_text="ID da TurmaEscola neste DB.",
+        help_text=_HELP_TURMA,
     )
     codigos_componentes_curriculares = models.TextField(
-        null=True,
+        null=True,  # NOSONAR professores:models:310 - Manter compatilidade com o legado
         blank=True,
         help_text="Lista de IDs de componentes separados por vírgula.",
     )
@@ -347,7 +356,7 @@ class Professor(models.Model):
 
     codigo_rf = models.CharField(max_length=20, primary_key=True)
     nome = models.CharField(max_length=200)
-    nome_social = models.CharField(max_length=200, null=True, blank=True)
+    nome_social = models.CharField(max_length=200, null=True, blank=True) # NOSONAR
 
     class Meta:
         """Metadados do modelo."""
@@ -423,7 +432,7 @@ class LotacaoServidor(models.Model):
     )
     codigo_unidade_educacao = models.CharField(
         max_length=20,
-        help_text="ID da UnidadeEducacional neste DB.",
+        help_text=_HELP_UE,
     )
     dt_inicio = models.DateField(null=True, blank=True)
     dt_fim = models.DateField(null=True, blank=True)
@@ -550,7 +559,7 @@ class Pessoa(models.Model):
     codigo_pessoa = models.BigIntegerField(primary_key=True)
     cpf = models.CharField(max_length=14, unique=True)
     nome = models.CharField(max_length=200)
-    nome_social = models.CharField(max_length=200, null=True, blank=True)
+    nome_social = models.CharField(max_length=200, null=True, blank=True) # NOSONAR
 
     class Meta:
         """Metadados do modelo."""
@@ -586,7 +595,7 @@ class ContratoExterno(models.Model):
     )
     codigo_unidade_educacao = models.CharField(
         max_length=20,
-        help_text="ID da UnidadeEducacional neste DB.",
+        help_text=_HELP_UE,
     )
     dt_cancelamento = models.DateField(null=True, blank=True)
     codigo_motivo_desligamento = models.IntegerField(null=True, blank=True)
@@ -632,12 +641,12 @@ class AtribuicaoAula(models.Model):
     )
     codigo_unidade_educacao = models.CharField(
         max_length=20,
-        help_text="ID da UnidadeEducacional neste DB.",
+        help_text=_HELP_UE,
     )
     codigo_turma_escola = models.BigIntegerField(
         null=True,
         blank=True,
-        help_text="ID da TurmaEscola neste DB.",
+        help_text=_HELP_TURMA,
     )
     codigo_turma_escola_grade_programa = models.BigIntegerField(
         null=True,
@@ -645,10 +654,10 @@ class AtribuicaoAula(models.Model):
         help_text="ID da TurmaEscolaGradePrograma neste DB.",
     )
     codigo_grade = models.IntegerField(
-        help_text="ID da grade — ref. domínio pedagógico.",
+        help_text=_HELP_GRADE,
     )
     codigo_componente_curricular = models.IntegerField(
-        help_text="ID do componente curricular — ref. domínio curricular.",
+        help_text=_HELP_COMP,
     )
     codigo_serie_grade = models.IntegerField(
         help_text="ID da SerieTurmaGrade neste DB.",
@@ -702,13 +711,13 @@ class AtribuicaoExterno(models.Model):
     )
     codigo_unidade_educacao = models.CharField(
         max_length=20,
-        help_text="ID da UnidadeEducacional neste DB.",
+        help_text=_HELP_UE,
     )
     codigo_grade = models.IntegerField(
-        help_text="ID da grade — ref. domínio pedagógico.",
+        help_text=_HELP_GRADE,
     )
     codigo_componente_curricular = models.IntegerField(
-        help_text="ID do componente curricular — ref. domínio curricular.",
+        help_text=_HELP_COMP,
     )
     codigo_serie_grade = models.IntegerField(
         help_text="ID da SerieTurmaGrade neste DB.",

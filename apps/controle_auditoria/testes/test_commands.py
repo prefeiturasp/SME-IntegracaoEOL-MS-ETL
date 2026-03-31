@@ -285,3 +285,55 @@ class ExecutarDominiosLoopCommandTestCase(TestCase):
             ("executar_dominios", "--volume", "50", "--continuar"),
         )
         sleep_mock.assert_called_once_with(1)
+
+    def test_deve_retornar_volume_restante_no_limite_linhas(self) -> None:
+        """Verifica cálculo do volume quando restam menos linhas que o volume total."""
+        from apps.controle_auditoria.management.commands.executar_dominios_loop import Command
+        cmd = Command()
+        # limite 100, total 70 -> volume restante 30
+        self.assertEqual(cmd._calcular_volume(100, 100, 70), 30)
+
+
+class CancelarExecucoesCommandTestCase(TestCase):
+    """Testes para o comando de cancelamento de execuções ETL."""
+
+    def test_deve_cancelar_execucoes_em_andamento(self) -> None:
+        """Marca execuções em aberto como canceladas."""
+        import uuid
+        from django.utils import timezone
+        from apps.controle_auditoria.models import EtlExecucao
+        EtlExecucao.objects.create(
+            id_execucao=uuid.uuid4(), 
+            dominio="escola", 
+            situacao="em_execucao",
+            iniciado_em=timezone.now()
+        )
+        
+        call_command("cancelar_execucoes")
+        
+        exec_obj = EtlExecucao.objects.get(dominio="escola")
+        self.assertEqual(exec_obj.situacao, "cancelado")
+
+    def test_deve_filtrar_por_dominio(self) -> None:
+        """Apenas o domínio solicitado deve ser cancelado."""
+        import uuid
+        from django.utils import timezone
+        from apps.controle_auditoria.models import EtlExecucao
+        EtlExecucao.objects.create(
+            id_execucao=uuid.uuid4(), 
+            dominio="escola", 
+            situacao="em_execucao",
+            iniciado_em=timezone.now()
+        )
+        EtlExecucao.objects.create(
+            id_execucao=uuid.uuid4(), 
+            dominio="professores", 
+            situacao="em_execucao",
+            iniciado_em=timezone.now()
+        )
+
+        call_command("cancelar_execucoes", "--dominio", "escola")
+
+        self.assertEqual(EtlExecucao.objects.filter(situacao="cancelado").count(), 1)
+        self.assertEqual(EtlExecucao.objects.filter(dominio="escola", situacao="cancelado").count(), 1)
+        self.assertEqual(EtlExecucao.objects.filter(dominio="professores", situacao="em_execucao").count(), 1)

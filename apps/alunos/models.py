@@ -57,7 +57,7 @@ class DRE(models.Model):
 
     codigo_dre = models.CharField(max_length=20, primary_key=True)
     nome = models.CharField(max_length=200)
-    sigla = models.CharField(max_length=20, null=True, blank=True)
+    sigla = models.CharField(max_length=20, null=True, blank=True)  # NOSONAR alunos:models:60 - Manter compatilidade com o legado
 
     class Meta:
         """Metadados do modelo."""
@@ -81,7 +81,7 @@ class TipoEscola(models.Model):
 
     codigo_tipo_escola = models.IntegerField(primary_key=True)
     descricao = models.CharField(max_length=200)
-    sigla = models.CharField(max_length=10, null=True, blank=True)
+    sigla = models.CharField(max_length=10, null=True, blank=True)  # NOSONAR alunos:models:84 - Manter compatilidade com o legado
 
     class Meta:
         """Metadados do modelo."""
@@ -106,12 +106,12 @@ class UnidadeEducacional(models.Model):
 
     codigo_ue = models.CharField(max_length=20, primary_key=True)
     nome = models.CharField(max_length=200)
-    sigla = models.CharField(max_length=50, null=True, blank=True)
+    sigla = models.CharField(max_length=50, null=True, blank=True)  # NOSONAR alunos:models:109 - Manter compatilidade com o legado
     codigo_dre = models.CharField(max_length=20)
-    nome_dre = models.CharField(max_length=200, null=True, blank=True)
-    sigla_dre = models.CharField(max_length=20, null=True, blank=True)
+    nome_dre = models.CharField(max_length=200, null=True, blank=True)  # NOSONAR alunos:models:111 - Manter compatilidade com o legado
+    sigla_dre = models.CharField(max_length=20, null=True, blank=True)  # NOSONAR alunos:models:112 - Manter compatilidade com o legado
     codigo_tipo_escola = models.IntegerField(null=True, blank=True)
-    sigla_tipo_escola = models.CharField(max_length=10, null=True, blank=True)
+    sigla_tipo_escola = models.CharField(max_length=10, null=True, blank=True)  # NOSONAR alunos:models:114 - Manter compatilidade com o legado
 
     class Meta:
         """Metadados do modelo."""
@@ -184,9 +184,9 @@ class Aluno(models.Model):
 
     codigo_aluno = models.BigIntegerField(primary_key=True)
     nome = models.CharField(max_length=200)
-    nome_social = models.CharField(max_length=200, null=True, blank=True)
+    nome_social = models.CharField(max_length=200, null=True, blank=True)  # NOSONAR alunos:models:187 - Manter compatilidade com o legado
     dt_nascimento = models.DateField(null=True, blank=True)
-    nome_mae = models.CharField(max_length=200, null=True, blank=True)
+    nome_mae = models.CharField(max_length=200, null=True, blank=True)  # NOSONAR alunos:models:189 - Manter compatilidade com o legado
     dt_atualizacao_contato = models.DateTimeField(null=True, blank=True)
 
     class Meta:
@@ -252,7 +252,7 @@ class MatriculaTurmaEscola(models.Model):
     )
     codigo_situacao_aluno = models.IntegerField()
     dt_situacao_aluno = models.DateField(null=True, blank=True)
-    nr_chamada_aluno = models.CharField(max_length=10, null=True, blank=True)
+    nr_chamada_aluno = models.CharField(max_length=10, null=True, blank=True) # NOSONAR
 
     class Meta:
         """Metadados do modelo."""
@@ -315,7 +315,7 @@ class HistoricoMatriculaTurmaEscola(models.Model):
     )
     codigo_situacao_aluno = models.IntegerField()
     dt_situacao_aluno = models.DateField(null=True, blank=True)
-    nr_chamada_aluno = models.CharField(max_length=10, null=True, blank=True)
+    nr_chamada_aluno = models.CharField(max_length=10, null=True, blank=True) # NOSONAR
 
     class Meta:
         """Metadados do modelo."""
@@ -342,10 +342,10 @@ class ResponsavelAluno(models.Model):
         on_delete=models.CASCADE,
         related_name="responsaveis",
     )
-    nome = models.CharField(max_length=200, null=True, blank=True)
+    nome = models.CharField(max_length=200, null=True, blank=True)  # NOSONAR alunos:models:345 - Manter compatilidade com o legado
     tipo_pessoa_responsavel = models.IntegerField(null=True, blank=True)
-    ddd_celular = models.CharField(max_length=4, null=True, blank=True)
-    nr_celular = models.CharField(max_length=20, null=True, blank=True)
+    ddd_celular = models.CharField(max_length=4, null=True, blank=True)  # NOSONAR alunos:models:347 - Manter compatilidade com o legado
+    nr_celular = models.CharField(max_length=20, null=True, blank=True)  # NOSONAR alunos:models:348 - Manter compatilidade com o legado
     dt_atualizacao = models.DateTimeField(null=True, blank=True)
     dt_fim = models.DateField(null=True, blank=True)
 

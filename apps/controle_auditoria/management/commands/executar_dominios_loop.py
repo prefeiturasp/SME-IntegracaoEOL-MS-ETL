@@ -42,42 +42,42 @@ class Command(BaseCommand):
         total_linhas_processadas: int = 0
 
         while True:
-            volume_execucao = volume
-
-            if limite_linhas is not None:
-                restante = limite_linhas - total_linhas_processadas
-                if restante <= 0:
-                    break
-                volume_execucao = min(volume, restante)
+            volume_execucao = self._calcular_volume(volume, limite_linhas, total_linhas_processadas)
+            if volume_execucao <= 0:
+                break
 
             argumentos: list[str] = ["--volume", str(volume_execucao)]
-
             if continuar:
                 argumentos.append("--continuar")
 
-            checkpoint_antes = repositorio.obter_checkpoint_dominio("escola")
-            token_antes_valor = (checkpoint_antes or {}).get("token_parada", 0)
-            token_antes = int(cast(int | str, token_antes_valor))
-
-            call_command("executar_dominios", *argumentos)
-
-            checkpoint_depois = repositorio.obter_checkpoint_dominio("escola")
-            token_depois_valor = (checkpoint_depois or {}).get("token_parada", 0)
-            token_depois = int(cast(int | str, token_depois_valor))
-
-            linhas = max(token_depois - token_antes, 0)
+            linhas = self._executar_e_contar(repositorio, argumentos)
             total_linhas_processadas += linhas
 
-            if linhas == 0:
-                break
-
-            if limite_linhas is not None and total_linhas_processadas >= limite_linhas:
+            if linhas == 0 or (limite_linhas and total_linhas_processadas >= limite_linhas):
                 break
 
             time.sleep(intervalo)
 
         self.stdout.write(
             self.style.SUCCESS(
-                "Loop finalizado. linhas_processadas=" f"{total_linhas_processadas}"
+                f"Loop finalizado. linhas_processadas={total_linhas_processadas}"
             )
         )
+
+    def _calcular_volume(self, volume: int, limite: int | None, total: int) -> int:
+        """Calcula volume do próximo lote considerando limite total."""
+        if limite is None:
+            return volume
+        restante = limite - total
+        return min(volume, restante) if restante > 0 else 0
+
+    def _executar_e_contar(self, repositorio: Any, argumentos: list[str]) -> int:
+        """Executa comando e retorna delta de linhas processadas."""
+        def _get_token() -> int:
+            cp = repositorio.obter_checkpoint_dominio("escola")
+            return int(cast(int | str, (cp or {}).get("token_parada", 0)))
+
+        token_antes = _get_token()
+        call_command("executar_dominios", *argumentos)
+        token_depois = _get_token()
+        return max(token_depois - token_antes, 0)

@@ -92,7 +92,7 @@ class ExecucoesView(APIView):
     @extend_schema(
         summary="Lista execuções recentes",
         description=(
-            "Retorna as 50 execuções ETL mais recentes " "ordenadas por data de início."
+            "Retorna as 50 execuções ETL mais recentes ordenadas por data de início."
         ),
         responses={200: EtlExecucaoSerializer(many=True)},
     )

@@ -29,16 +29,16 @@ _APP_PARA_BANCO: dict[str, str] = {
 class DominioRouter:
     """Roteia modelos dos domínios de negócio para seus bancos dedicados."""
 
-    def db_for_read(self, model: type, **hints: object) -> str | None:
+    def db_for_read(self, model: type, **_hints: object) -> str | None:
         """Direciona leitura para o banco do domínio."""
         return _APP_PARA_BANCO.get(model._meta.app_label)  # type: ignore[attr-defined]
 
-    def db_for_write(self, model: type, **hints: object) -> str | None:
+    def db_for_write(self, model: type, **_hints: object) -> str | None:
         """Direciona escrita para o banco do domínio."""
         return _APP_PARA_BANCO.get(model._meta.app_label)  # type: ignore[attr-defined]
 
     def allow_relation(  # noqa: E501
-        self, obj1: object, obj2: object, **hints: object
+        self, obj1: object, obj2: object, **_hints: object
     ) -> bool | None:
         """Permite relações apenas dentro do mesmo banco."""
         db1 = _APP_PARA_BANCO.get(obj1._meta.app_label, "default")  # type: ignore[attr-defined]
@@ -48,7 +48,7 @@ class DominioRouter:
         return None
 
     def allow_migrate(
-        self, db: str, app_label: str, model_name: str | None = None, **hints: object
+        self, db: str, app_label: str, _model_name: str | None = None, **_hints: object
     ) -> bool | None:
         """Garante que cada app migre apenas no banco correto."""
         banco_destino = _APP_PARA_BANCO.get(app_label)

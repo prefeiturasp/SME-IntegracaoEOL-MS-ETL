@@ -481,6 +481,29 @@ def _calcular_hash(campos: dict[str, Any]) -> str:
     conteudo = "|".join(f"{k}={v!r}" for k, v in sorted(campos.items()))
     return hashlib.sha256(conteudo.encode("utf-8")).hexdigest()
 
+def _reinsere_se_ausente(
+    model_class: Any,
+    pk_name: str,
+    pks: list[str],
+    map_linha: dict[str, tuple[str, str, dict[str, Any]]],
+    objs: list[Any],
+    hashes: dict[str, str]
+) -> None:
+    """Força reinserção se o hash não mudou mas o registro sumiu do destino."""
+    if not pks:
+        return
+    existentes: set[str] = set()
+    for i in range(0, len(pks), _HASH_LOOKUP_BATCH):
+        lote = pks[i : i + _HASH_LOOKUP_BATCH]
+        existentes.update(
+            str(pk) for pk in model_class.objects.using("professores_db")
+            .filter(**{f"{pk_name}__in": lote}).values_list(pk_name, flat=True)
+        )
+    for pk_str, (id_dest, novo_h, row_dict) in map_linha.items():
+        if pk_str not in existentes:
+            objs.append(model_class(**row_dict))
+            hashes[id_dest] = novo_h
+
 
 def _upsert_incremental(
     model_class: Any,
@@ -540,20 +563,9 @@ def _upsert_incremental(
 
     # Proteção contra dessincronização: se o hash não mudou mas o registro
     # não existe mais no destino (ex: migration reset), forçar reinserção.
-    if pks_hash_inalterado:
-        existentes_destino: set[str] = set()
-        for i in range(0, len(pks_hash_inalterado), _HASH_LOOKUP_BATCH):
-            lote_pks = pks_hash_inalterado[i : i + _HASH_LOOKUP_BATCH]
-            existentes_destino.update(
-                str(pk)
-                for pk in model_class.objects.using("professores_db")
-                .filter(**{f"{pk_name}__in": lote_pks})
-                .values_list(pk_name, flat=True)
-            )
-        for pk_str, (id_destino, novo_hash, row_dict) in map_pk_para_linha.items():
-            if pk_str not in existentes_destino:
-                objs_para_salvar.append(model_class(**row_dict))
-                novos_hashes[id_destino] = novo_hash
+    _reinsere_se_ausente(
+        model_class, pk_name, pks_hash_inalterado, map_pk_para_linha, objs_para_salvar, novos_hashes
+    )
 
     if not objs_para_salvar:
         return 0
