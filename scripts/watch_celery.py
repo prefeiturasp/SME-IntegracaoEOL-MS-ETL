@@ -33,17 +33,19 @@ class _RestartHandler(FileSystemEventHandler):
         self._proc.wait()
         self._proc = subprocess.Popen(_CELERY_CMD)
 
-    def on_modified(self, event: object) -> None:  # type: ignore[override]
+    def _trigger_restart_if_python_file(self, event: object) -> None:
+        """Reinicia o worker se o arquivo alterado/criado for .py."""
         if not getattr(event, "is_directory", True) and str(
             getattr(event, "src_path", "")
         ).endswith(".py"):
             self._restart()
 
+    def on_modified(self, event: object) -> None:  # type: ignore[override]
+        self._trigger_restart_if_python_file(event)
+
     def on_created(self, event: object) -> None:  # type: ignore[override]
-        if not getattr(event, "is_directory", True) and str(
-            getattr(event, "src_path", "")
-        ).endswith(".py"):
-            self._restart()
+        self._trigger_restart_if_python_file(event)
+
 
 
 def main() -> None:
