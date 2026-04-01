@@ -47,7 +47,6 @@ class _RestartHandler(FileSystemEventHandler):
         self._trigger_restart_if_python_file(event)
 
 
-
 def main() -> None:
     """Inicia o observer de polling e mantém o worker Celery em execução."""
     handler = _RestartHandler()
