@@ -8,26 +8,26 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    git \
-    curl \
-    gnupg2 \
     apt-transport-https \
+    build-essential \
     ca-certificates \
-    unixodbc \
-    unixodbc-dev \
-    postgresql-client \
-    graphviz \
-    make \
-    latexmk \
-    texlive-latex-recommended \
-    texlive-latex-extra \
-    texlive-fonts-recommended \
-    texlive-fonts-extra \
-    texlive-xetex \
-    texlive-lang-portuguese \
+    curl \
     fonts-dejavu \
     fonts-liberation \
+    git \
+    gnupg2 \
+    graphviz \
+    latexmk \
+    make \
+    postgresql-client \
+    texlive-fonts-extra \
+    texlive-fonts-recommended \
+    texlive-lang-portuguese \
+    texlive-latex-extra \
+    texlive-latex-recommended \
+    texlive-xetex \
+    unixodbc \
+    unixodbc-dev \
     && curl -fsSL https://packages.microsoft.com/keys/microsoft.asc \
         | gpg --dearmor > /usr/share/keyrings/microsoft-prod.gpg \
     && echo "deb [signed-by=/usr/share/keyrings/microsoft-prod.gpg] https://packages.microsoft.com/debian/11/prod bullseye main" \
@@ -35,6 +35,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get update \
     && ACCEPT_EULA=Y apt-get install -y --no-install-recommends msodbcsql17 \
     && rm -rf /var/lib/apt/lists/*
+
 
 COPY pyproject.toml README.md manage.py /app/
 COPY config /app/config
@@ -44,7 +45,8 @@ COPY requirements /app/requirements
 RUN pip install --upgrade pip \
     && pip install -r /app/requirements/local.txt \
     && pip install debugpy==1.8.5 \
-    && pip install sphinx sphinx-rtd-theme myst-parser
+    && pip install myst-parser sphinx sphinx-rtd-theme
+
 
 
 RUN echo "openssl_conf = default_conf" > /etc/ssl/openssl_custom.cnf \

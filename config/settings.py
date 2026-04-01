@@ -135,22 +135,21 @@ def _parse_eol_db(url: str) -> dict[str, Any]:
 
 
 
-URL_BANCO_INSTITUCIONAL = os.getenv("URL_BANCO_INSTITUCIONAL")
-URL_BANCO_PROFESSORES = os.getenv("URL_BANCO_PROFESSORES")
-URL_BANCO_ALUNOS = os.getenv("URL_BANCO_ALUNOS")
-URL_BANCO_PEDAGOGICO = os.getenv("URL_BANCO_PEDAGOGICO")
-URL_BANCO_PROGRAMAS = os.getenv("URL_BANCO_PROGRAMAS")
-
-if not URL_BANCO_INSTITUCIONAL:
-    raise ValueError("A variável de ambiente URL_BANCO_INSTITUCIONAL não foi definida!")
-if not URL_BANCO_PROFESSORES:
-    raise ValueError("A variável de ambiente URL_BANCO_PROFESSORES não foi definida!")
-if not URL_BANCO_ALUNOS:
-    raise ValueError("A variável de ambiente URL_BANCO_ALUNOS não foi definida!")
-if not URL_BANCO_PEDAGOGICO:
-    raise ValueError("A variável de ambiente URL_BANCO_PEDAGOGICO não foi definida!")
-if not URL_BANCO_PROGRAMAS:
-    raise ValueError("A variável de ambiente URL_BANCO_PROGRAMAS não foi definida!")
+URL_BANCO_INSTITUCIONAL = os.getenv("URL_BANCO_INSTITUCIONAL", 
+"postgresql://postgres:postgres@localhost:5432/institucional_db"
+)
+URL_BANCO_PROFESSORES = os.getenv("URL_BANCO_PROFESSORES", 
+"postgresql://postgres:postgres@localhost:5432/professores_db"
+)
+URL_BANCO_ALUNOS = os.getenv("URL_BANCO_ALUNOS", 
+"postgresql://postgres:postgres@localhost:5432/alunos_db"
+)
+URL_BANCO_PEDAGOGICO = os.getenv("URL_BANCO_PEDAGOGICO", 
+"postgresql://postgres:postgres@localhost:5432/pedagogico_db"
+)
+URL_BANCO_PROGRAMAS = os.getenv("URL_BANCO_PROGRAMAS", 
+"postgresql://postgres:postgres@localhost:5432/programas_db"
+)
 
 
 DATABASES = {
