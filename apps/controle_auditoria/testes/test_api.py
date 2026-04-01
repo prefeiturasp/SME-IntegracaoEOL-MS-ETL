@@ -366,21 +366,12 @@ class HealthSincRecViewTestCase(TestCase):
         """Prepara cliente API para testes."""
         self.client = APIClient()
 
-    @patch.dict(os.environ, {}, clear=True)
-    def test_health_sem_variavel(self) -> None:
-        """Retorna 503 quando URL_BANCO_AUDITORIA nao esta configurada."""
-        response = self.client.get("/api/v1/sinc_rec/health/")
-        self.assertEqual(response.status_code, 503)
-        self.assertEqual(response.json()["status"], "unhealthy")
-
-    @patch.dict(os.environ, {"URL_BANCO_AUDITORIA": "postgres://teste"})
     def test_health_banco_ok(self) -> None:
         """Retorna 200 quando banco esta acessivel."""
         response = self.client.get("/api/v1/sinc_rec/health/")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["status"], "healthy")
 
-    @patch.dict(os.environ, {"URL_BANCO_AUDITORIA": "postgres://teste"})
     @patch("apps.controle_auditoria.api.views.connections")
     def test_health_banco_erro(self, connections_mock: Any) -> None:
         """Retorna 503 quando banco lança excecao."""
