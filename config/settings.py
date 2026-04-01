@@ -141,18 +141,6 @@ URL_BANCO_ALUNOS = os.getenv("URL_BANCO_ALUNOS")
 URL_BANCO_PEDAGOGICO = os.getenv("URL_BANCO_PEDAGOGICO")
 URL_BANCO_PROGRAMAS = os.getenv("URL_BANCO_PROGRAMAS")
 
-if not URL_BANCO_INSTITUCIONAL:
-    raise ValueError("A variável de ambiente URL_BANCO_INSTITUCIONAL não foi definida!")
-if not URL_BANCO_PROFESSORES:
-    raise ValueError("A variável de ambiente URL_BANCO_PROFESSORES não foi definida!")
-if not URL_BANCO_ALUNOS:
-    raise ValueError("A variável de ambiente URL_BANCO_ALUNOS não foi definida!")
-if not URL_BANCO_PEDAGOGICO:
-    raise ValueError("A variável de ambiente URL_BANCO_PEDAGOGICO não foi definida!")
-if not URL_BANCO_PROGRAMAS:
-    raise ValueError("A variável de ambiente URL_BANCO_PROGRAMAS não foi definida!")
-
-
 DATABASES = {
     "default": {
         "ENGINE": "dj_db_conn_pool.backends.postgresql",
@@ -189,10 +177,6 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 NOME_APLICACAO = os.getenv("NOME_APLICACAO", "SME-IntegracaoEOL-MS-ETL")
 AMBIENTE_APLICACAO = os.getenv("AMBIENTE_APLICACAO", "local")
 NIVEL_LOG = os.getenv("NIVEL_LOG", "INFO")
-URL_BANCO_AUDITORIA = os.getenv(
-    "URL_BANCO_AUDITORIA",
-    "postgresql://postgres:postgres@localhost:5432/sinc_rec_db",
-)
 URL_KEYDB = os.getenv("URL_KEYDB", "redis://localhost:6379/0")
 EOL_DB = os.getenv("EOL_DB", "")
 INTERVALO_EXECUCAO_ETL_SEGUNDOS = int(
