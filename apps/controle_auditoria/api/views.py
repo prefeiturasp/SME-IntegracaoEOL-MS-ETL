@@ -473,8 +473,6 @@ class HealthSincRecView(APIView):
 
     def _check_database(self) -> dict[str, str]:
         """Retorna se esta conectado ao banco de dados default."""
-        if not os.environ.get("URL_BANCO_AUDITORIA"):
-            return {"status": "unhealthy"}
         try:
             with connections["default"].cursor() as cursor:
                 cursor.execute("SELECT 1")
