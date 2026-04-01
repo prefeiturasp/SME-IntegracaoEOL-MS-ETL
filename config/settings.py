@@ -16,9 +16,16 @@ _POOL_OPTIONS = {
 }
 
 
-def _parse_db_url(url: str) -> dict:
+def _parse_db_url(url: Any) -> dict:
     """Faz o parse de uma URL PostgreSQL para dict de configuração Django."""
-    parsed = urllib.parse.urlparse(url)
+    if not url:
+        return {}
+
+    # Garante que a URL é uma string para evitar que urlparse retorne bytes
+    if isinstance(url, bytes):
+        url = url.decode("utf-8")
+
+    parsed = urllib.parse.urlparse(str(url))
     return {
         "ENGINE": "dj_db_conn_pool.backends.postgresql",
         "NAME": parsed.path.lstrip("/"),
@@ -98,12 +105,16 @@ WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = "config.asgi.application"
 
 
-def _parse_eol_db(url: str) -> dict[str, Any]:
+def _parse_eol_db(url: Any) -> dict[str, Any]:
     """Faz o parse de uma URL mssql+pyodbc para dict de configuração Django."""
     if not url:
         return {}
 
-    parsed = urllib.parse.urlparse(url)
+    # Garante que a URL é uma string para evitar que urlparse retorne bytes
+    if isinstance(url, bytes):
+        url = url.decode("utf-8")
+
+    parsed = urllib.parse.urlparse(str(url))
     query = urllib.parse.parse_qs(parsed.query)
 
     def _get_param(name: str, default: str = "") -> str:
