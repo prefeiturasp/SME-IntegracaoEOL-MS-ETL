@@ -135,22 +135,11 @@ def _parse_eol_db(url: str) -> dict[str, Any]:
 
 
 
-URL_BANCO_INSTITUCIONAL = os.getenv("URL_BANCO_INSTITUCIONAL", 
-"postgresql://postgres:postgres@localhost:5432/institucional_db"
-)
-URL_BANCO_PROFESSORES = os.getenv("URL_BANCO_PROFESSORES", 
-"postgresql://postgres:postgres@localhost:5432/professores_db"
-)
-URL_BANCO_ALUNOS = os.getenv("URL_BANCO_ALUNOS", 
-"postgresql://postgres:postgres@localhost:5432/alunos_db"
-)
-URL_BANCO_PEDAGOGICO = os.getenv("URL_BANCO_PEDAGOGICO", 
-"postgresql://postgres:postgres@localhost:5432/pedagogico_db"
-)
-URL_BANCO_PROGRAMAS = os.getenv("URL_BANCO_PROGRAMAS", 
-"postgresql://postgres:postgres@localhost:5432/programas_db"
-)
-
+URL_BANCO_INSTITUCIONAL = os.getenv("URL_BANCO_INSTITUCIONAL")
+URL_BANCO_PROFESSORES = os.getenv("URL_BANCO_PROFESSORES")
+URL_BANCO_ALUNOS = os.getenv("URL_BANCO_ALUNOS")
+URL_BANCO_PEDAGOGICO = os.getenv("URL_BANCO_PEDAGOGICO")
+URL_BANCO_PROGRAMAS = os.getenv("URL_BANCO_PROGRAMAS")
 
 DATABASES = {
     "default": {
@@ -188,10 +177,6 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 NOME_APLICACAO = os.getenv("NOME_APLICACAO", "SME-IntegracaoEOL-MS-ETL")
 AMBIENTE_APLICACAO = os.getenv("AMBIENTE_APLICACAO", "local")
 NIVEL_LOG = os.getenv("NIVEL_LOG", "INFO")
-URL_BANCO_AUDITORIA = os.getenv(
-    "URL_BANCO_AUDITORIA",
-    "postgresql://postgres:postgres@localhost:5432/sinc_rec_db",
-)
 URL_KEYDB = os.getenv("URL_KEYDB", "redis://localhost:6379/0")
 EOL_DB = os.getenv("EOL_DB", "")
 INTERVALO_EXECUCAO_ETL_SEGUNDOS = int(
