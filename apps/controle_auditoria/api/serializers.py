@@ -9,6 +9,8 @@ from apps.controle_auditoria.models import (
     EtlExecucaoTabelaLida,
 )
 
+from apps.core.api.serializers import HealthStatusSerializer 
+
 
 class EtlCheckpointDominioSerializer(serializers.ModelSerializer):
     """Serializa checkpoint por dominio."""
@@ -88,7 +90,6 @@ class EtlExecucaoDetalheSerializer(serializers.ModelSerializer):
         return list(EtlExecucaoTabelaEscritaSerializer(qs, many=True).data)
 
 
-class HealthStatusSerializer(serializers.Serializer):
+class HealthStatusSerializer(HealthStatusSerializer):
     """Serializer para resposta do endpoint de healthcheck."""
-
-    status = serializers.ChoiceField(choices=["healthy", "degraded", "unhealthy"])
+    pass

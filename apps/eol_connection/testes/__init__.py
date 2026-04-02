@@ -1,1 +1,1 @@
-"""Pacote de testes do app eol_connection."""
+"""Pacote de testes do app eol."""

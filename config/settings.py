@@ -65,6 +65,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "rest_framework",
     "drf_spectacular",
+    "apps.core",
     "apps.controle_auditoria",
     "apps.eol_connection",
     "apps.institucional",
@@ -105,7 +106,7 @@ WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = "config.asgi.application"
 
 
-def _parse_eol_db(url: Any) -> dict[str, Any]:
+def _parse_readonly_db(url: Any) -> dict[str, Any]:
     """Faz o parse de uma URL mssql+pyodbc para dict de configuração Django."""
     if not url:
         return {}
@@ -162,7 +163,8 @@ DATABASES = {
         "PORT": os.getenv("POSTGRES_PORT", "5432"),
         "POOL_OPTIONS": _POOL_OPTIONS,
     },
-    "eol_db": _parse_eol_db(os.getenv("EOL_DB", "")),
+    "eol_db": _parse_readonly_db(os.getenv("EOL_DB", "")),
+    "core_sso_db": _parse_readonly_db(os.getenv("CORE_SSO_DB", "")),
     "institucional_db": _parse_db_url(URL_BANCO_INSTITUCIONAL),
     "professores_db": _parse_db_url(URL_BANCO_PROFESSORES),
     "alunos_db": _parse_db_url(URL_BANCO_ALUNOS),
@@ -190,6 +192,7 @@ AMBIENTE_APLICACAO = os.getenv("AMBIENTE_APLICACAO", "local")
 NIVEL_LOG = os.getenv("NIVEL_LOG", "INFO")
 URL_KEYDB = os.getenv("URL_KEYDB", "redis://localhost:6379/0")
 EOL_DB = os.getenv("EOL_DB", "")
+CORE_SSO_DB = os.getenv("CORE_SSO_DB", "")
 INTERVALO_EXECUCAO_ETL_SEGUNDOS = int(
     os.getenv("INTERVALO_EXECUCAO_ETL_SEGUNDOS", "60")
 )

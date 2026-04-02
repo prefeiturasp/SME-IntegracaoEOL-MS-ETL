@@ -1,7 +1,5 @@
-"""Excecoes customizadas do modulo eol_connection."""
+"""Excecoes customizadas do modulo eol."""
 
 
-class ConexaoSomenteLeituraError(Exception):
-    """Erro disparado quando alguma operacao de escrita e tentada no banco EOL."""
+from apps.core.libs.connection_readonly import ConexaoSomenteLeituraError
 
-    pass

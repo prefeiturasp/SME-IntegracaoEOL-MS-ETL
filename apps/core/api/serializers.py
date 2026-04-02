@@ -1,4 +1,4 @@
-"""Serializers do app eol_connection (status de saude)."""
+"""Serializers base para todos os apps do core."""
 
 from rest_framework import serializers
 

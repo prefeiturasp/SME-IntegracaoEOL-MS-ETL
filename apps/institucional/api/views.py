@@ -8,13 +8,13 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.institucional.api.serializers import (
-    HealthStatusSerializer,
-)
+from apps.core.api.serializers import HealthStatusSerializer
 
 
 class HealthInstitucionalView(APIView):
     """Health do dominio Institucional."""
+
+    serializer_class = HealthStatusSerializer
 
     authentication_classes: list[type] = []
     permission_classes = [AllowAny]

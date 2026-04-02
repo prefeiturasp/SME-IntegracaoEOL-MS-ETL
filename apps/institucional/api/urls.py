@@ -2,9 +2,7 @@
 
 from django.urls import path
 
-from apps.institucional.api.views import (
-    HealthInstitucionalView,
-)
+from apps.institucional.api.views import HealthInstitucionalView
 
 urlpatterns = [
     path(

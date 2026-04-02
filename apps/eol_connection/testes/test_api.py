@@ -9,6 +9,8 @@ from rest_framework.test import APIClient
 class TestHealthEndpoint(TestCase):
     """Teste do endpoint de health do EOL."""
 
+    databases = ["default", "eol_db"]
+
     def setUp(self) -> None:
         """Prepara cliente e URL para testes."""
         self.client = APIClient()

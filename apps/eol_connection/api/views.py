@@ -5,12 +5,14 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.eol_connection.api.serializers import HealthStatusSerializer
+from apps.core.api.serializers import HealthStatusSerializer
 from apps.eol_connection.libs.healthcheck import healthcheck_eol
 
 
 class HealthCheckEOLView(APIView):
     """Healthcheck do servico EOL."""
+
+    serializer_class = HealthStatusSerializer
 
     authentication_classes: list[type] = []
     permission_classes = [AllowAny]
