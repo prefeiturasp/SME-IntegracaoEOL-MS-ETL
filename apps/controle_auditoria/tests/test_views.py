@@ -93,7 +93,7 @@ class ExecucoesViewTest(TestCase):
         )
         t2 = EtlExecucao.objects.create(
             id_execucao=uuid.uuid4(),
-            dominio="escolas",
+            dominio="institucional",
             situacao="erro",
             iniciado_em=timezone.now(),
         )
@@ -191,7 +191,7 @@ class MonitoramentoPublicoTest(TestCase):
         )
         EtlExecucao.objects.create(
             id_execucao=uuid.uuid4(),
-            dominio="escolas",
+            dominio="institucional",
             situacao="concluido",
             iniciado_em=timezone.now(),
         )

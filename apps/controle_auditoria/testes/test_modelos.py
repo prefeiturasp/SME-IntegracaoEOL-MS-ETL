@@ -20,7 +20,7 @@ class ModelosAuditoriaCrudTestCase(TestCase):
         """Cria, atualiza e remove registro de execucao."""
         execucao = EtlExecucao.objects.create(
             id_execucao=uuid4(),
-            dominio="escola",
+            dominio="institucional",
             situacao="em_execucao",
             iniciado_em=timezone.now(),
         )
@@ -59,7 +59,7 @@ class ModelosAuditoriaCrudTestCase(TestCase):
         """Cria, atualiza e remove registro de tabela escrita."""
         registro = EtlExecucaoTabelaEscrita.objects.create(
             id_execucao=uuid4(),
-            tabela_destino="public.escola",
+            tabela_destino="public.institucional",
             linhas_escritas=10,
             modo_escrita="upsert",
         )
@@ -79,11 +79,11 @@ class ModelosAuditoriaCrudTestCase(TestCase):
     def test_crud_etl_checkpoint_dominio(self) -> None:
         """Cria, atualiza e remove checkpoint por dominio."""
         checkpoint = EtlCheckpointDominio.objects.create(
-            dominio="escola",
+            dominio="institucional",
             ultimo_id_execucao=uuid4(),
             ultima_pagina=1,
             token_parada="100",
-            indice_sincronizacao="escola:offset:100",
+            indice_sincronizacao="institucional:offset:100",
             ultima_situacao="sucesso",
         )
         checkpoint.ultima_pagina = 2
