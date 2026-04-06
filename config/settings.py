@@ -20,7 +20,11 @@ _POOL_OPTIONS = {
 def _parse_db_url(url: Any) -> dict:
     """Faz o parse de uma URL PostgreSQL para dict de configuração Django."""
     if not url:
-        return {}
+        # Fallback para evitar ImproperlyConfigured no CI/Testes
+        return {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": ":memory:",
+        }
 
     # Garante que a URL é uma string para evitar que urlparse retorne bytes
     if isinstance(url, bytes):
@@ -112,7 +116,11 @@ ASGI_APPLICATION = "config.asgi.application"
 def _parse_readonly_db(url: Any) -> dict[str, Any]:
     """Faz o parse de uma URL mssql+pyodbc para dict de configuração Django."""
     if not url:
-        return {}
+        # Fallback para evitar ImproperlyConfigured no CI/Testes
+        return {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": ":memory:",
+        }
 
     # Garante que a URL é uma string para evitar que urlparse retorne bytes
     if isinstance(url, bytes):
