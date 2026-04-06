@@ -35,9 +35,7 @@ class HealthInstitucionalViewTestCase(TestCase):
     @patch("apps.institucional.api.views.connections")
     def test_health_banco_erro(self, connections_mock: Any) -> None:
         """Erro no banco retorna unhealthy."""
-        connections_mock.__getitem__.return_value.cursor.side_effect = (
-            Exception()
-        )
+        connections_mock.__getitem__.return_value.cursor.side_effect = Exception()
 
         response = self.client.get("/api/v1/institucional/health/")
 

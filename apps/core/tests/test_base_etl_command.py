@@ -11,16 +11,18 @@ from apps.core.libs.base_etl_command import BaseEtlCommand
 class BaseEtlCommandTestCase(TestCase):
     """Valida o funcionamento orquestrado da BaseEtlCommand."""
 
-    def setUp(self):
+    def setUp(self) -> None:
         """Mocka o repositório de auditoria e serviço."""
-        self.patcher_repo = patch("apps.core.libs.base_etl_command.RepositorioAuditoriaPostgres")
+        self.patcher_repo = patch(
+            "apps.core.libs.base_etl_command.RepositorioAuditoriaPostgres"
+        )
         self.mock_repo_class = self.patcher_repo.start()
         self.repo = self.mock_repo_class.return_value
-        
+
         # Mock do serviço local por teste
         self.mock_servico_class = MagicMock()
         self.servico = self.mock_servico_class.return_value
-        
+
         class MyTestCommand(BaseEtlCommand):
             dominio = "teste_base"
             service_class = self.mock_servico_class
@@ -29,11 +31,11 @@ class BaseEtlCommandTestCase(TestCase):
         self.cmd.stdout = MagicMock()
         self.cmd.stderr = MagicMock()
 
-    def tearDown(self):
+    def tearDown(self) -> None:
         """Finaliza patches."""
         self.patcher_repo.stop()
 
-    def test_executa_fluxo_sucesso_completo(self):
+    def test_executa_fluxo_sucesso_completo(self) -> None:
         """Valida que todos os métodos do repositório são chamados corretamente."""
         self.servico.executar.return_value = {"tabela_teste": 50}
         self.servico.ultima_fase_concluida = 1
@@ -42,9 +44,9 @@ class BaseEtlCommandTestCase(TestCase):
 
         # Verificações
         self.assertTrue(self.repo.iniciar_execucao.called)
-        
+
         id_exec = self.repo.iniciar_execucao.return_value
-        
+
         self.repo.finalizar_execucao.assert_called_with(
             id_exec,
             situacao="concluido",
@@ -57,7 +59,7 @@ class BaseEtlCommandTestCase(TestCase):
             modo_escrita="full_refresh",
         )
 
-    def test_retomar_checkpoint_na_flag_continuar(self):
+    def test_retomar_checkpoint_na_flag_continuar(self) -> None:
         """Verifica se busca checkpoint quando continuar=True."""
         self.repo.obter_checkpoint_dominio.return_value = {
             "ultima_pagina": 2,
@@ -72,7 +74,7 @@ class BaseEtlCommandTestCase(TestCase):
         self.repo.obter_checkpoint_dominio.assert_called_with("teste_base")
         self.servico.executar.assert_called_with(fase_inicial=3)
 
-    def test_trata_erro_no_servico_e_persiste_situacao_erro(self):
+    def test_trata_erro_no_servico_e_persiste_situacao_erro(self) -> None:
         """Verifica que exceção no serviço é auditada como erro."""
         self.servico.executar.side_effect = Exception("Crash total")
         self.servico.ultima_fase_concluida = 0
@@ -81,7 +83,7 @@ class BaseEtlCommandTestCase(TestCase):
             self.cmd.handle(volume=100, offset=0, continuar=False)
 
         id_exec = self.repo.iniciar_execucao.return_value
-        
+
         self.repo.finalizar_execucao.assert_called_with(
             id_exec,
             situacao="erro",
@@ -97,31 +99,32 @@ class BaseEtlCommandTestCase(TestCase):
             sucesso=False,
         )
 
-    def test_falta_configuracao_gera_erro_no_setup(self):
+    def test_falta_configuracao_gera_erro_no_setup(self) -> None:
         """Verifica se a base protege contra falta de dominio/servico."""
+
         class Invalido(BaseEtlCommand):
             pass
 
         with self.assertRaises(NotImplementedError):
             Invalido()
-            
+
         class SemServico(BaseEtlCommand):
             dominio = "x"
-            
+
         with self.assertRaises(NotImplementedError):
             SemServico()
 
-    def test_continuar_sem_checkpoint(self):
+    def test_continuar_sem_checkpoint(self) -> None:
         """Valida que se continuar=True mas sem checkpoint, inicia do 1."""
         self.repo.obter_checkpoint_dominio.return_value = None
         self.servico.executar.return_value = {}
         self.servico.ultima_fase_concluida = 1
-        
+
         self.cmd.handle(volume=100, offset=0, continuar=True)
-        
+
         self.servico.executar.assert_called_with(fase_inicial=1)
 
-    def test_continuar_com_sucesso_anterior(self):
+    def test_continuar_com_sucesso_anterior(self) -> None:
         """Valida que se o último sucesso foi concluído, reinicia do 1."""
         self.repo.obter_checkpoint_dominio.return_value = {
             "ultima_pagina": 4,
@@ -130,20 +133,20 @@ class BaseEtlCommandTestCase(TestCase):
         }
         self.servico.executar.return_value = {}
         self.servico.ultima_fase_concluida = 1
-        
+
         self.cmd.handle(volume=100, offset=0, continuar=True)
-        
+
         self.servico.executar.assert_called_with(fase_inicial=1)
 
-    def test_get_modo_escrita_default(self):
+    def test_get_modo_escrita_default(self) -> None:
         """Verifica o valor default do modo de escrita."""
         self.assertEqual(self.cmd.get_modo_escrita("tabela"), "full_refresh")
 
-    def test_add_arguments(self):
+    def test_add_arguments(self) -> None:
         """Garante que os argumentos padrão são registrados no parser."""
         mock_parser = MagicMock()
         self.cmd.add_arguments(mock_parser)
-        
+
         # Verifica se add_argument foi chamado para cada opção
         calls = [c[0][0] for c in mock_parser.add_argument.call_args_list]
         self.assertIn("--volume", calls)

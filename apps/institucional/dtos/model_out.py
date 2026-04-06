@@ -134,6 +134,7 @@ class UnidadeEducacionalOut(UnidadeEducacional):
             vagas_integral=_int(obj.vagas_integral, 0),
             vagas_total=_int(obj.vagas_total, 0),
             quantidade_funcionarios=_int(obj.quantidade_funcionarios, 0),
+            codigo_inep=_int(obj.codigo_inep),
             status=_strip(obj.status) or None,
             dre_id=str(obj.codigo_dre) if obj.codigo_dre else None,
             tipo_escola_id=_int(obj.codigo_tipo_escola),

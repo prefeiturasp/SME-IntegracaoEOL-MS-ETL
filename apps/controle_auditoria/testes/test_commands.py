@@ -12,12 +12,14 @@ class ExecutarDominioCommandTestCase(TestCase):
     """Valida o roteamento do command executar_dominio."""
 
     @patch("apps.controle_auditoria.management.commands.executar_dominio.call_command")
-    def test_deve_executar_dominio_escola(self, call_command_mock: MagicMock) -> None:
-        """Encaminha para listar_escolas_offset com argumentos."""
+    def test_deve_executar_dominio_institucional(
+        self, call_command_mock: MagicMock
+    ) -> None:
+        """Encaminha para listar_institucional_offset com argumentos."""
         call_command(
             "executar_dominio",
             "--dominio",
-            "escola",
+            "institucional",
             "--volume",
             "200",
             "--offset",
@@ -25,7 +27,7 @@ class ExecutarDominioCommandTestCase(TestCase):
             "--continuar",
         )
         call_command_mock.assert_called_once_with(
-            "listar_escolas_offset",
+            "etl_institucional",
             "--volume",
             "200",
             "--offset",
@@ -66,7 +68,7 @@ class AgendarDominioCommandTestCase(TestCase):
         call_command(
             "agendar_dominio",
             "--dominio",
-            "escola",
+            "institucional",
             "--volume",
             "120",
             "--offset",
@@ -75,7 +77,7 @@ class AgendarDominioCommandTestCase(TestCase):
         )
 
         task_mock.delay.assert_called_once_with(
-            dominio="escola",
+            dominio="institucional",
             volume=120,
             offset=10,
             continuar=True,
@@ -93,7 +95,7 @@ class AgendarDominioCommandTestCase(TestCase):
         call_command(
             "agendar_dominio",
             "--dominio",
-            "escola",
+            "institucional",
             "--executar-em",
             "2026-03-10T23:00:00-03:00",
         )
@@ -103,7 +105,7 @@ class AgendarDominioCommandTestCase(TestCase):
         self.assertEqual(
             kwargs_apply["kwargs"],
             {
-                "dominio": "escola",
+                "dominio": "institucional",
                 "volume": 100,
                 "offset": 0,
                 "continuar": False,
@@ -117,7 +119,7 @@ class AgendarDominioCommandTestCase(TestCase):
             call_command(
                 "agendar_dominio",
                 "--dominio",
-                "escola",
+                "institucional",
                 "--executar-em",
                 "data-invalida",
             )
@@ -132,7 +134,7 @@ class AgendarDominioCommandTestCase(TestCase):
         task_mock.delay.side_effect = OperationalError("broker indisponível")
 
         with self.assertRaises(CommandError):
-            call_command("agendar_dominio", "--dominio", "escola")
+            call_command("agendar_dominio", "--dominio", "institucional")
 
     @patch(
         "apps.controle_auditoria.management.commands.agendar_dominio.executar_dominio_task"
@@ -147,7 +149,7 @@ class AgendarDominioCommandTestCase(TestCase):
             call_command(
                 "agendar_dominio",
                 "--dominio",
-                "escola",
+                "institucional",
                 "--executar-em",
                 "2026-03-10T23:00:00-03:00",
             )
@@ -160,7 +162,7 @@ class ExecutarDominiosCommandTestCase(TestCase):
     def test_deve_executar_dominios_sem_continuar(
         self, call_command_mock: MagicMock
     ) -> None:
-        """Executa sinc_rec_db e escola sem flag continuar."""
+        """Executa sinc_rec_db e institucional sem flag continuar."""
         call_command("executar_dominios", "--volume", "200")
 
         self.assertEqual(call_command_mock.call_count, 2)
@@ -173,7 +175,7 @@ class ExecutarDominiosCommandTestCase(TestCase):
             (
                 "executar_dominio",
                 "--dominio",
-                "escola",
+                "institucional",
                 "--volume",
                 "200",
             ),
@@ -183,7 +185,7 @@ class ExecutarDominiosCommandTestCase(TestCase):
     def test_deve_executar_dominios_com_continuar(
         self, call_command_mock: MagicMock
     ) -> None:
-        """Inclui flag continuar no domínio escola."""
+        """Inclui flag continuar no domínio institucional."""
         call_command("executar_dominios", "--volume", "100", "--continuar")
 
         self.assertEqual(
@@ -191,7 +193,7 @@ class ExecutarDominiosCommandTestCase(TestCase):
             (
                 "executar_dominio",
                 "--dominio",
-                "escola",
+                "institucional",
                 "--volume",
                 "100",
                 "--continuar",
@@ -288,7 +290,10 @@ class ExecutarDominiosLoopCommandTestCase(TestCase):
 
     def test_deve_retornar_volume_restante_no_limite_linhas(self) -> None:
         """Verifica cálculo do volume quando restam menos linhas que o volume total."""
-        from apps.controle_auditoria.management.commands.executar_dominios_loop import Command
+        from apps.controle_auditoria.management.commands.executar_dominios_loop import (
+            Command,
+        )
+
         cmd = Command()
         # limite 100, total 70 -> volume restante 30
         self.assertEqual(cmd._calcular_volume(100, 100, 70), 30)
@@ -300,40 +305,56 @@ class CancelarExecucoesCommandTestCase(TestCase):
     def test_deve_cancelar_execucoes_em_andamento(self) -> None:
         """Marca execuções em aberto como canceladas."""
         import uuid
+
         from django.utils import timezone
+
         from apps.controle_auditoria.models import EtlExecucao
+
         EtlExecucao.objects.create(
-            id_execucao=uuid.uuid4(), 
-            dominio="escola", 
+            id_execucao=uuid.uuid4(),
+            dominio="institucional",
             situacao="em_execucao",
-            iniciado_em=timezone.now()
+            iniciado_em=timezone.now(),
         )
-        
+
         call_command("cancelar_execucoes")
-        
-        exec_obj = EtlExecucao.objects.get(dominio="escola")
+
+        exec_obj = EtlExecucao.objects.get(dominio="institucional")
         self.assertEqual(exec_obj.situacao, "cancelado")
 
     def test_deve_filtrar_por_dominio(self) -> None:
         """Apenas o domínio solicitado deve ser cancelado."""
         import uuid
+
         from django.utils import timezone
+
         from apps.controle_auditoria.models import EtlExecucao
+
         EtlExecucao.objects.create(
-            id_execucao=uuid.uuid4(), 
-            dominio="escola", 
+            id_execucao=uuid.uuid4(),
+            dominio="institucional",
             situacao="em_execucao",
-            iniciado_em=timezone.now()
+            iniciado_em=timezone.now(),
         )
         EtlExecucao.objects.create(
-            id_execucao=uuid.uuid4(), 
-            dominio="professores", 
+            id_execucao=uuid.uuid4(),
+            dominio="professores",
             situacao="em_execucao",
-            iniciado_em=timezone.now()
+            iniciado_em=timezone.now(),
         )
 
-        call_command("cancelar_execucoes", "--dominio", "escola")
+        call_command("cancelar_execucoes", "--dominio", "institucional")
 
         self.assertEqual(EtlExecucao.objects.filter(situacao="cancelado").count(), 1)
-        self.assertEqual(EtlExecucao.objects.filter(dominio="escola", situacao="cancelado").count(), 1)
-        self.assertEqual(EtlExecucao.objects.filter(dominio="professores", situacao="em_execucao").count(), 1)
+        self.assertEqual(
+            EtlExecucao.objects.filter(
+                dominio="institucional", situacao="cancelado"
+            ).count(),
+            1,
+        )
+        self.assertEqual(
+            EtlExecucao.objects.filter(
+                dominio="professores", situacao="em_execucao"
+            ).count(),
+            1,
+        )

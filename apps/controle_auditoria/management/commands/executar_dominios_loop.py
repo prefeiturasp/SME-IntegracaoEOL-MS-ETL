@@ -42,7 +42,9 @@ class Command(BaseCommand):
         total_linhas_processadas: int = 0
 
         while True:
-            volume_execucao = self._calcular_volume(volume, limite_linhas, total_linhas_processadas)
+            volume_execucao = self._calcular_volume(
+                volume, limite_linhas, total_linhas_processadas
+            )
             if volume_execucao <= 0:
                 break
 
@@ -53,7 +55,9 @@ class Command(BaseCommand):
             linhas = self._executar_e_contar(repositorio, argumentos)
             total_linhas_processadas += linhas
 
-            if linhas == 0 or (limite_linhas and total_linhas_processadas >= limite_linhas):
+            if linhas == 0 or (
+                limite_linhas and total_linhas_processadas >= limite_linhas
+            ):
                 break
 
             time.sleep(intervalo)
@@ -73,8 +77,9 @@ class Command(BaseCommand):
 
     def _executar_e_contar(self, repositorio: Any, argumentos: list[str]) -> int:
         """Executa comando e retorna delta de linhas processadas."""
+
         def _get_token() -> int:
-            cp = repositorio.obter_checkpoint_dominio("escola")
+            cp = repositorio.obter_checkpoint_dominio("institucional")
             return int(cast(int | str, (cp or {}).get("token_parada", 0)))
 
         token_antes = _get_token()

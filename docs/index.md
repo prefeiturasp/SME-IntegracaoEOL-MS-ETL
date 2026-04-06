@@ -62,5 +62,6 @@ digraph G {
 arquitetura/visao_geral
 arquitetura/der
 dominios/professores/index
+dominios/institucional/index
 auditoria/index
 ```

@@ -26,7 +26,7 @@ class TipoEscola(models.Model):
     """
 
     codigo_tipo_escola = models.IntegerField(primary_key=True)
-    sigla = models.CharField(max_length=20, null=True, blank=True)  # NOSONAR institucional:models:29
+    sigla = models.CharField(max_length=20, null=True, blank=True)
     descricao = models.CharField(max_length=200)
 
     class Meta:
@@ -51,11 +51,9 @@ class DRE(models.Model):
 
     codigo_dre = models.CharField(max_length=20, primary_key=True)
     nome = models.CharField(max_length=200)
-    sigla = models.CharField(max_length=20, null=True, blank=True)  # NOSONAR institucional:models:54
+    sigla = models.CharField(max_length=20, null=True, blank=True)
     tipo_unidade_adm = models.IntegerField(null=True, blank=True)
-    descricao_unidade_adm = models.CharField(
-        max_length=200, null=True, blank=True  # NOSONAR institucional:models:57
-    )
+    descricao_unidade_adm = models.CharField(max_length=200, null=True, blank=True)
 
     class Meta:
         """Metadados do modelo."""
@@ -77,7 +75,7 @@ class SubPrefeitura(models.Model):
     """
 
     codigo_sub_prefeitura = models.IntegerField(primary_key=True)
-    sigla = models.CharField(max_length=20, null=True, blank=True)  # NOSONAR institucional:models:80
+    sigla = models.CharField(max_length=20, null=True, blank=True)
     nome = models.CharField(max_length=200)
 
     class Meta:
@@ -105,20 +103,20 @@ class UnidadeEducacional(models.Model):
 
     codigo_ue = models.CharField(max_length=20, primary_key=True)
     nome = models.CharField(max_length=200)
-    nome_nao_oficial = models.CharField(max_length=200, null=True, blank=True)  # NOSONAR institucional:models:108
-    tipo_ue = models.CharField(max_length=200, null=True, blank=True)  # NOSONAR institucional:models:109
-    tipo_logradouro = models.CharField(max_length=100, null=True, blank=True)  # NOSONAR institucional:models:110
-    logradouro = models.CharField(max_length=200, null=True, blank=True)  # NOSONAR institucional:models:111
-    numero = models.CharField(max_length=20, null=True, blank=True)  # NOSONAR institucional:models:112
-    bairro = models.CharField(max_length=100, null=True, blank=True)  # NOSONAR institucional:models:113
-    cep = models.CharField(max_length=10, null=True, blank=True)  # NOSONAR institucional:models:114
-    municipio = models.CharField(max_length=100, null=True, blank=True)  # NOSONAR institucional:models:115
-    distrito = models.CharField(max_length=100, null=True, blank=True)  # NOSONAR institucional:models:116
-    email = models.CharField(max_length=200, null=True, blank=True)  # NOSONAR institucional:models:117
-    telefone_1 = models.CharField(max_length=50, null=True, blank=True)  # NOSONAR institucional:models:118
-    telefone_2 = models.CharField(max_length=50, null=True, blank=True)  # NOSONAR institucional:models:119
+    nome_nao_oficial = models.CharField(max_length=200, null=True, blank=True)
+    tipo_ue = models.CharField(max_length=200, null=True, blank=True)
+    tipo_logradouro = models.CharField(max_length=100, null=True, blank=True)
+    logradouro = models.CharField(max_length=200, null=True, blank=True)
+    numero = models.CharField(max_length=20, null=True, blank=True)
+    bairro = models.CharField(max_length=100, null=True, blank=True)
+    cep = models.CharField(max_length=10, null=True, blank=True)
+    municipio = models.CharField(max_length=100, null=True, blank=True)
+    distrito = models.CharField(max_length=100, null=True, blank=True)
+    email = models.CharField(max_length=200, null=True, blank=True)
+    telefone_1 = models.CharField(max_length=50, null=True, blank=True)
+    telefone_2 = models.CharField(max_length=50, null=True, blank=True)
     ano_construcao = models.IntegerField(null=True, blank=True)
-    propriedade = models.CharField(max_length=200, null=True, blank=True)  # NOSONAR institucional:models:121
+    propriedade = models.CharField(max_length=200, null=True, blank=True)
     organizacao_parceira = models.BooleanField(default=False)
     vagas_matutino = models.IntegerField(default=0)
     vagas_vespertino = models.IntegerField(default=0)
@@ -127,10 +125,9 @@ class UnidadeEducacional(models.Model):
     vagas_integral = models.IntegerField(default=0)
     vagas_total = models.IntegerField(default=0)
     quantidade_funcionarios = models.IntegerField(default=0)
-    status = models.CharField(max_length=10, null=True, blank=True)  # NOSONAR institucional:models:130
-    codigo_ue_integracao = models.CharField(
-        max_length=50, null=True, blank=True  # NOSONAR institucional:models:131
-    )
+    status = models.CharField(max_length=10, null=True, blank=True)
+    codigo_inep = models.IntegerField(null=True, blank=True)
+    codigo_ue_integracao = models.CharField(max_length=50, null=True, blank=True)
     dre = models.ForeignKey(
         DRE,
         on_delete=models.CASCADE,
@@ -164,9 +161,7 @@ class UnidadeEducacional(models.Model):
         indexes = [
             models.Index(fields=["dre"], name="idx_ue_dre"),
             models.Index(fields=["tipo_escola"], name="idx_ue_tipo_escola"),
-            models.Index(
-                fields=["subprefeitura"], name="idx_ue_subprefeitura"
-            ),
+            models.Index(fields=["subprefeitura"], name="idx_ue_subprefeitura"),
         ]
 
     def __str__(self) -> str:

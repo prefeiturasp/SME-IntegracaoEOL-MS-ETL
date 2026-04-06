@@ -18,7 +18,7 @@ WRITE_COMMANDS = {"insert", "update", "delete", "merge", "create", "drop"}
 
 
 class ConexaoSomenteLeituraError(Exception):
-    """Erro disparado quando alguma operacao de escrita e tentada no banco EOL ou qualquer banco core read-only."""
+    """Erro disparado quando alguma operacao de escrita em banco de dados legado."""
 
     pass
 
@@ -62,7 +62,11 @@ class ReadOnlySQLServerConnectionFactory:
         try:
             with self.obter_conexao().cursor() as cursor:
                 if parametros:
-                    params_tuple = tuple(parametros) if isinstance(parametros, list) else parametros
+                    params_tuple = (
+                        tuple(parametros)
+                        if isinstance(parametros, list)
+                        else parametros
+                    )
                     cursor.execute(sql, params_tuple)
                 else:
                     cursor.execute(sql)
@@ -73,7 +77,9 @@ class ReadOnlySQLServerConnectionFactory:
                     if not lote:
                         break
                     rows.extend(lote)
-                    logger.info("[%s] fetch: %d registros carregados", self.db_alias, len(rows))
+                    logger.info(
+                        "[%s] fetch: %d registros carregados", self.db_alias, len(rows)
+                    )
                 return cast(list[tuple[Any, ...]], rows)
 
         except Exception:

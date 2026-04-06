@@ -1,3 +1,5 @@
+"""Fábrica de conexões especializadas para o banco legado EOL."""
+
 import logging
 import os
 from typing import Any
@@ -31,4 +33,3 @@ class EOLConnectionFactory(ReadOnlySQLServerConnectionFactory):
         """Mantém compatibilidade com assinatura do EOLConnectionFactory anterior."""
         chunk_size = chunk_size or _EOL_CHUNK_SIZE
         return super().executar_consulta(sql, parametros, chunk_size)
-

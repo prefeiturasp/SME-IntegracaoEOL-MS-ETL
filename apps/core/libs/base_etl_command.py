@@ -1,5 +1,6 @@
-"""Base para comandos de ETL com suporte a auditoria e checkpoint."""
+"""Base para implementação de comandos de ETL com controle de auditoria."""
 
+import logging
 from typing import Any
 from uuid import UUID
 
@@ -8,6 +9,8 @@ from django.core.management.base import BaseCommand
 from apps.controle_auditoria.libs.repositorio_auditoria import (
     RepositorioAuditoriaPostgres,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class BaseEtlCommand(BaseCommand):
@@ -26,9 +29,12 @@ class BaseEtlCommand(BaseCommand):
     service_class: Any = None
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Inicializa o comando de ETL validando os atributos mandatórios."""
         super().__init__(*args, **kwargs)
         if not self.dominio or not self.service_class:
-            raise NotImplementedError("Subclasse deve definir 'dominio' e 'service_class'")
+            raise NotImplementedError(
+                "Subclasse deve definir 'dominio' e 'service_class'"
+            )
 
     def add_arguments(self, parser: Any) -> None:
         """Declara argumentos padrão para todos os comandos de ETL."""
@@ -73,11 +79,11 @@ class BaseEtlCommand(BaseCommand):
                 if ultima_situacao == "erro" and 0 < ultima_fase < self.fase_final:
                     fase_inicial = ultima_fase + 1
                     label = self.dominio[:4].upper()
-                    self.stdout.write(
-                        self.style.WARNING(
-                            f"[ETL {label}] Retomando da fase {fase_inicial} "
-                            f"(última concluída: {ultima_fase})."
-                        )
+                    logger.warning(
+                        "[ETL %s] Retomando da fase %d (última concluída: %d).",
+                        label,
+                        fase_inicial,
+                        ultima_fase,
                     )
                 else:
                     fase_inicial = 1
@@ -121,12 +127,11 @@ class BaseEtlCommand(BaseCommand):
             repositorio.finalizar_execucao(id_execucao, situacao="concluido")
 
             label = self.dominio[:4].upper()
-            self.stdout.write(
-                self.style.SUCCESS(
-                    f"[ETL {label}] Concluído. "
-                    f"Linhas alteradas: {total_alterado}. "
-                    f"token_parada: {novo_token}."
-                )
+            logger.info(
+                "[ETL %s] Concluído. Linhas alteradas: %d. token_parada: %s.",
+                label,
+                total_alterado,
+                str(novo_token),
             )
 
         except Exception as erro:
@@ -146,6 +151,7 @@ class BaseEtlCommand(BaseCommand):
                 mensagem_erro=str(erro),
             )
             from django.core.management.base import CommandError
+
             raise CommandError(f"Falha ao executar {self.dominio}: {erro}") from erro
 
     def get_modo_escrita(self, tabela: str) -> str:

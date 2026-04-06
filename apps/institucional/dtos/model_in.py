@@ -65,6 +65,7 @@ class UnidadeEducacionalIn:
     vagas_integral: Any
     vagas_total: Any
     quantidade_funcionarios: Any
+    codigo_inep: Any
     status: Any
     codigo_dre: Any
     codigo_tipo_escola: Any

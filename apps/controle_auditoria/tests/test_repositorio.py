@@ -31,7 +31,7 @@ class IniciarExecucaoTest(TestCase):
     def test_retorna_uuid(self) -> None:
         """Verifica que iniciar_execucao retorna um UUID."""
         repo = RepositorioAuditoriaPostgres()
-        id_exec = repo.iniciar_execucao("escolas")
+        id_exec = repo.iniciar_execucao("institucional")
         self.assertIsInstance(id_exec, uuid.UUID)
 
 

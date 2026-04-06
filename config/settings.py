@@ -4,6 +4,7 @@ import os
 import urllib.parse
 from pathlib import Path
 from typing import Any
+
 from django.core.exceptions import ImproperlyConfigured
 
 DB_POOL_SIZE = int(os.getenv("DB_POOL_SIZE", "5"))
@@ -48,7 +49,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY")
 if not SECRET_KEY:
     if os.getenv("DJANGO_DEBUG", "1") == "0":  # Produção
-        raise ImproperlyConfigured("A variável DJANGO_SECRET_KEY é obrigatória em produção.")
+        raise ImproperlyConfigured(
+            "A variável DJANGO_SECRET_KEY é obrigatória em produção."
+        )
     # Fallback para desenvolvimento baseado no ambiente para não deixar chave exposta
     SECRET_KEY = os.getenv("HOSTNAME")
 DEBUG = os.getenv("DJANGO_DEBUG", "1") == "1"
@@ -144,7 +147,6 @@ def _parse_readonly_db(url: Any) -> dict[str, Any]:
         "OPTIONS": options,
         "TEST": {"MIGRATE": False},
     }
-
 
 
 URL_BANCO_INSTITUCIONAL = os.getenv("URL_BANCO_INSTITUCIONAL")

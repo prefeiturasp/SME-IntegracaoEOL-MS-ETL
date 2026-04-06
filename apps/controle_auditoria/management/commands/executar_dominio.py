@@ -13,7 +13,7 @@ from apps.controle_auditoria.libs.servico_sinc_rec_db import (
 class Command(BaseCommand):
     """Executa um dominio ETL independente."""
 
-    help = "Executa dominio ETL: sinc_rec_db, escola, professores"
+    help = "Executa dominio ETL: sinc_rec_db, institucional, professores"
 
     def add_arguments(self, parser: Any) -> None:
         """Adiciona argumentos ao comando."""
@@ -33,11 +33,11 @@ class Command(BaseCommand):
             exibir_validacao_sinc_rec_db()
             return
 
-        if dominio in {"escola", "escolas"}:
+        if dominio == "institucional":
             argumentos = ["--volume", str(volume), "--offset", str(offset)]
             if continuar:
                 argumentos.append("--continuar")
-            call_command("listar_escolas_offset", *argumentos)
+            call_command("etl_institucional", *argumentos)
             return
 
         if dominio == "professores":
@@ -47,4 +47,6 @@ class Command(BaseCommand):
             call_command("etl_professores", *argumentos)
             return
 
-        raise CommandError("Dominio invalido. Use: sinc_rec_db, escola, professores")
+        raise CommandError(
+            "Dominio invalido. Use: sinc_rec_db, institucional, professores"
+        )
