@@ -12,7 +12,6 @@ def exibir_validacao_sinc_rec_db() -> None:
         "etl_execucao_tabela_lida",
         "etl_execucao_tabela_escrita",
         "etl_checkpoint_dominio",
-        "escolas_consulta_log",
     }
     existentes = set(connection.introspection.table_names())
     tabelas = sorted(esperadas.intersection(existentes))

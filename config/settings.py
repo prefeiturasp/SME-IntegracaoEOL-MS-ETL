@@ -4,6 +4,7 @@ import os
 import urllib.parse
 from pathlib import Path
 from typing import Any
+
 from django.core.exceptions import ImproperlyConfigured
 
 DB_POOL_SIZE = int(os.getenv("DB_POOL_SIZE", "5"))
@@ -19,7 +20,11 @@ _POOL_OPTIONS = {
 def _parse_db_url(url: Any) -> dict:
     """Faz o parse de uma URL PostgreSQL para dict de configuração Django."""
     if not url:
-        return {}
+        # Fallback para evitar ImproperlyConfigured no CI/Testes
+        return {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": ":memory:",
+        }
 
     # Garante que a URL é uma string para evitar que urlparse retorne bytes
     if isinstance(url, bytes):
@@ -48,7 +53,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY")
 if not SECRET_KEY:
     if os.getenv("DJANGO_DEBUG", "1") == "0":  # Produção
-        raise ImproperlyConfigured("A variável DJANGO_SECRET_KEY é obrigatória em produção.")
+        raise ImproperlyConfigured(
+            "A variável DJANGO_SECRET_KEY é obrigatória em produção."
+        )
     # Fallback para desenvolvimento baseado no ambiente para não deixar chave exposta
     SECRET_KEY = os.getenv("HOSTNAME")
 DEBUG = os.getenv("DJANGO_DEBUG", "1") == "1"
@@ -65,6 +72,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "rest_framework",
     "drf_spectacular",
+    "apps.core",
     "apps.controle_auditoria",
     "apps.eol_connection",
     "apps.institucional",
@@ -105,10 +113,14 @@ WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = "config.asgi.application"
 
 
-def _parse_eol_db(url: Any) -> dict[str, Any]:
+def _parse_readonly_db(url: Any) -> dict[str, Any]:
     """Faz o parse de uma URL mssql+pyodbc para dict de configuração Django."""
     if not url:
-        return {}
+        # Fallback para evitar ImproperlyConfigured no CI/Testes
+        return {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": ":memory:",
+        }
 
     # Garante que a URL é uma string para evitar que urlparse retorne bytes
     if isinstance(url, bytes):
@@ -145,7 +157,6 @@ def _parse_eol_db(url: Any) -> dict[str, Any]:
     }
 
 
-
 URL_BANCO_INSTITUCIONAL = os.getenv("URL_BANCO_INSTITUCIONAL")
 URL_BANCO_PROFESSORES = os.getenv("URL_BANCO_PROFESSORES")
 URL_BANCO_ALUNOS = os.getenv("URL_BANCO_ALUNOS")
@@ -162,7 +173,8 @@ DATABASES = {
         "PORT": os.getenv("POSTGRES_PORT", "5432"),
         "POOL_OPTIONS": _POOL_OPTIONS,
     },
-    "eol_db": _parse_eol_db(os.getenv("EOL_DB", "")),
+    "eol_db": _parse_readonly_db(os.getenv("EOL_DB", "")),
+    "core_sso_db": _parse_readonly_db(os.getenv("CORE_SSO_DB", "")),
     "institucional_db": _parse_db_url(URL_BANCO_INSTITUCIONAL),
     "professores_db": _parse_db_url(URL_BANCO_PROFESSORES),
     "alunos_db": _parse_db_url(URL_BANCO_ALUNOS),
@@ -190,11 +202,15 @@ AMBIENTE_APLICACAO = os.getenv("AMBIENTE_APLICACAO", "local")
 NIVEL_LOG = os.getenv("NIVEL_LOG", "INFO")
 URL_KEYDB = os.getenv("URL_KEYDB", "redis://localhost:6379/0")
 EOL_DB = os.getenv("EOL_DB", "")
+CORE_SSO_DB = os.getenv("CORE_SSO_DB", "")
 INTERVALO_EXECUCAO_ETL_SEGUNDOS = int(
     os.getenv("INTERVALO_EXECUCAO_ETL_SEGUNDOS", "60")
 )
-API_KEY = os.getenv("API_KEY", "")
+API_KEY = os.getenv("API_KEY", "dev-key-default")
 API_KEY_HEADER = os.getenv("API_KEY_HEADER", "X-API-Key")
+CELERY_BROKER_URL = URL_KEYDB
+# Execução síncrona automática em testes/CI
+CELERY_TASK_ALWAYS_EAGER = os.getenv("CELERY_TASK_ALWAYS_EAGER", "1") == "1"
 
 REST_FRAMEWORK = {
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",

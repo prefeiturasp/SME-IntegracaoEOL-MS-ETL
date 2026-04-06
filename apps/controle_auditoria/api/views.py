@@ -1,7 +1,5 @@
 """Views DRF para controle e auditoria de execuções ETL."""
 
-import os
-
 from django.db import connections
 from django.db.models import OuterRef, QuerySet, Subquery
 from django.http import HttpRequest, HttpResponse

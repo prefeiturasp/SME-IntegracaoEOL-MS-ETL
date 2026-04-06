@@ -8,15 +8,17 @@ from apps.eol_connection.libs.connection import EOLConnectionFactory
 from apps.eol_connection.libs.exceptions import ConexaoSomenteLeituraError
 from apps.eol_connection.libs.healthcheck import healthcheck_eol
 from apps.eol_connection.libs.servico_eol import EOLService
-from config.settings import _parse_eol_db
+from config.settings import _parse_readonly_db
 
 
 class TestParseUrlDb(TestCase):
-    """Testes para a funcao _parse_eol_db."""
+    """Testes para a funcao _parse_readonly_db."""
 
     def test_parse_url_vazia(self) -> None:
-        """Retorna dict vazio para URL vazia."""
-        self.assertEqual(_parse_eol_db(""), {})
+        """Retorna fallback para SQLite para URL vazia (evita ImproperlyConfigured)."""
+        config = _parse_readonly_db("")
+        self.assertEqual(config["ENGINE"], "django.db.backends.sqlite3")
+        self.assertEqual(config["NAME"], ":memory:")
 
     def test_parse_url_valida(self) -> None:
         """Extrai corretamente os campos de uma URL MSSQL valida."""
@@ -25,7 +27,7 @@ class TestParseUrlDb(TestCase):
             "?driver=ODBC+Driver+18+for+SQL+Server"
             "&TrustServerCertificate=yes"
         )
-        config = _parse_eol_db(url)
+        config = _parse_readonly_db(url)
         self.assertEqual(config["ENGINE"], "mssql")
         self.assertEqual(config["NAME"], "db")
         self.assertEqual(config["USER"], "user")
@@ -50,7 +52,7 @@ class TestConnectionFactory(TestCase):
             EOLConnectionFactory(db_alias="eol_db")
 
     @override_settings(DATABASES={"eol_db": {"ENGINE": "mssql"}})
-    @patch("apps.eol_connection.libs.connection.connections")
+    @patch("apps.core.libs.connection_readonly.connections")
     def test_obter_conexao(self, mock_connections: MagicMock) -> None:
         """Obter conexao retorna a conexao do Django."""
         mock_conn = MagicMock()
@@ -63,7 +65,7 @@ class TestConnectionFactory(TestCase):
         mock_connections.__getitem__.assert_called_with("eol_db")
 
     @override_settings(DATABASES={"eol_db": {"ENGINE": "mssql"}})
-    @patch("apps.eol_connection.libs.connection.connections")
+    @patch("apps.core.libs.connection_readonly.connections")
     def test_executar_consulta(self, mock_connections: MagicMock) -> None:
         """Executa consulta e retorna resultados."""
         mock_cursor = MagicMock()
@@ -80,7 +82,7 @@ class TestConnectionFactory(TestCase):
         mock_cursor.execute.assert_called_with("SELECT 1")
 
     @override_settings(DATABASES={"eol_db": {"ENGINE": "mssql"}})
-    @patch("apps.eol_connection.libs.connection.connections")
+    @patch("apps.core.libs.connection_readonly.connections")
     def test_executar_consulta_com_parametros(
         self, mock_connections: MagicMock
     ) -> None:
@@ -103,7 +105,7 @@ class TestConnectionFactory(TestCase):
         )
 
     @override_settings(DATABASES={"eol_db": {"ENGINE": "mssql"}})
-    @patch("apps.eol_connection.libs.connection.connections")
+    @patch("apps.core.libs.connection_readonly.connections")
     def test_executar_comando_select(self, mock_connections: MagicMock) -> None:
         """Executa comando de leitura (SELECT)."""
         mock_cursor = MagicMock()
@@ -127,7 +129,7 @@ class TestConnectionFactory(TestCase):
             factory.executar_comando("INSERT INTO tabela VALUES (1)")
 
     @override_settings(DATABASES={"eol_db": {"ENGINE": "mssql"}})
-    @patch("apps.eol_connection.libs.connection.connections")
+    @patch("apps.core.libs.connection_readonly.connections")
     def test_executar_consulta_exception(self, mock_connections: MagicMock) -> None:
         """Ao ocorrer erro no driver, a exception e propagada."""
         mock_conn = MagicMock()
@@ -140,7 +142,7 @@ class TestConnectionFactory(TestCase):
             factory.executar_consulta("SELECT 1")
 
     @override_settings(DATABASES={"eol_db": {"ENGINE": "mssql"}})
-    @patch("apps.eol_connection.libs.connection.connections")
+    @patch("apps.core.libs.connection_readonly.connections")
     def test_iter_consulta(self, mock_connections: MagicMock) -> None:
         """Iter consulta faz yield de chunks e registra logs."""
         mock_cursor = MagicMock()
@@ -159,7 +161,7 @@ class TestConnectionFactory(TestCase):
         self.assertEqual(chunks[1], [(2,)])
 
     @override_settings(DATABASES={"eol_db": {"ENGINE": "mssql"}})
-    @patch("apps.eol_connection.libs.connection.connections")
+    @patch("apps.core.libs.connection_readonly.connections")
     def test_iter_consulta_exception(self, mock_connections: MagicMock) -> None:
         """Exceções no meio da iteração são propagadas."""
         mock_conn = MagicMock()

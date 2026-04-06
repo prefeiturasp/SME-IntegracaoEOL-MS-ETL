@@ -123,14 +123,14 @@ Imediato:
 
 ```bash
 docker compose exec web python manage.py agendar_dominio \
-  --dominio escola --volume 100 --continuar
+  --dominio institucional --volume 100 --continuar
 ```
 
 Agendado:
 
 ```bash
 docker compose exec web python manage.py agendar_dominio \
-  --dominio escola --volume 100 --continuar \
+  --dominio institucional --volume 100 --continuar \
   --executar-em 2026-03-10T23:00:00-03:00
 ```
 

@@ -10,7 +10,7 @@ Mapa de roteamento:
     pedagogico    → pedagogico_db     (PEDAGOGICO_DB)
     programas     → programas_db      (PROGRAMAS_DB)
 
-Apps sem mapeamento explícito (controle_auditoria, escolas,
+Apps sem mapeamento explícito (controle_auditoria,
 eol_connection) continuam usando o banco `default`.
 
 Nota: dominios_auxiliar foi removido — suas tabelas de referência

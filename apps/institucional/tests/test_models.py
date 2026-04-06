@@ -1,16 +1,23 @@
 """Testes de string representation dos modelos institucionais."""
 
 from django.test import TestCase
-from apps.institucional.models import DRE, TipoEscola, SubPrefeitura, UnidadeEducacional
+
+from apps.institucional.models import (
+    DRE,
+    SubPrefeitura,
+    TipoEscola,
+    UnidadeEducacional,
+)
+
 
 class InstitucionalModelsTest(TestCase):
-    """Testes para garantir que os métodos __str__ dos modelos estão cobertos."""
+    """Testes para garantir cobertura dos métodos __str__ dos modelos."""
 
     def test_dre_str(self) -> None:
         """Verifica representação string de DRE."""
         dre = DRE(codigo_dre="123", nome="DRE TESTE", sigla="DT")
         self.assertEqual(str(dre), "123 - DT")
-        
+
         dre2 = DRE(codigo_dre="456", nome="DRE SEM SIGLA", sigla=None)
         self.assertEqual(str(dre2), "456 - DRE SEM SIGLA")
 
@@ -28,3 +35,10 @@ class InstitucionalModelsTest(TestCase):
         """Verifica representação string de UnidadeEducacional."""
         ue = UnidadeEducacional(codigo_ue="098765", nome="ESC TESTE")
         self.assertEqual(str(ue), "098765 - ESC TESTE")
+
+    def test_institucional_consulta_log_str(self) -> None:
+        """Verifica representação string de InstitucionalConsultaLog."""
+        from apps.institucional.models import InstitucionalConsultaLog
+
+        log = InstitucionalConsultaLog(offset_inicial=100, limite=50)
+        self.assertEqual(str(log), "offset=100 limite=50")

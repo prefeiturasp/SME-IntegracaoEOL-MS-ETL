@@ -1,6 +1,5 @@
 """Testes dos endpoints e autenticacao da API de controle_auditoria."""
 
-import os
 from typing import Any
 from unittest.mock import patch
 from uuid import uuid4
@@ -77,11 +76,11 @@ class ViewsApiControleAuditoriaTestCase(TestCase):
     def test_deve_listar_checkpoints(self) -> None:
         """Retorna lista de checkpoints."""
         EtlCheckpointDominio.objects.create(
-            dominio="escola",
+            dominio="institucional",
             ultimo_id_execucao=uuid4(),
             ultima_pagina=2,
             token_parada="200",
-            indice_sincronizacao="escola:offset:200",
+            indice_sincronizacao="institucional:offset:200",
             ultima_situacao="sucesso",
         )
 
@@ -93,7 +92,7 @@ class ViewsApiControleAuditoriaTestCase(TestCase):
         """Retorna execuções mais recentes."""
         EtlExecucao.objects.create(
             id_execucao=uuid4(),
-            dominio="escola",
+            dominio="institucional",
             situacao="sucesso",
             iniciado_em=timezone.now(),
         )
@@ -107,7 +106,7 @@ class ViewsApiControleAuditoriaTestCase(TestCase):
         """POST sem data agenda em execução imediata (apply_async sem eta)."""
         tarefa_mock.apply_async.return_value = type("Result", (), {"id": "task-1"})()
         resposta = self.client.post(
-            "/api/v1/dominios/escola/executar/",
+            "/api/v1/dominios/institucional/executar/",
             data={"volume": 10, "offset": 1, "continuar": True},
             format="json",
             **self.headers,
@@ -115,7 +114,12 @@ class ViewsApiControleAuditoriaTestCase(TestCase):
         self.assertEqual(resposta.status_code, 202)
         self.assertEqual(resposta.json()["task_id"], "task-1")
         tarefa_mock.apply_async.assert_called_once_with(
-            kwargs={"dominio": "escola", "volume": 10, "offset": 1, "continuar": True},
+            kwargs={
+                "dominio": "institucional",
+                "volume": 10,
+                "offset": 1,
+                "continuar": True,
+            },
             priority=5,
         )
 
@@ -128,7 +132,7 @@ class ViewsApiControleAuditoriaTestCase(TestCase):
             {"id": "task-2"},
         )()
         resposta = self.client.post(
-            "/api/v1/dominios/escola/executar/",
+            "/api/v1/dominios/institucional/executar/",
             data={
                 "volume": 20,
                 "offset": 2,
@@ -146,7 +150,7 @@ class ViewsApiControleAuditoriaTestCase(TestCase):
     def test_deve_rejeitar_data_hora_invalida(self, tarefa_mock: Any) -> None:
         """Retorna 400 quando executar_em está inválido."""
         resposta = self.client.post(
-            "/api/v1/dominios/escola/executar/",
+            "/api/v1/dominios/institucional/executar/",
             data={"executar_em": "nao-e-data"},
             format="json",
             **self.headers,
@@ -172,7 +176,7 @@ class ViewsApiControleAuditoriaTestCase(TestCase):
         id_exec = uuid4()
         EtlExecucao.objects.create(
             id_execucao=id_exec,
-            dominio="escola",
+            dominio="institucional",
             situacao="sucesso",
             iniciado_em=timezone.now(),
         )
@@ -184,7 +188,7 @@ class ViewsApiControleAuditoriaTestCase(TestCase):
         )
         EtlExecucaoTabelaEscrita.objects.create(
             id_execucao=id_exec,
-            tabela_destino="escolas",
+            tabela_destino="institucional",
             linhas_escritas=100,
             modo_escrita="upsert",
         )
@@ -196,7 +200,9 @@ class ViewsApiControleAuditoriaTestCase(TestCase):
         self.assertEqual(len(dados["tabelas_lidas"]), 1)
         self.assertEqual(len(dados["tabelas_escritas"]), 1)
         self.assertEqual(dados["tabelas_lidas"][0]["tabela_origem"], "dbo.v_cadastro")
-        self.assertEqual(dados["tabelas_escritas"][0]["tabela_destino"], "escolas")
+        self.assertEqual(
+            dados["tabelas_escritas"][0]["tabela_destino"], "institucional"
+        )
 
     def test_deve_retornar_404_para_execucao_inexistente(self) -> None:
         """Retorna 404 quando id_execucao não existe."""
@@ -221,7 +227,7 @@ class ViewsApiControleAuditoriaTestCase(TestCase):
         """Retorna registros de tabelas escritas."""
         EtlExecucaoTabelaEscrita.objects.create(
             id_execucao=uuid4(),
-            tabela_destino="escolas",
+            tabela_destino="institucional",
             linhas_escritas=50,
             modo_escrita="upsert",
         )
@@ -243,7 +249,7 @@ class MonitoramentoViewsTestCase(TestCase):
         self.id_exec_b = uuid4()
         EtlExecucao.objects.create(
             id_execucao=self.id_exec_a,
-            dominio="escola",
+            dominio="institucional",
             situacao="sucesso",
             iniciado_em=timezone.now(),
         )
@@ -262,11 +268,13 @@ class MonitoramentoViewsTestCase(TestCase):
 
     def test_monitoramento_deve_filtrar_por_dominio(self) -> None:
         """Filtro por dominio retorna apenas execuções do domínio."""
-        resposta = self.client.get("/api/v1/monitoramento/execucoes/?dominio=escola")
+        resposta = self.client.get(
+            "/api/v1/monitoramento/execucoes/?dominio=institucional"
+        )
         self.assertEqual(resposta.status_code, 200)
         dados = resposta.json()
         self.assertEqual(len(dados), 1)
-        self.assertEqual(dados[0]["dominio"], "escola")
+        self.assertEqual(dados[0]["dominio"], "institucional")
 
     def test_monitoramento_deve_filtrar_por_situacao(self) -> None:
         """Filtro por situacao retorna apenas execuções com aquela situação."""
@@ -298,21 +306,21 @@ class MonitoramentoViewsTestCase(TestCase):
         self.assertEqual(resposta.status_code, 200)
         dados = resposta.json()
         dominios = [d["dominio"] for d in dados]
-        self.assertIn("escola", dominios)
+        self.assertIn("institucional", dominios)
         self.assertIn("sinc_rec_db", dominios)
 
     def test_monitoramento_resumo_retorna_apenas_ultima_por_dominio(self) -> None:
         """Resumo retorna somente 1 entrada por domínio."""
         EtlExecucao.objects.create(
             id_execucao=uuid4(),
-            dominio="escola",
+            dominio="institucional",
             situacao="erro",
             iniciado_em=timezone.now(),
         )
         resposta = self.client.get("/api/v1/monitoramento/resumo/")
         self.assertEqual(resposta.status_code, 200)
         dominios = [d["dominio"] for d in resposta.json()]
-        self.assertEqual(dominios.count("escola"), 1)
+        self.assertEqual(dominios.count("institucional"), 1)
 
 
 class DashboardViewTestCase(TestCase):
@@ -323,7 +331,7 @@ class DashboardViewTestCase(TestCase):
         self.client = Client()
         EtlExecucao.objects.create(
             id_execucao=uuid4(),
-            dominio="escola",
+            dominio="institucional",
             situacao="sucesso",
             iniciado_em=timezone.now(),
         )
@@ -335,7 +343,7 @@ class DashboardViewTestCase(TestCase):
 
     def test_dashboard_deve_responder_com_filtro_dominio(self) -> None:
         """Dashboard com filtro de domínio retorna 200."""
-        resposta = self.client.get("/dashboard/?dominio=escola")
+        resposta = self.client.get("/dashboard/?dominio=institucional")
         self.assertEqual(resposta.status_code, 200)
 
     def test_dashboard_deve_responder_com_filtro_situacao(self) -> None:
@@ -347,7 +355,7 @@ class DashboardViewTestCase(TestCase):
         """Dashboard com todos os filtros combinados retorna 200."""
         hoje = timezone.now().date().isoformat()
         resposta = self.client.get(
-            f"/dashboard/?dominio=escola&situacao=sucesso"
+            f"/dashboard/?dominio=institucional&situacao=sucesso"
             f"&data_inicio={hoje}&data_fim={hoje}"
         )
         self.assertEqual(resposta.status_code, 200)

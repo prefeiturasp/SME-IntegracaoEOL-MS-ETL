@@ -26,16 +26,16 @@ class RepositorioAuditoriaTestCase(TestCase):
 
     def test_deve_iniciar_e_finalizar_execucao(self) -> None:
         """Cria uma execucao e finaliza com sucesso."""
-        id_execucao = self.repositorio.iniciar_execucao("escola")
+        id_execucao = self.repositorio.iniciar_execucao("institucional")
         self.assertIsInstance(id_execucao, UUID)
 
         self.repositorio.finalizar_execucao(id_execucao, "sucesso")
-        checkpoint = self.repositorio.obter_checkpoint_dominio("escola")
+        checkpoint = self.repositorio.obter_checkpoint_dominio("institucional")
         self.assertIsNone(checkpoint)
 
     def test_deve_registrar_tabela_lida(self) -> None:
         """Registra leitura sem erro no banco de auditoria."""
-        id_execucao = self.repositorio.iniciar_execucao("escola")
+        id_execucao = self.repositorio.iniciar_execucao("institucional")
         self.repositorio.registrar_tabela_lida(
             id_execucao=id_execucao,
             tabela_origem="dbo.v_cadastro_unidade_educacao",
@@ -45,27 +45,27 @@ class RepositorioAuditoriaTestCase(TestCase):
 
     def test_deve_registrar_tabela_escrita(self) -> None:
         """Registra escrita sem erro no banco de auditoria."""
-        id_execucao = self.repositorio.iniciar_execucao("escola")
+        id_execucao = self.repositorio.iniciar_execucao("institucional")
         self.repositorio.registrar_tabela_escrita(
             id_execucao=id_execucao,
-            tabela_destino="console.saida_validacao_escolas",
+            tabela_destino="console.saida_validacao_institucional",
             linhas_escritas=10,
             modo_escrita="validacao",
         )
 
     def test_deve_criar_checkpoint_no_primeiro_upsert(self) -> None:
         """Cria checkpoint quando dominio ainda nao existe."""
-        id_execucao = self.repositorio.iniciar_execucao("escola")
+        id_execucao = self.repositorio.iniciar_execucao("institucional")
         self.repositorio.atualizar_checkpoint_dominio(
-            dominio="escola",
+            dominio="institucional",
             ultimo_id_execucao=id_execucao,
             ultima_pagina=1,
             token_parada="100",
-            indice_sincronizacao="escola:offset:100",
+            indice_sincronizacao="institucional:offset:100",
             ultima_situacao="sucesso",
             sucesso=True,
         )
-        salvo = EtlCheckpointDominio.objects.get(dominio="escola")
+        salvo = EtlCheckpointDominio.objects.get(dominio="institucional")
         self.assertEqual(salvo.ultima_pagina, 1)
         self.assertEqual(salvo.token_parada, "100")
         self.assertEqual(salvo.ultima_situacao, "sucesso")
@@ -73,32 +73,32 @@ class RepositorioAuditoriaTestCase(TestCase):
 
     def test_deve_atualizar_checkpoint_existente_com_falha(self) -> None:
         """Atualiza checkpoint sem sobrescrever sucesso em caso de falha."""
-        id_1 = self.repositorio.iniciar_execucao("escola")
+        id_1 = self.repositorio.iniciar_execucao("institucional")
         self.repositorio.atualizar_checkpoint_dominio(
-            dominio="escola",
+            dominio="institucional",
             ultimo_id_execucao=id_1,
             ultima_pagina=1,
             token_parada="100",
-            indice_sincronizacao="escola:offset:100",
+            indice_sincronizacao="institucional:offset:100",
             ultima_situacao="sucesso",
             sucesso=True,
         )
         sucesso_em_anterior = EtlCheckpointDominio.objects.get(
-            dominio="escola"
+            dominio="institucional"
         ).ultimo_sucesso_em
 
-        id_2 = self.repositorio.iniciar_execucao("escola")
+        id_2 = self.repositorio.iniciar_execucao("institucional")
         self.repositorio.atualizar_checkpoint_dominio(
-            dominio="escola",
+            dominio="institucional",
             ultimo_id_execucao=id_2,
             ultima_pagina=2,
             token_parada="200",
-            indice_sincronizacao="escola:offset:200",
+            indice_sincronizacao="institucional:offset:200",
             ultima_situacao="falha",
             sucesso=False,
         )
 
-        atualizado = EtlCheckpointDominio.objects.get(dominio="escola")
+        atualizado = EtlCheckpointDominio.objects.get(dominio="institucional")
         self.assertEqual(atualizado.ultima_pagina, 2)
         self.assertEqual(atualizado.token_parada, "200")
         self.assertEqual(atualizado.ultima_situacao, "falha")
@@ -156,7 +156,7 @@ class TasksControleAuditoriaTestCase(TestCase):
         repositorio_cls_mock.return_value = repositorio
 
         retorno = executar_dominio_task(
-            dominio="escola",
+            dominio="institucional",
             volume=120,
             offset=10,
             continuar=False,
@@ -169,7 +169,7 @@ class TasksControleAuditoriaTestCase(TestCase):
             (
                 "executar_dominio",
                 "--dominio",
-                "escola",
+                "institucional",
                 "--volume",
                 "120",
                 "--offset",
@@ -181,7 +181,7 @@ class TasksControleAuditoriaTestCase(TestCase):
             (
                 "executar_dominio",
                 "--dominio",
-                "escola",
+                "institucional",
                 "--volume",
                 "120",
                 "--offset",
@@ -206,7 +206,7 @@ class TasksControleAuditoriaTestCase(TestCase):
         repositorio_cls_mock.return_value = repositorio
 
         retorno = executar_dominio_task(
-            dominio="escola",
+            dominio="institucional",
             volume=90,
             offset=0,
             continuar=True,
@@ -216,7 +216,7 @@ class TasksControleAuditoriaTestCase(TestCase):
         call_command_mock.assert_called_once_with(
             "executar_dominio",
             "--dominio",
-            "escola",
+            "institucional",
             "--volume",
             "90",
             "--offset",

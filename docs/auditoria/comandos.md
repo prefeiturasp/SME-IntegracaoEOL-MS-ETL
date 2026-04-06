@@ -5,7 +5,7 @@ Executa um domínio específico.
 
 Suporta:
 - `sinc_rec_db`
-- `escola` / `escolas`
+- `institucional`
 - `professores`
 
 ## `executar_dominios`
