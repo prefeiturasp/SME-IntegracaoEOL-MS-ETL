@@ -206,7 +206,7 @@ CORE_SSO_DB = os.getenv("CORE_SSO_DB", "")
 INTERVALO_EXECUCAO_ETL_SEGUNDOS = int(
     os.getenv("INTERVALO_EXECUCAO_ETL_SEGUNDOS", "60")
 )
-API_KEY = os.getenv("API_KEY", "dev-key-default")  # Fallback para CI
+API_KEY = os.getenv("API_KEY", "dev-key-default")
 API_KEY_HEADER = os.getenv("API_KEY_HEADER", "X-API-Key")
 CELERY_BROKER_URL = URL_KEYDB
 # Execução síncrona automática em testes/CI
