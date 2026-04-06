@@ -15,8 +15,10 @@ class TestParseUrlDb(TestCase):
     """Testes para a funcao _parse_readonly_db."""
 
     def test_parse_url_vazia(self) -> None:
-        """Retorna dict vazio para URL vazia."""
-        self.assertEqual(_parse_readonly_db(""), {})
+        """Retorna fallback para SQLite para URL vazia (evita ImproperlyConfigured)."""
+        config = _parse_readonly_db("")
+        self.assertEqual(config["ENGINE"], "django.db.backends.sqlite3")
+        self.assertEqual(config["NAME"], ":memory:")
 
     def test_parse_url_valida(self) -> None:
         """Extrai corretamente os campos de uma URL MSSQL valida."""
