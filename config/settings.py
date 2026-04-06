@@ -200,6 +200,7 @@ INTERVALO_EXECUCAO_ETL_SEGUNDOS = int(
 )
 API_KEY = os.getenv("API_KEY", "")
 API_KEY_HEADER = os.getenv("API_KEY_HEADER", "X-API-Key")
+CELERY_BROKER_URL = URL_KEYDB
 
 REST_FRAMEWORK = {
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
