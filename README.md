@@ -49,7 +49,7 @@ docker compose -f docker-compose-dev.yml up -d --force-recreate
 docker exec -i sme_sgp_ms_etl_postgres psql -U postgres < scripts/criar_bancos.sql
 
 # Rodar migrations
-docker exec sme_sgp_ms_etl_etl_auditoria sh scripts/executar_migrations.sh
+docker exec sme_sgp_ms_elt_auditoria sh scripts/executar_migrations.sh
 ```
 
 > Os URLs dos bancos no `.env` devem usar o nome do serviço Docker `postgres` (porta `5432`), não `localhost`.
@@ -176,7 +176,7 @@ Resposta:
 Execução direta via command (dev):
 
 ```bash
-docker exec sme_sgp_ms_etl_etl_auditoria python manage.py etl_professores
+docker exec sme_sgp_ms_elt_auditoria python manage.py etl_professores
 ```
 
 ## Debug (dev)
@@ -214,3 +214,71 @@ Executa testes no container via ambiente dev:
 
 O script executa cobertura com `coverage` e exige mínimo de `80%`.
 
+## Logs em ambiente de desenvolvimento
+
+Logs em tempo real (equivalente ao runserver):
+```
+docker logs -f sme_sgp_ms_elt_auditoria
+```
+
+Logs com as últimas N linhas + tempo real:
+```
+docker logs -f --tail 100 sme_sgp_ms_elt_auditoria
+```
+
+Logs do worker Celery:
+```
+docker logs -f sme_sgp_ms_etl_worker
+```
+
+## Filas
+A fila padrão é fila_etl_padrao no KeyDB. Para inspecionar:
+
+Status geral do worker e filas ativas:
+```
+docker exec sme_sgp_ms_etl_worker celery -A apps.controle_auditoria.libs.celery_app.aplicacao_celery inspect active_queues
+```
+
+Tarefas ativas (em execução agora):
+```
+docker exec sme_sgp_ms_etl_worker celery -A apps.controle_auditoria.libs.celery_app.aplicacao_celery inspect active
+```
+
+Tarefas agendadas (eta/countdown):
+```
+docker exec sme_sgp_ms_etl_worker celery -A apps.controle_auditoria.libs.celery_app.aplicacao_celery inspect scheduled
+```
+
+Tarefas reservadas (eta/countdown):
+```
+docker exec sme_sgp_ms_etl_worker celery -A apps.controle_auditoria.libs.celery_app.aplicacao_celery inspect scheduled
+```
+
+Ver tamanho da fila diretamente no KeyDB:
+```
+docker exec sme_sgp_ms_etl_keydb keydb-cli llen fila_etl_padrao
+```
+
+Ver todas as chaves no KeyDB (filas, resultados etc):
+```
+docker exec sme_sgp_ms_etl_keydb keydb-cli keys "*"
+```
+
+## Para rodar migrations hardcode (sem o executar_migrations, pois este está com padrão LF do Linux e, em alguns casos, dá problema na execução do script)
+```
+docker exec sme_sgp_ms_elt_auditoria python manage.py migrate --database=institucional_db
+docker exec sme_sgp_ms_elt_auditoria python manage.py migrate --database=professores_db
+docker exec sme_sgp_ms_elt_auditoria python manage.py migrate --database=alunos_db
+docker exec sme_sgp_ms_elt_auditoria python manage.py migrate --database=pedagogico_db
+docker exec sme_sgp_ms_elt_auditoria python manage.py migrate --database=programas_db
+```
+
+## Rodando testes hardcode
+```
+docker exec sme_sgp_ms_elt_auditoria python manage.py test apps.programas.tests.tests --keepdb
+```
+
+## Obtendo dados de coverage hardcode
+```
+docker exec sme_sgp_ms_elt_auditoria coverage run --source=apps.programas manage.py test apps.programas.tests.tests --keepdb && docker exec sme_sgp_ms_elt_auditoria coverage report 
+```
