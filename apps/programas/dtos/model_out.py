@@ -105,6 +105,8 @@ class ComponenteCurricularProgramaOut(ComponenteCurricularPrograma):
             nome_componente_curricular=_strip(obj.nome_componente_curricular),
             categoria=categoria,
             vigente=codigo in vigentes,
+            data_inicio=obj.data_inicio,
+            data_fim=obj.data_fim,
         )
 
 

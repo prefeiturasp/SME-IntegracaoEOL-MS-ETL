@@ -373,3 +373,4 @@ class MatriculaTurmaPrograma(models.Model):
             f" — turma {self.codigo_turma}"
             f" / CC {self.codigo_componente_curricular}"
         )
+
