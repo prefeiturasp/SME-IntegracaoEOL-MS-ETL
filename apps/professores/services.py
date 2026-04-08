@@ -30,13 +30,15 @@ Cargos de professor reconhecidos pelo EOL:
     3336, 3344, 3840, 3859, 3867, 3874, 3883, 3884
 """
 
-import hashlib
 import logging
 from collections.abc import Iterator
 from typing import Any
 
 from apps.controle_auditoria.models import EtlAuditoriaLinha
 from apps.eol_connection.libs.servico_eol import EOLService
+from functools import partial
+
+from apps.core.libs.thread_processor import ThreadPoolProcessor, decorar_para_hash
 from apps.professores.models import (
     AtribuicaoAula,
     AtribuicaoExterno,
@@ -473,13 +475,6 @@ def _params_cargo() -> list[int]:
 _HASH_LOOKUP_BATCH = 1000
 
 
-def _calcular_hash(campos: dict[str, Any]) -> str:
-    """SHA-256 dos campos relevantes para controle incremental de mudança.
-
-    Serializa pares chave=valor em ordem alfabética e calcula o digest hex.
-    """
-    conteudo = "|".join(f"{k}={v!r}" for k, v in sorted(campos.items()))
-    return hashlib.sha256(conteudo.encode("utf-8")).hexdigest()
 
 def _reinsere_se_ausente(
     model_class: Any,
@@ -528,13 +523,10 @@ def _upsert_incremental(
 
     pk_name: str = model_class._meta.pk.name
 
-    # Construir (id_destino, hash, row_dict) para cada linha
-    linhas: list[tuple[str, str, dict[str, Any]]] = []
-    for row_dict in rows:
-        pk_str = str(row_dict[pk_name])
-        id_destino = f"{tabela}:{pk_str}"
-        campos_hash = {k: row_dict.get(k) for k in update_fields}
-        linhas.append((id_destino, _calcular_hash(campos_hash), row_dict))
+    processor = ThreadPoolProcessor(prefixo_log=f"ETL {tabela[:6].upper()}")
+    func = partial(decorar_para_hash, tabela, update_fields)
+    items = [(str(row[pk_name]), row) for row in rows]
+    linhas = processor.processar(items, func)
 
     # Buscar hashes existentes em lotes (evita IN query muito grande)
     ids_destino = [item[0] for item in linhas]
