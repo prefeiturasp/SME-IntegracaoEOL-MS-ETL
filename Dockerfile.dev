@@ -44,9 +44,8 @@ COPY apps /app/apps
 COPY requirements /app/requirements
 COPY scripts /app/scripts
 
-RUN chmod +x /app/scripts/executar_migrations.sh
-
-RUN pip install --upgrade pip \
+RUN chmod +x /app/scripts/executar_migrations.sh \
+    && pip install --upgrade pip \
     && pip install -r /app/requirements/local.txt \
     && pip install debugpy==1.8.5 \
     && pip install myst-parser sphinx sphinx-rtd-theme \
