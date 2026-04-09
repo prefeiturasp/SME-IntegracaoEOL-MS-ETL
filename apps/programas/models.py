@@ -70,7 +70,7 @@ class TipoPrograma(models.Model):
         verbose_name_plural = "tipos de programa"
 
     def __str__(self) -> str:
-        return f"{self.nome} ({self.id})"
+        return f"{self.nome} ({self.codigo_tipo_programa})"
 
 
 class ComponenteCurricularPrograma(models.Model):
@@ -116,12 +116,6 @@ class ComponenteCurricularPrograma(models.Model):
     )
     vigente = models.BooleanField(
         help_text="True = componente ativo; False = legado (substituído por versão mais nova).",
-    )
-    data_inicio = models.DateField(help_text="Início da vigência do componente no programa.")
-    data_fim = models.DateField(
-        null=True,
-        blank=True,
-        help_text="Fim da vigência. NULL para componentes sem prazo de encerramento.",
     )
 
     class Meta:

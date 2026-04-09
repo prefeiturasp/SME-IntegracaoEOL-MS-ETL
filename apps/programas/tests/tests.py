@@ -36,7 +36,6 @@ from apps.programas.services import (
 # Helpers de fixture
 # ---------------------------------------------------------------------------
 
-_DATA = datetime.date(2019, 1, 1)
 _DATA_MATRICULA = datetime.date(2025, 2, 1)
 
 
@@ -44,8 +43,8 @@ def _row_tipo(id_=649, sigla="PAP-RECUP", descricao="PAP Recuperação"):
     return (id_, sigla, descricao)
 
 
-def _row_componente(id_=1322, nome="PAP Rec Aprend", dt_inicio=_DATA, dt_fim=None):
-    return (id_, nome, dt_inicio, dt_fim)
+def _row_componente(id_=1322, nome="PAP Rec Aprend"):
+    return (id_, nome)
 
 
 def _row_turma(
@@ -74,7 +73,7 @@ def _row_matricula(
 
 class TestTipoProgramaStr(TestCase):
     def test_str(self) -> None:
-        tp = TipoPrograma(id=649, nome="PAP Recuperação", categoria="PAP")
+        tp = TipoPrograma(codigo_tipo_programa=649, nome="PAP Recuperação", categoria="PAP")
         self.assertEqual(str(tp), "PAP Recuperação (649)")
 
 
@@ -136,7 +135,7 @@ class TestMatriculaTurmaProgramaStr(TestCase):
 class TestTipoProgramaOut(TestCase):
     def test_pap_649(self) -> None:
         obj = TipoProgramaOut.from_in(TipoProgramaIn(*_row_tipo(649)))
-        self.assertEqual(obj.id, 649)
+        self.assertEqual(obj.codigo_tipo_programa, 649)
         self.assertEqual(obj.categoria, "PAP")
         self.assertTrue(obj.ativo)
 
@@ -195,13 +194,11 @@ class TestComponenteCurricularProgramaOut(TestCase):
                 self.assertEqual(obj.categoria, "PAP")
 
     def test_pap_legado_1033(self) -> None:
-        dt_fim = datetime.date(2018, 12, 31)
         obj = ComponenteCurricularProgramaOut.from_in(
-            ComponenteCurricularProgramaIn(*_row_componente(1033, dt_fim=dt_fim))
+            ComponenteCurricularProgramaIn(*_row_componente(1033))
         )
         self.assertEqual(obj.categoria, "PAP")
         self.assertFalse(obj.vigente)
-        self.assertEqual(obj.data_fim, dt_fim)
 
     def test_pap_legados_restantes(self) -> None:
         for id_ in (1051, 1052, 1053, 1054):
@@ -218,11 +215,6 @@ class TestComponenteCurricularProgramaOut(TestCase):
         self.assertEqual(obj.categoria, "PAEE")
         self.assertTrue(obj.vigente)
 
-    def test_data_fim_none(self) -> None:
-        obj = ComponenteCurricularProgramaOut.from_in(
-            ComponenteCurricularProgramaIn(*_row_componente(1322, dt_fim=None))
-        )
-        self.assertIsNone(obj.data_fim)
 
 
 # ---------------------------------------------------------------------------
@@ -327,27 +319,27 @@ class TestMatriculaTurmaProgramaOut(TestCase):
 
 class TestCalcularHash(TestCase):
     def test_retorna_sha256_de_64_chars(self) -> None:
-        tp = TipoPrograma(id=649, nome="PAP Rec", categoria="PAP", ativo=True)
+        tp = TipoPrograma(codigo_tipo_programa=649, nome="PAP Rec", categoria="PAP", ativo=True)
         h = _calcular_hash(tp, ["nome", "categoria", "ativo"])
         self.assertIsInstance(h, str)
         self.assertEqual(len(h), 64)
 
     def test_hash_muda_com_campo_alterado(self) -> None:
-        t1 = TipoPrograma(id=649, nome="PAP Rec", categoria="PAP", ativo=True)
-        t2 = TipoPrograma(id=649, nome="PAP Rec NOVO", categoria="PAP", ativo=True)
+        t1 = TipoPrograma(codigo_tipo_programa=649, nome="PAP Rec", categoria="PAP", ativo=True)
+        t2 = TipoPrograma(codigo_tipo_programa=649, nome="PAP Rec NOVO", categoria="PAP", ativo=True)
         campos = ["nome", "categoria", "ativo"]
         self.assertNotEqual(_calcular_hash(t1, campos), _calcular_hash(t2, campos))
 
     def test_hash_igual_para_mesmos_dados(self) -> None:
-        t1 = TipoPrograma(id=649, nome="PAP Rec", categoria="PAP", ativo=True)
-        t2 = TipoPrograma(id=649, nome="PAP Rec", categoria="PAP", ativo=True)
+        t1 = TipoPrograma(codigo_tipo_programa=649, nome="PAP Rec", categoria="PAP", ativo=True)
+        t2 = TipoPrograma(codigo_tipo_programa=649, nome="PAP Rec", categoria="PAP", ativo=True)
         campos = ["nome", "categoria", "ativo"]
         self.assertEqual(_calcular_hash(t1, campos), _calcular_hash(t2, campos))
 
     def test_hash_ignora_campo_nao_listado(self) -> None:
         """Campos fora da lista não afetam o hash."""
-        t1 = TipoPrograma(id=649, nome="PAP", categoria="PAP", ativo=True)
-        t2 = TipoPrograma(id=999, nome="PAP", categoria="PAP", ativo=False)
+        t1 = TipoPrograma(codigo_tipo_programa=649, nome="PAP", categoria="PAP", ativo=True)
+        t2 = TipoPrograma(codigo_tipo_programa=999, nome="PAP", categoria="PAP", ativo=False)
         self.assertEqual(_calcular_hash(t1, ["nome"]), _calcular_hash(t2, ["nome"]))
 
 
@@ -360,7 +352,7 @@ class TestUpsertIncrementalProgramas(TestCase):
     databases = ["programas_db", "default"]
 
     def _make_tipo(self, id_=649, nome="PAP Rec", categoria="PAP") -> TipoPrograma:
-        return TipoPrograma(id=id_, nome=nome, categoria=categoria, ativo=True)
+        return TipoPrograma(codigo_tipo_programa=id_, nome=nome, categoria=categoria, ativo=True)
 
     def _upsert_tipo(self, objs: list, nome_alt: str | None = None) -> int:
         campos = ["nome", "categoria", "ativo"]
@@ -374,7 +366,7 @@ class TestUpsertIncrementalProgramas(TestCase):
         resultado = self._upsert_tipo([self._make_tipo()])
         self.assertEqual(resultado, 1)
         self.assertTrue(
-            TipoPrograma.objects.using("programas_db").filter(id=649).exists()
+            TipoPrograma.objects.using("programas_db").filter(codigo_tipo_programa=649).exists()
         )
 
     def test_nao_reescreve_se_nao_mudou(self) -> None:
@@ -388,7 +380,7 @@ class TestUpsertIncrementalProgramas(TestCase):
         self._upsert_tipo([self._make_tipo(nome="PAP Rec")])
         resultado = self._upsert_tipo([self._make_tipo(nome="PAP Rec ALTERADO")])
         self.assertEqual(resultado, 1)
-        tp = TipoPrograma.objects.using("programas_db").get(id=649)
+        tp = TipoPrograma.objects.using("programas_db").get(codigo_tipo_programa=649)
         self.assertEqual(tp.nome, "PAP Rec ALTERADO")
 
     def test_deduplica_por_chave_mantém_ultimo(self) -> None:
@@ -396,7 +388,7 @@ class TestUpsertIncrementalProgramas(TestCase):
         objs = [self._make_tipo(nome="PRIMEIRO"), self._make_tipo(nome="SEGUNDO")]
         resultado = self._upsert_tipo(objs)
         self.assertEqual(resultado, 1)
-        tp = TipoPrograma.objects.using("programas_db").get(id=649)
+        tp = TipoPrograma.objects.using("programas_db").get(codigo_tipo_programa=649)
         self.assertEqual(tp.nome, "SEGUNDO")
 
     def test_multiplos_registros_novos(self) -> None:
@@ -492,7 +484,7 @@ class TestEtlProgramasServiceFase1(TestCase):
         self.mock_eol.executar_query.return_value = [_row_tipo(649)]
         resultado = self.service.popular_tipos_programa()
         self.assertEqual(resultado, 1)
-        tp = TipoPrograma.objects.using("programas_db").get(id=649)
+        tp = TipoPrograma.objects.using("programas_db").get(codigo_tipo_programa=649)
         self.assertEqual(tp.categoria, "PAP")
 
     def test_nao_reescreve_se_nao_mudou(self) -> None:
