@@ -356,8 +356,8 @@ class Professor(models.Model):
     codigo_rf = models.CharField(max_length=20, primary_key=True)
     nome = models.CharField(max_length=200)
     nome_social = models.CharField(
-        max_length=200, null=True, blank=True
-    )  # NOSONAR
+        max_length=200, null=True, blank=True  # NOSONAR
+    )  # fmt: skip
 
     class Meta:
 
@@ -555,8 +555,8 @@ class Pessoa(models.Model):
     cpf = models.CharField(max_length=14, unique=True)
     nome = models.CharField(max_length=200)
     nome_social = models.CharField(
-        max_length=200, null=True, blank=True
-    )  # NOSONAR
+        max_length=200, null=True, blank=True  # NOSONAR
+    )  # fmt: skip
 
     class Meta:
 

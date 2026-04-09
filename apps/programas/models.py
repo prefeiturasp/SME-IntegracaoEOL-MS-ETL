@@ -63,8 +63,8 @@ class TurmaTipoItinerario(models.Model):
     id = models.IntegerField(primary_key=True)
     nome = models.CharField(max_length=200)
     serie = models.CharField(
-        max_length=50, null=True, blank=True
-    )  # NOSONAR programas:models:66 - Manter compatilidade com o legado
+        max_length=50, null=True, blank=True  # NOSONAR programas:models:66 - Manter compatilidade com o legado  # noqa: E501
+    )  # fmt: skip
 
     class Meta:
 
@@ -119,8 +119,8 @@ class ComponenteCurricularPai(models.Model):
     )
     codigo_componente_pai = models.IntegerField(null=True, blank=True)
     vigencia = models.CharField(
-        max_length=20, null=True, blank=True
-    )  # NOSONAR programas:models:121 - Manter compatilidade com o legado
+        max_length=20, null=True, blank=True  # NOSONAR programas:models:121 - Manter compatilidade com o legado  # noqa: E501
+    )  # fmt: skip
 
     class Meta:
 
@@ -210,8 +210,8 @@ class AgrupamentoAtribuicaoTerritorioSaber(models.Model):
     ano_letivo = models.IntegerField(null=True, blank=True)
     codigo_motivo_disponibilizacao = models.IntegerField(null=True, blank=True)
     descricao_territorio_saber = models.CharField(
-        max_length=200, null=True, blank=True
-    )  # NOSONAR programas:models:211 - Manter compatilidade com o legado
+        max_length=200, null=True, blank=True  # NOSONAR programas:models:211 - Manter compatilidade com o legado  # noqa: E501
+    )  # fmt: skip
     descricao_experiencia_pedagogica = models.CharField(
         max_length=200,
         null=True,

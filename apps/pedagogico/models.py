@@ -64,8 +64,8 @@ class DRE(models.Model):
     codigo_dre = models.CharField(max_length=20, primary_key=True)
     nome = models.CharField(max_length=200)
     sigla = models.CharField(
-        max_length=20, null=True, blank=True
-    )  # NOSONAR pedagogico:models:66 - Manter compatilidade com o legado
+        max_length=20, null=True, blank=True  # NOSONAR pedagogico:models:66 - Manter compatilidade com o legado  # noqa: E501
+    )  # fmt: skip
 
     class Meta:
 
@@ -88,8 +88,8 @@ class TipoEscola(models.Model):
     codigo_tipo_escola = models.IntegerField(primary_key=True)
     descricao = models.CharField(max_length=200)
     sigla = models.CharField(
-        max_length=10, null=True, blank=True
-    )  # NOSONAR pedagogico:models:90 - Manter compatilidade com o legado
+        max_length=10, null=True, blank=True  # NOSONAR pedagogico:models:90 - Manter compatilidade com o legado  # noqa: E501
+    )  # fmt: skip
 
     class Meta:
 
@@ -113,19 +113,19 @@ class UnidadeEducacional(models.Model):
     codigo_ue = models.CharField(max_length=20, primary_key=True)
     nome = models.CharField(max_length=200)
     sigla = models.CharField(
-        max_length=50, null=True, blank=True
-    )  # NOSONAR pedagogico:models:115 - Manter compatilidade com o legado
+        max_length=50, null=True, blank=True  # NOSONAR pedagogico:models:115 - Manter compatilidade com o legado  # noqa: E501
+    )  # fmt: skip
     codigo_dre = models.CharField(max_length=20)
     nome_dre = models.CharField(
-        max_length=200, null=True, blank=True
-    )  # NOSONAR pedagogico:models:117 - Manter compatilidade com o legado
+        max_length=200, null=True, blank=True  # NOSONAR pedagogico:models:117 - Manter compatilidade com o legado  # noqa: E501
+    )  # fmt: skip
     sigla_dre = models.CharField(
-        max_length=20, null=True, blank=True
-    )  # NOSONAR pedagogico:models:118 - Manter compatilidade com o legado
+        max_length=20, null=True, blank=True  # NOSONAR pedagogico:models:118 - Manter compatilidade com o legado  # noqa: E501
+    )  # fmt: skip
     codigo_tipo_escola = models.IntegerField(null=True, blank=True)
     sigla_tipo_escola = models.CharField(
-        max_length=10, null=True, blank=True
-    )  # NOSONAR pedagogico:models:120 - Manter compatilidade com o legado
+        max_length=10, null=True, blank=True  # NOSONAR pedagogico:models:120 - Manter compatilidade com o legado  # noqa: E501
+    )  # fmt: skip
 
     class Meta:
 
@@ -177,8 +177,8 @@ class ComponenteCurricular(models.Model):
     codigo_componente = models.IntegerField(primary_key=True)
     descricao = models.CharField(max_length=200)
     descricao_sgp = models.CharField(
-        max_length=200, null=True, blank=True
-    )  # NOSONAR pedagogico:models:173 - Manter compatilidade com o legado
+        max_length=200, null=True, blank=True  # NOSONAR pedagogico:models:173 - Manter compatilidade com o legado  # noqa: E501
+    )  # fmt: skip
 
     class Meta:
 
