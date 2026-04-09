@@ -17,7 +17,6 @@ class EtlCheckpointDominioSerializer(serializers.ModelSerializer):
     """Serializa checkpoint por dominio."""
 
     class Meta:
-        """Configuração de metadados do modelo."""
 
         model = EtlCheckpointDominio
         fields = "__all__"
@@ -27,7 +26,6 @@ class EtlExecucaoSerializer(serializers.ModelSerializer):
     """Serializa execucoes ETL."""
 
     class Meta:
-        """Configuração de metadados do modelo."""
 
         model = EtlExecucao
         fields = "__all__"
@@ -37,7 +35,6 @@ class EtlExecucaoTabelaLidaSerializer(serializers.ModelSerializer):
     """Serializa rastreio de leitura por execucao."""
 
     class Meta:
-        """Configuração de metadados do modelo."""
 
         model = EtlExecucaoTabelaLida
         fields = "__all__"
@@ -47,7 +44,6 @@ class EtlExecucaoTabelaEscritaSerializer(serializers.ModelSerializer):
     """Serializa rastreio de escrita por execucao."""
 
     class Meta:
-        """Configuração de metadados do modelo."""
 
         model = EtlExecucaoTabelaEscrita
         fields = "__all__"
@@ -64,7 +60,6 @@ class EtlExecucaoDetalheSerializer(serializers.ModelSerializer):
     )
 
     class Meta:
-        """Configuração de metadados do modelo."""
 
         model = EtlExecucao
         fields = [
@@ -87,7 +82,9 @@ class EtlExecucaoDetalheSerializer(serializers.ModelSerializer):
 
     def get_tabelas_escritas(self, obj: EtlExecucao) -> list:
         """Retorna tabelas escritas com o mesmo id_execucao."""
-        qs = EtlExecucaoTabelaEscrita.objects.filter(id_execucao=obj.id_execucao)
+        qs = EtlExecucaoTabelaEscrita.objects.filter(
+            id_execucao=obj.id_execucao
+        )
         return list(EtlExecucaoTabelaEscritaSerializer(qs, many=True).data)
 
 

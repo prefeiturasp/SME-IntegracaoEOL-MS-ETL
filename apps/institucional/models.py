@@ -30,7 +30,6 @@ class TipoEscola(models.Model):
     descricao = models.CharField(max_length=200)
 
     class Meta:
-        """Metadados do modelo."""
 
         app_label = "institucional"
         db_table = "tipo_escola"
@@ -38,7 +37,6 @@ class TipoEscola(models.Model):
         verbose_name_plural = "tipos de escola"
 
     def __str__(self) -> str:
-        """Representação string."""
         return f"{self.codigo_tipo_escola} - {self.descricao}"
 
 
@@ -53,10 +51,11 @@ class DRE(models.Model):
     nome = models.CharField(max_length=200)
     sigla = models.CharField(max_length=20, null=True, blank=True)
     tipo_unidade_adm = models.IntegerField(null=True, blank=True)
-    descricao_unidade_adm = models.CharField(max_length=200, null=True, blank=True)
+    descricao_unidade_adm = models.CharField(
+        max_length=200, null=True, blank=True
+    )
 
     class Meta:
-        """Metadados do modelo."""
 
         app_label = "institucional"
         db_table = "dre"
@@ -64,7 +63,6 @@ class DRE(models.Model):
         verbose_name_plural = "diretorias regionais de educação"
 
     def __str__(self) -> str:
-        """Representação string."""
         return f"{self.codigo_dre} - {self.sigla or self.nome}"
 
 
@@ -79,7 +77,6 @@ class SubPrefeitura(models.Model):
     nome = models.CharField(max_length=200)
 
     class Meta:
-        """Metadados do modelo."""
 
         app_label = "institucional"
         db_table = "sub_prefeitura"
@@ -87,7 +84,6 @@ class SubPrefeitura(models.Model):
         verbose_name_plural = "sub-prefeituras"
 
     def __str__(self) -> str:
-        """Representação string."""
         return str(self.nome)
 
 
@@ -127,7 +123,9 @@ class UnidadeEducacional(models.Model):
     quantidade_funcionarios = models.IntegerField(default=0)
     status = models.CharField(max_length=10, null=True, blank=True)
     codigo_inep = models.IntegerField(null=True, blank=True)
-    codigo_ue_integracao = models.CharField(max_length=50, null=True, blank=True)
+    codigo_ue_integracao = models.CharField(
+        max_length=50, null=True, blank=True
+    )
     dre = models.ForeignKey(
         DRE,
         on_delete=models.CASCADE,
@@ -152,7 +150,6 @@ class UnidadeEducacional(models.Model):
     )
 
     class Meta:
-        """Metadados do modelo."""
 
         app_label = "institucional"
         db_table = "unidade_educacional"
@@ -161,11 +158,12 @@ class UnidadeEducacional(models.Model):
         indexes = [
             models.Index(fields=["dre"], name="idx_ue_dre"),
             models.Index(fields=["tipo_escola"], name="idx_ue_tipo_escola"),
-            models.Index(fields=["subprefeitura"], name="idx_ue_subprefeitura"),
+            models.Index(
+                fields=["subprefeitura"], name="idx_ue_subprefeitura"
+            ),
         ]
 
     def __str__(self) -> str:
-        """Representação string."""
         return f"{self.codigo_ue} - {self.nome}"
 
 
@@ -182,7 +180,6 @@ class InstitucionalConsultaLog(models.Model):
     executado_em = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        """Metadados do modelo."""
 
         app_label = "controle_auditoria"
 
@@ -191,5 +188,4 @@ class InstitucionalConsultaLog(models.Model):
         verbose_name_plural = "logs de consulta institucional"
 
     def __str__(self) -> str:
-        """Representação string."""
         return f"offset={self.offset_inicial} limite={self.limite}"

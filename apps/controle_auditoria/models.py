@@ -16,7 +16,6 @@ class EtlExecucao(models.Model):
     criado_em = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        """Configuração de metadados do modelo."""
 
         db_table = "etl_execucao"
 
@@ -32,7 +31,6 @@ class EtlExecucaoTabelaLida(models.Model):
     lido_em = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        """Configuração de metadados do modelo."""
 
         db_table = "etl_execucao_tabela_lida"
 
@@ -48,7 +46,6 @@ class EtlExecucaoTabelaEscrita(models.Model):
     escrito_em = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        """Configuração de metadados do modelo."""
 
         db_table = "etl_execucao_tabela_escrita"
 
@@ -61,13 +58,14 @@ class EtlCheckpointDominio(models.Model):
     ultimo_id_execucao = models.UUIDField(null=True)
     ultima_pagina = models.IntegerField(default=0)
     token_parada = models.CharField(max_length=255, blank=True, null=True)
-    indice_sincronizacao = models.CharField(max_length=120, blank=True, null=True)
+    indice_sincronizacao = models.CharField(
+        max_length=120, blank=True, null=True
+    )
     ultima_situacao = models.CharField(max_length=30, default="pendente")
     ultimo_sucesso_em = models.DateTimeField(null=True)
     atualizado_em = models.DateTimeField(auto_now=True)
 
     class Meta:
-        """Configuração de metadados do modelo."""
 
         db_table = "etl_checkpoint_dominio"
 
@@ -75,16 +73,18 @@ class EtlCheckpointDominio(models.Model):
 class EtlAuditoriaLinha(models.Model):
     """Controle de hash por linha para atualização incremental no destino.
 
-    Permite que o ETL processe apenas registros que sofreram alteração na origem,
-    evitando reescritas desnecessárias no destino.
+    Permite que o ETL processe apenas registros que sofreram alteração
+    na origem, evitando reescritas desnecessárias no destino.
 
     Fluxo de processamento:
-        1. ETL lê batch da origem e calcula SHA-256 dos campos relevantes de cada linha.
+        1. ETL lê batch da origem e calcula SHA-256 dos campos
+           relevantes de cada linha.
         2. Consulta esta tabela pelo id_destino.
-        3. Se hash_controle diverge (ou id_destino não existe): linha vai para o batch
-           de atualização.
+        3. Se hash_controle diverge (ou id_destino não existe):
+           linha vai para o batch de atualização.
         4. Destino é atualizado em batch (bulk_create/bulk_update).
-        5. hash_controle é atualizado aqui para refletir o estado atual da origem.
+        5. hash_controle é atualizado aqui para refletir o estado
+           atual da origem.
 
     id_destino:
         Chave composta no formato "{tabela_destino}:{id_origem}", ex:
@@ -93,7 +93,8 @@ class EtlAuditoriaLinha(models.Model):
             "atribuicao_aula:123456"
 
     hash_controle:
-        SHA-256 (hex, 64 chars) calculado sobre os campos relevantes da linha de origem.
+        SHA-256 (hex, 64 chars) calculado sobre os campos relevantes
+        da linha de origem.
         Apenas campos que impactam o dado destino devem compor o hash.
     """
 
@@ -109,7 +110,6 @@ class EtlAuditoriaLinha(models.Model):
     atualizado_em = models.DateTimeField(auto_now=True)
 
     class Meta:
-        """Configuração de metadados do modelo."""
 
         db_table = "etl_auditoria_linha"
         indexes = [

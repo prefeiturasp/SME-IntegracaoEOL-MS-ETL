@@ -30,7 +30,8 @@ Ordem de carga ETL:
     1.  DRE                         (embarcado — sem dependências)
     2.  TipoEscola                  (embarcado — sem dependências)
     3.  UnidadeEducacional          (embarcado — depende de: DRE, TipoEscola)
-    4.  TurmaEscola                 (embarcado — depende de: UnidadeEducacional)
+    4.  TurmaEscola                 (embarcado — depende de:
+        UnidadeEducacional)
     5.  Aluno
     6.  Matricula                   (depende de: Aluno)
     7.  HistoricoMatricula          (depende de: Aluno)
@@ -57,10 +58,11 @@ class DRE(models.Model):
 
     codigo_dre = models.CharField(max_length=20, primary_key=True)
     nome = models.CharField(max_length=200)
-    sigla = models.CharField(max_length=20, null=True, blank=True)  # NOSONAR alunos:models:60 - Manter compatilidade com o legado
+    sigla = models.CharField(
+        max_length=20, null=True, blank=True
+    )  # NOSONAR alunos:models:60 - Manter compatilidade com o legado
 
     class Meta:
-        """Metadados do modelo."""
 
         app_label = "alunos"
         db_table = "dre"
@@ -68,7 +70,6 @@ class DRE(models.Model):
         verbose_name_plural = "diretorias regionais de educação"
 
     def __str__(self) -> str:
-        """Representação string."""
         return f"{self.codigo_dre} - {self.sigla or self.nome}"
 
 
@@ -81,10 +82,11 @@ class TipoEscola(models.Model):
 
     codigo_tipo_escola = models.IntegerField(primary_key=True)
     descricao = models.CharField(max_length=200)
-    sigla = models.CharField(max_length=10, null=True, blank=True)  # NOSONAR alunos:models:84 - Manter compatilidade com o legado
+    sigla = models.CharField(
+        max_length=10, null=True, blank=True
+    )  # NOSONAR alunos:models:84 - Manter compatilidade com o legado
 
     class Meta:
-        """Metadados do modelo."""
 
         app_label = "alunos"
         db_table = "tipo_escola"
@@ -92,7 +94,6 @@ class TipoEscola(models.Model):
         verbose_name_plural = "tipos de escola"
 
     def __str__(self) -> str:
-        """Representação string."""
         return f"{self.codigo_tipo_escola} - {self.descricao}"
 
 
@@ -106,15 +107,22 @@ class UnidadeEducacional(models.Model):
 
     codigo_ue = models.CharField(max_length=20, primary_key=True)
     nome = models.CharField(max_length=200)
-    sigla = models.CharField(max_length=50, null=True, blank=True)  # NOSONAR alunos:models:109 - Manter compatilidade com o legado
+    sigla = models.CharField(
+        max_length=50, null=True, blank=True
+    )  # NOSONAR alunos:models:109 - Manter compatilidade com o legado
     codigo_dre = models.CharField(max_length=20)
-    nome_dre = models.CharField(max_length=200, null=True, blank=True)  # NOSONAR alunos:models:111 - Manter compatilidade com o legado
-    sigla_dre = models.CharField(max_length=20, null=True, blank=True)  # NOSONAR alunos:models:112 - Manter compatilidade com o legado
+    nome_dre = models.CharField(
+        max_length=200, null=True, blank=True
+    )  # NOSONAR alunos:models:111 - Manter compatilidade com o legado
+    sigla_dre = models.CharField(
+        max_length=20, null=True, blank=True
+    )  # NOSONAR alunos:models:112 - Manter compatilidade com o legado
     codigo_tipo_escola = models.IntegerField(null=True, blank=True)
-    sigla_tipo_escola = models.CharField(max_length=10, null=True, blank=True)  # NOSONAR alunos:models:114 - Manter compatilidade com o legado
+    sigla_tipo_escola = models.CharField(
+        max_length=10, null=True, blank=True
+    )  # NOSONAR alunos:models:114 - Manter compatilidade com o legado
 
     class Meta:
-        """Metadados do modelo."""
 
         app_label = "alunos"
         db_table = "unidade_educacional"
@@ -122,11 +130,12 @@ class UnidadeEducacional(models.Model):
         verbose_name_plural = "unidades educacionais"
         indexes = [
             models.Index(fields=["codigo_dre"], name="alu_idx_ue_dre"),
-            models.Index(fields=["codigo_tipo_escola"], name="alu_idx_ue_tipo_escola"),
+            models.Index(
+                fields=["codigo_tipo_escola"], name="alu_idx_ue_tipo_escola"
+            ),
         ]
 
     def __str__(self) -> str:
-        """Representação string."""
         return f"{self.codigo_ue} - {self.nome}"
 
 
@@ -150,7 +159,6 @@ class TurmaEscola(models.Model):
     status = models.CharField(max_length=1)
 
     class Meta:
-        """Metadados do modelo."""
 
         app_label = "alunos"
         db_table = "turma_escola"
@@ -166,7 +174,6 @@ class TurmaEscola(models.Model):
         ]
 
     def __str__(self) -> str:
-        """Representação string."""
         return f"{self.codigo_turma} - {self.nome_turma} ({self.ano_letivo})"
 
 
@@ -184,13 +191,16 @@ class Aluno(models.Model):
 
     codigo_aluno = models.BigIntegerField(primary_key=True)
     nome = models.CharField(max_length=200)
-    nome_social = models.CharField(max_length=200, null=True, blank=True)  # NOSONAR alunos:models:187 - Manter compatilidade com o legado
+    nome_social = models.CharField(
+        max_length=200, null=True, blank=True
+    )  # NOSONAR alunos:models:187 - Manter compatilidade com o legado
     dt_nascimento = models.DateField(null=True, blank=True)
-    nome_mae = models.CharField(max_length=200, null=True, blank=True)  # NOSONAR alunos:models:189 - Manter compatilidade com o legado
+    nome_mae = models.CharField(
+        max_length=200, null=True, blank=True
+    )  # NOSONAR alunos:models:189 - Manter compatilidade com o legado
     dt_atualizacao_contato = models.DateTimeField(null=True, blank=True)
 
     class Meta:
-        """Metadados do modelo."""
 
         app_label = "alunos"
         db_table = "aluno"
@@ -201,7 +211,6 @@ class Aluno(models.Model):
         ]
 
     def __str__(self) -> str:
-        """Representação string."""
         return f"{self.codigo_aluno} - {self.nome}"
 
 
@@ -222,7 +231,6 @@ class Matricula(models.Model):
     status_matricula = models.IntegerField(null=True, blank=True)
 
     class Meta:
-        """Metadados do modelo."""
 
         app_label = "alunos"
         db_table = "matricula"
@@ -252,10 +260,11 @@ class MatriculaTurmaEscola(models.Model):
     )
     codigo_situacao_aluno = models.IntegerField()
     dt_situacao_aluno = models.DateField(null=True, blank=True)
-    nr_chamada_aluno = models.CharField(max_length=10, null=True, blank=True) # NOSONAR
+    nr_chamada_aluno = models.CharField(
+        max_length=10, null=True, blank=True
+    )  # NOSONAR
 
     class Meta:
-        """Metadados do modelo."""
 
         app_label = "alunos"
         db_table = "matricula_turma_escola"
@@ -287,7 +296,6 @@ class HistoricoMatricula(models.Model):
     status_matricula = models.IntegerField(null=True, blank=True)
 
     class Meta:
-        """Metadados do modelo."""
 
         app_label = "alunos"
         db_table = "historico_matricula"
@@ -315,17 +323,20 @@ class HistoricoMatriculaTurmaEscola(models.Model):
     )
     codigo_situacao_aluno = models.IntegerField()
     dt_situacao_aluno = models.DateField(null=True, blank=True)
-    nr_chamada_aluno = models.CharField(max_length=10, null=True, blank=True) # NOSONAR
+    nr_chamada_aluno = models.CharField(
+        max_length=10, null=True, blank=True
+    )  # NOSONAR
 
     class Meta:
-        """Metadados do modelo."""
 
         app_label = "alunos"
         db_table = "historico_matricula_turma_escola"
         verbose_name = "histórico matrícula em turma"
         verbose_name_plural = "históricos matrículas em turmas"
         indexes = [
-            models.Index(fields=["codigo_turma_escola"], name="idx_hmte_turma"),
+            models.Index(
+                fields=["codigo_turma_escola"], name="idx_hmte_turma"
+            ),
         ]
 
 
@@ -342,15 +353,20 @@ class ResponsavelAluno(models.Model):
         on_delete=models.CASCADE,
         related_name="responsaveis",
     )
-    nome = models.CharField(max_length=200, null=True, blank=True)  # NOSONAR alunos:models:345 - Manter compatilidade com o legado
+    nome = models.CharField(
+        max_length=200, null=True, blank=True
+    )  # NOSONAR alunos:models:345 - Manter compatilidade com o legado
     tipo_pessoa_responsavel = models.IntegerField(null=True, blank=True)
-    ddd_celular = models.CharField(max_length=4, null=True, blank=True)  # NOSONAR alunos:models:347 - Manter compatilidade com o legado
-    nr_celular = models.CharField(max_length=20, null=True, blank=True)  # NOSONAR alunos:models:348 - Manter compatilidade com o legado
+    ddd_celular = models.CharField(
+        max_length=4, null=True, blank=True
+    )  # NOSONAR alunos:models:347 - Manter compatilidade com o legado
+    nr_celular = models.CharField(
+        max_length=20, null=True, blank=True
+    )  # NOSONAR alunos:models:348 - Manter compatilidade com o legado
     dt_atualizacao = models.DateTimeField(null=True, blank=True)
     dt_fim = models.DateField(null=True, blank=True)
 
     class Meta:
-        """Metadados do modelo."""
 
         app_label = "alunos"
         db_table = "responsavel_aluno"
@@ -378,7 +394,6 @@ class NecessidadeEspecialAluno(models.Model):
     tipo_necessidade_especial = models.IntegerField(null=True, blank=True)
 
     class Meta:
-        """Metadados do modelo."""
 
         app_label = "alunos"
         db_table = "necessidade_especial_aluno"

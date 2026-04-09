@@ -63,10 +63,11 @@ class DRE(models.Model):
 
     codigo_dre = models.CharField(max_length=20, primary_key=True)
     nome = models.CharField(max_length=200)
-    sigla = models.CharField(max_length=20, null=True, blank=True)  # NOSONAR pedagogico:models:66 - Manter compatilidade com o legado
+    sigla = models.CharField(
+        max_length=20, null=True, blank=True
+    )  # NOSONAR pedagogico:models:66 - Manter compatilidade com o legado
 
     class Meta:
-        """Metadados do modelo."""
 
         app_label = "pedagogico"
         db_table = "dre"
@@ -74,7 +75,6 @@ class DRE(models.Model):
         verbose_name_plural = "diretorias regionais de educação"
 
     def __str__(self) -> str:
-        """Representação string."""
         return f"{self.codigo_dre} - {self.sigla or self.nome}"
 
 
@@ -87,10 +87,11 @@ class TipoEscola(models.Model):
 
     codigo_tipo_escola = models.IntegerField(primary_key=True)
     descricao = models.CharField(max_length=200)
-    sigla = models.CharField(max_length=10, null=True, blank=True)  # NOSONAR pedagogico:models:90 - Manter compatilidade com o legado
+    sigla = models.CharField(
+        max_length=10, null=True, blank=True
+    )  # NOSONAR pedagogico:models:90 - Manter compatilidade com o legado
 
     class Meta:
-        """Metadados do modelo."""
 
         app_label = "pedagogico"
         db_table = "tipo_escola"
@@ -98,7 +99,6 @@ class TipoEscola(models.Model):
         verbose_name_plural = "tipos de escola"
 
     def __str__(self) -> str:
-        """Representação string."""
         return f"{self.codigo_tipo_escola} - {self.descricao}"
 
 
@@ -112,15 +112,22 @@ class UnidadeEducacional(models.Model):
 
     codigo_ue = models.CharField(max_length=20, primary_key=True)
     nome = models.CharField(max_length=200)
-    sigla = models.CharField(max_length=50, null=True, blank=True)  # NOSONAR pedagogico:models:115 - Manter compatilidade com o legado
+    sigla = models.CharField(
+        max_length=50, null=True, blank=True
+    )  # NOSONAR pedagogico:models:115 - Manter compatilidade com o legado
     codigo_dre = models.CharField(max_length=20)
-    nome_dre = models.CharField(max_length=200, null=True, blank=True)  # NOSONAR pedagogico:models:117 - Manter compatilidade com o legado
-    sigla_dre = models.CharField(max_length=20, null=True, blank=True)  # NOSONAR pedagogico:models:118 - Manter compatilidade com o legado
+    nome_dre = models.CharField(
+        max_length=200, null=True, blank=True
+    )  # NOSONAR pedagogico:models:117 - Manter compatilidade com o legado
+    sigla_dre = models.CharField(
+        max_length=20, null=True, blank=True
+    )  # NOSONAR pedagogico:models:118 - Manter compatilidade com o legado
     codigo_tipo_escola = models.IntegerField(null=True, blank=True)
-    sigla_tipo_escola = models.CharField(max_length=10, null=True, blank=True)  # NOSONAR pedagogico:models:120 - Manter compatilidade com o legado
+    sigla_tipo_escola = models.CharField(
+        max_length=10, null=True, blank=True
+    )  # NOSONAR pedagogico:models:120 - Manter compatilidade com o legado
 
     class Meta:
-        """Metadados do modelo."""
 
         app_label = "pedagogico"
         db_table = "unidade_educacional"
@@ -128,11 +135,12 @@ class UnidadeEducacional(models.Model):
         verbose_name_plural = "unidades educacionais"
         indexes = [
             models.Index(fields=["codigo_dre"], name="ped_idx_ue_dre"),
-            models.Index(fields=["codigo_tipo_escola"], name="ped_idx_ue_tipo_escola"),
+            models.Index(
+                fields=["codigo_tipo_escola"], name="ped_idx_ue_tipo_escola"
+            ),
         ]
 
     def __str__(self) -> str:
-        """Representação string."""
         return f"{self.codigo_ue} - {self.nome}"
 
 
@@ -148,7 +156,6 @@ class SerieEnsino(models.Model):
     descricao = models.CharField(max_length=200)
 
     class Meta:
-        """Metadados do modelo."""
 
         app_label = "pedagogico"
         db_table = "serie_ensino"
@@ -156,7 +163,6 @@ class SerieEnsino(models.Model):
         verbose_name_plural = "séries de ensino"
 
     def __str__(self) -> str:
-        """Representação string."""
         return f"{self.codigo_serie} - {self.descricao}"
 
 
@@ -170,10 +176,11 @@ class ComponenteCurricular(models.Model):
 
     codigo_componente = models.IntegerField(primary_key=True)
     descricao = models.CharField(max_length=200)
-    descricao_sgp = models.CharField(max_length=200, null=True, blank=True)  # NOSONAR pedagogico:models:173 - Manter compatilidade com o legado
+    descricao_sgp = models.CharField(
+        max_length=200, null=True, blank=True
+    )  # NOSONAR pedagogico:models:173 - Manter compatilidade com o legado
 
     class Meta:
-        """Metadados do modelo."""
 
         app_label = "pedagogico"
         db_table = "componente_curricular"
@@ -181,7 +188,6 @@ class ComponenteCurricular(models.Model):
         verbose_name_plural = "componentes curriculares"
 
     def __str__(self) -> str:
-        """Representação string."""
         return f"{self.codigo_componente} - {self.descricao}"
 
 
@@ -200,7 +206,6 @@ class TerritorioSaber(models.Model):
     descricao = models.CharField(max_length=200)
 
     class Meta:
-        """Metadados do modelo."""
 
         app_label = "pedagogico"
         db_table = "territorio_saber"
@@ -208,7 +213,6 @@ class TerritorioSaber(models.Model):
         verbose_name_plural = "territórios do saber"
 
     def __str__(self) -> str:
-        """Representação string."""
         return f"{self.codigo_territorio} - {self.descricao}"
 
 
@@ -222,7 +226,6 @@ class TipoExperienciaPedagogica(models.Model):
     descricao = models.CharField(max_length=200)
 
     class Meta:
-        """Metadados do modelo."""
 
         app_label = "pedagogico"
         db_table = "tipo_experiencia_pedagogica"
@@ -230,7 +233,6 @@ class TipoExperienciaPedagogica(models.Model):
         verbose_name_plural = "tipos de experiências pedagógicas"
 
     def __str__(self) -> str:
-        """Representação string."""
         return f"{self.codigo_experiencia} - {self.descricao}"
 
 
@@ -247,7 +249,6 @@ class DuracaoTipoTurno(models.Model):
     horas_duracao = models.DecimalField(max_digits=5, decimal_places=2)
 
     class Meta:
-        """Metadados do modelo."""
 
         app_label = "pedagogico"
         db_table = "duracao_tipo_turno"
@@ -280,7 +281,6 @@ class TurmaEscola(models.Model):
     status = models.CharField(max_length=1)
 
     class Meta:
-        """Metadados do modelo."""
 
         app_label = "pedagogico"
         db_table = "turma_escola"
@@ -297,7 +297,6 @@ class TurmaEscola(models.Model):
         ]
 
     def __str__(self) -> str:
-        """Representação string."""
         return f"{self.codigo_turma} - {self.nome_turma} ({self.ano_letivo})"
 
 
@@ -315,7 +314,6 @@ class EscolaGrade(models.Model):
     codigo_grade = models.IntegerField()
 
     class Meta:
-        """Metadados do modelo."""
 
         app_label = "pedagogico"
         db_table = "escola_grade"
@@ -339,7 +337,6 @@ class Grade(models.Model):
     codigo_tipo_turno = models.IntegerField(null=True, blank=True)
 
     class Meta:
-        """Metadados do modelo."""
 
         app_label = "pedagogico"
         db_table = "grade"
@@ -358,11 +355,12 @@ class GradeComponenteCurricular(models.Model):
         help_text="Grade curricular — ref. Grade neste DB.",
     )
     codigo_componente_curricular = models.IntegerField(
-        help_text=("Componente curricular — ref. ComponenteCurricular neste DB."),
+        help_text=(
+            "Componente curricular — ref. ComponenteCurricular neste DB."
+        ),
     )
 
     class Meta:
-        """Metadados do modelo."""
 
         app_label = "pedagogico"
         db_table = "grade_componente_curricular"
@@ -395,7 +393,6 @@ class SerieTurmaEscola(models.Model):
     dt_fim = models.DateField(null=True, blank=True)
 
     class Meta:
-        """Metadados do modelo."""
 
         app_label = "pedagogico"
         db_table = "serie_turma_escola"
@@ -431,7 +428,6 @@ class SerieTurmaGrade(models.Model):
     dt_fim = models.DateField(null=True, blank=True)
 
     class Meta:
-        """Metadados do modelo."""
 
         app_label = "pedagogico"
         db_table = "serie_turma_grade"
@@ -463,7 +459,6 @@ class TurmaEscolaGradePrograma(models.Model):
     dt_fim = models.DateField(null=True, blank=True)
 
     class Meta:
-        """Metadados do modelo."""
 
         app_label = "pedagogico"
         db_table = "turma_escola_grade_programa"
@@ -486,7 +481,9 @@ class TurmaGradeTerritorioExperiencia(models.Model):
         related_name="territorios_experiencias",
     )
     codigo_componente_curricular = models.IntegerField(
-        help_text=("Componente curricular — ref. ComponenteCurricular neste DB."),
+        help_text=(
+            "Componente curricular — ref. ComponenteCurricular neste DB."
+        ),
     )
     territorio_saber = models.ForeignKey(
         TerritorioSaber,
@@ -501,7 +498,6 @@ class TurmaGradeTerritorioExperiencia(models.Model):
     dt_inicio = models.DateField(null=True, blank=True)
 
     class Meta:
-        """Metadados do modelo."""
 
         app_label = "pedagogico"
         db_table = "turma_grade_territorio_experiencia"

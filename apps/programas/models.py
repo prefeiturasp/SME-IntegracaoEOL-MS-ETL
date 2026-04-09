@@ -5,7 +5,8 @@ Entidades extraídas das queries do ApiEolConnection (PostgreSQL da API EOL):
     - componentecurricularpai   → ComponenteCurricularPai
     - componentecurricularpap   → ComponenteCurricularPap
     - RegenciaComponenteCurricular → RegenciaComponenteCurricular
-    - agrupamentoatribuicaoterritoriosaber → AgrupamentoAtribuicaoTerritorioSaber
+    - agrupamentoatribuicaoterritoriosaber
+      → AgrupamentoAtribuicaoTerritorioSaber
     - parametros                → Parametro
     - turma_tipo_itinerario     → TurmaTipoItinerario
     - grupos                    → Grupo
@@ -43,7 +44,6 @@ class Parametro(models.Model):
     valor = models.TextField()
 
     class Meta:
-        """Metadados do modelo."""
 
         app_label = "programas"
         db_table = "parametro"
@@ -51,7 +51,6 @@ class Parametro(models.Model):
         verbose_name_plural = "parâmetros"
 
     def __str__(self) -> str:
-        """Representação string."""
         return f"{self.nome}={self.valor}"
 
 
@@ -63,10 +62,11 @@ class TurmaTipoItinerario(models.Model):
 
     id = models.IntegerField(primary_key=True)
     nome = models.CharField(max_length=200)
-    serie = models.CharField(max_length=50, null=True, blank=True)  # NOSONAR programas:models:66 - Manter compatilidade com o legado
+    serie = models.CharField(
+        max_length=50, null=True, blank=True
+    )  # NOSONAR programas:models:66 - Manter compatilidade com o legado
 
     class Meta:
-        """Metadados do modelo."""
 
         app_label = "programas"
         db_table = "turma_tipo_itinerario"
@@ -85,14 +85,15 @@ class ComponenteCurricularApi(models.Model):
     id = models.IntegerField(primary_key=True)
     codigo_componente = models.IntegerField(
         unique=True,
-        help_text="Código do componente no EolConnection — IdComponenteCurricular.",
+        help_text=(
+            "Código do componente no EolConnection — IdComponenteCurricular."
+        ),
     )
     eh_regencia = models.BooleanField(default=False)
     eh_territorio = models.BooleanField(default=False)
     descricao = models.CharField(max_length=200)
 
     class Meta:
-        """Metadados do modelo."""
 
         app_label = "programas"
         db_table = "componente_curricular_api"
@@ -100,7 +101,6 @@ class ComponenteCurricularApi(models.Model):
         verbose_name_plural = "componentes curriculares (API)"
 
     def __str__(self) -> str:
-        """Representação string."""
         return f"{self.codigo_componente} - {self.descricao}"
 
 
@@ -118,10 +118,11 @@ class ComponenteCurricularPai(models.Model):
         to_field="codigo_componente",
     )
     codigo_componente_pai = models.IntegerField(null=True, blank=True)
-    vigencia = models.CharField(max_length=20, null=True, blank=True)  # NOSONAR programas:models:121 - Manter compatilidade com o legado
+    vigencia = models.CharField(
+        max_length=20, null=True, blank=True
+    )  # NOSONAR programas:models:121 - Manter compatilidade com o legado
 
     class Meta:
-        """Metadados do modelo."""
 
         app_label = "programas"
         db_table = "componente_curricular_pai"
@@ -130,8 +131,9 @@ class ComponenteCurricularPai(models.Model):
 
 
 class ComponenteCurricularPap(models.Model):
-    """Componentes curriculares elegíveis ao PAP (Prog. de Acompanhamento Pedagógico).
+    """Componentes curriculares elegíveis ao PAP (PAP).
 
+    Prog. de Acompanhamento Pedagógico.
     Fonte: tabela `componentecurricularpap` (ApiEolConnection).
     """
 
@@ -144,7 +146,6 @@ class ComponenteCurricularPap(models.Model):
     )
 
     class Meta:
-        """Metadados do modelo."""
 
         app_label = "programas"
         db_table = "componente_curricular_pap"
@@ -167,7 +168,6 @@ class RegenciaComponenteCurricular(models.Model):
     ano = models.IntegerField(null=True, blank=True)
 
     class Meta:
-        """Metadados do modelo."""
 
         app_label = "programas"
         db_table = "regencia_componente_curricular"
@@ -176,10 +176,11 @@ class RegenciaComponenteCurricular(models.Model):
 
 
 class AgrupamentoAtribuicaoTerritorioSaber(models.Model):
-    """Agrupamento de atribuição do programa Território do Saber (ApiEolConnection).
+    """Agrupamento de atribuição — Território do Saber (ApiEolConnection).
 
     Fonte: tabela `agrupamentoatribuicaoterritoriosaber` (ApiEolConnection).
-    Agrupa atribuições de professores de TdS por turma, território e experiência.
+    Agrupa atribuições de professores de TdS por turma, território
+    e experiência.
     codigos_componentes_curriculares armazena lista separada por vírgula.
     """
 
@@ -192,7 +193,7 @@ class AgrupamentoAtribuicaoTerritorioSaber(models.Model):
     dt_fim_turma = models.DateField(null=True, blank=True)
     rf_professor = models.CharField(
         max_length=20,
-        null=True,  # NOSONAR programas:models:195 - Manter compatilidade com o legado
+        null=True,  # NOSONAR - Manter compatibilidade com o legado
         blank=True,
         help_text="RF do professor — ref. PROFESSORES_DB.",
     )
@@ -202,15 +203,19 @@ class AgrupamentoAtribuicaoTerritorioSaber(models.Model):
         help_text="Código da turma — ref. PEDAGOGICO_DB.",
     )
     codigos_componentes_curriculares = models.TextField(
-        null=True,  # NOSONAR programas:models:205 - Manter compatilidade com o legado
+        null=True,  # NOSONAR - Manter compatibilidade com o legado
         blank=True,
         help_text="Lista de códigos separados por vírgula.",
     )
     ano_letivo = models.IntegerField(null=True, blank=True)
     codigo_motivo_disponibilizacao = models.IntegerField(null=True, blank=True)
-    descricao_territorio_saber = models.CharField(max_length=200, null=True, blank=True)  # NOSONAR programas:models:211 - Manter compatilidade com o legado
+    descricao_territorio_saber = models.CharField(
+        max_length=200, null=True, blank=True
+    )  # NOSONAR programas:models:211 - Manter compatilidade com o legado
     descricao_experiencia_pedagogica = models.CharField(
-        max_length=200, null=True, blank=True  # NOSONAR programas:models:213 - Manter compatilidade com o legado
+        max_length=200,
+        null=True,
+        blank=True,  # NOSONAR - Manter compatibilidade com o legado
     )
     encerramento_atribuicao_agrupamento_atualizado = models.BooleanField(
         null=True, blank=True
@@ -219,14 +224,15 @@ class AgrupamentoAtribuicaoTerritorioSaber(models.Model):
     alterado_em = models.DateTimeField(null=True, blank=True)
 
     class Meta:
-        """Metadados do modelo."""
 
         app_label = "programas"
         db_table = "agrupamento_atribuicao_territorio_saber"
         verbose_name = "agrupamento de atribuição TdS"
         verbose_name_plural = "agrupamentos de atribuições TdS"
         indexes = [
-            models.Index(fields=["rf_professor"], name="prog_idx_aats_professor"),
+            models.Index(
+                fields=["rf_professor"], name="prog_idx_aats_professor"
+            ),
             models.Index(fields=["codigo_turma"], name="prog_idx_aats_turma"),
             models.Index(fields=["ano_letivo"], name="prog_idx_aats_ano"),
         ]
@@ -245,7 +251,6 @@ class Grupo(models.Model):
     eh_perfil_manual = models.BooleanField(default=False)
 
     class Meta:
-        """Metadados do modelo."""
 
         app_label = "programas"
         db_table = "grupo"
@@ -270,7 +275,6 @@ class GrupoCargo(models.Model):
     )
 
     class Meta:
-        """Metadados do modelo."""
 
         app_label = "programas"
         db_table = "grupo_cargo"
@@ -293,7 +297,6 @@ class GrupoFuncaoAtividade(models.Model):
     codigo_tipo_funcao_atividade = models.IntegerField()
 
     class Meta:
-        """Metadados do modelo."""
 
         app_label = "programas"
         db_table = "grupo_funcao_atividade"
