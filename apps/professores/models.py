@@ -93,7 +93,7 @@ class UnidadeEducacional(models.Model):
     codigo_ue = models.CharField(max_length=20, primary_key=True)
     codigo_dre = models.CharField(
         max_length=20,
-        null=True,  # NOSONAR professores:models:87 - Manter compatilidade com o legado
+        null=True,  # NOSONAR - Manter compatibilidade com o legado
         blank=True,
         help_text="ID da DRE — ref. domínio institucional.",
     )
@@ -101,12 +101,12 @@ class UnidadeEducacional(models.Model):
         null=True,
         blank=True,
         help_text=(
-            "ID do tipo de escola — usado em filtros tp_escola IN @tiposEscola."
+            "ID do tipo de escola"
+            " — usado em filtros tp_escola IN @tiposEscola."
         ),
     )
 
     class Meta:
-        """Metadados do modelo."""
 
         app_label = "professores"
         db_table = "unidade_educacional"
@@ -114,11 +114,12 @@ class UnidadeEducacional(models.Model):
         verbose_name_plural = "unidades educacionais"
         indexes = [
             models.Index(fields=["codigo_dre"], name="prof_idx_ue_dre"),
-            models.Index(fields=["codigo_tipo_escola"], name="prof_idx_ue_tipo_escola"),
+            models.Index(
+                fields=["codigo_tipo_escola"], name="prof_idx_ue_tipo_escola"
+            ),
         ]
 
     def __str__(self) -> str:
-        """Representação string."""
         return str(self.codigo_ue)
 
 
@@ -145,7 +146,6 @@ class TurmaEscola(models.Model):
     dt_fim = models.DateField(null=True, blank=True)
 
     class Meta:
-        """Metadados do modelo."""
 
         app_label = "professores"
         db_table = "turma_escola"
@@ -162,7 +162,6 @@ class TurmaEscola(models.Model):
         ]
 
     def __str__(self) -> str:
-        """Representação string."""
         return f"{self.codigo_turma} ({self.ano_letivo})"
 
 
@@ -170,7 +169,8 @@ class SerieTurmaGrade(models.Model):
     """Série-grade associada a uma turma — chave de atribuição de aulas.
 
     Fonte EOL: tabela `serie_turma_grade`.
-    Entidade central de ligação entre TurmaEscola, escola_grade e AtribuicaoAula.
+    Entidade central de ligação entre TurmaEscola, escola_grade
+    e AtribuicaoAula.
     Registros com dt_fim IS NULL estão ativos.
     """
 
@@ -188,7 +188,6 @@ class SerieTurmaGrade(models.Model):
     dt_fim = models.DateField(null=True, blank=True)
 
     class Meta:
-        """Metadados do modelo."""
 
         app_label = "professores"
         db_table = "serie_turma_grade"
@@ -219,7 +218,6 @@ class TurmaEscolaGradePrograma(models.Model):
     dt_fim = models.DateField(null=True, blank=True)
 
     class Meta:
-        """Metadados do modelo."""
 
         app_label = "professores"
         db_table = "turma_escola_grade_programa"
@@ -255,7 +253,6 @@ class TurmaGradeTerritorioExperiencia(models.Model):
     dt_inicio = models.DateField(null=True, blank=True)
 
     class Meta:
-        """Metadados do modelo."""
 
         app_label = "professores"
         db_table = "turma_grade_territorio_experiencia"
@@ -286,7 +283,8 @@ class AgrupamentoAtribuicaoTerritorioSaber(models.Model):
       - VerificaSeTemAtribuicaoTurmaTerritorioSaberQuery
       - ObterUsuariosComAtribuicaoTerritorioSaberQuery
       - ObterAtribuicoesDoProfessorPorAnoLetivoTerritorioDoSaberQuery
-    Descrições de território e experiência são resolvidas pelo Transition Gateway.
+    Descrições de território e experiência são resolvidas pelo
+    Transition Gateway.
     """
 
     codigo_agrupamento = models.BigIntegerField(primary_key=True)
@@ -306,7 +304,7 @@ class AgrupamentoAtribuicaoTerritorioSaber(models.Model):
     dt_fim_turma = models.DateField(null=True, blank=True)
     rf_professor = models.CharField(
         max_length=20,
-        null=True,  # NOSONAR professores:models:300 - Manter compatilidade com o legado
+        null=True,  # NOSONAR - Manter compatibilidade com o legado
         blank=True,
         help_text="Ref. Professor.codigo_rf neste DB.",
     )
@@ -316,7 +314,7 @@ class AgrupamentoAtribuicaoTerritorioSaber(models.Model):
         help_text=_HELP_TURMA,
     )
     codigos_componentes_curriculares = models.TextField(
-        null=True,  # NOSONAR professores:models:310 - Manter compatilidade com o legado
+        null=True,  # NOSONAR - Manter compatibilidade com o legado
         blank=True,
         help_text="Lista de IDs de componentes separados por vírgula.",
     )
@@ -329,14 +327,15 @@ class AgrupamentoAtribuicaoTerritorioSaber(models.Model):
     alterado_em = models.DateTimeField(null=True, blank=True)
 
     class Meta:
-        """Metadados do modelo."""
 
         app_label = "professores"
         db_table = "agrupamento_atribuicao_territorio_saber"
         verbose_name = "agrupamento de atribuição TdS"
         verbose_name_plural = "agrupamentos de atribuições TdS"
         indexes = [
-            models.Index(fields=["rf_professor"], name="prof_idx_aats_professor"),
+            models.Index(
+                fields=["rf_professor"], name="prof_idx_aats_professor"
+            ),
             models.Index(fields=["codigo_turma"], name="prof_idx_aats_turma"),
             models.Index(fields=["ano_letivo"], name="prof_idx_aats_ano"),
         ]
@@ -356,10 +355,11 @@ class Professor(models.Model):
 
     codigo_rf = models.CharField(max_length=20, primary_key=True)
     nome = models.CharField(max_length=200)
-    nome_social = models.CharField(max_length=200, null=True, blank=True) # NOSONAR
+    nome_social = models.CharField(
+        max_length=200, null=True, blank=True  # NOSONAR
+    )  # fmt: skip
 
     class Meta:
-        """Metadados do modelo."""
 
         app_label = "professores"
         db_table = "professor"
@@ -367,7 +367,6 @@ class Professor(models.Model):
         verbose_name_plural = "professores"
 
     def __str__(self) -> str:
-        """Representação string."""
         return f"{self.codigo_rf} - {self.nome}"
 
 
@@ -377,7 +376,8 @@ class CargoBaseServidor(models.Model):
     Fonte EOL: view `v_cargo_base_cotic`.
     Representa o vínculo formal do servidor com seu cargo efetivo.
     dt_fim_nomeacao IS NULL = nomeação ativa.
-    codigo_cargo é ID do domínio RH — descrição resolvida pelo Transition Gateway.
+    codigo_cargo é ID do domínio RH — descrição resolvida pelo
+    Transition Gateway.
     """
 
     id = models.BigAutoField(primary_key=True)
@@ -396,7 +396,6 @@ class CargoBaseServidor(models.Model):
     dt_cancelamento = models.DateField(null=True, blank=True)
 
     class Meta:
-        """Metadados do modelo."""
 
         app_label = "professores"
         db_table = "cargo_base_servidor"
@@ -412,7 +411,6 @@ class CargoBaseServidor(models.Model):
         ]
 
     def __str__(self) -> str:
-        """Representação string."""
         return f"CargoBase #{self.pk} RF={self.professor_id}"
 
 
@@ -438,7 +436,6 @@ class LotacaoServidor(models.Model):
     dt_fim = models.DateField(null=True, blank=True)
 
     class Meta:
-        """Metadados do modelo."""
 
         app_label = "professores"
         db_table = "lotacao_servidor"
@@ -456,7 +453,8 @@ class CargoSobrepostoServidor(models.Model):
     Fonte EOL: tabela `cargo_sobreposto_servidor`.
     dt_fim_cargo_sobreposto IS NULL = sobreposto ativo, impede atribuição
     (exceto cargos 3379, 3085, 3360).
-    codigo_cargo é ID do domínio RH — descrição resolvida pelo Transition Gateway.
+    codigo_cargo é ID do domínio RH — descrição resolvida pelo
+    Transition Gateway.
     """
 
     id = models.BigAutoField(primary_key=True)
@@ -476,7 +474,6 @@ class CargoSobrepostoServidor(models.Model):
     dt_fim_cargo_sobreposto = models.DateField(null=True, blank=True)
 
     class Meta:
-        """Metadados do modelo."""
 
         app_label = "professores"
         db_table = "cargo_sobreposto_servidor"
@@ -511,7 +508,6 @@ class FuncaoAtividadeCargoServidor(models.Model):
     dt_fim_funcao_atividade = models.DateField(null=True, blank=True)
 
     class Meta:
-        """Metadados do modelo."""
 
         app_label = "professores"
         db_table = "funcao_atividade_cargo_servidor"
@@ -535,7 +531,6 @@ class LaudoMedico(models.Model):
     )
 
     class Meta:
-        """Metadados do modelo."""
 
         app_label = "professores"
         db_table = "laudo_medico"
@@ -559,10 +554,11 @@ class Pessoa(models.Model):
     codigo_pessoa = models.BigIntegerField(primary_key=True)
     cpf = models.CharField(max_length=14, unique=True)
     nome = models.CharField(max_length=200)
-    nome_social = models.CharField(max_length=200, null=True, blank=True) # NOSONAR
+    nome_social = models.CharField(
+        max_length=200, null=True, blank=True  # NOSONAR
+    )  # fmt: skip
 
     class Meta:
-        """Metadados do modelo."""
 
         app_label = "professores"
         db_table = "pessoa"
@@ -570,7 +566,6 @@ class Pessoa(models.Model):
         verbose_name_plural = "pessoas"
 
     def __str__(self) -> str:
-        """Representação string."""
         return f"{self.cpf} - {self.nome}"
 
 
@@ -601,7 +596,6 @@ class ContratoExterno(models.Model):
     codigo_motivo_desligamento = models.IntegerField(null=True, blank=True)
 
     class Meta:
-        """Metadados do modelo."""
 
         app_label = "professores"
         db_table = "contrato_externo"
@@ -669,7 +663,6 @@ class AtribuicaoAula(models.Model):
     dt_cancelamento = models.DateField(null=True, blank=True)
 
     class Meta:
-        """Metadados do modelo."""
 
         app_label = "professores"
         db_table = "atribuicao_aula"
@@ -730,11 +723,12 @@ class AtribuicaoExterno(models.Model):
     ano_atribuicao = models.IntegerField()
     dt_atribuicao = models.DateField()
     dt_disponibilizacao = models.DateField(null=True, blank=True)
-    codigo_motivo_disponibilizacao_externo = models.IntegerField(null=True, blank=True)
+    codigo_motivo_disponibilizacao_externo = models.IntegerField(
+        null=True, blank=True
+    )
     dt_cancelamento = models.DateField(null=True, blank=True)
 
     class Meta:
-        """Metadados do modelo."""
 
         app_label = "professores"
         db_table = "atribuicao_externo"

@@ -1,1 +1,0 @@
-"""Bibliotecas internas do projeto."""

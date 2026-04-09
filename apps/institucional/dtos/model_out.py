@@ -42,7 +42,6 @@ class TipoEscolaOut(TipoEscola):
     """Proxy para conversão de TipoEscola."""
 
     class Meta(ProxyMeta):
-        """Configurações do proxy."""
 
         pass
 
@@ -60,7 +59,6 @@ class DREOut(DRE):
     """Proxy para conversão de DRE."""
 
     class Meta(ProxyMeta):
-        """Configurações do proxy."""
 
         pass
 
@@ -80,7 +78,6 @@ class SubprefeituraOut(SubPrefeitura):
     """Proxy para conversão de SubPrefeitura."""
 
     class Meta(ProxyMeta):
-        """Configurações do proxy."""
 
         pass
 
@@ -98,7 +95,6 @@ class UnidadeEducacionalOut(UnidadeEducacional):
     """Proxy para conversão de UnidadeEducacional."""
 
     class Meta(ProxyMeta):
-        """Configurações do proxy."""
 
         pass
 
