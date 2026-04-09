@@ -23,8 +23,6 @@ class ComponenteCurricularProgramaIn:
 
     codigo_componente_curricular: Any
     nome_componente_curricular: Any
-    data_inicio: Any
-    data_fim: Any
 
 
 @dataclass
