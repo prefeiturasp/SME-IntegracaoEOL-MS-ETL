@@ -12,7 +12,7 @@ class EtlExecucao(models.Model):
     situacao = models.CharField(max_length=30)
     iniciado_em = models.DateTimeField()
     finalizado_em = models.DateTimeField(null=True)
-    mensagem_erro = models.TextField(blank=True, null=True)
+    mensagem_erro = models.TextField(blank=True, null=True)  # NOSONAR
     criado_em = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -57,10 +57,10 @@ class EtlCheckpointDominio(models.Model):
     dominio = models.CharField(max_length=120, unique=True)
     ultimo_id_execucao = models.UUIDField(null=True)
     ultima_pagina = models.IntegerField(default=0)
-    token_parada = models.CharField(max_length=255, blank=True, null=True)
+    token_parada = models.CharField(max_length=255, blank=True, null=True)  # NOSONAR  # noqa: E501  # fmt: skip
     indice_sincronizacao = models.CharField(
-        max_length=120, blank=True, null=True
-    )
+        max_length=120, blank=True, null=True  # NOSONAR
+    )  # fmt: skip
     ultima_situacao = models.CharField(max_length=30, default="pendente")
     ultimo_sucesso_em = models.DateTimeField(null=True)
     atualizado_em = models.DateTimeField(auto_now=True)

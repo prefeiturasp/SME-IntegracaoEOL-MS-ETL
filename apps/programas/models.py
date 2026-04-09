@@ -214,9 +214,9 @@ class AgrupamentoAtribuicaoTerritorioSaber(models.Model):
     )  # fmt: skip
     descricao_experiencia_pedagogica = models.CharField(
         max_length=200,
-        null=True,
-        blank=True,  # NOSONAR - Manter compatibilidade com o legado
-    )
+        null=True,  # NOSONAR - Manter compatibilidade com o legado
+        blank=True,
+    )  # fmt: skip
     encerramento_atribuicao_agrupamento_atualizado = models.BooleanField(
         null=True, blank=True
     )
