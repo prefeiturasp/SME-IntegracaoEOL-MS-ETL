@@ -50,10 +50,7 @@ class CalcularHashTest(TestCase):
         """Verifica que o hash calculado corresponde ao SHA-256 esperado manualmente."""
         obj = {"z": "b", "a": "x"}
         campos = ["a", "z"]
-        # calcular_hash usa json.dumps(data, sort_keys=True, default=str)
-        import json
-        data = {f: obj.get(f) for f in campos}
-        conteudo = json.dumps(data, sort_keys=True, default=str).encode("utf-8")
+        conteudo = "a=x|z=b".encode("utf-8")
         esperado = hashlib.sha256(conteudo).hexdigest()
         self.assertEqual(_calcular_hash(obj, campos), esperado)
 

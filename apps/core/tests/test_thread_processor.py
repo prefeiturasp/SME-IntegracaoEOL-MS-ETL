@@ -1,7 +1,6 @@
 """Testes unitários do ThreadPoolProcessor."""
 
 import hashlib
-import json
 import logging
 import time
 
@@ -90,8 +89,9 @@ class TestThreadPoolProcessor(TestCase):
         }
 
         def _calcular_hash(obj: object, campos: list[str]) -> str:
-            data = {f: getattr(obj, f) for f in campos}
-            conteudo = json.dumps(data, sort_keys=True, default=str).encode("utf-8")
+            conteudo = "|".join(
+                f"{f}={getattr(obj, f)}" for f in sorted(campos)
+            ).encode("utf-8")
             return hashlib.sha256(conteudo).hexdigest()
 
         def _decorar(item: tuple) -> tuple:

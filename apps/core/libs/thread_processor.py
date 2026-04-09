@@ -1,34 +1,62 @@
-"""Processador paralelo de chunks via ThreadPoolExecutor.
+"""Processador paralelo de lotes e utilitários de hash para ETL.
 
-Responsabilidades:
-- Receber uma lista de itens e uma função de transformação.
-- Executar em paralelo com ``ThreadPoolExecutor(max_workers=...)``.
-- Preservar a ordem dos resultados (índice → resultado).
-- Isolar erros por thread: logar ``[prefixo_log] Erro na thread N: <exc>``
-  e re-raise após todas concluírem.
-- Registrar throughput ao final:
-  ``[prefixo_log] throughput: N itens em Xs (M itens/s)``.
-- Respeitar ``timeout``: se excedido, logar e lançar ``TimeoutError``.
+Este módulo fornece ferramentas para processamento paralelo de dados em
+ETLs, com foco em eficiência no uso de ThreadPool e controle incremental
+baseado em hash.
+
+Classes:
+    ThreadPoolProcessor:
+        Divide a lista de itens em ``max_workers`` lotes (um por worker) e
+        submete cada lote como uma única future ao ``ThreadPoolExecutor``.
+        Isso elimina o overhead de uma future por registro. Cada worker
+        processa seu lote inteiro em loop Python puro, minimizando a
+        contenção pelo GIL.
+
+Funções:
+    calcular_hash:
+        Calcula SHA-256 dos campos de uma linha para controle incremental.
+
+        Suporta dois modos:
+            - campos como índices inteiros (tuplas/listas SQL)
+            - campos como nomes string (dicts ou objetos Django)
+
+        Campos string são ordenados automaticamente para garantir
+        determinismo. Campos inteiros mantêm a ordem recebida.
+
+    decorar_para_hash:
+        Transforma uma linha em ``(id_destino, hash, dados)``.
+
+        Modos de uso:
+
+        Tuplas SQL (4 argumentos via ``partial``):
+            func = partial(decorar_para_hash, tabela, pk_index, field_indexes)
+            resultado = processor.processar(rows, func)
+
+        Dicts ou objetos Django (3 argumentos via ``partial``):
+            func = partial(decorar_para_hash, tabela, update_fields)
+            resultado = processor.processar([(pk, obj), ...], func)
 """
 
 import hashlib
-import json
 import logging
+import math
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError
-from functools import partial
-from typing import Any, Callable, List, TypeVar
+from typing import Any, Callable, List, Sequence, TypeVar, overload
 
 from django.conf import settings
 
 logger = logging.getLogger(__name__)
 T = TypeVar("T")
 
-class ThreadPoolProcessor:
-    """Executa transformações locais em paralelo via ThreadPoolExecutor.
 
-    Projetado para uso dentro de Celery Workers — controla o paralelismo
-    local no processamento de chunks sem impactar o broker ou os bancos.
+class ThreadPoolProcessor:
+    """Processador paralelo por lotes para pipelines ETL.
+
+    Divide os itens recebidos em ``max_workers`` lotes e submete cada
+    lote como uma única future ao ``ThreadPoolExecutor``. Isso reduz
+    o overhead de scheduling comparado a uma future por item e diminui
+    a contenção pelo GIL ao manter cada worker ocupado em loop contínuo.
     """
 
     def __init__(
@@ -37,43 +65,70 @@ class ThreadPoolProcessor:
         timeout: int | None = None,
         prefixo_log: str = "ETL",
     ) -> None:
+        """Inicializa o processador.
+
+        Args:
+            max_workers: Número de workers paralelos.
+            timeout: Tempo máximo de execução em segundos.
+            prefixo_log: Prefixo utilizado nas mensagens de log.
+        """
         self.max_workers = max_workers or settings.THREAD_POOL_MAX_WORKERS
         self.timeout = timeout or settings.THREAD_POOL_CHUNK_TIMEOUT
         self.prefixo_log = prefixo_log
-    
-    def processar(self, items: list[Any], func: Callable[[Any], T]) -> List[T]:
-        """Processa itens em paralelo preservando a ordem.
 
-        Erros individuais são logados e isolados; a primeira exceção
-        encontrada é relançada após todas as futures concluírem ou
-        cancelarem. Se o timeout for excedido, um ``TimeoutError`` é
-        lançado.
+    def processar(self, items: Sequence[Any], func: Callable[[Any], T]) -> List[T]:
+        """Processa itens em paralelo por lotes, preservando a ordem.
+
+        Args:
+            items: Sequência de itens a processar.
+            func: Função aplicada a cada item.
+
+        Returns:
+            Lista de resultados na mesma ordem dos itens de entrada.
+
+        Raises:
+            TimeoutError: Se o tempo de execução exceder ``self.timeout``.
         """
-
         if not items:
             return []
-        
-        resultados: list[T | None] = [None] * len(items)
-        erro_caputurado: Exception | None = None
+
+        total = len(items)
         inicio = time.monotonic()
 
+        batch_size = math.ceil(total / self.max_workers)
+        batches: list[tuple[int, Sequence[Any]]] = [
+            (start, items[start:start + batch_size])
+            for start in range(0, total, batch_size)
+        ]
+
+        resultados: list[T | None] = [None] * total
+        erro_capturado: Exception | None = None
+
         with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-            futures = {executor.submit(func, item): idx for idx, item in enumerate(items)}
+            futures = {
+                executor.submit(self._processar_lote, start, batch, func): start
+                for start, batch in batches
+            }
 
             try:
                 for future in as_completed(futures, timeout=self.timeout):
-                    idx = futures[future]
+                    start = futures[future]
                     try:
-                        resultados[idx] = future.result()
+                        batch_start, batch_result = future.result()
+                        resultados[batch_start:batch_start + len(batch_result)] = batch_result
                     except Exception as exc:
                         logger.exception(
-                            "[%s] Erro na thread %d: %s", self.prefixo_log, idx, exc
+                            "[%s] Erro no lote iniciado em %d: %s",
+                            self.prefixo_log,
+                            start,
+                            exc,
                         )
-                        if erro_caputurado is None:
-                            erro_caputurado = exc
+                        if erro_capturado is None:
+                            erro_capturado = exc
             except TimeoutError:
                 for future in futures:
                     future.cancel()
+
                 msg = (
                     f"[{self.prefixo_log}] Timeout após {self.timeout}s "
                     f"processando {len(items)} itens"
@@ -82,14 +137,38 @@ class ThreadPoolProcessor:
                 raise TimeoutError(msg)
 
         elapsed = time.monotonic() - inicio
-        self._log_throughput(len(items), elapsed)
+        self._log_throughput(total, elapsed)
 
-        if erro_caputurado is not None:
-            raise erro_caputurado
-        
+        if erro_capturado is not None:
+            raise erro_capturado
+
         return resultados  # type: ignore[return-value]
-    
+
+    @staticmethod
+    def _processar_lote(
+        start: int,
+        batch: Sequence[Any],
+        func: Callable[[Any], T],
+    ) -> tuple[int, list[T]]:
+        """Processa um lote de itens sequencialmente.
+
+        Args:
+            start: Índice inicial do lote na lista original.
+            batch: Subconjunto de itens a processar.
+            func: Função aplicada a cada item.
+
+        Returns:
+            Tupla contendo o índice inicial e a lista de resultados.
+        """
+        return start, [func(item) for item in batch]
+
     def _log_throughput(self, total: int, elapsed: float) -> None:
+        """Registra métricas de throughput no log.
+
+        Args:
+            total: Número total de itens processados.
+            elapsed: Tempo total em segundos.
+        """
         taxa = total / elapsed if elapsed > 0 else float("inf")
         logger.info(
             "[%s] throughput: %d itens em %.2fs (%.2f itens/s)",
@@ -100,28 +179,122 @@ class ThreadPoolProcessor:
         )
 
 
-def calcular_hash(obj: Any, update_fields: list[str]) -> str:
-    """Calcula SHA-256 dos campos de atualização para controle incremental.
+def _is_int_fields(fields: Sequence[Any]) -> bool:
+    """Verifica se todos os campos são inteiros."""
+    return bool(fields) and all(isinstance(f, int) for f in fields)
 
-    Aceita instâncias Django (via ``getattr``) ou dicts (via ``.get``).
+
+def _is_str_fields(fields: Sequence[Any]) -> bool:
+    """Verifica se todos os campos são strings."""
+    return bool(fields) and all(isinstance(f, str) for f in fields)
+
+
+@overload
+def calcular_hash(obj: Sequence[Any], fields: Sequence[int]) -> str: ...
+@overload
+def calcular_hash(obj: dict[str, Any] | Any, fields: Sequence[str]) -> str: ...
+
+
+def calcular_hash(obj: Any, fields: Sequence[int] | Sequence[str]) -> str:
+    """Calcula o hash SHA-256 de campos selecionados.
+
+    Suporta dois modos:
+
+    1. Campos como índices inteiros:
+       ``obj`` é tratado como sequência (tupla/lista).
+
+    2. Campos como nomes string:
+       ``obj`` é tratado como ``dict`` ou objeto.
+
+    Regras:
+        - Campos string são ordenados para garantir determinismo.
+        - Campos inteiros mantêm a ordem fornecida.
+
+    Args:
+        obj: Linha ou objeto a ser serializado.
+        fields: Índices ou nomes de campos.
+
+    Returns:
+        Hash SHA-256 em formato hexadecimal.
+
+    Raises:
+        TypeError: Se ``fields`` não for homogêneo.
     """
-    if isinstance(obj, dict):
-        data = {f: obj.get(f) for f in update_fields}
-    else:
-        data = {f: getattr(obj, f) for f in update_fields}
-    conteudo = json.dumps(data, sort_keys=True, default=str).encode("utf-8")
-    return hashlib.sha256(conteudo).hexdigest()
+    if not fields:
+        conteudo = b""
+        return hashlib.sha256(conteudo).hexdigest()
+
+    if _is_int_fields(fields):
+        conteudo = "|".join(
+            str(obj[idx]) for idx in fields
+        ).encode("utf-8")
+        return hashlib.sha256(conteudo).hexdigest()
+
+    if _is_str_fields(fields):
+        ordered_fields = sorted(fields)
+        if isinstance(obj, dict):
+            conteudo = "|".join(
+                f"{field}={obj.get(field)}" for field in ordered_fields
+            ).encode("utf-8")
+        else:
+            conteudo = "|".join(
+                f"{field}={getattr(obj, field)}" for field in ordered_fields
+            ).encode("utf-8")
+        return hashlib.sha256(conteudo).hexdigest()
+
+    raise TypeError("fields deve conter somente int ou somente str")
 
 
-def decorar_para_hash(tabela: str, update_fields: list[str], item: tuple) -> tuple:
-    """Transforma ``(pk, obj)`` em ``(id_destino, hash, obj)``.
+@overload
+def decorar_para_hash(
+    tabela: str,
+    pk_index: int,
+    field_indexes: Sequence[int],
+    row: Sequence[Any],
+) -> tuple[str, str, Sequence[Any]]: ...
+@overload
+def decorar_para_hash(
+    tabela: str,
+    update_fields: Sequence[str],
+    item: tuple[Any, Any],
+) -> tuple[str, str, Any]: ...
 
-    Função utilitária compartilhada entre os services de todos os
-    domínios. Use com ``functools.partial`` para fixar ``tabela`` e
-    ``update_fields``::
 
-        func = partial(decorar_para_hash, tabela, update_fields)
-        linhas = processor.processar(items, func)
+def decorar_para_hash(tabela: str, *args: Any) -> tuple[str, str, Any]:
+    """Transforma dados em ``(id_destino, hash, dados)``.
+
+    Modos suportados:
+
+    1. Tuplas SQL:
+        ``decorar_para_hash(tabela, pk_index, field_indexes, row)``
+
+    2. Dicts ou objetos:
+        ``decorar_para_hash(tabela, update_fields, (pk, obj))``
+
+    Args:
+        tabela: Nome lógico da tabela.
+        *args: Argumentos conforme o modo de uso.
+
+    Returns:
+        Tupla no formato ``(id_destino, hash_hex, dados_originais)``.
+
+    Raises:
+        TypeError: Se a assinatura não corresponder a um modo válido.
     """
-    pk_val, obj = item
-    return (f"{tabela}:{pk_val}", calcular_hash(obj, update_fields), obj)
+    # Modo 1: (tabela, pk_index, field_indexes, row)
+    if len(args) == 3 and isinstance(args[0], int):
+        pk_index, field_indexes, row = args
+        pk_val = row[pk_index]
+        return (f"{tabela}:{pk_val}", calcular_hash(row, field_indexes), row)
+
+    # Modo 2: (tabela, update_fields, (pk, obj))
+    if len(args) == 2:
+        update_fields, item = args
+        pk_val, obj = item
+        return (f"{tabela}:{pk_val}", calcular_hash(obj, update_fields), obj)
+
+    raise TypeError(
+        "Assinatura inválida para decorar_para_hash. "
+        "Use (tabela, pk_index, field_indexes, row) "
+        "ou (tabela, update_fields, (pk, obj))."
+    )
