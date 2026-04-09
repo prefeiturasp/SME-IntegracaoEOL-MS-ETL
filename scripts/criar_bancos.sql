@@ -2,8 +2,6 @@
 -- Executar no postgres do docker-compose:
 --   docker exec -i sme_sgp_ms_etl_postgres psql -U postgres < scripts/criar_bancos.sql
 
--- dominios_auxiliar_db removido (v2.0) — tabelas embarcadas em cada domínio.
-
 -- Drop com force (desconecta sessões ativas) antes de recriar.
 SELECT 'DROP DATABASE IF EXISTS institucional_db WITH (FORCE)'\gexec
 SELECT 'DROP DATABASE IF EXISTS professores_db WITH (FORCE)'\gexec

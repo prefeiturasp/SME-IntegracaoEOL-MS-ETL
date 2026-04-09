@@ -12,9 +12,6 @@ Mapa de roteamento:
 
 Apps sem mapeamento explícito (controle_auditoria,
 eol_connection) continuam usando o banco `default`.
-
-Nota: dominios_auxiliar foi removido — suas tabelas de referência
-são embarcadas em cada domínio que as necessita.
 """
 
 _APP_PARA_BANCO: dict[str, str] = {
@@ -48,7 +45,11 @@ class DominioRouter:
         return None
 
     def allow_migrate(
-        self, db: str, app_label: str, _model_name: str | None = None, **_hints: object
+        self,
+        db: str,
+        app_label: str,
+        _model_name: str | None = None,
+        **_hints: object,
     ) -> bool | None:
         """Garante que cada app migre apenas no banco correto."""
         banco_destino = _APP_PARA_BANCO.get(app_label)

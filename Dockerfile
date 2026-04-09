@@ -29,7 +29,8 @@ COPY apps /app/apps
 COPY requirements /app/requirements
 COPY scripts /app/scripts
 
-RUN pip install --upgrade pip \
+RUN chmod +x /app/scripts/executar_migrations.sh \
+    && pip install --upgrade pip \
     && pip install -r /app/requirements/base.txt
 
 RUN echo "openssl_conf = default_conf" > /etc/ssl/openssl_custom.cnf \
