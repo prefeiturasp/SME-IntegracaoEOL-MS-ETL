@@ -77,7 +77,7 @@ class TipoProgramaOut(TipoPrograma):
         """Mapeia DTO de entrada para instância de saída."""
         codigo = int(obj.codigo_tipo_programa)
         return cls(
-            id=codigo,
+            codigo_tipo_programa=codigo,
             nome=_strip(obj.descricao) or _strip(obj.sigla),
             categoria=_CATEGORIA_POR_TIPO_PROGRAMA.get(codigo, TipoPrograma.PAP),
             ativo=True,
@@ -105,8 +105,6 @@ class ComponenteCurricularProgramaOut(ComponenteCurricularPrograma):
             nome_componente_curricular=_strip(obj.nome_componente_curricular),
             categoria=categoria,
             vigente=codigo in vigentes,
-            data_inicio=obj.data_inicio,
-            data_fim=obj.data_fim,
         )
 
 

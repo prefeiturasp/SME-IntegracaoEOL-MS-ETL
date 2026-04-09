@@ -59,14 +59,10 @@ FROM tipo_programa
 WHERE cd_tipo_programa IN (649, 650, 656, 657, 658)
 """
 
-# TODO: verificar nomes dos campos de data de vigência no EOL
-# (possíveis: dt_inicio / dt_fim, dt_inicio_vigencia / dt_fim_vigencia)
 SQL_COMPONENTE_CURRICULAR_PROGRAMA = """
 SELECT
     cc.cd_componente_curricular
   , LTRIM(RTRIM(cc.dc_componente_curricular)) AS nome_componente_curricular
-  , cc.dt_inicio
-  , cc.dt_fim
 FROM componente_curricular cc
 WHERE cc.cd_componente_curricular IN (
     1322, 1770, 1804, 1805,
@@ -84,7 +80,7 @@ SELECT
   , te.an_letivo
   , te.cd_tipo_turno
   , tt.dc_exibicao_portal AS descricao_turno
-  , te.sg_tipo_situacao_turma AS situacao
+  , te.st_turma_escola AS situacao
   , te.cd_tipo_programa
 FROM turma_escola te
 INNER JOIN v_cadastro_unidade_educacao vcue
@@ -96,16 +92,14 @@ WHERE te.cd_tipo_turma = 3
 ORDER BY te.cd_turma_escola
 """
 
-# TODO: verificar nomes reais das tabelas de grade de programa no EOL
-# (turma_escola_grade_programa, escola_grade_programa)
 SQL_TURMA_PROGRAMA_COMPONENTE_CURRICULAR = """
 SELECT DISTINCT
     tegp.cd_turma_escola
   , gcc.cd_componente_curricular
   , LTRIM(RTRIM(cc.dc_componente_curricular)) AS nome_componente_curricular
 FROM turma_escola_grade_programa tegp
-INNER JOIN escola_grade_programa egp
-    ON egp.cd_escola_grade_programa = tegp.cd_escola_grade_programa
+INNER JOIN escola_grade egp
+    ON egp.cd_escola_grade = tegp.cd_escola_grade
 INNER JOIN grade_componente_curricular gcc
     ON gcc.cd_grade = egp.cd_grade
 INNER JOIN componente_curricular cc
@@ -122,45 +116,61 @@ WHERE te.cd_tipo_turma = 3
 ORDER BY tegp.cd_turma_escola
 """
 
-# TODO: verificar nomes dos campos de data e situação da matrícula no EOL
-# (dt_status_matricula, dt_situacao_aluno, dc_situacao_matricula)
 SQL_MATRICULA_TURMA_PROGRAMA = """
 SELECT
-    m.cd_aluno
-  , m.cd_turma_escola
-  , gcc.cd_componente_curricular
-  , LTRIM(RTRIM(cc.dc_componente_curricular)) AS nome_componente_curricular
-  , m.st_matricula
-  , LTRIM(RTRIM(sm.dc_situacao_matricula)) AS descricao_situacao_matricula
-  , m.dt_status_matricula
-  , m.dt_situacao_aluno
-  , te.an_letivo
-  , CAST(te.cd_escola AS VARCHAR(20)) AS codigo_ue
-  , CAST(vcue.cd_unidade_administrativa_referencia AS VARCHAR(20)) AS codigo_dre
-  , te.cd_tipo_programa
-FROM matricula_turma_escola m
-INNER JOIN turma_escola te
-    ON te.cd_turma_escola = m.cd_turma_escola
-INNER JOIN v_cadastro_unidade_educacao vcue
-    ON vcue.cd_unidade_educacao = te.cd_escola
-INNER JOIN turma_escola_grade_programa tegp
-    ON tegp.cd_turma_escola = te.cd_turma_escola
-INNER JOIN escola_grade_programa egp
-    ON egp.cd_escola_grade_programa = tegp.cd_escola_grade_programa
-INNER JOIN grade_componente_curricular gcc
-    ON gcc.cd_grade = egp.cd_grade
-INNER JOIN componente_curricular cc
-    ON cc.cd_componente_curricular = gcc.cd_componente_curricular
-LEFT JOIN situacao_matricula sm
-    ON sm.st_matricula = m.st_matricula
-WHERE te.cd_tipo_turma = 3
-  AND te.cd_tipo_programa IN (649, 650, 656, 657, 658)
-  AND gcc.cd_componente_curricular IN (
-    1322, 1770, 1804, 1805,
-    1033, 1051, 1052, 1053, 1054,
-    1030
-  )
-ORDER BY m.cd_aluno, te.cd_turma_escola
+      vm.cd_aluno
+    , m.cd_turma_escola
+    , gcc.cd_componente_curricular
+    , LTRIM(RTRIM(cc.dc_componente_curricular)) AS nome_componente_curricular
+    , m.cd_situacao_aluno
+    , CASE m.cd_situacao_aluno
+          WHEN 1 THEN 'Ativo'
+          WHEN 2 THEN 'Desistente'
+          WHEN 3 THEN 'Transferido'
+          WHEN 4 THEN 'Vínculo Indevido'
+          WHEN 5 THEN 'Concluído'
+          WHEN 6 THEN 'Pendente de Rematrícula'
+          WHEN 7 THEN 'Falecido'
+          WHEN 8 THEN 'Não Compareceu'
+          WHEN 10 THEN 'Rematriculado'
+          WHEN 11 THEN 'Deslocamento'
+          WHEN 12 THEN 'Cessado'
+          WHEN 13 THEN 'Sem continuidade'
+          WHEN 14 THEN 'Remanejado Saída'
+          WHEN 15 THEN 'Reclassificado Saída'
+          WHEN 16 THEN 'Transferido SED'
+          WHEN 17 THEN 'Dispensado Ed. Física'
+          ELSE 'Desconhecido'
+      END AS descricao_situacao_matricula
+    , m.dt_situacao_aluno
+    , m.dt_situacao_aluno AS dt_situacao
+    , te.an_letivo
+    , CAST(te.cd_escola AS VARCHAR(20)) AS codigo_ue
+    , CAST(vcue.cd_unidade_administrativa_referencia AS VARCHAR(20)) AS codigo_dre
+    , te.cd_tipo_programa
+  FROM matricula_turma_escola m
+  INNER JOIN v_matricula_cotic vm
+      ON vm.cd_matricula = m.cd_matricula
+  INNER JOIN turma_escola te
+      ON te.cd_turma_escola = m.cd_turma_escola
+  INNER JOIN v_cadastro_unidade_educacao vcue
+      ON vcue.cd_unidade_educacao = te.cd_escola
+  INNER JOIN turma_escola_grade_programa tegp
+      ON tegp.cd_turma_escola = te.cd_turma_escola
+  INNER JOIN escola_grade eg
+      ON eg.cd_escola_grade = tegp.cd_escola_grade
+  INNER JOIN grade_componente_curricular gcc
+      ON gcc.cd_grade = eg.cd_grade
+  INNER JOIN componente_curricular cc
+      ON cc.cd_componente_curricular = gcc.cd_componente_curricular
+  WHERE te.cd_tipo_turma = 3
+    AND te.cd_tipo_programa IN (649, 650, 656, 657, 658)
+    AND gcc.cd_componente_curricular IN (
+      1322, 1770, 1804, 1805,
+      1033, 1051, 1052, 1053, 1054,
+      1030
+    )
+  ORDER BY vm.cd_aluno, te.cd_turma_escola
 """
 
 # ---------------------------------------------------------------------------
@@ -303,8 +313,6 @@ class EtlProgramasService:
             "nome_componente_curricular",
             "categoria",
             "vigente",
-            "data_inicio",
-            "data_fim",
         ]
         total = _upsert_incremental(
             ComponenteCurricularPrograma,
