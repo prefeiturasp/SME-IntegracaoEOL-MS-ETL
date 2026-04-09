@@ -5,7 +5,8 @@ import hashlib
 from django.test import TestCase
 
 from apps.controle_auditoria.models import EtlAuditoriaLinha
-from apps.professores.services import _calcular_hash, _upsert_incremental
+from apps.professores.services import _upsert_incremental
+from apps.core.libs.thread_processor import calcular_hash as _calcular_hash
 
 
 class CalcularHashTest(TestCase):
@@ -13,43 +14,48 @@ class CalcularHashTest(TestCase):
 
     def test_hash_deterministico(self) -> None:
         """Verifica que o mesmo conjunto de campos sempre gera o mesmo hash."""
-        campos = {"nome": "Ana", "codigo_rf": "012345"}
-        h1 = _calcular_hash(campos)
-        h2 = _calcular_hash(campos)
+        obj = {"nome": "Ana", "codigo_rf": "012345"}
+        campos = ["nome", "codigo_rf"]
+        h1 = _calcular_hash(obj, campos)
+        h2 = _calcular_hash(obj, campos)
         self.assertEqual(h1, h2)
 
     def test_hash_e_sha256_hex(self) -> None:
         """O hash gerado é uma string hexadecimal SHA-256 de 64 caracteres."""
-        campos = {"nome": "Ana"}
-        resultado = _calcular_hash(campos)
+        obj = {"nome": "Ana"}
+        resultado = _calcular_hash(obj, ["nome"])
         self.assertEqual(len(resultado), 64)
         # Verifica que é hexadecimal válido
         int(resultado, 16)
 
     def test_ordem_dos_campos_nao_altera_hash(self) -> None:
         """Verifica que a ordem dos campos não afeta o hash calculado."""
-        h1 = _calcular_hash({"a": 1, "b": 2})
-        h2 = _calcular_hash({"b": 2, "a": 1})
+        obj = {"a": 1, "b": 2}
+        h1 = _calcular_hash(obj, ["a", "b"])
+        h2 = _calcular_hash(obj, ["b", "a"])
         self.assertEqual(h1, h2)
 
     def test_campos_diferentes_geram_hashes_diferentes(self) -> None:
         """Verifica que campos com valores diferentes geram hashes distintos."""
-        h1 = _calcular_hash({"nome": "Ana"})
-        h2 = _calcular_hash({"nome": "Bia"})
+        h1 = _calcular_hash({"nome": "Ana"}, ["nome"])
+        h2 = _calcular_hash({"nome": "Bia"}, ["nome"])
         self.assertNotEqual(h1, h2)
 
     def test_valor_none_e_aceito(self) -> None:
         """Verifica que campos com valor None não causam exceção."""
-        # Não deve lançar exceção
-        resultado = _calcular_hash({"nome": None, "codigo": 123})
+        resultado = _calcular_hash({"nome": None, "codigo": 123}, ["nome", "codigo"])
         self.assertEqual(len(resultado), 64)
 
     def test_hash_correto_manualmente(self) -> None:
         """Verifica que o hash calculado corresponde ao SHA-256 esperado manualmente."""
-        campos = {"z": "b", "a": "x"}
-        conteudo = "a='x'|z='b'"
-        esperado = hashlib.sha256(conteudo.encode("utf-8")).hexdigest()
-        self.assertEqual(_calcular_hash(campos), esperado)
+        obj = {"z": "b", "a": "x"}
+        campos = ["a", "z"]
+        # calcular_hash usa json.dumps(data, sort_keys=True, default=str)
+        import json
+        data = {f: obj.get(f) for f in campos}
+        conteudo = json.dumps(data, sort_keys=True, default=str).encode("utf-8")
+        esperado = hashlib.sha256(conteudo).hexdigest()
+        self.assertEqual(_calcular_hash(obj, campos), esperado)
 
 
 class UpsertIncrementalTest(TestCase):

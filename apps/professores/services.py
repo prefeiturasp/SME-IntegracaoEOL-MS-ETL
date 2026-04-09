@@ -33,10 +33,10 @@ Cargos de professor reconhecidos pelo EOL:
 import logging
 from collections.abc import Iterator
 from typing import Any
+from functools import partial
 
 from apps.controle_auditoria.models import EtlAuditoriaLinha
 from apps.eol_connection.libs.servico_eol import EOLService
-from functools import partial
 
 from apps.core.libs.thread_processor import ThreadPoolProcessor, decorar_para_hash
 from apps.professores.models import (
