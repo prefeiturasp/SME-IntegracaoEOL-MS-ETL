@@ -6,16 +6,13 @@
 set -e
 
 echo "==> makemigrations para todos os apps de dominio"
-python manage.py makemigrations institucional dominios_auxiliar professores alunos pedagogico programas
+python manage.py makemigrations institucional professores alunos pedagogico programas
 
 echo "==> migrate banco default (controle_auditoria, auth, etc.)"
 python manage.py migrate
 
 echo "==> migrate institucional_db"
 python manage.py migrate --database=institucional_db
-
-echo "==> migrate dominios_auxiliar_db"
-python manage.py migrate --database=dominios_auxiliar_db
 
 echo "==> migrate professores_db"
 python manage.py migrate --database=professores_db

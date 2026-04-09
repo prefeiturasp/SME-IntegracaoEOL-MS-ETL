@@ -49,7 +49,7 @@ docker compose -f docker-compose-dev.yml up -d --force-recreate
 docker exec -i sme_sgp_ms_etl_postgres psql -U postgres < scripts/criar_bancos.sql
 
 # Rodar migrations
-docker exec sme_sgp_ms_etl_etl_auditoria sh scripts/executar_migrations.sh
+docker exec sme_sgp_ms_etl_auditoria sh scripts/executar_migrations.sh
 ```
 
 > Os URLs dos bancos no `.env` devem usar o nome do serviço Docker `postgres` (porta `5432`), não `localhost`.
@@ -170,13 +170,13 @@ curl -X POST http://localhost:8068/api/v1/dominios/professores/executar/ \
 Resposta:
 
 ```json
-{"task_id": "abc123-..."}
+{ "task_id": "abc123-..." }
 ```
 
 Execução direta via command (dev):
 
 ```bash
-docker exec sme_sgp_ms_etl_etl_auditoria python manage.py etl_professores
+docker exec sme_sgp_ms_etl_auditoria python manage.py etl_professores
 ```
 
 ## Debug (dev)
@@ -196,8 +196,10 @@ Gera a documentação HTML a partir dos arquivos em `docs/`:
 docker compose -f docker-compose-dev.yml run --rm etl_auditoria \
   sphinx-build -b html docs docs/_build
 ```
+
 Gera a documentação PDF a partir dos arquivos em `docs/`:
-``` bash
+
+```bash
 docker compose -f docker-compose-dev.yml run --rm etl_auditoria \
   sh -c "sphinx-build -b latex docs docs/_build/latex && make -C docs/_build/latex"
 ```
@@ -213,4 +215,3 @@ Executa testes no container via ambiente dev:
 ```
 
 O script executa cobertura com `coverage` e exige mínimo de `80%`.
-

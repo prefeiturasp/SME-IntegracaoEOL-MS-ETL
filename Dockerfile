@@ -29,6 +29,8 @@ COPY apps /app/apps
 COPY requirements /app/requirements
 COPY scripts /app/scripts
 
+RUN chmod +x /app/scripts/executar_migrations.sh
+
 RUN pip install --upgrade pip \
     && pip install -r /app/requirements/base.txt
 
