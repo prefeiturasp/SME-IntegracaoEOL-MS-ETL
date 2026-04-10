@@ -11,7 +11,7 @@ from django.db import connections
 logger = logging.getLogger(__name__)
 
 # Configurações padrão (podem ser sobrescritas por variáveis de ambiente específicas)
-_DEFAULT_CHUNK_SIZE = int(os.getenv("LEGACY_CHUNK_SIZE", "300"))
+_DEFAULT_CHUNK_SIZE = int(os.getenv("LEGACY_CHUNK_SIZE", "10000"))
 _DEFAULT_LOTE_MAXIMO = int(os.getenv("LEGACY_LOTE_MAXIMO", "0"))
 
 WRITE_COMMANDS = {"insert", "update", "delete", "merge", "create", "drop"}

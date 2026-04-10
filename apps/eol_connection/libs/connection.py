@@ -8,7 +8,7 @@ from apps.core.libs.connection_readonly import ReadOnlySQLServerConnectionFactor
 
 logger = logging.getLogger(__name__)
 
-_EOL_CHUNK_SIZE = int(os.getenv("EOL_CHUNK_SIZE", "300"))
+_EOL_CHUNK_SIZE = int(os.getenv("EOL_CHUNK_SIZE", "10000"))
 # 0 = sem limite (produção). >0 = para após N lotes por query (testes).
 _EOL_LOTE_MAXIMO = int(os.getenv("EOL_LOTE_MAXIMO", "0"))
 
