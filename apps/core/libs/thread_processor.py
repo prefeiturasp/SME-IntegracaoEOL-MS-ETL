@@ -281,13 +281,11 @@ def decorar_para_hash(tabela: str, *args: Any) -> tuple[str, str, Any]:
     Raises:
         TypeError: Se a assinatura não corresponder a um modo válido.
     """
-    # Modo 1: (tabela, pk_index, field_indexes, row)
     if len(args) == 3 and isinstance(args[0], int):
         pk_index, field_indexes, row = args
         pk_val = row[pk_index]
         return (f"{tabela}:{pk_val}", calcular_hash(row, field_indexes), row)
 
-    # Modo 2: (tabela, update_fields, (pk, obj))
     if len(args) == 2:
         update_fields, item = args
         pk_val, obj = item
