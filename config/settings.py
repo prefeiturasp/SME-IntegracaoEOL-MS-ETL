@@ -16,11 +16,7 @@ _POOL_OPTIONS = {
     "PRE_PING": True,
 }
 
-THREAD_POOL_MAX_WORKERS = int(os.getenv("THREAD_POOL_MAX_WORKERS", "4"))
-THREAD_POOL_CHUNK_TIMEOUT = int(os.getenv("THREAD_POOL_CHUNK_TIMEOUT", "120"))
-
 def _parse_db_url(url: Any) -> dict:
-    """Faz o parse de uma URL PostgreSQL para dict de configuração Django."""
     if not url:
         # Fallback para evitar ImproperlyConfigured no CI/Testes
         return {
@@ -215,7 +211,8 @@ CELERY_BROKER_BACKEND = URL_KEYDB
 # Execução síncrona automática em testes/CI
 CELERY_TASK_ALWAYS_EAGER = os.getenv("CELERY_TASK_ALWAYS_EAGER", "1") == "1"
 
-THREAD_POOL_MAX_WORKERS = os.getenv("THREAD_POOL_MAX_WORKERS", "4")
+THREAD_POOL_MAX_WORKERS = int(os.getenv("THREAD_POOL_MAX_WORKERS", "4"))
+THREAD_POOL_CHUNK_TIMEOUT = int(os.getenv("THREAD_POOL_CHUNK_TIMEOUT", "120"))
 
 REST_FRAMEWORK = {
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
