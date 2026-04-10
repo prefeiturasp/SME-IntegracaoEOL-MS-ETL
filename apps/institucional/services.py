@@ -13,12 +13,13 @@ Mapeamento:
     a lógica de transformação esteja centralizada.
 """
 
-import hashlib
-import json
 import logging
 from typing import Any
 
 from apps.controle_auditoria.models import EtlAuditoriaLinha
+from functools import partial
+
+from apps.core.libs.thread_processor import ThreadPoolProcessor, decorar_para_hash
 from apps.core.libs.cache import CacheService
 from apps.eol_connection.libs.servico_eol import EOLService
 from apps.institucional.dtos.model_in import (
@@ -205,13 +206,6 @@ ORDER BY codigo_ue
 # ---------------------------------------------------------------------------
 
 
-def _calcular_hash(obj: Any, update_fields: list[str]) -> str:
-    """Calcula SHA-256 dos campos de atualização de uma instância Django."""
-    data = {f: getattr(obj, f) for f in update_fields}
-    conteudo = json.dumps(data, sort_keys=True, default=str).encode("utf-8")
-    return hashlib.sha256(conteudo).hexdigest()
-
-
 def _upsert_incremental(
     model_class: Any,
     tabela: str,
@@ -228,10 +222,9 @@ def _upsert_incremental(
     # se houver duplicados na origem, mantemos o último da lista.
     objs_unicos: dict[Any, Any] = {getattr(obj, pk_name): obj for obj in objs}
 
-    linhas_com_hash = []
-    for pk_val, obj in objs_unicos.items():
-        id_destino = f"{tabela}:{pk_val}"
-        linhas_com_hash.append((id_destino, _calcular_hash(obj, update_fields), obj))
+    processor = ThreadPoolProcessor(prefixo_log=f"ETL {tabela[:6].upper()}")
+    func = partial(decorar_para_hash, tabela, update_fields)
+    linhas_com_hash = processor.processar(list(objs_unicos.items()), func)
 
     # Busca hashes existentes no banco de auditoria (banco default)
     ids_destino = [item[0] for item in linhas_com_hash]
