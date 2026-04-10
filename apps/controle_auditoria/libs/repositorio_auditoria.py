@@ -127,3 +127,18 @@ class RepositorioAuditoriaPostgres:
         if sucesso:
             checkpoint.ultimo_sucesso_em = timezone.now()
         checkpoint.save()
+
+    def upsert_bulk_hashes(
+        self,
+        rows: list[tuple[str, str]],
+        batch_id: str = "batch",
+    ) -> int:
+        """Executa upsert de hashes de auditoria via COPY + Temp Table.
+
+        Delega para ``PostgresUpsertEngine``, eliminando duplicação da
+        lógica de COPY/staging entre este repositório e o motor de ETL.
+        """
+        from apps.core.libs.base_etl_service import PostgresUpsertEngine
+
+        engine = PostgresUpsertEngine()
+        return engine.upsert_bulk("etl_auditoria_linha", rows, batch_id)
