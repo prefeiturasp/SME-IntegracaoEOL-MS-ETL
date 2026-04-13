@@ -20,6 +20,7 @@ from uuid import UUID
 
 from django.conf import settings
 from django.db import connections, transaction
+from psycopg import sql
 
 from apps.core.libs.thread_processor import ThreadPoolProcessor, calcular_hash
 
@@ -166,17 +167,18 @@ class PostgresUpsertEngine:
             connections["default"].cursor() as cursor,
         ):
             temp_table = f"temp_audit_{batch_id.replace('-', '_')}"
-            cursor.execute(
-                f"CREATE TEMP TABLE {temp_table} "
+            query_create = sql.SQL(
+                "CREATE TEMP TABLE {} "
                 "(id_destino text, hash_controle text) ON COMMIT DROP"
-            )
+            ).format(sql.Identifier(temp_table))
+            cursor.execute(query_create)
 
             raw_cursor = cursor.cursor
             if hasattr(raw_cursor, "copy"):
-                with raw_cursor.copy(
-                    f"COPY {temp_table} (id_destino, hash_controle)"
-                    " FROM STDIN"
-                ) as copy:
+                copy_query = sql.SQL(
+                    "COPY {} (id_destino, hash_controle) FROM STDIN"
+                ).format(sql.Identifier(temp_table))
+                with raw_cursor.copy(copy_query) as copy:
                     copy.write(conteudo)
             else:
                 raw_cursor.copy_from(
@@ -185,19 +187,23 @@ class PostgresUpsertEngine:
                     columns=("id_destino", "hash_controle"),
                 )
 
-            cursor.execute(
-                f"""
-                    INSERT INTO {table_name}
+            query_upsert = sql.SQL(
+                """
+                    INSERT INTO {table}
                         (id_destino, hash_controle, atualizado_em)
                     SELECT id_destino, hash_controle, NOW()
-                    FROM {temp_table}
+                    FROM {temp}
                     ON CONFLICT (id_destino) DO UPDATE
                     SET hash_controle = EXCLUDED.hash_controle,
                         atualizado_em = NOW()
-                    WHERE {table_name}.hash_controle
+                    WHERE {table}.hash_controle
                         <> EXCLUDED.hash_controle
                 """
+            ).format(
+                table=sql.Identifier(table_name),
+                temp=sql.Identifier(temp_table),
             )
+            cursor.execute(query_upsert)
             return int(cursor.rowcount or 0)
 
 
@@ -338,8 +344,11 @@ class BaseEtlService:
         ``primeiro_run=True``. O nome da tabela é definido em código
         (PhaseConfig), nunca vem de entrada externa.
         """
+        query = sql.SQL("TRUNCATE TABLE {} CASCADE").format(
+            sql.Identifier(table_name)
+        )
         with connections[self.db_alias].cursor() as cur:
-            cur.execute(f"TRUNCATE TABLE {table_name} CASCADE")  # noqa: S608
+            cur.execute(query)
         logger.info(
             "[%s] Tabela %s truncada para full-sync.",
             self._dominio,
@@ -671,15 +680,16 @@ class BaseEtlService:
             transaction.atomic(using="default"),
             connections["default"].cursor() as cursor,
         ):
-            cursor.execute(
-                f"CREATE TEMP TABLE {temp_table} "
-                "(id_destino text) ON COMMIT DROP"
-            )
+            query_create = sql.SQL(
+                "CREATE TEMP TABLE {} (id_destino text) ON COMMIT DROP"
+            ).format(sql.Identifier(temp_table))
+            cursor.execute(query_create)
             raw_cursor = cursor.cursor
             if hasattr(raw_cursor, "copy"):
-                with raw_cursor.copy(
-                    f"COPY {temp_table} (id_destino) FROM STDIN"
-                ) as copy:
+                copy_query = sql.SQL(
+                    "COPY {} (id_destino) FROM STDIN"
+                ).format(sql.Identifier(temp_table))
+                with raw_cursor.copy(copy_query) as copy:
                     copy.write(conteudo)
             else:
                 raw_cursor.copy_from(
@@ -687,12 +697,13 @@ class BaseEtlService:
                     temp_table,
                     columns=("id_destino",),
                 )
-            cursor.execute(  # noqa: S608
-                f"""
+            query_select = sql.SQL(
+                """
                 SELECT al.id_destino, al.hash_controle
                 FROM etl_auditoria_linha al
-                INNER JOIN {temp_table} tl
+                INNER JOIN {temp} tl
                     ON al.id_destino = tl.id_destino
                 """
-            )
+            ).format(temp=sql.Identifier(temp_table))
+            cursor.execute(query_select)
             return dict(cursor.fetchall())
