@@ -22,18 +22,18 @@ def _make_service(**kwargs) -> BaseEtlService:
 
 
 def _make_phase(**kwargs) -> PhaseConfig:
-    defaults = dict(
-        nome="fase_teste",
-        sql="SELECT 1",
-        table_name="tabela_destino",
-        source_table="tabela_origem",
-        model_class=MagicMock(),
-        dto_in=MagicMock(),
-        dto_out=MagicMock(),
-        pk_field="id",
-        update_fields=("campo_a",),
-        unique_fields=("id",),
-    )
+    defaults = {
+        "nome": "fase_teste",
+        "sql": "SELECT 1",
+        "table_name": "tabela_destino",
+        "source_table": "tabela_origem",
+        "model_class": MagicMock(),
+        "dto_in": MagicMock(),
+        "dto_out": MagicMock(),
+        "pk_field": "id",
+        "update_fields": ("campo_a",),
+        "unique_fields": ("id",),
+    }
     defaults.update(kwargs)
     return PhaseConfig(**defaults)
 
@@ -631,7 +631,7 @@ class BaseEtlServiceCoverageTest(TestCase):
         config.dto_in.return_value = dto_inst
 
         transform = self.svc._criar_transform(config)
-        id_dest, h, obj = transform((1,))
+        id_dest, _, obj = transform((1,))
 
         self.assertEqual(id_dest, "1")
         self.assertEqual(obj.id, 1)
@@ -678,7 +678,7 @@ class BaseEtlServiceCoverageTest(TestCase):
         transform = self.svc.create_transformer(
             dto_in, dto_out, model_class, pk_field=["id", "nome"]
         )
-        pk, obj = transform((1, "A"))
+        pk, _ = transform((1, "A"))
         self.assertEqual(pk, "1-A")
 
     def test_thread_processor_context_manager(self) -> None:
@@ -873,7 +873,7 @@ class BaseEtlServiceCoverageTest(TestCase):
         
         svc = BaseEtlService(db_alias="d")
         transform = svc._criar_transform(config)
-        id_dest, h, obj = transform((1,))
+        id_dest, _, _ = transform((1,))
         
         self.assertEqual(id_dest, "1")
         config.dto_out.to_dict.assert_called_once_with(dto_in_inst)
