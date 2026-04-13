@@ -110,7 +110,7 @@ class PhaseConfig:
     table_name: str
     model_class: Any
     dto_in: Any
-    pk_field: Union[str, list[str]]
+    pk_field: str | list[str]
     update_fields: tuple[str, ...]
     unique_fields: tuple[str, ...]
     dto_out: Any = None
@@ -347,121 +347,101 @@ class BaseEtlService:
         )
 
     def _executar_fase(self, config: PhaseConfig) -> PipelineMetrics:
-        """Executa uma fase com padrão Producer-Consumer (I/O Overlap).
-
-        A thread de extração (producer) busca chunks da origem enquanto
-        a thread principal (consumer) transforma e escreve no destino,
-        sobrepondo latência de rede com processamento local.
-
-        Quando ``config.truncate_on_full_sync=True`` e ``primeiro_run=True``,
-        a tabela de destino é truncada antes do início da carga.
-        """
+        """Executa fase com padrão Producer-Consumer."""
         if config.truncate_on_full_sync and self.primeiro_run:
             self._truncar_tabela(config.table_name)
 
-        queue_maxsize: int = getattr(settings, "THREAD_POOL_MAX_WORKERS", 4)
-        producer_timeout: int = settings.THREAD_POOL_CHUNK_TIMEOUT
-
         self._fase_suporta_bulk_insert = config.suporta_bulk_insert
-
-        queue: Queue[list[tuple] | None] = Queue(maxsize=queue_maxsize)
+        queue: Queue[list[tuple] | None] = Queue(
+            maxsize=getattr(settings, "THREAD_POOL_MAX_WORKERS", 4)
+        )
         metrics = PipelineMetrics()
         transform_func = self._criar_transform(config)
-        erro_producer: list[Exception] = []
-
-        def producer() -> None:
-            try:
-                for chunk in self._iter_chunks(config.sql):
-                    queue.put(chunk)
-                queue.put(None)
-            except Exception as exc:
-                logger.exception(
-                    "[%s] Erro no Producer: %s", config.nome, exc
-                )
-                erro_producer.append(exc)
-                queue.put(None)
+        erros: list[Exception] = []
 
         thread = Thread(
-            target=producer, name=f"ETL-{config.nome}", daemon=True
+            target=self._producer, args=(config, queue, erros), daemon=True
         )
         thread.start()
 
-        update_fields = list(config.update_fields)
-        unique_fields = list(config.unique_fields)
-        batch_num = 0
+        self._consumir_pedacos(config, queue, transform_func, metrics, erros)
 
+        thread.join(timeout=settings.THREAD_POOL_CHUNK_TIMEOUT)
+        if thread.is_alive():
+            raise RuntimeError(f"[{config.nome}] Producer não encerrou.")
+        if erros:
+            raise erros[0]
+
+        return metrics
+
+    def _producer(self, config: PhaseConfig, queue: Queue, erros: list) -> None:
+        """Busca pedaços da origem e alimenta a queue."""
+        try:
+            for chunk in self._iter_chunks(config.sql):
+                queue.put(chunk)
+            queue.put(None)
+        except Exception as exc:
+            erros.append(exc)
+            queue.put(None)
+
+    def _consumir_pedacos(
+        self,
+        config: PhaseConfig,
+        queue: Queue,
+        transform: Callable,
+        metrics: PipelineMetrics,
+        erros: list,
+    ) -> None:
+        """Transforma e sincroniza pedaços da queue."""
+        timeout = settings.THREAD_POOL_CHUNK_TIMEOUT
+        batch_num = 0
         processor = ThreadPoolProcessor(
             max_workers=settings.THREAD_POOL_MAX_WORKERS,
-            timeout=settings.THREAD_POOL_CHUNK_TIMEOUT,
+            timeout=timeout,
             prefixo_log=f"{self._dominio}/{config.nome}",
         )
 
         with processor:
             while True:
                 try:
-                    chunk = queue.get(timeout=producer_timeout)
+                    chunk = queue.get(timeout=timeout)
                 except Empty:
-                    raise RuntimeError(
-                        f"[{config.nome}] Producer não entregou chunk em"
-                        f" {producer_timeout}s — possível travamento na"
-                        " conexão de origem"
-                    )
+                    raise RuntimeError(f"[{config.nome}] Producer Timeout.")
+
                 if chunk is None:
                     break
-                if erro_producer:
-                    raise erro_producer[0]
+                if erros:
+                    raise erros[0]
 
                 t0 = time.monotonic()
-                lote_objs = processor.processar(chunk, transform_func)
+                lote = processor.processar(chunk, transform)
                 escritos, ignorados = self._sync_batch(
-                    processed_data=lote_objs,
+                    processed_data=lote,
                     model_class=config.model_class,
                     table_name=config.table_name,
-                    update_fields=update_fields,
-                    unique_fields=unique_fields,
+                    update_fields=list(config.update_fields),
+                    unique_fields=list(config.unique_fields),
                     batch_num=batch_num,
                 )
-                elapsed = time.monotonic() - t0
 
                 metrics.total_lidos += len(chunk)
                 metrics.total_escritos += escritos
                 metrics.total_ignorados += ignorados
-                batch_num += 1
+                if lote:
+                    self.ultimo_token = str(lote[-1][0])
 
-                if lote_objs:
-                    self.ultimo_token = str(lote_objs[-1][0])
-
-                throughput = (
-                    len(chunk) / elapsed if elapsed > 0 else float("inf")
-                )
+                elapsed = time.monotonic() - t0
+                throughput = len(chunk) / elapsed if elapsed > 0 else 0
                 logger.info(
-                    "[%s] TABELA: %s | LOTE: %d"
-                    " | Lidos: %s | Sync: %s | Time: %.1fs | %.0f reg/s",
+                    "[%s] %s | LOTE: %d | Lidos: %s | Sync: %s | %.0f reg/s",
                     self._dominio,
                     config.table_name,
                     batch_num,
                     _fmt_num(metrics.total_lidos),
                     _fmt_num(escritos),
-                    elapsed,
                     throughput,
                 )
-
-        thread.join(timeout=producer_timeout)
-        if thread.is_alive():
-            raise RuntimeError(
-                f"[{config.nome}] Producer thread não encerrou em"
-                f" {producer_timeout}s"
-            )
-        if erro_producer:
-            raise erro_producer[0]
-
-        logger.info(
-            "[%s] Fase OK. Escritos: %d, Lidos: %d",
-            config.nome,
-            metrics.total_escritos,
-            metrics.total_lidos,
-        )
-        return metrics
+                batch_num += 1
 
     def _registrar_auditoria_fase(
         self, config: PhaseConfig, metrics: PipelineMetrics
@@ -576,74 +556,89 @@ class BaseEtlService:
         if not batch_data:
             return 0, 0
 
-        unique_batch = {}
-        for id_dest, h, obj in batch_data:
-            unique_batch[id_dest] = (h, obj)
+        dedup = {id_dest: (h, obj) for id_dest, h, obj in batch_data}
+        dedup_data = sorted(
+            [(k, v[0], v[1]) for k, v in dedup.items()], key=lambda x: x[0]
+        )
+        ignorados = len(batch_data) - len(dedup_data)
 
-        dedup_data = [(k, v[0], v[1]) for k, v in unique_batch.items()]
+        objs, hashes = self._obter_dados_pendentes(
+            dedup_data, db_table, batch_num
+        )
+        ignorados += len(dedup_data) - len(objs)
 
+        if objs:
+            self._persistir_batch(
+                objs, hashes, model_class, db_table, batch_num,
+                update_fields, unique_fields
+            )
+
+        return len(objs), ignorados
+
+    def _obter_dados_pendentes(
+        self, dedup_data: list, db_table: str, batch_num: int
+    ) -> tuple[list, list]:
+        """Identifica quais registros realmente mudaram."""
         if self.primeiro_run:
-            dedup_data.sort(key=lambda x: x[0])
-            objs_para_pg = [obj for _, _, obj in dedup_data]
-            hashes_para_pg = [
-                (f"{db_table}:{id_dest}", h)
-                for id_dest, h, _ in dedup_data
-            ]
-            ignorados = len(batch_data) - len(dedup_data)
-        else:
-            ids_audit = [f"{db_table}:{r[0]}" for r in dedup_data]
-            hashes_existentes = self._buscar_hashes_por_copy(
-                ids_audit, f"{db_table}_{batch_num}"
+            return (
+                [obj for _, _, obj in dedup_data],
+                [(f"{db_table}:{r[0]}", r[1]) for r in dedup_data],
             )
-            objs_para_pg = []
-            hashes_para_pg = []
-            ignorados = len(batch_data) - len(dedup_data)
 
-            dedup_data.sort(key=lambda x: x[0])
+        ids_audit = [f"{db_table}:{r[0]}" for r in dedup_data]
+        existentes = self._buscar_hashes_por_copy(
+            ids_audit, f"{db_table}_{batch_num}"
+        )
 
-            for id_dest, h, obj in dedup_data:
-                id_audit = f"{db_table}:{id_dest}"
-                if hashes_existentes.get(id_audit) != h:
-                    objs_para_pg.append(obj)
-                    hashes_para_pg.append((id_audit, h))
-                else:
-                    ignorados += 1
+        objs, hashes = [], []
+        for id_dest, h, obj in dedup_data:
+            id_audit = f"{db_table}:{id_dest}"
+            if existentes.get(id_audit) != h:
+                objs.append(obj)
+                hashes.append((id_audit, h))
 
-        if objs_para_pg:
-            usar_bulk_simples = (
-                self.primeiro_run
-                and getattr(self, "_fase_suporta_bulk_insert", False)
-            )
-            with transaction.atomic(using=self.db_alias):
-                if usar_bulk_simples:
-                    model_class.objects.using(self.db_alias).bulk_create(
-                        objs_para_pg
-                    )
-                else:
-                    v_unique = unique_fields or getattr(
-                        model_class, "unique_fields", ["id"]
-                    )
-                    v_update = update_fields or [
-                        f.name
-                        for f in model_class._meta.fields
-                        if not f.primary_key and f.name != "id"
-                    ]
-                    model_class.objects.using(self.db_alias).bulk_create(
-                        objs_para_pg,
-                        update_conflicts=True,
-                        unique_fields=v_unique,
-                        update_fields=v_update,
-                    )
+        return objs, hashes
 
-            batch_id = f"{db_table}_{batch_num}"
-            if self.auditor:
-                self.auditor.upsert_bulk_hashes(hashes_para_pg, batch_id)
+    def _persistir_batch(
+        self,
+        objs: list,
+        hashes: list,
+        model_class: Any,
+        db_table: str,
+        batch_num: int,
+        update_fields: list | None,
+        unique_fields: list | None,
+    ) -> None:
+        """Executa a persistência no domínio e na auditoria."""
+        usar_bulk = self.primeiro_run and getattr(
+            self, "_fase_suporta_bulk_insert", False
+        )
+        with transaction.atomic(using=self.db_alias):
+            if usar_bulk:
+                model_class.objects.using(self.db_alias).bulk_create(objs)
             else:
-                self.pg_engine.upsert_bulk(
-                    "etl_auditoria_linha", hashes_para_pg, batch_id
+                v_unique = unique_fields or getattr(
+                    model_class, "unique_fields", ["id"]
+                )
+                v_update = update_fields or [
+                    f.name
+                    for f in model_class._meta.fields
+                    if not f.primary_key and f.name != "id"
+                ]
+                model_class.objects.using(self.db_alias).bulk_create(
+                    objs,
+                    update_conflicts=True,
+                    unique_fields=v_unique,
+                    update_fields=v_update,
                 )
 
-        return len(objs_para_pg), ignorados
+        batch_id = f"{db_table}_{batch_num}"
+        if self.auditor:
+            self.auditor.upsert_bulk_hashes(hashes, batch_id)
+        else:
+            self.pg_engine.upsert_bulk(
+                "etl_auditoria_linha", hashes, batch_id
+            )
 
     def _buscar_hashes_por_copy(
         self,

@@ -100,40 +100,12 @@ class BaseEtlCommand(BaseCommand):
 
     def handle(self, *args: Any, **options: Any) -> None:
         """Execução padronizada do fluxo de ETL."""
-        continuar: bool = options.get("continuar", False)
-        fase_forcada: int = options.get("fase", 0)
         repositorio = RepositorioAuditoriaPostgres()
-
-        # Determinando fase inicial e token anterior
-        fase_inicial = fase_forcada if fase_forcada > 0 else 1
-        token_anterior = 0
-
-        if continuar and not fase_forcada:
-            checkpoint = repositorio.obter_checkpoint_dominio(self.dominio)
-            if checkpoint:
-                ultima_situacao = str(checkpoint.get("ultima_situacao") or "")
-                ultima_fase = int(str(checkpoint.get("ultima_pagina") or 0))
-                token_anterior = int(
-                    str(checkpoint.get("token_parada") or 0)
-                )
-
-                if ultima_situacao == "erro" and 0 < ultima_fase < self.fase_final:
-                    fase_inicial = ultima_fase + 1
-                    label = self.dominio[:4].upper()
-                    logger.warning(
-                        "[ETL %s] Retomando da fase %d (última concluída: %d).",
-                        label,
-                        fase_inicial,
-                        ultima_fase,
-                    )
-                else:
-                    fase_inicial = 1
-
+        fase_inicial, token_ant = self._obter_ponto_partida(repositorio, **options)
         id_execucao = repositorio.iniciar_execucao(self.dominio)
 
-        # Injeção de dependências no serviço
         servico = self.service_class(
-            db_alias=self.dominio + "_db",
+            db_alias=f"{self.dominio}_db",
             id_execucao=id_execucao,
             repositorio_auditoria=repositorio,
             id_min=options.get("id_min"),
@@ -145,66 +117,103 @@ class BaseEtlCommand(BaseCommand):
 
         try:
             resultado = servico.executar(fase_inicial=fase_inicial)
-
-            for tabela, linhas in resultado.items():
-                repositorio.registrar_tabela_escrita(
-                    id_execucao=id_execucao,
-                    tabela_destino=tabela,
-                    linhas_escritas=linhas,
-                    modo_escrita=self.get_modo_escrita(tabela),
-                )
-
-            total_alterado = sum(resultado.values())
-            novo_token = token_anterior + total_alterado
-
-            ultima_tabela = (
-                list(resultado.keys())[-1] if resultado else self.dominio
+            self._finalizar_com_sucesso(
+                repositorio, id_execucao, servico, resultado, token_ant
             )
-            indice = f"{ultima_tabela}:offset:{novo_token}"
-
-            repositorio.atualizar_checkpoint_dominio(
-                dominio=self.dominio,
-                ultimo_id_execucao=id_execucao,
-                ultima_pagina=servico.ultima_fase_concluida,
-                token_parada=str(novo_token),
-                indice_sincronizacao=indice,
-                ultima_situacao="concluido",
-                sucesso=True,
-            )
-            repositorio.finalizar_execucao(id_execucao, situacao="concluido")
-
-            label = self.dominio[:4].upper()
-            logger.info(
-                "[ETL %s] Concluído. Linhas alteradas: %d. token_parada: %s.",
-                label,
-                total_alterado,
-                str(novo_token),
-            )
-
         except Exception as erro:
-            # Em caso de erro, salvamos o progresso parcial se disponível
-            token_erro = servico.ultimo_token or str(token_anterior)
-            fase_atual = servico.ultima_fase_concluida
-
-            repositorio.atualizar_checkpoint_dominio(
-                dominio=self.dominio,
-                ultimo_id_execucao=id_execucao,
-                ultima_pagina=fase_atual,
-                token_parada=token_erro,
-                indice_sincronizacao=f"ERRO:{fase_atual}:{token_erro}",
-                ultima_situacao="erro",
-                sucesso=False,
+            self._finalizar_com_erro(
+                repositorio, id_execucao, servico, erro, token_ant
             )
-            repositorio.finalizar_execucao(
-                id_execucao,
-                situacao="erro",
-                mensagem_erro=str(erro),
-            )
-            from django.core.management.base import CommandError
 
-            raise CommandError(
-                f"Falha ao executar {self.dominio}: {erro}"
-            ) from erro
+    def _obter_ponto_partida(
+        self, repositorio: Any, **options: Any
+    ) -> tuple[int, int]:
+        """Define fase e token inicial baseados em checkpoint ou flags."""
+        fase_forcada = options.get("fase", 0)
+        if fase_forcada > 0:
+            return fase_forcada, 0
+
+        if not options.get("continuar", False):
+            return 1, 0
+
+        checkpoint = repositorio.obter_checkpoint_dominio(self.dominio)
+        if not checkpoint:
+            return 1, 0
+
+        situacao = str(checkpoint.get("ultima_situacao") or "")
+        fase = int(str(checkpoint.get("ultima_pagina") or 0))
+        token = int(str(checkpoint.get("token_parada") or 0))
+
+        if situacao == "erro" and 0 < fase < self.fase_final:
+            label = self.dominio[:4].upper()
+            logger.warning("[ETL %s] Retomando da fase %d.", label, fase + 1)
+            return fase + 1, token
+
+        return 1, 0
+
+    def _finalizar_com_sucesso(
+        self,
+        repositorio: Any,
+        id_exec: Any,
+        servico: Any,
+        resultado: dict[str, int],
+        token_ant: int,
+    ) -> None:
+        """Registra métricas, finaliza execução e atualiza checkpoint."""
+        for tabela, linhas in resultado.items():
+            repositorio.registrar_tabela_escrita(
+                id_execucao=id_exec,
+                tabela_destino=tabela,
+                linhas_escritas=linhas,
+                modo_escrita=self.get_modo_escrita(tabela),
+            )
+
+        total = sum(resultado.values())
+        novo_token = token_ant + total
+        ultima = list(resultado.keys())[-1] if resultado else self.dominio
+        indice = f"{ultima}:offset:{novo_token}"
+
+        repositorio.atualizar_checkpoint_dominio(
+            dominio=self.dominio,
+            ultimo_id_execucao=id_exec,
+            ultima_pagina=servico.ultima_fase_concluida,
+            token_parada=str(novo_token),
+            indice_sincronizacao=indice,
+            ultima_situacao="concluido",
+            sucesso=True,
+        )
+        repositorio.finalizar_execucao(id_exec, situacao="concluido")
+        logger.info(
+            "[ETL %s] Concluído. %d alterados.",
+            self.dominio[:4].upper(),
+            total,
+        )
+
+    def _finalizar_com_erro(
+        self,
+        repositorio: Any,
+        id_exec: Any,
+        servico: Any,
+        erro: Exception,
+        token_ant: int,
+    ) -> None:
+        """Registra falha na auditoria e no checkpoint para retomada."""
+        token_erro = servico.ultimo_token or str(token_ant)
+        fase = servico.ultima_fase_concluida
+
+        repositorio.atualizar_checkpoint_dominio(
+            dominio=self.dominio,
+            ultimo_id_execucao=id_exec,
+            ultima_pagina=fase,
+            token_parada=token_erro,
+            indice_sincronizacao=f"ERRO:{fase}:{token_erro}",
+            ultima_situacao="erro",
+            sucesso=False,
+        )
+        repositorio.finalizar_execucao(id_exec, situacao="erro", mensagem_erro=str(erro))
+        from django.core.management.base import CommandError
+
+        raise CommandError(f"Falha ao executar {self.dominio}: {erro}")
 
     def get_modo_escrita(self, _tabela: str) -> str:
         """Determina o modo de escrita da tabela (pode ser sobrescrito)."""
