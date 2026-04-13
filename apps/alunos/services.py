@@ -1,6 +1,7 @@
 """Serviço de ETL do domínio Alunos (ALUNOS_DB)."""
 
 import logging
+from collections.abc import Iterator
 from typing import Any
 from uuid import UUID
 
@@ -12,14 +13,6 @@ from apps.alunos.dtos.model_in import (
     ResponsavelAlunoIn,
     TipoNecessidadeEspecialIn,
 )
-from apps.alunos.dtos.model_out import (
-    AlunoOut,
-    MatriculaOut,
-    MatriculaTurmaOut,
-    NecessidadeEspecialAlunoOut,
-    ResponsavelAlunoOut,
-    TipoNecessidadeEspecialOut,
-)
 from apps.alunos.models import (
     Aluno,
     Matricula,
@@ -28,11 +21,10 @@ from apps.alunos.models import (
     ResponsavelAluno,
     TipoNecessidadeEspecial,
 )
-from apps.core.libs.base_etl_service import BaseEtlService, PipelineMetrics
+from apps.core.libs.base_etl_service import BaseEtlService, PhaseConfig
 from apps.eol_connection.libs.servico_eol import EOLService
 
 logger = logging.getLogger(__name__)
-
 
 SQL_TIPO_NEE = """
 SELECT
@@ -74,14 +66,13 @@ SELECT
    , e.cd_cep AS cep
    , ra.dt_fim AS data_fim_vinculo_aluno
 FROM responsavel_aluno ra
-INNER JOIN aluno a ON a.cd_aluno = ra.cd_aluno
 LEFT JOIN endereco e ON e.ci_endereco = ra.ci_endereco
 """
 
 SQL_NEE_ALUNO = """
 SELECT
     cd_identificador_necessidade_especial_aluno
-      AS codigo_necessidade_especial_aluno
+        AS codigo_necessidade_especial_aluno
   , cd_aluno AS codigo_aluno
   , tp_necessidade_especial AS codigo_necessidade_especial
   , dt_inicio
@@ -89,256 +80,246 @@ SELECT
 FROM necessidade_especial_aluno
 """
 
-_SQL_MATRICULA_UNION = """
-        SELECT
-            cd_matricula, cd_aluno, cd_escola, dt_status_matricula,
-            an_letivo, st_matricula
-        FROM v_matricula_cotic
-        UNION ALL
-        SELECT
-            cd_matricula, cd_aluno, cd_escola, dt_status_matricula,
-            an_letivo, st_matricula
-        FROM v_historico_matricula_cotic"""
-
 SQL_MATRICULA = """
 SELECT
-    mt.cd_matricula AS codigo_matricula,
-    mt.cd_aluno AS codigo_aluno,
-    mt.codigo_ue, mt.data_status, mt.ano_letivo,
-    mt.codigo_situacao_matricula,
-    CASE
-        WHEN mt.codigo_situacao_matricula = 1  THEN 'Ativo'
-        WHEN mt.codigo_situacao_matricula = 2  THEN 'Desistente'
-        WHEN mt.codigo_situacao_matricula = 3  THEN 'Transferido'
-        WHEN mt.codigo_situacao_matricula = 4  THEN 'Vínculo Indevido'
-        WHEN mt.codigo_situacao_matricula = 5  THEN 'Concluído'
-        WHEN mt.codigo_situacao_matricula = 6  THEN 'Pendente de Rematrícula'
-        WHEN mt.codigo_situacao_matricula = 7  THEN 'Falecido'
-        WHEN mt.codigo_situacao_matricula = 8  THEN 'Não Compareceu'
-        WHEN mt.codigo_situacao_matricula = 10 THEN 'Rematriculado'
-        WHEN mt.codigo_situacao_matricula = 11 THEN 'Deslocamento'
-        WHEN mt.codigo_situacao_matricula = 12 THEN 'Cessado'
-        WHEN mt.codigo_situacao_matricula = 13 THEN 'Sem continuidade'
-        WHEN mt.codigo_situacao_matricula = 14 THEN 'Remanejado Saída'
-        WHEN mt.codigo_situacao_matricula = 15 THEN 'Reclassificado Saída'
-        WHEN mt.codigo_situacao_matricula = 16 THEN 'Transferido SED'
-        WHEN mt.codigo_situacao_matricula = 17 THEN 'Dispensado Ed. Física'
-        ELSE 'Fora do domínio liberado pela PRODAM'
-    END AS situacao_matricula
+    q.cd_matricula, q.cd_aluno, q.codigo_ue, q.data_status, q.ano_letivo,
+    q.codigo_situacao_matricula, q.situacao_matricula
 FROM (
     SELECT
-        cd_matricula, cd_aluno, cd_escola AS codigo_ue,
-        dt_status_matricula AS data_status, an_letivo AS ano_letivo,
-        st_matricula AS codigo_situacao_matricula,
-        ROW_NUMBER() OVER(
-            PARTITION BY cd_matricula
-            ORDER BY dt_status_matricula DESC, an_letivo DESC
-        ) AS rn
-    FROM ({inner_union}) AS q_inner
-) AS mt
-WHERE rn = 1
+        cd_matricula
+      , cd_aluno
+      , cd_escola AS codigo_ue
+      , dt_status_matricula AS data_status
+      , an_letivo AS ano_letivo
+      , st_matricula AS codigo_situacao_matricula
+      , CASE
+            WHEN st_matricula = 1  THEN 'Ativo'
+            WHEN st_matricula = 2  THEN 'Desistente'
+            WHEN st_matricula = 3  THEN 'Transferido'
+            WHEN st_matricula = 4  THEN 'Vínculo Indevido'
+            WHEN st_matricula = 5  THEN 'Concluído'
+            WHEN st_matricula = 6  THEN 'Pendente de Rematrícula'
+            WHEN st_matricula = 7  THEN 'Falecido'
+            WHEN st_matricula = 8  THEN 'Não Compareceu'
+            WHEN st_matricula = 10 THEN 'Rematriculado'
+            WHEN st_matricula = 11 THEN 'Deslocamento'
+            WHEN st_matricula = 12 THEN 'Cessado'
+            WHEN st_matricula = 13 THEN 'Sem continuidade'
+            WHEN st_matricula = 14 THEN 'Remanejado Saída'
+            WHEN st_matricula = 15 THEN 'Reclassificado Saída'
+            WHEN st_matricula = 16 THEN 'Transferido SED'
+            WHEN st_matricula = 17 THEN 'Dispensado Ed. Física'
+            ELSE 'Fora do domínio liberado pela PRODAM'
+        END situacao_matricula
+    FROM v_matricula_cotic
+    UNION ALL
+    SELECT
+        cd_matricula
+      , cd_aluno
+      , cd_escola AS codigo_ue
+      , dt_status_matricula AS data_status
+      , an_letivo AS ano_letivo
+      , st_matricula AS codigo_situacao_matricula
+      , CASE
+            WHEN st_matricula = 1  THEN 'Ativo'
+            WHEN st_matricula = 2  THEN 'Desistente'
+            WHEN st_matricula = 3  THEN 'Transferido'
+            WHEN st_matricula = 4  THEN 'Vínculo Indevido'
+            WHEN st_matricula = 5  THEN 'Concluído'
+            WHEN st_matricula = 6  THEN 'Pendente de Rematrícula'
+            WHEN st_matricula = 7  THEN 'Falecido'
+            WHEN st_matricula = 8  THEN 'Não Compareceu'
+            WHEN st_matricula = 10 THEN 'Rematriculado'
+            WHEN st_matricula = 11 THEN 'Deslocamento'
+            WHEN st_matricula = 12 THEN 'Cessado'
+            WHEN st_matricula = 13 THEN 'Sem continuidade'
+            WHEN st_matricula = 14 THEN 'Remanejado Saída'
+            WHEN st_matricula = 15 THEN 'Reclassificado Saída'
+            WHEN st_matricula = 16 THEN 'Transferido SED'
+            WHEN st_matricula = 17 THEN 'Dispensado Ed. Física'
+            ELSE 'Fora do domínio liberado pela PRODAM'
+        END situacao_matricula
+    FROM v_historico_matricula_cotic
+) AS q
+ORDER BY q.cd_matricula
 """
 
 SQL_MATRICULA_TURMA = """
-SELECT
-    cd_matricula AS codigo_matricula,
-    codigo_turma, numero_chamada, data_situacao
-FROM (
+WITH CteMatriculaTurma AS (
     SELECT
-        cd_matricula, cd_turma_escola AS codigo_turma,
-        nr_chamada_aluno AS numero_chamada, dt_situacao_aluno AS data_situacao
-    FROM matricula_turma_escola
+        mt.cd_matricula
+      , mt.cd_turma_escola AS codigo_turma
+      , mt.nr_chamada_aluno AS numero_chamada
+      , mt.dt_situacao_aluno AS data_situacao
+      , m.cd_aluno
+    FROM matricula_turma_escola mt
+    INNER JOIN v_matricula_cotic m ON m.cd_matricula = mt.cd_matricula
     UNION ALL
     SELECT
-        cd_matricula, cd_turma_escola AS codigo_turma,
-        nr_chamada_aluno AS numero_chamada, dt_situacao_aluno AS data_situacao
-    FROM historico_matricula_turma_escola
-) AS mt_inner
+        mt.cd_matricula
+      , mt.cd_turma_escola AS codigo_turma
+      , mt.nr_chamada_aluno AS numero_chamada
+      , mt.dt_situacao_aluno AS data_situacao
+      , m.cd_aluno
+    FROM historico_matricula_turma_escola mt
+    INNER JOIN v_historico_matricula_cotic m
+        ON m.cd_matricula = mt.cd_matricula
+)
+SELECT mt.cd_matricula, mt.codigo_turma, mt.numero_chamada, mt.data_situacao
+FROM CteMatriculaTurma mt
 """
 
 
 class EtlAlunosService(BaseEtlService):
-    """Orquestra o ETL Turbo para o domínio de Alunos (ALUNOS_DB)."""
+    """Serviço de ETL otimizado para Alunos.
+
+    Define as 6 fases do domínio e aponta ``_iter_chunks`` para o EOL.
+    Todo o pipeline Producer-Consumer, particionamento e auditoria são
+    herdados de ``BaseEtlService``.
+    """
+
+    _dominio = "ALUNOS"
 
     def __init__(
         self,
-        eol: EOLService | None = None,
+        db_alias: str,
         id_execucao: UUID | None = None,
         repositorio_auditoria: Any | None = None,
         id_min: int | None = None,
         id_max: int | None = None,
+        particao: int = 0,
+        total_particoes: int = 1,
+        eol: EOLService | None = None,
         primeiro_run: bool = False,
     ) -> None:
         super().__init__(
-            db_alias="alunos_db",
+            db_alias=db_alias,
             id_execucao=id_execucao,
             repositorio_auditoria=repositorio_auditoria,
             id_min=id_min,
             id_max=id_max,
+            particao=particao,
+            total_particoes=total_particoes,
             primeiro_run=primeiro_run,
         )
         self.eol = eol or EOLService()
+        self._fases = self._init_fases()
 
-    def popular_tipos_nee(self) -> PipelineMetrics:
-        """Fase 1: Tipos de NEEs (Global)."""
-        extractor = self.eol.iter_query(SQL_TIPO_NEE)
-        return self.sync_table(
-            db_table="tipo_necessidade_especial",
-            update_fields=[
-                "descricao",
-                "codigo_estado",
-                "ativo",
-                "data_cancelamento",
-            ],
-            extractor_iterator=extractor,
-            transform_func=self.create_transformer(
-                TipoNecessidadeEspecialIn,
-                TipoNecessidadeEspecialOut,
-                TipoNecessidadeEspecial,
-                "codigo_necessidade_especial",
+    def _iter_chunks(self, sql: str) -> Iterator[list[tuple]]:
+        """Delega a extração para o EOLService (SQL Server)."""
+        return self.eol.iter_query(sql)
+
+    def _init_fases(self) -> list[PhaseConfig]:
+        """Define as 6 fases do ETL de Alunos."""
+        return [
+            PhaseConfig(
+                nome="tipo_nee",
+                sql=SQL_TIPO_NEE,
+                table_name="tipo_necessidade_especial",
+                source_table="tipo_necessidade_especial",
+                model_class=TipoNecessidadeEspecial,
+                dto_in=TipoNecessidadeEspecialIn,
+                pk_field="codigo_necessidade_especial",
+                update_fields=(
+                    "descricao",
+                    "codigo_estado",
+                    "ativo",
+                    "data_cancelamento",
+                ),
+                unique_fields=("codigo_necessidade_especial",),
+                suporta_bulk_insert=False,
             ),
-            unique_fields=["codigo_necessidade_especial"],
-            model_class=TipoNecessidadeEspecial,
-        )
-
-    def popular_alunos(self) -> PipelineMetrics:
-        """Fase 2: Alunos (Particionado)."""
-        sql = self._get_partition_sql(SQL_ALUNO, "a.cd_aluno")
-        extractor = self.eol.iter_query(sql)
-        return self.sync_table(
-            db_table="aluno",
-            update_fields=[
-                "nome",
-                "nome_social",
-                "data_nascimento",
-                "sexo",
-                "nacionalidade",
-                "nis",
-                "cpf",
-                "raca_cor",
-            ],
-            extractor_iterator=extractor,
-            transform_func=self.create_transformer(
-                AlunoIn, AlunoOut, Aluno, "codigo_aluno"
+            PhaseConfig(
+                nome="aluno",
+                sql=self._get_partition_sql(SQL_ALUNO, "a.cd_aluno"),
+                table_name="aluno",
+                source_table="aluno",
+                model_class=Aluno,
+                dto_in=AlunoIn,
+                pk_field="codigo_aluno",
+                update_fields=(
+                    "nome",
+                    "nome_social",
+                    "data_nascimento",
+                    "sexo",
+                    "nacionalidade",
+                    "nis",
+                    "cpf",
+                    "raca_cor",
+                ),
+                unique_fields=("codigo_aluno",),
+                suporta_bulk_insert=True,
             ),
-            unique_fields=["codigo_aluno"],
-            model_class=Aluno,
-        )
-
-    def popular_responsaveis(self) -> PipelineMetrics:
-        """Fase 3: Responsáveis (Particionado por cd_aluno)."""
-        sql = self._get_partition_sql(SQL_RESPONSAVEL, "a.cd_aluno")
-        extractor = self.eol.iter_query(sql)
-        return self.sync_table(
-            db_table="responsavel_aluno",
-            update_fields=[
-                "tipo_responsavel",
-                "nome",
-                "cpf",
-                "ddd_celular",
-                "numero_celular",
-                "email",
-                "autoriza_sms",
-                "logradouro",
-                "cep",
-                "data_fim_vinculo",
-            ],
-            extractor_iterator=extractor,
-            transform_func=self.create_transformer(
-                ResponsavelAlunoIn,
-                ResponsavelAlunoOut,
-                ResponsavelAluno,
-                "codigo_responsavel",
+            PhaseConfig(
+                nome="responsavel",
+                sql=self._get_partition_sql(SQL_RESPONSAVEL, "ra.cd_aluno"),
+                table_name="responsavel_aluno",
+                source_table="responsavel_aluno",
+                model_class=ResponsavelAluno,
+                dto_in=ResponsavelAlunoIn,
+                pk_field="codigo_responsavel",
+                update_fields=(
+                    "tipo_responsavel",
+                    "nome",
+                    "cpf",
+                    "ddd_celular",
+                    "numero_celular",
+                    "email",
+                    "autoriza_sms",
+                    "logradouro",
+                    "cep",
+                    "data_fim_vinculo",
+                ),
+                unique_fields=("codigo_responsavel",),
+                suporta_bulk_insert=True,
             ),
-            unique_fields=["codigo_responsavel"],
-            model_class=ResponsavelAluno,
-        )
-
-    def popular_nee_alunos(self) -> PipelineMetrics:
-        """Fase 4: Vínculo Aluno x NEE (Particionado)."""
-        sql = self._get_partition_sql(SQL_NEE_ALUNO, "cd_aluno")
-        extractor = self.eol.iter_query(sql)
-        return self.sync_table(
-            db_table="necessidade_especial_aluno",
-            update_fields=["data_inicio", "data_fim"],
-            extractor_iterator=extractor,
-            transform_func=self.create_transformer(
-                NecessidadeEspecialAlunoIn,
-                NecessidadeEspecialAlunoOut,
-                NecessidadeEspecialAluno,
-                "codigo_necessidade_especial_aluno",
+            PhaseConfig(
+                nome="nee_aluno",
+                sql=self._get_partition_sql(SQL_NEE_ALUNO, "cd_aluno"),
+                table_name="necessidade_especial_aluno",
+                source_table="necessidade_especial_aluno",
+                model_class=NecessidadeEspecialAluno,
+                dto_in=NecessidadeEspecialAlunoIn,
+                pk_field="codigo_necessidade_especial_aluno",
+                update_fields=(
+                    "aluno_id",
+                    "necessidade_especial_id",
+                    "data_inicio",
+                    "data_fim",
+                ),
+                unique_fields=("codigo_necessidade_especial_aluno",),
+                suporta_bulk_insert=True,
             ),
-            unique_fields=["codigo_necessidade_especial_aluno"],
-            model_class=NecessidadeEspecialAluno,
-        )
-
-    def popular_matriculas(self) -> PipelineMetrics:
-        """Fase 5: Matrículas (Particionado)."""
-        inner = self._get_union_partition_sql(_SQL_MATRICULA_UNION, "cd_aluno")
-        sql = SQL_MATRICULA.format(inner_union=inner)
-        extractor = self.eol.iter_query(sql)
-        return self.sync_table(
-            db_table="matricula",
-            update_fields=[
-                "codigo_ue",
-                "ano_letivo",
-                "data_status",
-                "codigo_situacao_matricula",
-                "situacao_matricula",
-            ],
-            extractor_iterator=extractor,
-            transform_func=self.create_transformer(
-                MatriculaIn, MatriculaOut, Matricula, "codigo_matricula"
+            PhaseConfig(
+                nome="matricula",
+                sql=self._get_partition_sql(SQL_MATRICULA, "q.cd_aluno"),
+                table_name="matricula",
+                source_table="v_matricula_cotic",
+                model_class=Matricula,
+                dto_in=MatriculaIn,
+                pk_field="codigo_matricula",
+                update_fields=(
+                    "codigo_ue",
+                    "ano_letivo",
+                    "data_status",
+                    "codigo_situacao_matricula",
+                    "situacao_matricula",
+                ),
+                unique_fields=("codigo_matricula",),
+                suporta_bulk_insert=False,
             ),
-            unique_fields=["codigo_matricula"],
-            model_class=Matricula,
-        )
-
-    def popular_matricula_turmas(self) -> PipelineMetrics:
-        """Fase 6: Enturmação (Particionado por cd_aluno)."""
-        join_sql = f"""
-            SELECT mt.* FROM ({SQL_MATRICULA_TURMA}) mt
-            INNER JOIN v_matricula_cotic vmc
-                ON vmc.cd_matricula = mt.codigo_matricula
-        """
-        sql = self._get_partition_sql(join_sql, "vmc.cd_aluno")
-        extractor = self.eol.iter_query(sql)
-        return self.sync_table(
-            db_table="matricula_turma",
-            update_fields=["numero_chamada", "data_situacao_aluno"],
-            extractor_iterator=extractor,
-            transform_func=self.create_transformer(
-                MatriculaTurmaIn,
-                MatriculaTurmaOut,
-                MatriculaTurma,
-                ["codigo_matricula", "codigo_turma"],
+            PhaseConfig(
+                nome="matricula_turma",
+                sql=self._get_partition_sql(
+                    SQL_MATRICULA_TURMA, "mt.cd_aluno"
+                ),
+                table_name="matricula_turma",
+                source_table="matricula_turma_escola",
+                model_class=MatriculaTurma,
+                dto_in=MatriculaTurmaIn,
+                pk_field=["codigo_matricula", "codigo_turma"],
+                update_fields=("numero_chamada", "data_situacao_aluno"),
+                unique_fields=("matricula_id", "codigo_turma"),
+                suporta_bulk_insert=False,
             ),
-            unique_fields=["matricula", "codigo_turma"],
-            model_class=MatriculaTurma,
-        )
-
-    def executar(self, fase_inicial: int = 1) -> dict[str, int]:
-        """Executa as fases do ETL com métricas Turbo."""
-        metodos = [
-            ("tipo_nee", self.popular_tipos_nee),
-            ("aluno", self.popular_alunos),
-            ("responsavel", self.popular_responsaveis),
-            ("nee_aluno", self.popular_nee_alunos),
-            ("matricula", self.popular_matriculas),
-            ("matricula_turma", self.popular_matricula_turmas),
         ]
-
-        resultados: dict[str, int] = {}
-        for i, (nome, metodo) in enumerate(metodos, 1):
-            if i >= fase_inicial:
-                logger.info("[ETL ALUNOS] Iniciando Fase %d: %s", i, nome)
-                m = metodo()
-                resultados[nome] = m.total_escritos
-                logger.info(
-                    "[ETL ALUNOS] Fase %d concluída. Escritos: %d, Lidos: %d",
-                    i,
-                    m.total_escritos,
-                    m.total_lidos,
-                )
-
-        return resultados
