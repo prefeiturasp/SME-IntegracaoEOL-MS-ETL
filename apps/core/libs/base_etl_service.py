@@ -251,7 +251,7 @@ class PostgresUpsertEngine:
 
         total = len(processed)
         dedup = {pk: (h, obj) for pk, h, obj in processed}
-        del processed 
+        del processed
 
         def _get(obj, key, default=None):
             if isinstance(obj, dict):
@@ -295,7 +295,7 @@ class PostgresUpsertEngine:
         )
         objs = [p[2] for p in pendentes]
         hashes = [(f"{tn}:{p[0]}", p[1]) for p in pendentes]
-        del pendentes 
+        del pendentes
 
         uf = list(_get(fase_meta, "update_fields") or [])
         unique = list(_get(fase_meta, "unique_fields") or [])
@@ -304,7 +304,8 @@ class PostgresUpsertEngine:
         del objs
 
         escritos = len(hashes)
-        self.upsert_bulk("etl_auditoria_linha", hashes, batch_id=f"{tn}-{batch_num}")
+        self.upsert_bulk("etl_auditoria_linha", hashes,
+                         batch_id=f"{tn}-{batch_num}")
         del hashes
 
         return escritos, total - escritos
@@ -590,7 +591,7 @@ class BaseEtlService:
         # Atualiza o checkpoint para permitir retomada granular
         is_ultima = numero_fase > 0 and numero_fase == total_fases
         token = self.ultimo_token or "0"
-        
+
         self.auditor.atualizar_checkpoint_dominio(
             dominio=self._dominio.lower(),
             ultimo_id_execucao=self.id_execucao,
@@ -644,4 +645,3 @@ class BaseEtlService:
     def _buscar_hashes_por_copy(self, ids: list[str], tn: str) -> dict[str, str]:
         """Busca hashes via PostgresUpsertEngine."""
         return self.pg_engine.buscar_hashes(ids, tn)
-

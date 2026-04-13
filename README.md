@@ -60,7 +60,7 @@ docker exec sme_sgp_ms_etl_auditoria sh scripts/executar_migrations.sh
 Base:
 
 ```bash
-docker compose exec web python manage.py createsuperuser
+docker compose sme_sgp_ms_etl_auditoria python manage.py createsuperuser
 ```
 
 Dev:

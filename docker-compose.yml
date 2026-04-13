@@ -14,6 +14,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    platform: linux/amd64
     container_name: sme_sgp_ms_etl_worker
     env_file:
       - .env
@@ -36,6 +37,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    platform: linux/amd64
     container_name: sme_sgp_ms_etl_auditoria
     env_file:
       - .env

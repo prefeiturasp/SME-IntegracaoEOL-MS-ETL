@@ -1,5 +1,9 @@
+"""Utilitários de saneamento para pipelines de ETL."""
+
 from datetime import date, datetime
-from typing import Any
+from typing import Any, cast
+
+from django.utils import timezone
 
 
 def strip_str(val: Any) -> str | None:
@@ -29,3 +33,19 @@ def parse_date(val: Any) -> date | None:
             return None
 
     return None
+
+
+def make_aware(dt: str | datetime | None) -> datetime | None:
+    """Garante que o datetime seja timezone-aware, tolerando None e strings."""
+    if dt is None:
+        return None
+
+    if isinstance(dt, str):
+        dt = datetime.fromisoformat(dt)
+
+    if timezone.is_naive(dt):
+        return cast(
+            datetime, timezone.make_aware(dt, timezone.get_current_timezone())
+        )
+
+    return dt
