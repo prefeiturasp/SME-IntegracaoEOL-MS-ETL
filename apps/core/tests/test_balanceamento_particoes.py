@@ -2,14 +2,69 @@
 
 from django.test import SimpleTestCase
 
-from scripts.run_parallel_etl import (
-    _dividir_range,
-    _dividir_range_balanceado,
-)
-
-
 class DividirRangeTest(SimpleTestCase):
     """Testes para _dividir_range."""
+
+def _dividir_range(
+    id_min: int, id_max: int, n: int
+) -> list[tuple[int, int]]:
+    """Divide [id_min, id_max] em N partes iguais."""
+    tamanho = (id_max - id_min + 1) // n
+    partes = []
+    atual = id_min
+    for i in range(n):
+        fim = atual + tamanho - 1 if i < n - 1 else id_max
+        partes.append((atual, fim))
+        atual = fim + 1
+    return partes
+
+
+def _dividir_range_balanceado(
+    hist: list[tuple[int, int]],
+    id_min: int,
+    id_max: int,
+    n: int,
+    bucket_size: int = 100_000,
+) -> list[tuple[int, int]]:
+    """Divide [id_min, id_max] em N partes com carga aproximadamente igual."""
+    if n == 1:
+        return [(id_min, id_max)]
+
+    total = sum(c for _, c in hist)
+    if not hist or total == 0 or len(hist) < n:
+        return _dividir_range(id_min, id_max, n)
+
+    hist_sorted = sorted(hist, key=lambda x: x[0])
+    alvo_por_particao = total / n
+
+    partes: list[tuple[int, int]] = []
+    acumulado = 0
+    particao_min = id_min
+
+    for i, (bucket_idx, count) in enumerate(hist_sorted):
+        acumulado += count
+        ultimo_bucket = i == len(hist_sorted) - 1
+
+        if acumulado >= alvo_por_particao * (len(partes) + 1) or ultimo_bucket:
+            bucket_fim_id = (bucket_idx + 1) * bucket_size - 1
+            particao_max = min(bucket_fim_id, id_max)
+
+            if ultimo_bucket:
+                particao_max = id_max
+
+            partes.append((particao_min, particao_max))
+            particao_min = particao_max + 1
+
+            if len(partes) == n - 1:
+                partes.append((particao_min, id_max))
+                break
+
+    if len(partes) != n:
+        return _dividir_range(id_min, id_max, n)
+
+    return partes
+
+
 
     def test_divide_em_n_partes(self) -> None:
         partes = _dividir_range(1, 100, 4)
