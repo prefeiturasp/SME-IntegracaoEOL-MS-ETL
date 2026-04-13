@@ -8,6 +8,7 @@ from uuid import uuid4
 
 from django.db import OperationalError
 from django.test import SimpleTestCase, TestCase
+from psycopg import sql
 
 from apps.core.libs.base_etl_service import (
     BaseEtlService,
@@ -242,8 +243,10 @@ class BuscarHashesPorCopyTest(SimpleTestCase):
 
         create_call = cursor.execute.call_args_list[0]
         sql_create = create_call[0][0]
-        self.assertIn("ON COMMIT DROP", sql_create)
-        self.assertIn("temp_lookup_batch_4", sql_create)
+        # Converte Composed para string para verificação (psycopg 3)
+        sql_str = sql_create.as_string(None)
+        self.assertIn("ON COMMIT DROP", sql_str)
+        self.assertIn("temp_lookup_batch_4", sql_str)
 
     def test_nome_temp_table_sanitiza_hifens(self) -> None:
         """Hifens no batch_id devem ser substituídos por underscores."""
@@ -264,9 +267,10 @@ class BuscarHashesPorCopyTest(SimpleTestCase):
             svc._buscar_hashes_por_copy(["x:1"], "abc-def-ghi")
 
         create_call = cursor.execute.call_args_list[0]
-        sql_create = create_call[0][0]
-        self.assertIn("temp_lookup_abc_def_ghi", sql_create)
-        self.assertNotIn("-", sql_create.split("TEMP TABLE")[1].split("(")[0])
+        # Converte Composed para string para verificação (psycopg 3)
+        sql_str = create_call[0][0].as_string(None)
+        self.assertIn("temp_lookup_abc_def_ghi", sql_str)
+        self.assertNotIn("-", sql_str.split("TEMP TABLE")[1].split("(")[0])
 
 
 class ProcessarBatchFullSyncTest(TestCase):
@@ -606,8 +610,12 @@ class BaseEtlServiceCoverageTest(TestCase):
             mock_cursor = (
                 mock_conns.__getitem__.return_value.cursor.return_value.__enter__.return_value
             )
-            mock_cursor.execute.assert_called_once_with(
-                "TRUNCATE TABLE minha_tabela CASCADE"
+            # Verifica se o execute foi chamado com um objeto SQL equivalente
+            # Em psycopg 3, comparamos a string gerada
+            args, _ = mock_cursor.execute.call_args
+            self.assertEqual(
+                args[0].as_string(None),
+                'TRUNCATE TABLE "minha_tabela" CASCADE'
             )
 
     def test_criar_transform_caminho_adapter(self) -> None:
