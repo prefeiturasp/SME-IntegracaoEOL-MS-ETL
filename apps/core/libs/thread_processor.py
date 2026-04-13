@@ -12,6 +12,10 @@ Classes:
         processa seu lote inteiro em loop Python puro, minimizando a
         contenção pelo GIL.
 
+        Suporta uso como gerenciador de contexto para reutilização do
+        pool de threads entre múltiplas chamadas de ``processar``,
+        eliminando o custo de criação/destruição de threads a cada lote.
+
 Funções:
     calcular_hash:
         Calcula SHA-256 dos campos de uma linha para controle incremental.
@@ -57,6 +61,22 @@ class ThreadPoolProcessor:
     lote como uma única future ao ``ThreadPoolExecutor``. Isso reduz
     o overhead de scheduling comparado a uma future por item e diminui
     a contenção pelo GIL ao manter cada worker ocupado em loop contínuo.
+
+    Uso como gerenciador de contexto (recomendado para múltiplos lotes):
+        with ThreadPoolProcessor(max_workers=4) as processor:
+            for lote in lotes:
+                processor.processar(lote, func)
+
+    Nesse modo, o pool de threads é criado uma única vez e reutilizado
+    entre todas as chamadas de ``processar``, eliminando o overhead de
+    criação de threads por lote.
+
+    Uso avulso (compatibilidade legada):
+        processor = ThreadPoolProcessor()
+        resultado = processor.processar(items, func)
+
+    Nesse modo, um executor temporário é criado e destruído a cada
+    chamada de ``processar``.
     """
 
     def __init__(
@@ -75,9 +95,31 @@ class ThreadPoolProcessor:
         self.max_workers = max_workers or settings.THREAD_POOL_MAX_WORKERS
         self.timeout = timeout or settings.THREAD_POOL_CHUNK_TIMEOUT
         self.prefixo_log = prefixo_log
+        self._executor: ThreadPoolExecutor | None = None
 
-    def processar(self, items: Sequence[Any], func: Callable[[Any], T]) -> List[T]:
+    def __enter__(self) -> "ThreadPoolProcessor":
+        """Cria o executor persistente para reutilização entre chamadas."""
+        self._executor = ThreadPoolExecutor(max_workers=self.max_workers)
+        return self
+
+    def __exit__(self, *_: Any) -> None:
+        """Encerra o executor e libera os recursos do pool."""
+        self.shutdown()
+
+    def shutdown(self) -> None:
+        """Encerra o executor de forma segura, aguardando tarefas pendentes."""
+        if self._executor is not None:
+            self._executor.shutdown(wait=True)
+            self._executor = None
+
+    def processar(
+        self, items: Sequence[Any], func: Callable[[Any], T]
+    ) -> List[T]:
         """Processa itens em paralelo por lotes, preservando a ordem.
+
+        Quando utilizado como gerenciador de contexto, reutiliza o pool
+        de threads já criado. Caso contrário, cria um executor temporário
+        por chamada (comportamento legado).
 
         Args:
             items: Sequência de itens a processar.
@@ -92,49 +134,75 @@ class ThreadPoolProcessor:
         if not items:
             return []
 
+        if self._executor is not None:
+            return self._processar_com_executor(self._executor, items, func)
+
+        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+            return self._processar_com_executor(executor, items, func)
+
+    def _processar_com_executor(
+        self,
+        executor: ThreadPoolExecutor,
+        items: Sequence[Any],
+        func: Callable[[Any], T],
+    ) -> List[T]:
+        """Executa o processamento usando o executor fornecido.
+
+        Args:
+            executor: Pool de threads a utilizar.
+            items: Sequência de itens a processar.
+            func: Função aplicada a cada item.
+
+        Returns:
+            Lista de resultados na mesma ordem dos itens de entrada.
+
+        Raises:
+            TimeoutError: Se o tempo de execução exceder ``self.timeout``.
+        """
         total = len(items)
         inicio = time.monotonic()
 
         batch_size = math.ceil(total / self.max_workers)
         batches: list[tuple[int, Sequence[Any]]] = [
-            (start, items[start:start + batch_size])
+            (start, items[start : start + batch_size])
             for start in range(0, total, batch_size)
         ]
 
         resultados: list[T | None] = [None] * total
         erro_capturado: Exception | None = None
 
-        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-            futures = {
-                executor.submit(self._processar_lote, start, batch, func): start
-                for start, batch in batches
-            }
+        futures = {
+            executor.submit(self._processar_lote, start, batch, func): start
+            for start, batch in batches
+        }
 
-            try:
-                for future in as_completed(futures, timeout=self.timeout):
-                    start = futures[future]
-                    try:
-                        batch_start, batch_result = future.result()
-                        resultados[batch_start:batch_start + len(batch_result)] = batch_result
-                    except Exception as exc:
-                        logger.exception(
-                            "[%s] Erro no lote iniciado em %d: %s",
-                            self.prefixo_log,
-                            start,
-                            exc,
-                        )
-                        if erro_capturado is None:
-                            erro_capturado = exc
-            except TimeoutError:
-                for future in futures:
-                    future.cancel()
+        try:
+            for future in as_completed(futures, timeout=self.timeout):
+                start = futures[future]
+                try:
+                    batch_start, batch_result = future.result()
+                    resultados[
+                        batch_start : batch_start + len(batch_result)
+                    ] = batch_result
+                except Exception as exc:
+                    logger.exception(
+                        "[%s] Erro no lote iniciado em %d: %s",
+                        self.prefixo_log,
+                        start,
+                        exc,
+                    )
+                    if erro_capturado is None:
+                        erro_capturado = exc
+        except TimeoutError:
+            for future in futures:
+                future.cancel()
 
-                msg = (
-                    f"[{self.prefixo_log}] Timeout após {self.timeout}s "
-                    f"processando {len(items)} itens"
-                )
-                logger.error(msg)
-                raise TimeoutError(msg)
+            msg = (
+                f"[{self.prefixo_log}] Timeout após {self.timeout}s "
+                f"processando {len(items)} itens"
+            )
+            logger.error(msg)
+            raise TimeoutError(msg)
 
         elapsed = time.monotonic() - inicio
         self._log_throughput(total, elapsed)
@@ -225,20 +293,20 @@ def calcular_hash(obj: Any, fields: Sequence[int] | Sequence[str]) -> str:
         return hashlib.sha256(conteudo).hexdigest()
 
     if _is_int_fields(fields):
-        conteudo = "|".join(
-            str(obj[idx]) for idx in fields
-        ).encode("utf-8")
+        conteudo = "|".join(str(obj[idx]) for idx in fields).encode("utf-8")
         return hashlib.sha256(conteudo).hexdigest()
 
     if _is_str_fields(fields):
-        ordered_fields = sorted(fields)
+        # Garantimos determinismo ordenando os nomes dos campos
+        sorted_fields = sorted(fields)
         if isinstance(obj, dict):
             conteudo = "|".join(
-                f"{field}={obj.get(field)}" for field in ordered_fields
+                f"{field}={obj.get(field)}" for field in sorted_fields
             ).encode("utf-8")
         else:
             conteudo = "|".join(
-                f"{field}={getattr(obj, field)}" for field in ordered_fields
+                f"{field}={getattr(obj, str(field))}"
+                for field in sorted_fields
             ).encode("utf-8")
         return hashlib.sha256(conteudo).hexdigest()
 
@@ -260,7 +328,7 @@ def decorar_para_hash(
 ) -> tuple[str, str, Any]: ...
 
 
-def decorar_para_hash(tabela: str, *args: Any) -> tuple[str, str, Any]:
+def decorar_para_hash(tabela: str, *args: Any) -> tuple[str, str, Any]:  # type: ignore[misc]
     """Transforma dados em ``(id_destino, hash, dados)``.
 
     Modos suportados:

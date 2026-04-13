@@ -22,6 +22,7 @@ class BaseEtlCommandTestCase(TestCase):
         # Mock do serviço local por teste
         self.mock_servico_class = MagicMock()
         self.servico = self.mock_servico_class.return_value
+        self.servico.ultimo_token = "0"
 
         class MyTestCommand(BaseEtlCommand):
             dominio = "teste_base"
@@ -59,6 +60,17 @@ class BaseEtlCommandTestCase(TestCase):
             modo_escrita="full_refresh",
         )
 
+    def test_indice_sincronizacao_formato_correto(self) -> None:
+        """Valida formato '<tabela>:<offset>:<token>' em indice_sincronizacao."""
+        self.servico.executar.return_value = {"matricula": 100}
+        self.servico.ultima_fase_concluida = 5
+
+        self.cmd.handle(volume=100, offset=3, continuar=False)
+
+        kwargs = self.repo.atualizar_checkpoint_dominio.call_args.kwargs
+        self.assertEqual(kwargs["indice_sincronizacao"], "matricula:offset:100")
+        self.assertEqual(kwargs["token_parada"], "100")
+
     def test_retomar_checkpoint_na_flag_continuar(self) -> None:
         """Verifica se busca checkpoint quando continuar=True."""
         self.repo.obter_checkpoint_dominio.return_value = {
@@ -94,7 +106,7 @@ class BaseEtlCommandTestCase(TestCase):
             ultimo_id_execucao=id_exec,
             ultima_pagina=0,
             token_parada="0",
-            indice_sincronizacao=None,
+            indice_sincronizacao="ERRO:0:0",
             ultima_situacao="erro",
             sucesso=False,
         )
@@ -137,6 +149,17 @@ class BaseEtlCommandTestCase(TestCase):
         self.cmd.handle(volume=100, offset=0, continuar=True)
 
         self.servico.executar.assert_called_with(fase_inicial=1)
+
+    def test_checkpoint_usa_id_execucao_proprio(self) -> None:
+        """Checkpoint aponta ao próprio etl_execucao (sem mestre)."""
+        self.servico.executar.return_value = {"tabela_teste": 10}
+        self.servico.ultima_fase_concluida = 1
+
+        self.cmd.handle(volume=100, offset=0, continuar=False)
+
+        id_exec = self.repo.iniciar_execucao.return_value
+        kwargs = self.repo.atualizar_checkpoint_dominio.call_args.kwargs
+        self.assertEqual(kwargs["ultimo_id_execucao"], id_exec)
 
     def test_get_modo_escrita_default(self) -> None:
         """Verifica o valor default do modo de escrita."""
