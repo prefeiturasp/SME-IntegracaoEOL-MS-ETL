@@ -30,6 +30,9 @@ Ordem de carga ETL:
 
 from django.db import models
 
+from apps.programas.enums import CategoriaPrograma
+
+
 class TipoPrograma(models.Model):
     """Subtipos de programa do EOL (cd_tipo_programa), agrupados por categoria.
 
@@ -44,13 +47,6 @@ class TipoPrograma(models.Model):
         658 → PAEE Itinerante        (PAEE)
     """
 
-    PAP = "PAP"
-    PAEE = "PAEE"
-    CATEGORIA_CHOICES = [
-        (PAP, "PAP"),
-        (PAEE, "PAEE"),
-    ]
-
     codigo_tipo_programa = models.IntegerField(
         primary_key=True,
         help_text="Mesmo ID do EOL (cd_tipo_programa).",
@@ -58,7 +54,7 @@ class TipoPrograma(models.Model):
     nome = models.CharField(max_length=100)
     categoria = models.CharField(
         max_length=10,
-        choices=CATEGORIA_CHOICES,
+        choices=CategoriaPrograma.choices,
         help_text="'PAP' ou 'PAEE'.",
     )
     ativo = models.BooleanField(default=True)
@@ -94,13 +90,6 @@ class ComponenteCurricularPrograma(models.Model):
         1030 → Sala de Recursos Multifuncionais
     """
 
-    PAP = "PAP"
-    PAEE = "PAEE"
-    CATEGORIA_CHOICES = [
-        (PAP, "PAP"),
-        (PAEE, "PAEE"),
-    ]
-
     codigo_componente_curricular = models.BigIntegerField(
         unique=True,
         help_text="EOL cd_componente_curricular.",
@@ -111,7 +100,7 @@ class ComponenteCurricularPrograma(models.Model):
     )
     categoria = models.CharField(
         max_length=10,
-        choices=CATEGORIA_CHOICES,
+        choices=CategoriaPrograma.choices,
         help_text="'PAP' ou 'PAEE'.",
     )
     vigente = models.BooleanField(
@@ -150,13 +139,6 @@ class TurmaPrograma(models.Model):
         E = Extinta
     """
 
-    PAP = "PAP"
-    PAEE = "PAEE"
-    CATEGORIA_CHOICES = [
-        (PAP, "PAP"),
-        (PAEE, "PAEE"),
-    ]
-
     codigo_turma = models.BigIntegerField(
         unique=True,
         help_text="EOL cd_turma_escola.",
@@ -181,8 +163,8 @@ class TurmaPrograma(models.Model):
     )
     descricao_turno = models.CharField(
         max_length=100,
-        null=True,
         blank=True,
+        default="",
         help_text="EOL tipo_turno.dc_exibicao_portal — desnormalizado para evitar JOIN.",
     )
     situacao = models.CharField(
@@ -194,7 +176,7 @@ class TurmaPrograma(models.Model):
     )
     categoria = models.CharField(
         max_length=10,
-        choices=CATEGORIA_CHOICES,
+        choices=CategoriaPrograma.choices,
         help_text="'PAP' ou 'PAEE' — desnormalizado de TipoPrograma para filtros diretos.",
     )
     criado_em = models.DateTimeField(auto_now_add=True)
@@ -293,13 +275,6 @@ class MatriculaTurmaPrograma(models.Model):
         13 → Sem continuidade
     """
 
-    PAP = "PAP"
-    PAEE = "PAEE"
-    CATEGORIA_CHOICES = [
-        (PAP, "PAP"),
-        (PAEE, "PAEE"),
-    ]
-
     codigo_aluno = models.BigIntegerField(
         help_text="EOL cd_aluno — FK lógica para aluno (PEDAGOGICO_DB — banco diferente).",
     )
@@ -339,7 +314,7 @@ class MatriculaTurmaPrograma(models.Model):
     )
     categoria = models.CharField(
         max_length=10,
-        choices=CATEGORIA_CHOICES,
+        choices=CategoriaPrograma.choices,
         help_text="'PAP' ou 'PAEE' — desnormalizado da turma para filtros diretos.",
     )
     criado_em = models.DateTimeField(auto_now_add=True)

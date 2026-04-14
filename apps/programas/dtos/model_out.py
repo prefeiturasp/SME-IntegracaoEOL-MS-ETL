@@ -97,7 +97,7 @@ class TurmaProgramaOut(TurmaPrograma):
             codigo_dre=str(obj.codigo_dre),
             ano_letivo=int(obj.ano_letivo),
             tipo_turno=_int(obj.tipo_turno),
-            descricao_turno=_strip(obj.descricao_turno) or None,
+            descricao_turno=_strip(obj.descricao_turno),
             situacao=_strip(obj.situacao),
             codigo_tipo_programa=codigo_tipo,
             categoria=TipoProgramaEOL.categoria(codigo_tipo),

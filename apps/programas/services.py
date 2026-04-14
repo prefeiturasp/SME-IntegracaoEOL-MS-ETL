@@ -262,14 +262,6 @@ class _FaseInfo:
 class EtlProgramasService:
     """Orquestra o ETL unificado para o domínio Programas."""
 
-    _FASES: tuple[_FaseInfo, ...] = (
-        _FaseInfo(table_name="tipo_programa"),
-        _FaseInfo(table_name="componente_curricular_programa"),
-        _FaseInfo(table_name="turma_programa"),
-        _FaseInfo(table_name="turma_programa_componente_curricular"),
-        _FaseInfo(table_name="matricula_turma_programa"),
-    )
-
     def __init__(
         self,
         db_alias: str = "programas_db",
@@ -290,7 +282,14 @@ class EtlProgramasService:
         self.eol = eol or EOLService()
         self.ultima_fase_concluida = 0
         self.ultimo_token: str | None = None
-        self._fases = list(self._FASES)
+        # Contrato com BaseEtlCommand: `servico._fases[i].table_name`
+        self._fases: list[_FaseInfo] = [
+            _FaseInfo(table_name="tipo_programa"),
+            _FaseInfo(table_name="componente_curricular_programa"),
+            _FaseInfo(table_name="turma_programa"),
+            _FaseInfo(table_name="turma_programa_componente_curricular"),
+            _FaseInfo(table_name="matricula_turma_programa"),
+        ]
 
     def popular_tipos_programa(self) -> int:
         """Fase 1: Extrai e persiste TipoPrograma (seed do EOL).

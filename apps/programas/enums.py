@@ -16,12 +16,19 @@ Os enums substituem:
 
 from enum import IntEnum, StrEnum
 
+from django.db import models
 
-class CategoriaPrograma(StrEnum):
-    """Categoria de programa — PAP ou PAEE."""
 
-    PAP = "PAP"
-    PAEE = "PAEE"
+class CategoriaPrograma(models.TextChoices):
+    """Categoria de programa — PAP ou PAEE.
+
+    Herda de TextChoices (e não StrEnum) para expor `.choices` consumível
+    diretamente pelo `choices=` do CharField nos models. O comportamento
+    como string é preservado — `CategoriaPrograma.PAP == "PAP"`.
+    """
+
+    PAP = "PAP", "PAP"
+    PAEE = "PAEE", "PAEE"
 
 
 class TipoProgramaEOL(IntEnum):
