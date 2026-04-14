@@ -28,7 +28,10 @@ class _RestartHandler(FileSystemEventHandler):
         self._proc = subprocess.Popen(_CELERY_CMD)
 
     def _restart(self) -> None:
-        print("[watch_celery] Alteração detectada — reiniciando worker...", flush=True)
+        print(
+            "[watch_celery] Alteração detectada — reiniciando worker...",
+            flush=True,
+        )
         self._proc.terminate()
         self._proc.wait()
         self._proc = subprocess.Popen(_CELERY_CMD)

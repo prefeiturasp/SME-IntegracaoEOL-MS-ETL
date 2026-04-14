@@ -1,22 +1,21 @@
 """Comando Django para executar o ETL do dominio PROFESSORES_DB.
 
 Suporta execução incremental por hash de linha e retomada por checkpoint
-de fase, integrando-se ao fluxo Celery definido em controle_auditoria.
+de fase, tabela e lote, integrando ao fluxo Celery de controle_auditoria.
 
 Fluxo de controle:
-    1. Lê checkpoint para determinar de qual fase retomar (se --continuar).
+    1. Lê checkpoint para determinar fase/tabela/lote de retomada.
     2. Inicia registro de execução no banco de auditoria.
-    3. Executa as fases do ETL a partir da fase determinada.
-    4. Registra leituras e escritas por tabela no log de auditoria.
-    5. Atualiza checkpoint com a fase concluída e token_parada acumulado.
-    6. Em caso de erro: persiste o checkpoint da última fase bem-sucedida
-       antes de propagar a exceção, permitindo retomada precisa.
+    3. Executa ETL a partir da fase/tabela/lote determinada.
+    4. Após cada lote concluído: salva checkpoint com "tabela:lote".
+    5. Após cada tabela concluída: salva checkpoint com "tabela".
+    6. Registra métricas por tabela no log de auditoria.
+    7. Atualiza checkpoint final com token_parada acumulado.
 
-Controle por hash (EtlAuditoriaLinha):
-    Cada registro escrito é comparado via SHA-256 dos campos relevantes.
-    Apenas registros alterados ou novos geram escrita no destino.
-    O ``token_parada`` acumula o total de linhas *efetivamente alteradas*
-    em todas as execuções, servindo como sinal de progresso para o Celery.
+Formato de indice_sincronizacao:
+    "turma_escola:435"  — tabela interrompida no lote 435 (retoma do 436)
+    "turma_escola"      — tabela concluída (próxima tabela começa do lote 1)
+    None                — execução concluída ou nunca iniciada
 """
 
 from typing import Any
@@ -27,7 +26,11 @@ from django.core.management.base import BaseCommand
 from apps.controle_auditoria.libs.repositorio_auditoria import (
     RepositorioAuditoriaPostgres,
 )
-from apps.professores.services import EtlProfessoresService
+from apps.professores.services import (
+    _ORDEM_TABELAS,
+    _TABELAS_FULL_REFRESH,
+    EtlProfessoresService,
+)
 
 # Tabelas que usam estratégia upsert incremental (hash por linha).
 # As demais usam full-refresh (delete + bulk_create).
@@ -83,43 +86,119 @@ class Command(BaseCommand):
         repositorio = RepositorioAuditoriaPostgres()
 
         # ------------------------------------------------------------------
-        # Determinar fase inicial e token acumulado anterior
+        # Determinar fase/tabela de retomada e token acumulado anterior
         # ------------------------------------------------------------------
         fase_inicial = 1
+        pular_ate: str | None = None
         token_anterior = 0
+
+        lote_inicial = 0
 
         if continuar:
             checkpoint = repositorio.obter_checkpoint_dominio("professores")
             if checkpoint:
-                ultima_situacao = str(checkpoint.get("ultima_situacao") or "")
                 ultima_fase = int(str(checkpoint.get("ultima_pagina") or 0))
+                raw_indice = str(checkpoint.get("indice_sincronizacao") or "")
                 token_anterior = int(str(checkpoint.get("token_parada") or 0))
 
-                if ultima_situacao == "erro" and 0 < ultima_fase < 4:
-                    # Retoma da próxima fase após a última bem-sucedida
-                    fase_inicial = ultima_fase + 1
+                # Se tudo foi concluído (fase 3, sem índice parcial),
+                # reinicia do zero; caso contrário avança para a próxima.
+                fase_inicial = ultima_fase + 1 if ultima_fase < 3 else 1
+
+                if raw_indice:
+                    if ":" in raw_indice:
+                        # "tabela:lote" — tabela interrompida no meio
+                        tabela_interrompida, lote_str = raw_indice.split(
+                            ":", 1
+                        )
+                        lote_salvo = int(lote_str)
+                        # Tabelas full-refresh não suportam retomada por
+                        # lote: sempre reprocessam do início.
+                        if tabela_interrompida in _TABELAS_FULL_REFRESH:
+                            lote_inicial = 0
+                        else:
+                            lote_inicial = lote_salvo
+                        # Pula tudo antes da tabela interrompida.
+                        idx = (
+                            _ORDEM_TABELAS.index(tabela_interrompida)
+                            if tabela_interrompida in _ORDEM_TABELAS
+                            else -1
+                        )
+                        pular_ate = (
+                            _ORDEM_TABELAS[idx - 1] if idx > 0 else None
+                        )
+                        self.stdout.write(
+                            self.style.WARNING(
+                                f"[ETL PROF] Retomando '{tabela_interrompida}'"
+                                f" do lote {lote_salvo + 1}"
+                                f" (fase {fase_inicial})."
+                            )
+                        )
+                    else:
+                        # "tabela" — tabela concluída; próxima começa do 0
+                        pular_ate = raw_indice
+                        self.stdout.write(
+                            self.style.WARNING(
+                                f"[ETL PROF] Retomando da fase {fase_inicial}"
+                                f", após '{pular_ate}'."
+                            )
+                        )
+                else:
                     self.stdout.write(
                         self.style.WARNING(
-                            f"[ETL PROF] Retomando da fase {fase_inicial}"
-                            f" (última concluída: {ultima_fase})."
+                            f"[ETL PROF] Retomando da fase {fase_inicial}."
                         )
                     )
-                else:
-                    # Sucesso ou fase 4 já concluída: reinicia do zero
-                    fase_inicial = 1
 
         # ------------------------------------------------------------------
         # Executar ETL
         # ------------------------------------------------------------------
         id_execucao: UUID = repositorio.iniciar_execucao("professores")
         servico = EtlProfessoresService()
+        ultimo_indice_salvo: str | None = None
+
+        def _salvar_checkpoint_lote(tabela: str, lote: int) -> None:
+            """Salva checkpoint após cada lote — formato 'tabela:lote'."""
+            nonlocal ultimo_indice_salvo
+            ultimo_indice_salvo = f"{tabela}:{lote}"
+            repositorio.atualizar_checkpoint_dominio(
+                dominio="professores",
+                ultimo_id_execucao=id_execucao,
+                ultima_pagina=servico.ultima_fase_concluida,
+                token_parada=str(token_anterior),
+                indice_sincronizacao=ultimo_indice_salvo,
+                ultima_situacao="parcial",
+                sucesso=False,
+            )
+
+        def _salvar_checkpoint_tabela(tabela: str, _linhas: int) -> None:
+            """Salva checkpoint após tabela concluída — formato 'tabela'."""
+            nonlocal ultimo_indice_salvo
+            ultimo_indice_salvo = tabela
+            repositorio.atualizar_checkpoint_dominio(
+                dominio="professores",
+                ultimo_id_execucao=id_execucao,
+                ultima_pagina=servico.ultima_fase_concluida,
+                token_parada=str(token_anterior),
+                indice_sincronizacao=ultimo_indice_salvo,
+                ultima_situacao="parcial",
+                sucesso=False,
+            )
 
         try:
-            resultado = servico.executar(fase_inicial=fase_inicial)
+            resultado = servico.executar(
+                fase_inicial=fase_inicial,
+                pular_ate=pular_ate,
+                lote_inicial=lote_inicial,
+                on_lote=_salvar_checkpoint_lote,
+                on_tabela_concluida=_salvar_checkpoint_tabela,
+            )
 
             # Registrar métricas por tabela no log de auditoria
             for tabela, linhas in resultado.items():
-                modo = "upsert" if tabela in _TABELAS_UPSERT else "full_refresh"
+                modo = (
+                    "upsert" if tabela in _TABELAS_UPSERT else "full_refresh"
+                )
                 repositorio.registrar_tabela_escrita(
                     id_execucao=id_execucao,
                     tabela_destino=tabela,
@@ -156,14 +235,15 @@ class Command(BaseCommand):
             )
 
         except Exception as erro:
-            # Persiste checkpoint com a fase até onde chegou antes de falhar.
-            # Permite que o Celery retome via --continuar na próxima tentativa.
+            # O callback já salvou o indice_sincronizacao da última tabela
+            # concluída. Aqui apenas marca a situação como "erro" preservando
+            # esse valor para que --continuar retome após essa tabela.
             repositorio.atualizar_checkpoint_dominio(
                 dominio="professores",
                 ultimo_id_execucao=id_execucao,
                 ultima_pagina=servico.ultima_fase_concluida,
                 token_parada=str(token_anterior),
-                indice_sincronizacao=None,
+                indice_sincronizacao=ultimo_indice_salvo,
                 ultima_situacao="erro",
                 sucesso=False,
             )

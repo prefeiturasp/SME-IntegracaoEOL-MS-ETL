@@ -32,7 +32,7 @@ Cargos de professor reconhecidos pelo EOL:
 
 import hashlib
 import logging
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from typing import Any
 
 from apps.controle_auditoria.models import EtlAuditoriaLinha
@@ -66,12 +66,14 @@ CARGOS_PROFESSOR = (
     3280,
     3298,
     3301,
+    3310,
     3336,
     3344,
     3840,
     3859,
     3867,
     3874,
+    3875,
     3883,
     3884,
 )
@@ -92,14 +94,19 @@ SQL_UNIDADES_EDUCACIONAIS = """
     FROM v_cadastro_unidade_educacao ue
 """
 
-# Apenas campos necessários para filtros de atribuição.
-# nome_turma, tipo, duração, turno resolvidos pelo Transition Gateway.
+# Campos necessários para filtros e resultados de atribuição.
+# cd_tipo_turma: obrigatório para VerificaSeEhTurmaDeProgramaAsync.
+# dt_inicio_turma: retornado como DataInicioAtribuicao
+# em BuscaProfessoresAsync.
+# nome_turma, turno resolvidos pelo Transition Gateway (não armazenados).
 SQL_TURMAS_ESCOLA = """
     SELECT
         cd_turma_escola,
         cd_escola,
         an_letivo,
         st_turma_escola,
+        cd_tipo_turma,
+        dt_inicio_turma,
         dt_fim_turma,
         dt_fim
     FROM turma_escola
@@ -139,7 +146,11 @@ SQL_TURMA_GRADE_TERRITORIO = """
 # ---------------------------------------------------------------------------
 
 SQL_PROFESSORES = f"""
-    SELECT DISTINCT sc.cd_registro_funcional, sc.nm_pessoa, sc.nm_social
+    SELECT DISTINCT
+        sc.cd_registro_funcional,
+        sc.nm_pessoa,
+        sc.nm_social,
+        sc.cd_cpf_pessoa
     FROM v_servidor_cotic sc
     INNER JOIN v_cargo_base_cotic cbs
         ON cbs.cd_servidor = sc.cd_servidor
@@ -151,6 +162,7 @@ SQL_CARGOS_BASE = f"""
         cbs.cd_cargo_base_servidor,
         sc.cd_registro_funcional,
         cbs.cd_cargo,
+        cbs.cd_situacao_funcional,
         cbs.dt_posse,
         cbs.dt_fim_nomeacao,
         cbs.dt_cancelamento
@@ -287,8 +299,10 @@ def _row_to_turma_escola(row: tuple[Any, ...]) -> dict[str, Any]:
         "codigo_escola": str(row[1]).strip(),
         "ano_letivo": row[2],
         "status": row[3] or "",
-        "dt_fim_turma": row[4],
-        "dt_fim": row[5],
+        "tipo_turma": row[4],
+        "dt_inicio_turma": row[5],
+        "dt_fim_turma": row[6],
+        "dt_fim": row[7],
     }
 
 
@@ -302,7 +316,9 @@ def _row_to_serie_turma_grade(row: tuple[Any, ...]) -> dict[str, Any]:
     }
 
 
-def _row_to_turma_escola_grade_programa(row: tuple[Any, ...]) -> dict[str, Any]:
+def _row_to_turma_escola_grade_programa(
+    row: tuple[Any, ...]
+) -> dict[str, Any]:
     return {
         "codigo": row[0],
         "codigo_turma": row[1],
@@ -326,6 +342,7 @@ def _row_to_professor(row: tuple[Any, ...]) -> dict[str, Any]:
         "codigo_rf": str(row[0]).strip(),
         "nome": row[1] or "",
         "nome_social": row[2] or None,
+        "cpf": str(row[3]).strip() if row[3] else None,
     }
 
 
@@ -334,9 +351,10 @@ def _row_to_cargo_base(row: tuple[Any, ...]) -> dict[str, Any]:
         "id": row[0],
         "professor_id": str(row[1]).strip(),
         "codigo_cargo": row[2],
-        "dt_posse": row[3],
-        "dt_fim_nomeacao": row[4],
-        "dt_cancelamento": row[5],
+        "situacao_funcional": row[3],
+        "dt_posse": row[4],
+        "dt_fim_nomeacao": row[5],
+        "dt_cancelamento": row[6],
     }
 
 
@@ -462,7 +480,7 @@ def _full_refresh(model_class: Any, objs: list[Any]) -> int:
 
 
 def _params_cargo() -> list[int]:
-    """Retorna lista de cargos de professor para parâmetros posicionais (%s)."""
+    """Retorna cargos de professor como parâmetros posicionais (%s)."""
     return list(CARGOS_PROFESSOR)
 
 
@@ -481,13 +499,14 @@ def _calcular_hash(campos: dict[str, Any]) -> str:
     conteudo = "|".join(f"{k}={v!r}" for k, v in sorted(campos.items()))
     return hashlib.sha256(conteudo.encode("utf-8")).hexdigest()
 
+
 def _reinsere_se_ausente(
     model_class: Any,
     pk_name: str,
     pks: list[str],
     map_linha: dict[str, tuple[str, str, dict[str, Any]]],
     objs: list[Any],
-    hashes: dict[str, str]
+    hashes: dict[str, str],
 ) -> None:
     """Força reinserção se o hash não mudou mas o registro sumiu do destino."""
     if not pks:
@@ -496,8 +515,10 @@ def _reinsere_se_ausente(
     for i in range(0, len(pks), _HASH_LOOKUP_BATCH):
         lote = pks[i : i + _HASH_LOOKUP_BATCH]
         existentes.update(
-            str(pk) for pk in model_class.objects.using("professores_db")
-            .filter(**{f"{pk_name}__in": lote}).values_list(pk_name, flat=True)
+            str(pk)
+            for pk in model_class.objects.using("professores_db")
+            .filter(**{f"{pk_name}__in": lote})
+            .values_list(pk_name, flat=True)
         )
     for pk_str, (id_dest, novo_h, row_dict) in map_linha.items():
         if pk_str not in existentes:
@@ -536,7 +557,6 @@ def _upsert_incremental(
         campos_hash = {k: row_dict.get(k) for k in update_fields}
         linhas.append((id_destino, _calcular_hash(campos_hash), row_dict))
 
-    # Buscar hashes existentes em lotes (evita IN query muito grande)
     ids_destino = [item[0] for item in linhas]
     hashes_existentes: dict[str, str] = {}
     for i in range(0, len(ids_destino), _HASH_LOOKUP_BATCH):
@@ -547,7 +567,6 @@ def _upsert_incremental(
             )
         )
 
-    # Filtrar somente linhas que mudaram; coletar PKs com hash inalterado
     objs_para_salvar: list[Any] = []
     novos_hashes: dict[str, str] = {}
     pks_hash_inalterado: list[str] = []
@@ -564,13 +583,28 @@ def _upsert_incremental(
     # Proteção contra dessincronização: se o hash não mudou mas o registro
     # não existe mais no destino (ex: migration reset), forçar reinserção.
     _reinsere_se_ausente(
-        model_class, pk_name, pks_hash_inalterado, map_pk_para_linha, objs_para_salvar, novos_hashes
+        model_class,
+        pk_name,
+        pks_hash_inalterado,
+        map_pk_para_linha,
+        objs_para_salvar,
+        novos_hashes,
     )
 
     if not objs_para_salvar:
         return 0
 
-    # Gravar registros alterados no banco destino
+    # Deduplicar por PK antes do bulk_create: ON CONFLICT DO UPDATE falha se o
+    # mesmo PK aparecer mais de uma vez no mesmo lote.
+    seen_pks: set[Any] = set()
+    objs_dedup: list[Any] = []
+    for obj in objs_para_salvar:
+        pk_val = getattr(obj, pk_name)
+        if pk_val not in seen_pks:
+            seen_pks.add(pk_val)
+            objs_dedup.append(obj)
+    objs_para_salvar = objs_dedup
+
     model_class.objects.using("professores_db").bulk_create(
         objs_para_salvar,
         update_conflicts=True,
@@ -579,7 +613,6 @@ def _upsert_incremental(
         batch_size=500,
     )
 
-    # Atualizar hashes no banco de auditoria (default DB)
     hash_objs = [
         EtlAuditoriaLinha(id_destino=id_d, hash_controle=h)
         for id_d, h in novos_hashes.items()
@@ -598,6 +631,39 @@ def _upsert_incremental(
 # ---------------------------------------------------------------------------
 # Servico principal
 # ---------------------------------------------------------------------------
+
+
+# Tabelas que usam full-refresh (delete-all + bulk_create).
+# Não suportam retomada por lote: ao reiniciar, processam do lote 1.
+_TABELAS_FULL_REFRESH: frozenset[str] = frozenset(
+    {
+        "turma_grade_territorio_experiencia",
+        "lotacao_servidor",
+        "cargo_sobreposto_servidor",
+        "funcao_atividade_cargo_servidor",
+        "laudo_medico",
+    }
+)
+
+# Ordem exata de processamento de todas as tabelas (todas as fases).
+# Usada para determinar quais tabelas pular ao retomar por lote.
+_ORDEM_TABELAS: tuple[str, ...] = (
+    "unidade_educacional",
+    "turma_escola",
+    "professor",
+    "pessoa",
+    "serie_turma_grade",
+    "turma_escola_grade_programa",
+    "cargo_base_servidor",
+    "contrato_externo",
+    "turma_grade_territorio_experiencia",
+    "lotacao_servidor",
+    "cargo_sobreposto_servidor",
+    "funcao_atividade_cargo_servidor",
+    "laudo_medico",
+    "atribuicao_aula",
+    "atribuicao_externo",
+)
 
 
 class EtlProfessoresService:
@@ -641,6 +707,8 @@ class EtlProfessoresService:
                     "codigo_escola",
                     "ano_letivo",
                     "status",
+                    "tipo_turma",
+                    "dt_inicio_turma",
                     "dt_fim_turma",
                     "dt_fim",
                 ],
@@ -655,7 +723,7 @@ class EtlProfessoresService:
                 Professor,
                 "professor",
                 [_row_to_professor(r) for r in chunk],
-                ["nome", "nome_social"],
+                ["nome", "nome_social", "cpf"],
             )
         return total
 
@@ -715,6 +783,7 @@ class EtlProfessoresService:
                 [
                     "professor_id",
                     "codigo_cargo",
+                    "situacao_funcional",
                     "dt_posse",
                     "dt_fim_nomeacao",
                     "dt_cancelamento",
@@ -745,12 +814,14 @@ class EtlProfessoresService:
     # ------------------------------------------------------------------
 
     def popular_turma_grade_territorio_experiencia(self) -> int:
-        """Full-refresh por lote: PK auto-gerada, sem chave natural para upsert."""
+        """Full-refresh por lote — sem chave natural para upsert."""
         return _full_refresh_por_lote(
             TurmaGradeTerritorioExperiencia,
             (
                 [
-                    TurmaGradeTerritorioExperiencia(**_row_to_turma_grade_territorio(r))
+                    TurmaGradeTerritorioExperiencia(
+                        **_row_to_turma_grade_territorio(r)
+                    )
                     for r in chunk
                 ]
                 for chunk in self.eol.iter_query(SQL_TURMA_GRADE_TERRITORIO)
@@ -772,7 +843,10 @@ class EtlProfessoresService:
         return _full_refresh_por_lote(
             CargoSobrepostoServidor,
             (
-                [CargoSobrepostoServidor(**_row_to_cargo_sobreposto(r)) for r in chunk]
+                [
+                    CargoSobrepostoServidor(**_row_to_cargo_sobreposto(r))
+                    for r in chunk
+                ]
                 for chunk in self.eol.iter_query(
                     SQL_CARGOS_SOBREPOSTOS, _params_cargo()
                 )
@@ -788,7 +862,9 @@ class EtlProfessoresService:
                     FuncaoAtividadeCargoServidor(**_row_to_funcao_atividade(r))
                     for r in chunk
                 ]
-                for chunk in self.eol.iter_query(SQL_FUNCOES_ATIVIDADE, _params_cargo())
+                for chunk in self.eol.iter_query(
+                    SQL_FUNCOES_ATIVIDADE, _params_cargo()
+                )
             ),
         )
 
@@ -810,7 +886,9 @@ class EtlProfessoresService:
         campo atualizado e o hash diverge, forçando a escrita.
         """
         total = 0
-        for chunk in self.eol.iter_query(SQL_ATRIBUICOES_AULA, _params_cargo()):
+        for chunk in self.eol.iter_query(
+            SQL_ATRIBUICOES_AULA, _params_cargo()
+        ):
             total += _upsert_incremental(
                 AtribuicaoAula,
                 "atribuicao_aula",
@@ -860,7 +938,14 @@ class EtlProfessoresService:
     # Execucao completa na ordem correta
     # ------------------------------------------------------------------
 
-    def executar(self, fase_inicial: int = 1) -> dict[str, int]:
+    def executar(
+        self,
+        fase_inicial: int = 1,
+        pular_ate: str | None = None,
+        lote_inicial: int = 0,
+        on_lote: Callable[[str, int], None] | None = None,
+        on_tabela_concluida: Callable[[str, int], None] | None = None,
+    ) -> dict[str, int]:
         """Executa ETL do dominio PROFESSORES_DB a partir de ``fase_inicial``.
 
         Args:
@@ -869,6 +954,17 @@ class EtlProfessoresService:
                 - 1: Tabelas sem dependências (UEs, turmas, professores)
                 - 2: Vínculos cargo/contrato (dependem da fase 1)
                 - 3: Atribuições e bloqueios (dependem da fase 2)
+            pular_ate: Nome da última tabela completamente concluída.
+                Todas as tabelas até ela (inclusive) são puladas.
+            lote_inicial: Número de lotes já processados na tabela
+                imediatamente após ``pular_ate``. Esses lotes são
+                descartados (lidos do cursor mas não escritos).
+                Ignorado para tabelas full-refresh.
+            on_lote: Callback chamado após cada lote processado com
+                assinatura ``(nome_tabela, numero_lote)``. Usado para
+                salvar checkpoints por lote.
+            on_tabela_concluida: Callback chamado após cada tabela
+                concluir, com assinatura ``(nome_tabela, linhas)``.
 
         Retorna:
             Dict com contagem de registros *alterados* escritos por tabela.
@@ -879,20 +975,84 @@ class EtlProfessoresService:
 
         log("[ETL PROF] Iniciando carga a partir da fase %d...", fase_inicial)
 
+        # pular_ate aplica-se só à fase inicial;
+        # fases seguintes rodam completas.
+        _pular = pular_ate
+        # lote_inicial é consumido uma única vez,
+        # na primeira tabela processada.
+        _li = [lote_inicial]
+
+        original_iter_query = self.eol.iter_query
+
+        def _executar_tabela(nome: str, metodo: Callable[[], int]) -> None:
+            """Executa tabela, pulando se ainda no intervalo a pular.
+
+            Tabelas são puladas enquanto ``_pular`` não for None.
+            Quando ``nome == _pular``, essa também é pulada (última já
+            concluída) e ``_pular`` é zerado para as próximas processarem.
+            """
+            nonlocal _pular
+            if _pular is not None:
+                if _pular == nome:
+                    _pular = None
+                    _li[0] = 0
+                log("[ETL PROF] Pulando %s (já concluída).", nome)
+                return
+
+            # Lote inicial só aplicável a tabelas upsert (full-refresh
+            # precisam reprocessar tudo para manter consistência).
+            li = 0 if nome in _TABELAS_FULL_REFRESH else _li[0]
+            _li[0] = 0
+
+            if li:
+                log(
+                    "[ETL PROF] %s: retomando do lote %d.",
+                    nome,
+                    li + 1,
+                )
+
+            # Substitui iter_query temporariamente para rastrear lotes
+            # e aplicar o offset sem modificar os métodos popular_*.
+            _lote_counter = [li]
+
+            def _iter_rastreavel(
+                sql: str,
+                parametros: list | dict | None = None,
+            ) -> Iterator[list[tuple[Any, ...]]]:
+                for i, chunk in enumerate(
+                    original_iter_query(sql, parametros)
+                ):
+                    if i < li:
+                        continue
+                    _lote_counter[0] += 1
+                    yield chunk
+                    if on_lote is not None:
+                        on_lote(nome, _lote_counter[0])
+
+            self.eol.iter_query = _iter_rastreavel  # type: ignore[method-assign]
+            try:
+                r[nome] = metodo()
+            finally:
+                self.eol.iter_query = original_iter_query  # type: ignore[method-assign]
+
+            log("[ETL PROF] %s: %d", nome, r[nome])
+            if on_tabela_concluida is not None:
+                on_tabela_concluida(nome, r[nome])
+
         # ------------------------------------------------------------------
         # Fase 1 — Sem dependências internas
         # ------------------------------------------------------------------
         if fase_inicial <= 1:
             log("[ETL PROF] === Fase 1: Suporte e Professores ===")
-            r["unidade_educacional"] = self.popular_unidades_educacionais()
-            log("[ETL PROF] unidade_educacional: %d", r["unidade_educacional"])
-            r["turma_escola"] = self.popular_turmas_escola()
-            log("[ETL PROF] turma_escola: %d", r["turma_escola"])
-            r["professor"] = self.popular_professores()
-            log("[ETL PROF] professor: %d", r["professor"])
-            r["pessoa"] = self.popular_pessoas()
-            log("[ETL PROF] pessoa: %d", r["pessoa"])
+            _executar_tabela(
+                "unidade_educacional",
+                self.popular_unidades_educacionais,
+            )
+            _executar_tabela("turma_escola", self.popular_turmas_escola)
+            _executar_tabela("professor", self.popular_professores)
+            _executar_tabela("pessoa", self.popular_pessoas)
             self.ultima_fase_concluida = 1
+            _pular = None  # fases seguintes rodam completas
             log("[ETL PROF] Fase 1 concluída.")
 
         # ------------------------------------------------------------------
@@ -900,20 +1060,19 @@ class EtlProfessoresService:
         # ------------------------------------------------------------------
         if fase_inicial <= 2:
             log("[ETL PROF] === Fase 2: Vínculos ===")
-            r["serie_turma_grade"] = self.popular_serie_turma_grade()
-            log("[ETL PROF] serie_turma_grade: %d", r["serie_turma_grade"])
-            r["turma_escola_grade_programa"] = (
-                self.popular_turma_escola_grade_programa()
+            _executar_tabela(
+                "serie_turma_grade", self.popular_serie_turma_grade
             )
-            log(
-                "[ETL PROF] turma_escola_grade_programa: %d",
-                r["turma_escola_grade_programa"],
+            _executar_tabela(
+                "turma_escola_grade_programa",
+                self.popular_turma_escola_grade_programa,
             )
-            r["cargo_base_servidor"] = self.popular_cargos_base()
-            log("[ETL PROF] cargo_base_servidor: %d", r["cargo_base_servidor"])
-            r["contrato_externo"] = self.popular_contratos_externos()
-            log("[ETL PROF] contrato_externo: %d", r["contrato_externo"])
+            _executar_tabela("cargo_base_servidor", self.popular_cargos_base)
+            _executar_tabela(
+                "contrato_externo", self.popular_contratos_externos
+            )
             self.ultima_fase_concluida = 2
+            _pular = None
             log("[ETL PROF] Fase 2 concluída.")
 
         # ------------------------------------------------------------------
@@ -921,31 +1080,23 @@ class EtlProfessoresService:
         # ------------------------------------------------------------------
         if fase_inicial <= 3:
             log("[ETL PROF] === Fase 3: Atribuições e Bloqueios ===")
-            r["turma_grade_territorio_experiencia"] = (
-                self.popular_turma_grade_territorio_experiencia()
+            _executar_tabela(
+                "turma_grade_territorio_experiencia",
+                self.popular_turma_grade_territorio_experiencia,
             )
-            log(
-                "[ETL PROF] turma_grade_territorio_experiencia: %d",
-                r["turma_grade_territorio_experiencia"],
+            _executar_tabela("lotacao_servidor", self.popular_lotacoes)
+            _executar_tabela(
+                "cargo_sobreposto_servidor", self.popular_cargos_sobrepostos
             )
-            r["lotacao_servidor"] = self.popular_lotacoes()
-            log("[ETL PROF] lotacao_servidor: %d", r["lotacao_servidor"])
-            r["cargo_sobreposto_servidor"] = self.popular_cargos_sobrepostos()
-            log(
-                "[ETL PROF] cargo_sobreposto_servidor: %d",
-                r["cargo_sobreposto_servidor"],
+            _executar_tabela(
+                "funcao_atividade_cargo_servidor",
+                self.popular_funcoes_atividade,
             )
-            r["funcao_atividade_cargo_servidor"] = self.popular_funcoes_atividade()
-            log(
-                "[ETL PROF] funcao_atividade_cargo_servidor: %d",
-                r["funcao_atividade_cargo_servidor"],
+            _executar_tabela("laudo_medico", self.popular_laudos)
+            _executar_tabela("atribuicao_aula", self.popular_atribuicoes_aula)
+            _executar_tabela(
+                "atribuicao_externo", self.popular_atribuicoes_externo
             )
-            r["laudo_medico"] = self.popular_laudos()
-            log("[ETL PROF] laudo_medico: %d", r["laudo_medico"])
-            r["atribuicao_aula"] = self.popular_atribuicoes_aula()
-            log("[ETL PROF] atribuicao_aula: %d", r["atribuicao_aula"])
-            r["atribuicao_externo"] = self.popular_atribuicoes_externo()
-            log("[ETL PROF] atribuicao_externo: %d", r["atribuicao_externo"])
             self.ultima_fase_concluida = 3
             log("[ETL PROF] Fase 3 concluída.")
 

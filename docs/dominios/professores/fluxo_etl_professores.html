@@ -1,0 +1,854 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Fluxo ETL — Domínio Professores</title>
+    <style>
+      :root {
+        --bg: #0f172a;
+        --surface: #1e293b;
+        --border: #334155;
+        --text: #e2e8f0;
+        --muted: #94a3b8;
+        --dim: #64748b;
+        --accent-blue: #38bdf8;
+        --accent-green: #4ade80;
+        --accent-purple: #c084fc;
+        --accent-amber: #fbbf24;
+        --accent-red: #f87171;
+        --accent-teal: #2dd4bf;
+        --phase1: #0369a1;
+        --phase2: #6d28d9;
+        --phase3: #065f46;
+        --upsert: #0e7490;
+        --refresh: #7c3aed;
+      }
+
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font-family: "Segoe UI", system-ui, sans-serif;
+        font-size: 0.9rem;
+        padding: 2rem;
+        line-height: 1.5;
+      }
+
+      h1 {
+        font-size: 1.4rem;
+        font-weight: 700;
+        color: #f8fafc;
+        margin-bottom: 0.25rem;
+      }
+      .subtitle {
+        font-size: 0.75rem;
+        color: var(--dim);
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin-bottom: 2rem;
+      }
+
+      h2 {
+        font-size: 0.8rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 1.5px;
+        color: var(--dim);
+        margin-bottom: 1rem;
+        padding-bottom: 0.4rem;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .section {
+        margin-bottom: 2.5rem;
+      }
+
+      /* ── Nodes ── */
+      .node {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.35rem 0.75rem;
+        border-radius: 6px;
+        font-size: 0.78rem;
+        font-weight: 600;
+        white-space: nowrap;
+        border: 1px solid transparent;
+      }
+      .node-cli    { background: #1e3a5f; border-color: #1d4ed8; color: #93c5fd; }
+      .node-api    { background: #1a2e1a; border-color: #166534; color: #86efac; }
+      .node-celery { background: #2d1a3e; border-color: #6d28d9; color: #c084fc; }
+      .node-cmd    { background: #1e2d3e; border-color: #0369a1; color: #7dd3fc; }
+      .node-svc    { background: #1a1a2e; border-color: #4338ca; color: #a5b4fc; }
+      .node-repo   { background: #1e3028; border-color: #065f46; color: #6ee7b7; }
+      .node-db     { background: #2e1a1a; border-color: #9f1239; color: #fca5a5; }
+      .node-ext    { background: #1e1e2e; border-color: #475569; color: #94a3b8; }
+
+      /* ── Arrow ── */
+      .arrow {
+        display: inline-flex;
+        align-items: center;
+        color: var(--border);
+        padding: 0 0.4rem;
+        font-size: 1rem;
+      }
+      .arrow-label {
+        font-size: 0.65rem;
+        color: var(--dim);
+        padding: 0 0.25rem;
+      }
+
+      /* ── Flow row ── */
+      .flow-row {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 0.1rem;
+        margin-bottom: 0.6rem;
+      }
+
+      /* ── Entry points grid ── */
+      .entry-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+      }
+      .entry-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 1rem;
+      }
+      .entry-card-title {
+        font-size: 0.7rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        color: var(--dim);
+        margin-bottom: 0.6rem;
+      }
+
+      /* ── Phase grid ── */
+      .phases {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1rem;
+        margin-bottom: 1rem;
+      }
+      @media (max-width: 860px) {
+        .phases { grid-template-columns: 1fr; }
+      }
+
+      .phase-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        overflow: hidden;
+      }
+      .phase-header {
+        padding: 0.6rem 1rem;
+        font-size: 0.78rem;
+        font-weight: 700;
+        letter-spacing: 0.5px;
+      }
+      .phase-header.f1 { background: #0c2a45; color: #7dd3fc; border-bottom: 1px solid #0369a1; }
+      .phase-header.f2 { background: #1e0a3c; color: #c084fc; border-bottom: 1px solid #6d28d9; }
+      .phase-header.f3 { background: #0a2018; color: #6ee7b7; border-bottom: 1px solid #065f46; }
+      .phase-body { padding: 0.75rem 1rem; }
+
+      .table-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.3rem 0;
+        border-bottom: 1px solid #1e293b;
+        font-size: 0.76rem;
+        gap: 0.5rem;
+      }
+      .table-row:last-child { border-bottom: none; }
+      .table-name { font-family: monospace; color: var(--text); }
+      .badge {
+        font-size: 0.62rem;
+        padding: 0.15rem 0.4rem;
+        border-radius: 4px;
+        font-weight: 700;
+        text-transform: uppercase;
+        white-space: nowrap;
+        flex-shrink: 0;
+      }
+      .badge-upsert  { background: #0e4a5e; color: #67e8f9; border: 1px solid #0e7490; }
+      .badge-refresh { background: #2e1b4e; color: #d8b4fe; border: 1px solid #7c3aed; }
+
+      .source-label {
+        font-size: 0.62rem;
+        color: var(--dim);
+        font-family: monospace;
+        margin-left: 0.3rem;
+      }
+
+      /* ── Hash flow ── */
+      .hash-flow {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 0;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 1rem 1.25rem;
+        overflow: hidden;
+      }
+
+      .hash-step {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.25rem;
+        padding: 0.5rem 0.75rem;
+        min-width: 80px;
+      }
+      .hash-step-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1rem;
+        font-weight: 700;
+      }
+      .hash-step-label {
+        font-size: 0.65rem;
+        text-align: center;
+        color: var(--muted);
+        max-width: 80px;
+      }
+      .hash-arrow {
+        color: var(--border);
+        font-size: 1.2rem;
+        padding: 0 0.25rem;
+        align-self: center;
+        margin-top: -12px;
+      }
+
+      .hs1 .hash-step-icon { background: #0c2a45; color: #7dd3fc; }
+      .hs2 .hash-step-icon { background: #1a1a2e; color: #a5b4fc; }
+      .hs3 .hash-step-icon { background: #0e2a2e; color: #67e8f9; }
+      .hs4 .hash-step-icon { background: #1e2a1e; color: #86efac; }
+      .hs5 .hash-step-icon { background: #1a1e0a; color: #bef264; }
+      .hs6 .hash-step-icon { background: #1e2a1e; color: #6ee7b7; }
+
+      /* ── Checkpoint flow ── */
+      .cp-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+      }
+      @media (max-width: 640px) {
+        .cp-grid { grid-template-columns: 1fr; }
+      }
+
+      .cp-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 1rem;
+      }
+      .cp-card-title {
+        font-size: 0.72rem;
+        font-weight: 700;
+        color: var(--accent-amber);
+        margin-bottom: 0.6rem;
+      }
+      .cp-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        padding: 0.25rem 0;
+        border-bottom: 1px solid var(--border);
+        gap: 1rem;
+        font-size: 0.75rem;
+      }
+      .cp-row:last-child { border-bottom: none; }
+      .cp-key { color: var(--dim); flex-shrink: 0; }
+      .cp-val { color: var(--text); font-family: monospace; font-size: 0.72rem; text-align: right; }
+
+      /* ── Audit models ── */
+      .models-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 0.75rem;
+      }
+      .model-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 0.75rem;
+      }
+      .model-name {
+        font-size: 0.72rem;
+        font-weight: 700;
+        color: var(--accent-blue);
+        margin-bottom: 0.4rem;
+        font-family: monospace;
+      }
+      .model-table {
+        font-size: 0.65rem;
+        color: var(--dim);
+        margin-bottom: 0.5rem;
+        font-family: monospace;
+      }
+      .field-list { list-style: none; }
+      .field-list li {
+        font-size: 0.7rem;
+        color: var(--muted);
+        padding: 0.1rem 0;
+        font-family: monospace;
+      }
+      .field-list li span { color: var(--dim); }
+
+      /* ── Token/progress explanation ── */
+      .info-box {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-left: 3px solid var(--accent-amber);
+        border-radius: 8px;
+        padding: 0.75rem 1rem;
+        font-size: 0.78rem;
+        color: var(--muted);
+        margin-bottom: 1rem;
+      }
+      .info-box strong { color: var(--text); }
+
+      /* ── Retry/loop diagram ── */
+      .retry-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 1rem;
+      }
+      .step-list { list-style: none; counter-reset: step; }
+      .step-list li {
+        counter-increment: step;
+        display: flex;
+        align-items: flex-start;
+        gap: 0.6rem;
+        padding: 0.35rem 0;
+        font-size: 0.78rem;
+        color: var(--muted);
+        border-bottom: 1px solid var(--border);
+      }
+      .step-list li:last-child { border-bottom: none; }
+      .step-list li::before {
+        content: counter(step);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: var(--border);
+        color: var(--text);
+        font-size: 0.65rem;
+        font-weight: 700;
+        flex-shrink: 0;
+        margin-top: 1px;
+      }
+      .step-list li strong { color: var(--text); }
+      .step-list li code {
+        font-family: monospace;
+        font-size: 0.72rem;
+        background: var(--bg);
+        padding: 0.1rem 0.3rem;
+        border-radius: 3px;
+        color: var(--accent-teal);
+      }
+
+      .situation-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.75rem;
+        margin-top: 0.75rem;
+      }
+      .situation-card {
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 0.75rem;
+        font-size: 0.75rem;
+      }
+      .situation-card.success { border-left: 3px solid var(--accent-green); }
+      .situation-card.error   { border-left: 3px solid var(--accent-red); }
+      .situation-card-title { font-weight: 700; margin-bottom: 0.4rem; }
+      .situation-card.success .situation-card-title { color: var(--accent-green); }
+      .situation-card.error   .situation-card-title { color: var(--accent-red); }
+      .situation-card ul { list-style: none; color: var(--muted); }
+      .situation-card ul li { padding: 0.15rem 0; }
+      .situation-card ul li::before { content: "· "; color: var(--dim); }
+    </style>
+  </head>
+  <body>
+    <h1>Fluxo ETL — Domínio Professores</h1>
+    <div class="subtitle">apps/professores · apps/controle_auditoria · professores_db</div>
+
+    <!-- ═══════════════════════════════════════════════
+         SECTION 1 — ENTRY POINTS
+    ══════════════════════════════════════════════════ -->
+    <div class="section">
+      <h2>1 · Pontos de entrada</h2>
+      <div class="entry-grid">
+
+        <div class="entry-card">
+          <div class="entry-card-title">Via CLI direto</div>
+          <div class="flow-row">
+            <span class="node node-cli">etl_professores</span>
+            <span class="arrow">→</span>
+            <span class="node node-svc">EtlProfessoresService</span>
+          </div>
+          <div style="font-size:0.7rem;color:var(--dim);margin-top:0.5rem">
+            <code style="font-size:0.68rem;color:var(--accent-teal)">python manage.py etl_professores [--volume 500] [--continuar]</code>
+          </div>
+        </div>
+
+        <div class="entry-card">
+          <div class="entry-card-title">Via roteador de domínios</div>
+          <div class="flow-row">
+            <span class="node node-cmd">executar_dominio<br><span style="font-size:0.65rem;font-weight:400">--dominio professores</span></span>
+            <span class="arrow">→</span>
+            <span class="node node-cli">etl_professores</span>
+          </div>
+        </div>
+
+        <div class="entry-card">
+          <div class="entry-card-title">Via Celery (assíncrono)</div>
+          <div class="flow-row">
+            <span class="node node-api">POST /api/v1/dominios/<br>professores/executar/</span>
+            <span class="arrow">→</span>
+            <span class="node node-celery">executar_dominio_task</span>
+            <span class="arrow">→</span>
+            <span class="node node-cmd">executar_dominio</span>
+          </div>
+          <div class="flow-row" style="margin-top:0.4rem">
+            <span class="node node-cli">agendar_dominio</span>
+            <span class="arrow">→</span>
+            <span class="node node-celery">executar_dominio_task</span>
+            <span class="arrow">→</span>
+            <span class="node node-cmd">executar_dominio</span>
+          </div>
+        </div>
+
+        <div class="entry-card">
+          <div class="entry-card-title">Via loop contínuo (container)</div>
+          <div class="flow-row">
+            <span class="node node-cli">executar_dominios_loop</span>
+            <span class="arrow">→</span>
+            <span class="node node-cmd">executar_dominios</span>
+          </div>
+          <div class="flow-row" style="margin-top:0.3rem">
+            <span class="node node-cmd">executar_dominios</span>
+            <span class="arrow">→</span>
+            <span class="node node-cli">sinc_rec_db</span>
+            <span class="arrow">+</span>
+            <span class="node node-cli">escola</span>
+          </div>
+          <div style="font-size:0.68rem;color:var(--dim);margin-top:0.4rem">
+            Professores é executado separadamente via <code style="font-size:0.66rem;color:var(--accent-teal)">executar_dominio --dominio professores</code>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════
+         SECTION 2 — CELERY LOOP
+    ══════════════════════════════════════════════════ -->
+    <div class="section">
+      <h2>2 · Loop da task Celery (executar_dominio_task)</h2>
+      <div class="retry-card">
+        <ol class="step-list">
+          <li>Lê <code>EtlCheckpointDominio("professores")</code> → captura <code>token_antes</code></li>
+          <li>Monta argumentos; adiciona <code>--continuar</code> se <code>continuar_execucao=True</code></li>
+          <li>Chama <code>call_command("executar_dominio", --dominio professores, ...)</code></li>
+          <li>Lê checkpoint novamente → captura <code>token_depois</code></li>
+          <li><code>linhas = max(token_depois − token_antes, 0)</code></li>
+          <li>Se <code>linhas &lt; volume</code> → <strong>para o loop</strong>; caso contrário define <code>continuar_execucao = True</code> e repete</li>
+          <li>Em exceção → <strong>retry</strong> com <code>continuar=True</code>, <code>countdown=60s</code>, máx. 5 tentativas</li>
+        </ol>
+        <div class="situation-grid">
+          <div class="situation-card success">
+            <div class="situation-card-title">Loop encerrado normalmente</div>
+            <ul>
+              <li>linhas alteradas &lt; volume no ciclo</li>
+              <li>retorna <code>ok:{total_linhas_processadas}</code></li>
+            </ul>
+          </div>
+          <div class="situation-card error">
+            <div class="situation-card-title">Exceção → retry</div>
+            <ul>
+              <li>salva checkpoint com situação = erro</li>
+              <li>próxima tentativa retoma com <code>--continuar</code></li>
+              <li>após 5 falhas a task é abandonada</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════
+         SECTION 3 — COMANDO etl_professores
+    ══════════════════════════════════════════════════ -->
+    <div class="section">
+      <h2>3 · Fluxo do comando etl_professores</h2>
+      <div class="retry-card">
+        <ol class="step-list">
+          <li>
+            Se <code>--continuar</code>: lê checkpoint do domínio <code>"professores"</code>.<br>
+            Se <code>ultima_situacao == "erro"</code> e <code>0 &lt; ultima_fase &lt; 4</code>
+            → <strong>retoma da fase seguinte</strong>; caso contrário reinicia da fase 1.
+          </li>
+          <li>Cria <code>id_execucao</code> via <code>RepositorioAuditoriaPostgres.iniciar_execucao("professores")</code></li>
+          <li>Instancia <code>EtlProfessoresService</code> e chama <code>servico.executar(fase_inicial)</code></li>
+          <li>Para cada tabela no resultado: registra <code>EtlExecucaoTabelaLida</code> e <code>EtlExecucaoTabelaEscrita</code> com <code>modo_escrita</code></li>
+          <li>Calcula <code>novo_token = token_anterior + total_alterado</code></li>
+          <li>Atualiza <code>EtlCheckpointDominio</code>: <code>ultima_pagina = ultima_fase_concluida</code>, <code>token_parada = novo_token</code>, <code>situacao = concluido</code></li>
+          <li>Finaliza execução com <code>situacao = "concluido"</code></li>
+        </ol>
+        <div class="situation-grid">
+          <div class="situation-card success">
+            <div class="situation-card-title">Sucesso</div>
+            <ul>
+              <li>checkpoint: situação = <code>concluido</code></li>
+              <li>token_parada acumulado</li>
+              <li>ultima_pagina = fase concluída (3)</li>
+            </ul>
+          </div>
+          <div class="situation-card error">
+            <div class="situation-card-title">Erro</div>
+            <ul>
+              <li>checkpoint: situação = <code>erro</code></li>
+              <li>token_parada preservado do anterior</li>
+              <li>ultima_pagina = última fase bem-sucedida</li>
+              <li>exceção repropagada</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════
+         SECTION 4 — FASES ETL
+    ══════════════════════════════════════════════════ -->
+    <div class="section">
+      <h2>4 · Fases do EtlProfessoresService</h2>
+      <div class="info-box">
+        <strong>Fonte:</strong> EOL (SQL Server) via pyodbc.
+        Cada método <code>popular_*</code> retorna o nº de linhas efetivamente alteradas.
+        O retorno acumulado de <code>executar(fase_inicial)</code> é um <code>dict[tabela → linhas]</code>.
+      </div>
+      <div class="phases">
+
+        <div class="phase-card">
+          <div class="phase-header f1">Fase 1 — sem dependências internas</div>
+          <div class="phase-body">
+            <div class="table-row">
+              <div>
+                <span class="table-name">unidade_educacional</span>
+                <span class="source-label">v_cadastro_unidade_educacao</span>
+              </div>
+              <span class="badge badge-upsert">upsert</span>
+            </div>
+            <div class="table-row">
+              <div>
+                <span class="table-name">turma_escola</span>
+                <span class="source-label">turma_escola</span>
+              </div>
+              <span class="badge badge-upsert">upsert</span>
+            </div>
+            <div class="table-row">
+              <div>
+                <span class="table-name">professor</span>
+                <span class="source-label">v_servidor_cotic</span>
+              </div>
+              <span class="badge badge-upsert">upsert</span>
+            </div>
+            <div class="table-row">
+              <div>
+                <span class="table-name">pessoa</span>
+                <span class="source-label">pessoa</span>
+              </div>
+              <span class="badge badge-upsert">upsert</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="phase-card">
+          <div class="phase-header f2">Fase 2 — dependem da Fase 1</div>
+          <div class="phase-body">
+            <div class="table-row">
+              <div>
+                <span class="table-name">serie_turma_grade</span>
+                <span class="source-label">serie_turma_grade</span>
+              </div>
+              <span class="badge badge-upsert">upsert</span>
+            </div>
+            <div class="table-row">
+              <div>
+                <span class="table-name">turma_escola_grade_programa</span>
+                <span class="source-label">turma_escola_grade_programa</span>
+              </div>
+              <span class="badge badge-upsert">upsert</span>
+            </div>
+            <div class="table-row">
+              <div>
+                <span class="table-name">cargo_base_servidor</span>
+                <span class="source-label">v_cargo_base_cotic</span>
+              </div>
+              <span class="badge badge-upsert">upsert</span>
+            </div>
+            <div class="table-row">
+              <div>
+                <span class="table-name">contrato_externo</span>
+                <span class="source-label">contrato_externo</span>
+              </div>
+              <span class="badge badge-upsert">upsert</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="phase-card">
+          <div class="phase-header f3">Fase 3 — dependem da Fase 2</div>
+          <div class="phase-body">
+            <div class="table-row">
+              <div>
+                <span class="table-name">turma_grade_territorio_experiencia</span>
+              </div>
+              <span class="badge badge-refresh">full&nbsp;refresh</span>
+            </div>
+            <div class="table-row">
+              <div>
+                <span class="table-name">lotacao_servidor</span>
+              </div>
+              <span class="badge badge-refresh">full&nbsp;refresh</span>
+            </div>
+            <div class="table-row">
+              <div>
+                <span class="table-name">cargo_sobreposto_servidor</span>
+              </div>
+              <span class="badge badge-refresh">full&nbsp;refresh</span>
+            </div>
+            <div class="table-row">
+              <div>
+                <span class="table-name">funcao_atividade_cargo_servidor</span>
+              </div>
+              <span class="badge badge-refresh">full&nbsp;refresh</span>
+            </div>
+            <div class="table-row">
+              <div>
+                <span class="table-name">laudo_medico</span>
+              </div>
+              <span class="badge badge-refresh">full&nbsp;refresh</span>
+            </div>
+            <div class="table-row">
+              <div>
+                <span class="table-name">atribuicao_aula</span>
+                <span class="source-label">atribuicao_aula</span>
+              </div>
+              <span class="badge badge-upsert">upsert</span>
+            </div>
+            <div class="table-row">
+              <div>
+                <span class="table-name">atribuicao_externo</span>
+                <span class="source-label">atribuicao_externo</span>
+              </div>
+              <span class="badge badge-upsert">upsert</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════
+         SECTION 5 — HASH / UPSERT INCREMENTAL
+    ══════════════════════════════════════════════════ -->
+    <div class="section">
+      <h2>5 · Controle incremental por hash (_upsert_incremental)</h2>
+      <div class="hash-flow">
+        <div class="hash-step hs1">
+          <div class="hash-step-icon">1</div>
+          <div class="hash-step-label">Leitura EOL<br>(SQL Server)</div>
+        </div>
+        <div class="hash-arrow">→</div>
+        <div class="hash-step hs2">
+          <div class="hash-step-icon">2</div>
+          <div class="hash-step-label">Montar<br>id_destino<br><em style="font-size:0.6rem">"tabela:pk"</em></div>
+        </div>
+        <div class="hash-arrow">→</div>
+        <div class="hash-step hs3">
+          <div class="hash-step-icon">3</div>
+          <div class="hash-step-label">SHA-256<br>update_fields</div>
+        </div>
+        <div class="hash-arrow">→</div>
+        <div class="hash-step hs4">
+          <div class="hash-step-icon">4</div>
+          <div class="hash-step-label">Consultar<br>EtlAuditoriaLinha<br>(lotes 1000)</div>
+        </div>
+        <div class="hash-arrow">→</div>
+        <div class="hash-step hs5">
+          <div class="hash-step-icon">5</div>
+          <div class="hash-step-label">Filtrar<br>novos ou<br>alterados</div>
+        </div>
+        <div class="hash-arrow">→</div>
+        <div class="hash-step hs5">
+          <div class="hash-step-icon">6</div>
+          <div class="hash-step-label">bulk_create<br>update_conflicts<br>professores_db</div>
+        </div>
+        <div class="hash-arrow">→</div>
+        <div class="hash-step hs6">
+          <div class="hash-step-icon">7</div>
+          <div class="hash-step-label">Atualizar<br>EtlAuditoriaLinha<br>(default db)</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:1rem;margin-top:0.75rem;flex-wrap:wrap">
+        <div class="info-box" style="flex:1;min-width:200px;margin-bottom:0">
+          <strong>Full Refresh:</strong> tabelas sem chave natural estável (5 tabelas da Fase 3)
+          executam <code>delete()</code> + <code>bulk_create()</code> em transação atômica no <code>professores_db</code>.
+          Não usam <code>EtlAuditoriaLinha</code>.
+        </div>
+        <div class="info-box" style="flex:1;min-width:200px;margin-bottom:0;border-left-color:var(--accent-teal)">
+          <strong>token_parada</strong> acumula o total de linhas <em>efetivamente alteradas</em> entre execuções.
+          O Celery usa o delta do token para detectar se há mais trabalho a fazer
+          (<code>linhas &lt; volume</code> → encerra loop).
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════
+         SECTION 6 — CHECKPOINT & RETOMADA
+    ══════════════════════════════════════════════════ -->
+    <div class="section">
+      <h2>6 · Checkpoint e retomada por fase</h2>
+      <div class="cp-grid">
+        <div class="cp-card">
+          <div class="cp-card-title">EtlCheckpointDominio — campos relevantes</div>
+          <div class="cp-row"><span class="cp-key">dominio</span><span class="cp-val">"professores"</span></div>
+          <div class="cp-row"><span class="cp-key">ultimo_id_execucao</span><span class="cp-val">UUID da última execução</span></div>
+          <div class="cp-row"><span class="cp-key">ultima_pagina</span><span class="cp-val">nº da última fase concluída (1, 2 ou 3)</span></div>
+          <div class="cp-row"><span class="cp-key">token_parada</span><span class="cp-val">total acumulado de linhas alteradas</span></div>
+          <div class="cp-row"><span class="cp-key">ultima_situacao</span><span class="cp-val">"concluido" | "erro" | "em_execucao"</span></div>
+          <div class="cp-row"><span class="cp-key">ultimo_sucesso_em</span><span class="cp-val">datetime do último sucesso</span></div>
+        </div>
+        <div class="cp-card">
+          <div class="cp-card-title">Lógica de retomada (--continuar)</div>
+          <ol class="step-list">
+            <li>Lê <code>checkpoint = obter_checkpoint_dominio("professores")</code></li>
+            <li>
+              Se <code>ultima_situacao == "erro"</code> e <code>0 &lt; ultima_pagina &lt; 4</code>:
+              <strong>fase_inicial = ultima_pagina + 1</strong>
+            </li>
+            <li>
+              Caso contrário (sucesso ou sem checkpoint):
+              <strong>fase_inicial = 1</strong>
+            </li>
+            <li>Em erro durante execução: salva checkpoint com <code>ultima_pagina = servico.ultima_fase_concluida</code></li>
+          </ol>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════
+         SECTION 7 — AUDIT MODELS
+    ══════════════════════════════════════════════════ -->
+    <div class="section">
+      <h2>7 · Modelos de auditoria (controle_auditoria)</h2>
+      <div class="models-grid">
+        <div class="model-card">
+          <div class="model-name">EtlExecucao</div>
+          <div class="model-table">db: etl_execucao</div>
+          <ul class="field-list">
+            <li>id_execucao <span>UUIDField unique</span></li>
+            <li>dominio <span>CharField(120)</span></li>
+            <li>situacao <span>em_execucao · concluido · erro · cancelado</span></li>
+            <li>iniciado_em / finalizado_em <span>DateTimeField</span></li>
+            <li>mensagem_erro <span>TextField null</span></li>
+          </ul>
+        </div>
+        <div class="model-card">
+          <div class="model-name">EtlExecucaoTabelaLida</div>
+          <div class="model-table">db: etl_execucao_tabela_lida</div>
+          <ul class="field-list">
+            <li>id_execucao <span>UUIDField (ref. EtlExecucao)</span></li>
+            <li>tabela_origem <span>CharField(200)</span></li>
+            <li>numero_pagina <span>IntegerField default=0</span></li>
+            <li>linhas_lidas <span>IntegerField default=0</span></li>
+            <li>lido_em <span>DateTimeField</span></li>
+          </ul>
+        </div>
+        <div class="model-card">
+          <div class="model-name">EtlExecucaoTabelaEscrita</div>
+          <div class="model-table">db: etl_execucao_tabela_escrita</div>
+          <ul class="field-list">
+            <li>id_execucao <span>UUIDField (ref. EtlExecucao)</span></li>
+            <li>tabela_destino <span>CharField(200)</span></li>
+            <li>linhas_escritas <span>IntegerField default=0</span></li>
+            <li>modo_escrita <span>"upsert" | "full_refresh"</span></li>
+            <li>escrito_em <span>DateTimeField</span></li>
+          </ul>
+        </div>
+        <div class="model-card">
+          <div class="model-name">EtlCheckpointDominio</div>
+          <div class="model-table">db: etl_checkpoint_dominio</div>
+          <ul class="field-list">
+            <li>dominio <span>CharField(120) unique</span></li>
+            <li>ultimo_id_execucao <span>UUIDField null</span></li>
+            <li>ultima_pagina <span>IntegerField (fase)</span></li>
+            <li>token_parada <span>CharField(255) null</span></li>
+            <li>ultima_situacao <span>CharField(30)</span></li>
+            <li>ultimo_sucesso_em <span>DateTimeField null</span></li>
+          </ul>
+        </div>
+        <div class="model-card">
+          <div class="model-name">EtlAuditoriaLinha</div>
+          <div class="model-table">db: etl_auditoria_linha</div>
+          <ul class="field-list">
+            <li>id_destino <span>CharField(255) PK<br>"tabela:pk_origem"</span></li>
+            <li>hash_controle <span>CharField(64) SHA-256 hex</span></li>
+            <li>atualizado_em <span>DateTimeField</span></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════
+         SECTION 8 — DATABASES
+    ══════════════════════════════════════════════════ -->
+    <div class="section">
+      <h2>8 · Roteamento de bancos de dados</h2>
+      <div style="display:flex;gap:1rem;flex-wrap:wrap">
+        <div class="cp-card" style="flex:1;min-width:200px">
+          <div class="cp-card-title" style="color:var(--accent-red)">professores_db</div>
+          <div class="cp-row"><span class="cp-key">app</span><span class="cp-val">professores</span></div>
+          <div class="cp-row"><span class="cp-key">conteúdo</span><span class="cp-val">16 modelos de domínio</span></div>
+          <div class="cp-row"><span class="cp-key">escrita</span><span class="cp-val">bulk_create / delete</span></div>
+          <div class="cp-row"><span class="cp-key">usando</span><span class="cp-val">DominioRouter</span></div>
+        </div>
+        <div class="cp-card" style="flex:1;min-width:200px">
+          <div class="cp-card-title" style="color:var(--accent-green)">default (auditoria)</div>
+          <div class="cp-row"><span class="cp-key">app</span><span class="cp-val">controle_auditoria</span></div>
+          <div class="cp-row"><span class="cp-key">conteúdo</span><span class="cp-val">EtlExecucao, Checkpoint, AuditoriaLinha</span></div>
+          <div class="cp-row"><span class="cp-key">escrita</span><span class="cp-val">ORM Django</span></div>
+        </div>
+        <div class="cp-card" style="flex:1;min-width:200px">
+          <div class="cp-card-title" style="color:var(--accent-blue)">EOL (origem)</div>
+          <div class="cp-row"><span class="cp-key">driver</span><span class="cp-val">pyodbc / SQL Server</span></div>
+          <div class="cp-row"><span class="cp-key">acesso</span><span class="cp-val">somente leitura</span></div>
+          <div class="cp-row"><span class="cp-key">via</span><span class="cp-val">EtlProfessoresService</span></div>
+        </div>
+      </div>
+    </div>
+
+  </body>
+</html>

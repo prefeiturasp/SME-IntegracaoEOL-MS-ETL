@@ -56,7 +56,9 @@ class Migration(migrations.Migration):
             fields=[
                 (
                     "codigo_rf",
-                    models.CharField(max_length=20, primary_key=True, serialize=False),
+                    models.CharField(
+                        max_length=20, primary_key=True, serialize=False
+                    ),
                 ),
                 ("nome", models.CharField(max_length=200)),
                 (
@@ -93,7 +95,10 @@ class Migration(migrations.Migration):
                         null=True,
                     ),
                 ),
-                ("dt_inicio_atribuicao", models.DateField(blank=True, null=True)),
+                (
+                    "dt_inicio_atribuicao",
+                    models.DateField(blank=True, null=True),
+                ),
                 ("ano_atribuicao", models.IntegerField(blank=True, null=True)),
                 ("dt_fim_atribuicao", models.DateField(blank=True, null=True)),
                 ("dt_fim_turma", models.DateField(blank=True, null=True)),
@@ -109,7 +114,9 @@ class Migration(migrations.Migration):
                 (
                     "codigo_turma",
                     models.BigIntegerField(
-                        blank=True, help_text="ID da TurmaEscola neste DB.", null=True
+                        blank=True,
+                        help_text="ID da TurmaEscola neste DB.",
+                        null=True,
                     ),
                 ),
                 (
@@ -140,8 +147,12 @@ class Migration(migrations.Migration):
                     models.Index(
                         fields=["rf_professor"], name="prof_idx_aats_professor"
                     ),
-                    models.Index(fields=["codigo_turma"], name="prof_idx_aats_turma"),
-                    models.Index(fields=["ano_letivo"], name="prof_idx_aats_ano"),
+                    models.Index(
+                        fields=["codigo_turma"], name="prof_idx_aats_turma"
+                    ),
+                    models.Index(
+                        fields=["ano_letivo"], name="prof_idx_aats_ano"
+                    ),
                 ],
             },
         ),
@@ -152,10 +163,14 @@ class Migration(migrations.Migration):
                 (
                     "codigo_unidade_local_servico",
                     models.CharField(
-                        help_text="ID da UE onde a função é exercida.", max_length=20
+                        help_text="ID da UE onde a função é exercida.",
+                        max_length=20,
                     ),
                 ),
-                ("dt_fim_funcao_atividade", models.DateField(blank=True, null=True)),
+                (
+                    "dt_fim_funcao_atividade",
+                    models.DateField(blank=True, null=True),
+                ),
                 (
                     "cargo_base",
                     models.ForeignKey(
@@ -206,7 +221,8 @@ class Migration(migrations.Migration):
                 (
                     "codigo_unidade_educacao",
                     models.CharField(
-                        help_text="ID da UnidadeEducacional neste DB.", max_length=20
+                        help_text="ID da UnidadeEducacional neste DB.",
+                        max_length=20,
                     ),
                 ),
                 ("dt_cancelamento", models.DateField(blank=True, null=True)),
@@ -248,12 +264,15 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "codigo_turma",
-                    models.BigIntegerField(help_text="ID da TurmaEscola neste DB."),
+                    models.BigIntegerField(
+                        help_text="ID da TurmaEscola neste DB."
+                    ),
                 ),
                 (
                     "codigo_escola",
                     models.CharField(
-                        help_text="ID da UnidadeEducacional neste DB.", max_length=20
+                        help_text="ID da UnidadeEducacional neste DB.",
+                        max_length=20,
                     ),
                 ),
                 (
@@ -269,9 +288,15 @@ class Migration(migrations.Migration):
                 "verbose_name_plural": "séries-grade das turmas",
                 "db_table": "serie_turma_grade",
                 "indexes": [
-                    models.Index(fields=["codigo_turma"], name="prof_idx_stg_turma"),
-                    models.Index(fields=["dt_fim"], name="prof_idx_stg_dt_fim"),
-                    models.Index(fields=["codigo_escola"], name="prof_idx_stg_escola"),
+                    models.Index(
+                        fields=["codigo_turma"], name="prof_idx_stg_turma"
+                    ),
+                    models.Index(
+                        fields=["dt_fim"], name="prof_idx_stg_dt_fim"
+                    ),
+                    models.Index(
+                        fields=["codigo_escola"], name="prof_idx_stg_escola"
+                    ),
                 ],
             },
         ),
@@ -285,7 +310,8 @@ class Migration(migrations.Migration):
                 (
                     "codigo_escola",
                     models.CharField(
-                        help_text="ID da UnidadeEducacional neste DB.", max_length=20
+                        help_text="ID da UnidadeEducacional neste DB.",
+                        max_length=20,
                     ),
                 ),
                 ("ano_letivo", models.IntegerField()),
@@ -304,8 +330,12 @@ class Migration(migrations.Migration):
                 "verbose_name_plural": "turmas escolares",
                 "db_table": "turma_escola",
                 "indexes": [
-                    models.Index(fields=["codigo_escola"], name="prof_idx_te_escola"),
-                    models.Index(fields=["ano_letivo"], name="prof_idx_te_ano"),
+                    models.Index(
+                        fields=["codigo_escola"], name="prof_idx_te_escola"
+                    ),
+                    models.Index(
+                        fields=["ano_letivo"], name="prof_idx_te_ano"
+                    ),
                     models.Index(fields=["status"], name="prof_idx_te_status"),
                     models.Index(
                         fields=["codigo_escola", "ano_letivo"],
@@ -317,10 +347,15 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name="TurmaEscolaGradePrograma",
             fields=[
-                ("codigo", models.BigIntegerField(primary_key=True, serialize=False)),
+                (
+                    "codigo",
+                    models.BigIntegerField(primary_key=True, serialize=False),
+                ),
                 (
                     "codigo_turma",
-                    models.BigIntegerField(help_text="ID da TurmaEscola neste DB."),
+                    models.BigIntegerField(
+                        help_text="ID da TurmaEscola neste DB."
+                    ),
                 ),
                 (
                     "codigo_escola_grade",
@@ -335,7 +370,9 @@ class Migration(migrations.Migration):
                 "verbose_name_plural": "grades/programas das turmas",
                 "db_table": "turma_escola_grade_programa",
                 "indexes": [
-                    models.Index(fields=["codigo_turma"], name="prof_idx_tegp_turma")
+                    models.Index(
+                        fields=["codigo_turma"], name="prof_idx_tegp_turma"
+                    )
                 ],
             },
         ),
@@ -345,7 +382,9 @@ class Migration(migrations.Migration):
                 ("id", models.BigAutoField(primary_key=True, serialize=False)),
                 (
                     "codigo_serie_grade",
-                    models.IntegerField(help_text="ID da SerieTurmaGrade neste DB."),
+                    models.IntegerField(
+                        help_text="ID da SerieTurmaGrade neste DB."
+                    ),
                 ),
                 (
                     "codigo_componente_curricular",
@@ -373,7 +412,8 @@ class Migration(migrations.Migration):
                 "db_table": "turma_grade_territorio_experiencia",
                 "indexes": [
                     models.Index(
-                        fields=["codigo_serie_grade"], name="prof_idx_tgte_serie_grade"
+                        fields=["codigo_serie_grade"],
+                        name="prof_idx_tgte_serie_grade",
                     ),
                     models.Index(
                         fields=["codigo_componente_curricular"],
@@ -387,7 +427,9 @@ class Migration(migrations.Migration):
             fields=[
                 (
                     "codigo_ue",
-                    models.CharField(max_length=20, primary_key=True, serialize=False),
+                    models.CharField(
+                        max_length=20, primary_key=True, serialize=False
+                    ),
                 ),
                 (
                     "codigo_dre",
@@ -412,9 +454,12 @@ class Migration(migrations.Migration):
                 "verbose_name_plural": "unidades educacionais",
                 "db_table": "unidade_educacional",
                 "indexes": [
-                    models.Index(fields=["codigo_dre"], name="prof_idx_ue_dre"),
                     models.Index(
-                        fields=["codigo_tipo_escola"], name="prof_idx_ue_tipo_escola"
+                        fields=["codigo_dre"], name="prof_idx_ue_dre"
+                    ),
+                    models.Index(
+                        fields=["codigo_tipo_escola"],
+                        name="prof_idx_ue_tipo_escola",
                     ),
                 ],
             },
@@ -426,13 +471,16 @@ class Migration(migrations.Migration):
                 (
                     "codigo_unidade_educacao",
                     models.CharField(
-                        help_text="ID da UnidadeEducacional neste DB.", max_length=20
+                        help_text="ID da UnidadeEducacional neste DB.",
+                        max_length=20,
                     ),
                 ),
                 (
                     "codigo_turma_escola",
                     models.BigIntegerField(
-                        blank=True, help_text="ID da TurmaEscola neste DB.", null=True
+                        blank=True,
+                        help_text="ID da TurmaEscola neste DB.",
+                        null=True,
                     ),
                 ),
                 (
@@ -457,11 +505,16 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "codigo_serie_grade",
-                    models.IntegerField(help_text="ID da SerieTurmaGrade neste DB."),
+                    models.IntegerField(
+                        help_text="ID da SerieTurmaGrade neste DB."
+                    ),
                 ),
                 ("ano_atribuicao", models.IntegerField()),
                 ("dt_atribuicao_aula", models.DateField()),
-                ("dt_disponibilizacao_aulas", models.DateField(blank=True, null=True)),
+                (
+                    "dt_disponibilizacao_aulas",
+                    models.DateField(blank=True, null=True),
+                ),
                 (
                     "codigo_motivo_disponibilizacao",
                     models.IntegerField(blank=True, null=True),
@@ -481,8 +534,12 @@ class Migration(migrations.Migration):
                 "verbose_name_plural": "atribuições de aulas",
                 "db_table": "atribuicao_aula",
                 "indexes": [
-                    models.Index(fields=["codigo_unidade_educacao"], name="idx_aa_ue"),
-                    models.Index(fields=["codigo_turma_escola"], name="idx_aa_turma"),
+                    models.Index(
+                        fields=["codigo_unidade_educacao"], name="idx_aa_ue"
+                    ),
+                    models.Index(
+                        fields=["codigo_turma_escola"], name="idx_aa_turma"
+                    ),
                     models.Index(
                         fields=["codigo_componente_curricular"],
                         name="idx_aa_componente",
@@ -511,7 +568,10 @@ class Migration(migrations.Migration):
                         max_length=20,
                     ),
                 ),
-                ("dt_fim_cargo_sobreposto", models.DateField(blank=True, null=True)),
+                (
+                    "dt_fim_cargo_sobreposto",
+                    models.DateField(blank=True, null=True),
+                ),
                 (
                     "cargo_base",
                     models.ForeignKey(
@@ -527,7 +587,8 @@ class Migration(migrations.Migration):
                 "db_table": "cargo_sobreposto_servidor",
                 "indexes": [
                     models.Index(
-                        fields=["dt_fim_cargo_sobreposto"], name="idx_css_dt_fim"
+                        fields=["dt_fim_cargo_sobreposto"],
+                        name="idx_css_dt_fim",
                     )
                 ],
             },
@@ -539,7 +600,8 @@ class Migration(migrations.Migration):
                 (
                     "codigo_unidade_educacao",
                     models.CharField(
-                        help_text="ID da UnidadeEducacional neste DB.", max_length=20
+                        help_text="ID da UnidadeEducacional neste DB.",
+                        max_length=20,
                     ),
                 ),
                 (
@@ -556,7 +618,9 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "codigo_serie_grade",
-                    models.IntegerField(help_text="ID da SerieTurmaGrade neste DB."),
+                    models.IntegerField(
+                        help_text="ID da SerieTurmaGrade neste DB."
+                    ),
                 ),
                 (
                     "codigo_turma_escola_grade_programa",
@@ -568,7 +632,10 @@ class Migration(migrations.Migration):
                 ),
                 ("ano_atribuicao", models.IntegerField()),
                 ("dt_atribuicao", models.DateField()),
-                ("dt_disponibilizacao", models.DateField(blank=True, null=True)),
+                (
+                    "dt_disponibilizacao",
+                    models.DateField(blank=True, null=True),
+                ),
                 (
                     "codigo_motivo_disponibilizacao_externo",
                     models.IntegerField(blank=True, null=True),
@@ -588,7 +655,9 @@ class Migration(migrations.Migration):
                 "verbose_name_plural": "atribuições de professores externos",
                 "db_table": "atribuicao_externo",
                 "indexes": [
-                    models.Index(fields=["codigo_unidade_educacao"], name="idx_ae_ue"),
+                    models.Index(
+                        fields=["codigo_unidade_educacao"], name="idx_ae_ue"
+                    ),
                     models.Index(
                         fields=["codigo_componente_curricular"],
                         name="idx_ae_componente",
@@ -607,7 +676,8 @@ class Migration(migrations.Migration):
                 (
                     "codigo_unidade_educacao",
                     models.CharField(
-                        help_text="ID da UnidadeEducacional neste DB.", max_length=20
+                        help_text="ID da UnidadeEducacional neste DB.",
+                        max_length=20,
                     ),
                 ),
                 ("dt_inicio", models.DateField(blank=True, null=True)),
@@ -626,18 +696,24 @@ class Migration(migrations.Migration):
                 "verbose_name_plural": "lotações dos servidores",
                 "db_table": "lotacao_servidor",
                 "indexes": [
-                    models.Index(fields=["codigo_unidade_educacao"], name="idx_ls_ue"),
+                    models.Index(
+                        fields=["codigo_unidade_educacao"], name="idx_ls_ue"
+                    ),
                     models.Index(fields=["dt_fim"], name="idx_ls_dt_fim"),
                 ],
             },
         ),
         migrations.AddIndex(
             model_name="contratoexterno",
-            index=models.Index(fields=["codigo_unidade_educacao"], name="idx_ce_ue"),
+            index=models.Index(
+                fields=["codigo_unidade_educacao"], name="idx_ce_ue"
+            ),
         ),
         migrations.AddIndex(
             model_name="contratoexterno",
-            index=models.Index(fields=["dt_cancelamento"], name="idx_ce_cancelamento"),
+            index=models.Index(
+                fields=["dt_cancelamento"], name="idx_ce_cancelamento"
+            ),
         ),
         migrations.AddIndex(
             model_name="cargobaseservidor",
@@ -649,6 +725,8 @@ class Migration(migrations.Migration):
         ),
         migrations.AddIndex(
             model_name="cargobaseservidor",
-            index=models.Index(fields=["dt_fim_nomeacao"], name="idx_cbs_fim_nomeacao"),
+            index=models.Index(
+                fields=["dt_fim_nomeacao"], name="idx_cbs_fim_nomeacao"
+            ),
         ),
     ]

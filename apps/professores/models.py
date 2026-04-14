@@ -93,12 +93,12 @@ class UnidadeEducacional(models.Model):
     codigo_ue = models.CharField(max_length=20, primary_key=True)
     codigo_dre = models.CharField(
         max_length=20,
-        null=True,  # NOSONAR - Manter compatibilidade com o legado
+        null=True,  # NOSONAR - manter compatibilidade com legado
         blank=True,
         help_text="ID da DRE — ref. domínio institucional.",
     )
     codigo_tipo_escola = models.IntegerField(
-        null=True,
+        null=True,  # NOSONAR - manter compatibilidade com legado
         blank=True,
         help_text=(
             "ID do tipo de escola"
@@ -130,6 +130,10 @@ class TurmaEscola(models.Model):
     Status: 'O'=Aberta, 'A'=Ativa, 'E'=Extinta, 'C'=Cancelada.
 
     Filtro principal: st_turma_escola IN ('O','A','C','E').
+    cd_tipo_turma: 1=Série, 2=Ciclo, 3=Programa — obrigatório para
+        VerificaSeEhTurmaDeProgramaAsync (cd_tipo_turma != 1).
+    dt_inicio_turma: retornado em BuscaTurmasAtribuidasProfessorAsync
+        e BuscaProfessoresAsync como DataInicioAtribuicao.
     """
 
     codigo_turma = models.BigIntegerField(primary_key=True)
@@ -142,6 +146,12 @@ class TurmaEscola(models.Model):
         max_length=1,
         help_text="'O'=Aberta, 'A'=Ativa, 'E'=Extinta, 'C'=Cancelada.",
     )
+    tipo_turma = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="cd_tipo_turma: 1=Série, 2=Ciclo, 3=Programa.",
+    )
+    dt_inicio_turma = models.DateField(null=True, blank=True)
     dt_fim_turma = models.DateField(null=True, blank=True)
     dt_fim = models.DateField(null=True, blank=True)
 
@@ -283,8 +293,8 @@ class AgrupamentoAtribuicaoTerritorioSaber(models.Model):
       - VerificaSeTemAtribuicaoTurmaTerritorioSaberQuery
       - ObterUsuariosComAtribuicaoTerritorioSaberQuery
       - ObterAtribuicoesDoProfessorPorAnoLetivoTerritorioDoSaberQuery
-    Descrições de território e experiência são resolvidas pelo
-    Transition Gateway.
+    Descrições de território e experiência são resolvidas
+    pelo Transition Gateway.
     """
 
     codigo_agrupamento = models.BigIntegerField(primary_key=True)
@@ -304,7 +314,7 @@ class AgrupamentoAtribuicaoTerritorioSaber(models.Model):
     dt_fim_turma = models.DateField(null=True, blank=True)
     rf_professor = models.CharField(
         max_length=20,
-        null=True,  # NOSONAR - Manter compatibilidade com o legado
+        null=True,  # NOSONAR - manter compatibilidade com legado
         blank=True,
         help_text="Ref. Professor.codigo_rf neste DB.",
     )
@@ -314,7 +324,7 @@ class AgrupamentoAtribuicaoTerritorioSaber(models.Model):
         help_text=_HELP_TURMA,
     )
     codigos_componentes_curriculares = models.TextField(
-        null=True,  # NOSONAR - Manter compatibilidade com o legado
+        null=True,  # NOSONAR - manter compatibilidade com legado
         blank=True,
         help_text="Lista de IDs de componentes separados por vírgula.",
     )
@@ -351,13 +361,26 @@ class Professor(models.Model):
 
     Fonte EOL: view `v_servidor_cotic`.
     Identificado pelo Registro Funcional (RF).
+    cpf armazenado para consultas que retornam cd_cpf_pessoa como CPF
+    (ex.: BuscaProfessoresAsync, BuscarProfessorTitularPorDisciplinaAsync).
     """
 
     codigo_rf = models.CharField(max_length=20, primary_key=True)
     nome = models.CharField(max_length=200)
     nome_social = models.CharField(
-        max_length=200, null=True, blank=True  # NOSONAR
-    )  # fmt: skip
+        max_length=200,
+        null=True,  # NOSONAR nome_social:models:Professor
+        blank=True,
+    )
+    cpf = models.CharField(
+        max_length=14,
+        null=True,  # NOSONAR cpf:models:Professor
+        blank=True,
+        help_text=(
+            "cd_cpf_pessoa do servidor — retornado como CPF"
+            " em consultas de perfil."
+        ),
+    )
 
     class Meta:
 
@@ -376,8 +399,10 @@ class CargoBaseServidor(models.Model):
     Fonte EOL: view `v_cargo_base_cotic`.
     Representa o vínculo formal do servidor com seu cargo efetivo.
     dt_fim_nomeacao IS NULL = nomeação ativa.
-    codigo_cargo é ID do domínio RH — descrição resolvida pelo
-    Transition Gateway.
+    codigo_cargo é ID do domínio RH — descrição resolvida pelo Transition
+    Gateway.
+    situacao_funcional (cd_situacao_funcional) obrigatório para
+    VerificarValidadeProfessorAsync: filtra situacao_funcional = 6.
     """
 
     id = models.BigAutoField(primary_key=True)
@@ -390,6 +415,14 @@ class CargoBaseServidor(models.Model):
     )
     codigo_cargo = models.IntegerField(
         help_text="ID do cargo — ref. domínio RH/funcional.",
+    )
+    situacao_funcional = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text=(
+            "cd_situacao_funcional — usado em VerificarValidadeProfessorAsync"
+            " (filtro situacao = 6)."
+        ),
     )
     dt_posse = models.DateField(null=True, blank=True)
     dt_fim_nomeacao = models.DateField(null=True, blank=True)
@@ -453,8 +486,8 @@ class CargoSobrepostoServidor(models.Model):
     Fonte EOL: tabela `cargo_sobreposto_servidor`.
     dt_fim_cargo_sobreposto IS NULL = sobreposto ativo, impede atribuição
     (exceto cargos 3379, 3085, 3360).
-    codigo_cargo é ID do domínio RH — descrição resolvida pelo
-    Transition Gateway.
+    codigo_cargo é ID do domínio RH — descrição resolvida
+    pelo Transition Gateway.
     """
 
     id = models.BigAutoField(primary_key=True)
@@ -555,8 +588,10 @@ class Pessoa(models.Model):
     cpf = models.CharField(max_length=14, unique=True)
     nome = models.CharField(max_length=200)
     nome_social = models.CharField(
-        max_length=200, null=True, blank=True  # NOSONAR
-    )  # fmt: skip
+        max_length=200,
+        null=True,  # NOSONAR nome_social:models:Pessoa
+        blank=True,
+    )
 
     class Meta:
 
@@ -654,6 +689,8 @@ class AtribuicaoAula(models.Model):
         help_text=_HELP_COMP,
     )
     codigo_serie_grade = models.IntegerField(
+        null=True,
+        blank=True,
         help_text="ID da SerieTurmaGrade neste DB.",
     )
     ano_atribuicao = models.IntegerField()
@@ -713,6 +750,8 @@ class AtribuicaoExterno(models.Model):
         help_text=_HELP_COMP,
     )
     codigo_serie_grade = models.IntegerField(
+        null=True,
+        blank=True,
         help_text="ID da SerieTurmaGrade neste DB.",
     )
     codigo_turma_escola_grade_programa = models.BigIntegerField(
