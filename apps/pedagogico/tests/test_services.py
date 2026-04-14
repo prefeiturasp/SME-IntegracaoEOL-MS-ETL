@@ -6,7 +6,11 @@ from uuid import uuid4
 from django.test import TestCase
 from django.utils import timezone
 
-from apps.core.libs.base_etl_service import BaseEtlService, PhaseConfig, PipelineMetrics
+from apps.core.libs.base_etl_service import (
+    BaseEtlService,
+    PhaseConfig,
+    PipelineMetrics,
+)
 from apps.pedagogico.dtos.model_in import RegenciaComponenteCurricularIn
 from apps.pedagogico.services import (
     EtlPedagogicoService,
@@ -75,7 +79,9 @@ class TestPedagogicoService(TestCase):
         self.assertTrue(_planejamento_regencia(200, 1, "1", exact, fallback))
         self.assertFalse(_planejamento_regencia(300, 1, "1", exact, fallback))
 
-    def test_criar_transform_componente_curricular_retorna_tripla(self) -> None:
+    def test_criar_transform_componente_curricular_retorna_tripla(
+        self,
+    ) -> None:
         config = self.service._fases[0]
         transform = self.service._criar_transform(config)
 
@@ -94,7 +100,8 @@ class TestPedagogicoService(TestCase):
         transform = self.service._criar_transform(config)
 
         pk, _, obj = transform(
-            (513, " Inglês ", 1, 6, "7", 2025, "T1", "RF1", 0))
+            (513, " Inglês ", 1, 6, "7", 2025, "T1", "RF1", 0)
+        )
 
         self.assertEqual(pk, "513-T1-RF1")
         self.assertTrue(obj.regencia)
@@ -102,7 +109,9 @@ class TestPedagogicoService(TestCase):
         self.assertTrue(obj.planejamento_regencia)
         self.assertEqual(obj.codigo_componente_curricular_pai, 512)
 
-    def test_criar_transform_componente_por_turma_pula_linha_sem_codigo_ou_turma(self) -> None:
+    def test_criar_transform_comp_por_turma_pula_linha_sem_codigo_ou_turma(
+        self,
+    ) -> None:
         config = self.service._fases[1]
         transform = self.service._criar_transform(config)
 
@@ -113,7 +122,9 @@ class TestPedagogicoService(TestCase):
             transform((513, " Inglês ", 1, 6, "7", 2025, None, "RF1", 0))
         )
 
-    def test_criar_transform_componente_regencia_gera_pk_composta(self) -> None:
+    def test_criar_transform_componente_regencia_gera_pk_composta(
+        self,
+    ) -> None:
         self.service._fallback = {200}
         config = self.service._fases[3]
         transform = self.service._criar_transform(config)
@@ -145,16 +156,14 @@ class TestPedagogicoService(TestCase):
         self.assertTrue(obj.componente_planejamento_regencia)
         self.assertTrue(timezone.is_aware(obj.inicio_atribuicao))
 
-    def test_criar_transform_componente_por_ano_letivo_ignora_registro_sem_chave(self) -> None:
+    def test_criar_transform_comp_por_ano_letivo_ignora_registro_sem_chave(
+        self,
+    ) -> None:
         config = self.service._fases[5]
         transform = self.service._criar_transform(config)
 
-        self.assertIsNone(
-            transform((None, "Desc", "1", "1 ano", 1, 5, 2025))
-        )
-        self.assertIsNone(
-            transform((100, "Desc", "1", "1 ano", 1, 5, None))
-        )
+        self.assertIsNone(transform((None, "Desc", "1", "1 ano", 1, 5, 2025)))
+        self.assertIsNone(transform((100, "Desc", "1", "1 ano", 1, 5, None)))
 
     @patch.object(BaseEtlService, "_sync_batch")
     def test_sync_batch_filtra_nones_antes_de_delegar(
@@ -173,6 +182,28 @@ class TestPedagogicoService(TestCase):
 
         self.assertEqual(resultado, (1, 0))
         self.assertEqual(len(mock_sync.call_args.kwargs["processed_data"]), 1)
+
+    def test_processar_batch_filtra_nones_antes_do_sync_batch(self) -> None:
+        config = self.service._fases[1]
+        self.service._a2 = {
+            513: MagicMock(eh_regencia=1, eh_territorio=0),
+        }
+        self.service.sync_batch = MagicMock(return_value=(1, 1))
+
+        escritos, ignorados = self.service._processar_batch(
+            config=config,
+            chunk=[
+                (None, "Inválido", 1, 6, "7", 2025, "T1", "RF1", 0),
+                (513, " Inglês ", 1, 6, "7", 2025, "T1", "RF1", 0),
+            ],
+            transform=self.service._criar_transform(config),
+            batch_num=0,
+        )
+
+        self.assertEqual((escritos, ignorados), (1, 1))
+        processed_data = self.service.sync_batch.call_args.args[0]
+        self.assertEqual(len(processed_data), 1)
+        self.assertEqual(processed_data[0][0], "513-T1-RF1")
 
     def test_anos_letivos_usa_cache_por_instancia(self) -> None:
         self.mock_eol.iter_query.return_value = [[(2024,), (2025,)]]
@@ -285,8 +316,6 @@ class TestPedagogicoService(TestCase):
         service = EtlPedagogicoService(
             db_alias="default",
             eol=self.mock_eol,
-            id_min=1,
-            id_max=1000,
         )
         sql = "SELECT codigo FROM componente_curricular ORDER BY codigo"
 

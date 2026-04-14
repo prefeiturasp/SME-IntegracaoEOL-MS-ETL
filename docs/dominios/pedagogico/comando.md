@@ -12,7 +12,6 @@ Herdados de `BaseEtlCommand`:
 - `--offset` — offset inicial
 - `--continuar` — retoma a partir do último checkpoint salvo
 - `--primeiro-run` — sinaliza primeiro run (sem filtro incremental)
-- `--particao` / `--total-particoes` — processamento particionado
 
 ## Comportamento
 
@@ -35,5 +34,4 @@ Todas as 7 tabelas do domínio estão em `_TABELAS_UPSERT` — `get_modo_escrita
 python manage.py etl_pedagogico
 python manage.py etl_pedagogico --continuar
 python manage.py etl_pedagogico --primeiro-run
-python manage.py etl_pedagogico --particao 0 --total-particoes 4
 ```

@@ -271,10 +271,6 @@ class EtlPedagogicoService(BaseEtlService):
         db_alias: str = _DB,
         id_execucao: UUID | None = None,
         repositorio_auditoria: Any | None = None,
-        id_min: int | None = None,
-        id_max: int | None = None,
-        particao: int = 0,
-        total_particoes: int = 1,
         primeiro_run: bool = False,
         eol: EOLService | None = None,
     ) -> None:
@@ -282,10 +278,6 @@ class EtlPedagogicoService(BaseEtlService):
             db_alias=db_alias,
             id_execucao=id_execucao,
             repositorio_auditoria=repositorio_auditoria,
-            id_min=id_min,
-            id_max=id_max,
-            particao=particao,
-            total_particoes=total_particoes,
             primeiro_run=primeiro_run,
         )
         self.eol = eol or EOLService()
@@ -429,6 +421,29 @@ class EtlPedagogicoService(BaseEtlService):
         return cast(
             tuple[int, int],
             super()._sync_batch(processed_data=filtered_data, **kwargs),
+        )
+
+    def _processar_batch(
+        self,
+        config: PhaseConfig,
+        chunk: list[Any],
+        **kwargs: Any,
+    ) -> tuple[int, int]:
+        """Filtra transforms nulos antes de delegar ao pipeline base."""
+        transform = kwargs.get("transform") or (lambda x: x)
+        lote_transformado = [
+            item
+            for item in (transform(row) for row in chunk)
+            if item is not None
+        ]
+        if not lote_transformado:
+            return 0, len(chunk)
+
+        meta = self._get_batch_meta(config)
+        return self.sync_batch(
+            cast(list[ProcessedRecord], lote_transformado),
+            meta,
+            batch_num=kwargs.get("batch_num", 0),
         )
 
     # ------------------------------------------------------------------
