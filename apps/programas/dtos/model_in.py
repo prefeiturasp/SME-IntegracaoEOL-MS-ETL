@@ -58,7 +58,6 @@ class MatriculaTurmaProgramaIn:
     codigo_componente_curricular: Any
     nome_componente_curricular: Any
     codigo_situacao_matricula: Any
-    descricao_situacao_matricula: Any
     data_matricula: Any
     data_situacao: Any
     ano_letivo: Any

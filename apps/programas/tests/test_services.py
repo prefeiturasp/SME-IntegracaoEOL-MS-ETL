@@ -1,24 +1,10 @@
-"""Testes do app programas — models, DTOs e services."""
+"""Testes do service ETL do app programas."""
 
 import datetime
 from unittest.mock import MagicMock
 
 from django.test import TestCase
 
-from apps.programas.dtos.model_in import (
-    ComponenteCurricularProgramaIn,
-    MatriculaTurmaProgramaIn,
-    TipoProgramaIn,
-    TurmaProgramaComponenteCurricularIn,
-    TurmaProgramaIn,
-)
-from apps.programas.dtos.model_out import (
-    ComponenteCurricularProgramaOut,
-    MatriculaTurmaProgramaOut,
-    TipoProgramaOut,
-    TurmaProgramaComponenteCurricularOut,
-    TurmaProgramaOut,
-)
 from apps.programas.models import (
     ComponenteCurricularPrograma,
     MatriculaTurmaPrograma,
@@ -31,10 +17,6 @@ from apps.programas.services import (
     _calcular_hash,
     _upsert_incremental,
 )
-
-# ---------------------------------------------------------------------------
-# Helpers de fixture
-# ---------------------------------------------------------------------------
 
 _DATA_MATRICULA = datetime.date(2025, 2, 1)
 
@@ -60,261 +42,10 @@ def _row_comp_turma(codigo_turma=12345, codigo_comp=1322, nome="PAP Rec"):
 
 def _row_matricula(
     aluno=99999, turma=12345, comp=1322, nome_comp="PAP Rec",
-    sit=1, desc_sit="Ativo", dt_mat=_DATA_MATRICULA, dt_sit=None,
+    sit=1, dt_mat=_DATA_MATRICULA, dt_sit=None,
     ano=2025, ue="000001", dre="108900", tipo_prog=649,
 ):
-    return (aluno, turma, comp, nome_comp, sit, desc_sit, dt_mat, dt_sit, ano, ue, dre, tipo_prog)
-
-
-# ---------------------------------------------------------------------------
-# Models — __str__
-# ---------------------------------------------------------------------------
-
-
-class TestTipoProgramaStr(TestCase):
-    def test_str(self) -> None:
-        tp = TipoPrograma(codigo_tipo_programa=649, nome="PAP Recuperação", categoria="PAP")
-        self.assertEqual(str(tp), "PAP Recuperação (649)")
-
-
-class TestComponenteCurricularProgramaStr(TestCase):
-    def test_str(self) -> None:
-        cc = ComponenteCurricularPrograma(
-            codigo_componente_curricular=1322,
-            nome_componente_curricular="PAP Rec",
-            categoria="PAP",
-        )
-        resultado = str(cc)
-        self.assertIn("1322", resultado)
-        self.assertIn("PAP Rec", resultado)
-        self.assertIn("PAP", resultado)
-
-
-class TestTurmaProgramaStr(TestCase):
-    def test_str(self) -> None:
-        t = TurmaPrograma(
-            codigo_turma=12345, nome_turma="TURMA PAP 1A",
-            codigo_ue="000001", codigo_dre="108900",
-            ano_letivo=2025, situacao="O",
-            codigo_tipo_programa=649, categoria="PAP",
-        )
-        resultado = str(t)
-        self.assertIn("12345", resultado)
-        self.assertIn("2025", resultado)
-
-
-class TestTurmaProgramaComponenteCurricularStr(TestCase):
-    def test_str(self) -> None:
-        tcc = TurmaProgramaComponenteCurricular(
-            codigo_turma=12345,
-            codigo_componente_curricular=1322,
-            nome_componente_curricular="PAP Rec",
-        )
-        resultado = str(tcc)
-        self.assertIn("12345", resultado)
-        self.assertIn("1322", resultado)
-
-
-class TestMatriculaTurmaProgramaStr(TestCase):
-    def test_str(self) -> None:
-        m = MatriculaTurmaPrograma(
-            codigo_aluno=99999, codigo_turma=12345,
-            codigo_componente_curricular=1322,
-        )
-        resultado = str(m)
-        self.assertIn("99999", resultado)
-        self.assertIn("12345", resultado)
-        self.assertIn("1322", resultado)
-
-
-# ---------------------------------------------------------------------------
-# DTOs — TipoProgramaOut
-# ---------------------------------------------------------------------------
-
-
-class TestTipoProgramaOut(TestCase):
-    def test_pap_649(self) -> None:
-        obj = TipoProgramaOut.from_in(TipoProgramaIn(*_row_tipo(649)))
-        self.assertEqual(obj.codigo_tipo_programa, 649)
-        self.assertEqual(obj.categoria, "PAP")
-        self.assertTrue(obj.ativo)
-
-    def test_pap_650(self) -> None:
-        obj = TipoProgramaOut.from_in(TipoProgramaIn(*_row_tipo(650)))
-        self.assertEqual(obj.categoria, "PAP")
-
-    def test_paee_656(self) -> None:
-        obj = TipoProgramaOut.from_in(TipoProgramaIn(*_row_tipo(656, "PAEE-SRM", "PAEE SRM")))
-        self.assertEqual(obj.categoria, "PAEE")
-
-    def test_paee_657_e_658(self) -> None:
-        for id_ in (657, 658):
-            with self.subTest(id_=id_):
-                obj = TipoProgramaOut.from_in(TipoProgramaIn(*_row_tipo(id_)))
-                self.assertEqual(obj.categoria, "PAEE")
-
-    def test_nome_usa_descricao(self) -> None:
-        obj = TipoProgramaOut.from_in(TipoProgramaIn(*_row_tipo(649, "SIG", "Descrição Completa")))
-        self.assertEqual(obj.nome, "Descrição Completa")
-
-    def test_nome_fallback_sigla_se_descricao_vazia(self) -> None:
-        obj = TipoProgramaOut.from_in(TipoProgramaIn(649, "SIG", ""))
-        self.assertEqual(obj.nome, "SIG")
-
-    def test_codigo_desconhecido_default_pap(self) -> None:
-        obj = TipoProgramaOut.from_in(TipoProgramaIn(999, "X", "Desconhecido"))
-        self.assertEqual(obj.categoria, "PAP")
-
-    def test_nome_trimado(self) -> None:
-        obj = TipoProgramaOut.from_in(TipoProgramaIn(649, "  SIG  ", "  Nome  "))
-        self.assertEqual(obj.nome, "Nome")
-
-
-# ---------------------------------------------------------------------------
-# DTOs — ComponenteCurricularProgramaOut
-# ---------------------------------------------------------------------------
-
-
-class TestComponenteCurricularProgramaOut(TestCase):
-    def test_pap_vigente_1322(self) -> None:
-        obj = ComponenteCurricularProgramaOut.from_in(
-            ComponenteCurricularProgramaIn(*_row_componente(1322))
-        )
-        self.assertEqual(obj.categoria, "PAP")
-        self.assertTrue(obj.vigente)
-        self.assertEqual(obj.codigo_componente_curricular, 1322)
-
-    def test_pap_vigente_1770_1804_1805(self) -> None:
-        for id_ in (1770, 1804, 1805):
-            with self.subTest(id_=id_):
-                obj = ComponenteCurricularProgramaOut.from_in(
-                    ComponenteCurricularProgramaIn(*_row_componente(id_))
-                )
-                self.assertTrue(obj.vigente)
-                self.assertEqual(obj.categoria, "PAP")
-
-    def test_pap_legado_1033(self) -> None:
-        obj = ComponenteCurricularProgramaOut.from_in(
-            ComponenteCurricularProgramaIn(*_row_componente(1033))
-        )
-        self.assertEqual(obj.categoria, "PAP")
-        self.assertFalse(obj.vigente)
-
-    def test_pap_legados_restantes(self) -> None:
-        for id_ in (1051, 1052, 1053, 1054):
-            with self.subTest(id_=id_):
-                obj = ComponenteCurricularProgramaOut.from_in(
-                    ComponenteCurricularProgramaIn(*_row_componente(id_))
-                )
-                self.assertFalse(obj.vigente)
-
-    def test_paee_vigente_1030(self) -> None:
-        obj = ComponenteCurricularProgramaOut.from_in(
-            ComponenteCurricularProgramaIn(*_row_componente(1030))
-        )
-        self.assertEqual(obj.categoria, "PAEE")
-        self.assertTrue(obj.vigente)
-
-
-
-# ---------------------------------------------------------------------------
-# DTOs — TurmaProgramaOut
-# ---------------------------------------------------------------------------
-
-
-class TestTurmaProgramaOut(TestCase):
-    def test_campos_basicos(self) -> None:
-        obj = TurmaProgramaOut.from_in(TurmaProgramaIn(*_row_turma()))
-        self.assertEqual(obj.codigo_turma, 12345)
-        self.assertEqual(obj.nome_turma, "TURMA PAP 1A")
-        self.assertEqual(obj.codigo_ue, "000001")
-        self.assertEqual(obj.codigo_dre, "108900")
-        self.assertEqual(obj.ano_letivo, 2025)
-        self.assertEqual(obj.situacao, "O")
-        self.assertEqual(obj.codigo_tipo_programa, 649)
-        self.assertEqual(obj.categoria, "PAP")
-
-    def test_paee(self) -> None:
-        obj = TurmaProgramaOut.from_in(TurmaProgramaIn(*_row_turma(tipo_prog=656)))
-        self.assertEqual(obj.categoria, "PAEE")
-
-    def test_tipo_turno_none(self) -> None:
-        obj = TurmaProgramaOut.from_in(TurmaProgramaIn(*_row_turma(turno=None)))
-        self.assertIsNone(obj.tipo_turno)
-
-    def test_descricao_turno_vazia_vira_none(self) -> None:
-        obj = TurmaProgramaOut.from_in(TurmaProgramaIn(*_row_turma(desc_turno="")))
-        self.assertIsNone(obj.descricao_turno)
-
-    def test_nome_trimado(self) -> None:
-        obj = TurmaProgramaOut.from_in(TurmaProgramaIn(*_row_turma(nome="  TURMA  ")))
-        self.assertEqual(obj.nome_turma, "TURMA")
-
-
-# ---------------------------------------------------------------------------
-# DTOs — TurmaProgramaComponenteCurricularOut
-# ---------------------------------------------------------------------------
-
-
-class TestTurmaProgramaComponenteCurricularOut(TestCase):
-    def test_campos(self) -> None:
-        obj = TurmaProgramaComponenteCurricularOut.from_in(
-            TurmaProgramaComponenteCurricularIn(*_row_comp_turma())
-        )
-        self.assertEqual(obj.codigo_turma, 12345)
-        self.assertEqual(obj.codigo_componente_curricular, 1322)
-        self.assertEqual(obj.nome_componente_curricular, "PAP Rec")
-
-    def test_nome_trimado(self) -> None:
-        obj = TurmaProgramaComponenteCurricularOut.from_in(
-            TurmaProgramaComponenteCurricularIn(12345, 1322, "  PAP Rec  ")
-        )
-        self.assertEqual(obj.nome_componente_curricular, "PAP Rec")
-
-
-# ---------------------------------------------------------------------------
-# DTOs — MatriculaTurmaProgramaOut
-# ---------------------------------------------------------------------------
-
-
-class TestMatriculaTurmaProgramaOut(TestCase):
-    def test_campos_basicos(self) -> None:
-        obj = MatriculaTurmaProgramaOut.from_in(MatriculaTurmaProgramaIn(*_row_matricula()))
-        self.assertEqual(obj.codigo_aluno, 99999)
-        self.assertEqual(obj.codigo_turma, 12345)
-        self.assertEqual(obj.codigo_componente_curricular, 1322)
-        self.assertEqual(obj.nome_componente_curricular, "PAP Rec")
-        self.assertEqual(obj.codigo_situacao_matricula, 1)
-        self.assertEqual(obj.descricao_situacao_matricula, "Ativo")
-        self.assertEqual(obj.data_matricula, _DATA_MATRICULA)
-        self.assertEqual(obj.ano_letivo, 2025)
-        self.assertEqual(obj.codigo_ue, "000001")
-        self.assertEqual(obj.codigo_dre, "108900")
-        self.assertEqual(obj.categoria, "PAP")
-
-    def test_paee(self) -> None:
-        obj = MatriculaTurmaProgramaOut.from_in(
-            MatriculaTurmaProgramaIn(*_row_matricula(tipo_prog=656))
-        )
-        self.assertEqual(obj.categoria, "PAEE")
-
-    def test_data_situacao_none(self) -> None:
-        obj = MatriculaTurmaProgramaOut.from_in(
-            MatriculaTurmaProgramaIn(*_row_matricula(dt_sit=None))
-        )
-        self.assertIsNone(obj.data_situacao)
-
-    def test_data_situacao_preenchida(self) -> None:
-        dt = datetime.date(2025, 6, 30)
-        obj = MatriculaTurmaProgramaOut.from_in(
-            MatriculaTurmaProgramaIn(*_row_matricula(dt_sit=dt))
-        )
-        self.assertEqual(obj.data_situacao, dt)
-
-
-# ---------------------------------------------------------------------------
-# Services — _calcular_hash
-# ---------------------------------------------------------------------------
+    return (aluno, turma, comp, nome_comp, sit, dt_mat, dt_sit, ano, ue, dre, tipo_prog)
 
 
 class TestCalcularHash(TestCase):
@@ -341,11 +72,6 @@ class TestCalcularHash(TestCase):
         t1 = TipoPrograma(codigo_tipo_programa=649, nome="PAP", categoria="PAP", ativo=True)
         t2 = TipoPrograma(codigo_tipo_programa=999, nome="PAP", categoria="PAP", ativo=False)
         self.assertEqual(_calcular_hash(t1, ["nome"]), _calcular_hash(t2, ["nome"]))
-
-
-# ---------------------------------------------------------------------------
-# Services — _upsert_incremental
-# ---------------------------------------------------------------------------
 
 
 class TestUpsertIncrementalProgramas(TestCase):
@@ -454,11 +180,6 @@ class TestUpsertIncrementalProgramas(TestCase):
         self.assertEqual(resultado, 0)
 
 
-# ---------------------------------------------------------------------------
-# Services — EtlProgramasService (fases individuais)
-# ---------------------------------------------------------------------------
-
-
 class TestEtlProgramasServiceInit(TestCase):
     databases = ["programas_db", "default"]
 
@@ -466,11 +187,25 @@ class TestEtlProgramasServiceInit(TestCase):
         service = EtlProgramasService()
         self.assertIsNotNone(service.eol)
         self.assertEqual(service.ultima_fase_concluida, 0)
+        self.assertIsNone(service.ultimo_token)
+        self.assertEqual(len(service._fases), 5)
 
     def test_init_com_eol_injetado(self) -> None:
         mock_eol = MagicMock()
         service = EtlProgramasService(eol=mock_eol)
         self.assertIs(service.eol, mock_eol)
+
+    def test_init_aceita_kwargs_do_base_command(self) -> None:
+        """Contrato com BaseEtlCommand._handle_sync."""
+        service = EtlProgramasService(
+            db_alias="programas_db",
+            id_execucao=None,
+            repositorio_auditoria=MagicMock(),
+            primeiro_run=True,
+            eol=MagicMock(),
+        )
+        self.assertEqual(service.db_alias, "programas_db")
+        self.assertTrue(service.primeiro_run)
 
 
 class TestEtlProgramasServiceFase1(TestCase):
@@ -641,9 +376,9 @@ class TestEtlProgramasServiceFase5(TestCase):
         self.assertEqual(resultado, 0)
 
     def test_atualiza_situacao_e_preenche_atualizado_em(self) -> None:
-        self.mock_eol.executar_query.return_value = [_row_matricula(sit=1, desc_sit="Ativo")]
+        self.mock_eol.executar_query.return_value = [_row_matricula(sit=1)]
         self.service.popular_matriculas_turma_programa()
-        self.mock_eol.executar_query.return_value = [_row_matricula(sit=5, desc_sit="Concluído")]
+        self.mock_eol.executar_query.return_value = [_row_matricula(sit=5)]
         resultado = self.service.popular_matriculas_turma_programa()
         self.assertEqual(resultado, 1)
         m = MatriculaTurmaPrograma.objects.using("programas_db").get(
@@ -661,11 +396,6 @@ class TestEtlProgramasServiceFase5(TestCase):
     def test_vazio_retorna_zero(self) -> None:
         self.mock_eol.executar_query.return_value = []
         self.assertEqual(self.service.popular_matriculas_turma_programa(), 0)
-
-
-# ---------------------------------------------------------------------------
-# Services — executar
-# ---------------------------------------------------------------------------
 
 
 class TestEtlProgramasServiceExecutar(TestCase):
