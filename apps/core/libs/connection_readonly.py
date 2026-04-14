@@ -11,8 +11,8 @@ from django.db import connections
 logger = logging.getLogger(__name__)
 
 # Configurações padrão (podem ser sobrescritas por variáveis de ambiente específicas)
-_DEFAULT_CHUNK_SIZE = int(os.getenv("LEGACY_CHUNK_SIZE", "10000"))
-_DEFAULT_LOTE_MAXIMO = int(os.getenv("LEGACY_LOTE_MAXIMO", "0"))
+_DEFAULT_CHUNK_SIZE = int(os.getenv("EOL_CHUNK_SIZE", "10000"))
+_DEFAULT_LOTE_MAXIMO = int(os.getenv("EOL_LOTE_MAXIMO", "0"))
 
 WRITE_COMMANDS = {"insert", "update", "delete", "merge", "create", "drop"}
 
@@ -82,8 +82,12 @@ class ReadOnlySQLServerConnectionFactory:
                     )
                 return cast(list[tuple[Any, ...]], rows)
 
-        except Exception:
-            logger.exception("[%s] Erro ao executar consulta", self.db_alias)
+        except Exception as exc:
+            erro_str = str(exc).lower()
+            if "no such table" in erro_str or "invalid object name" in erro_str:
+                logger.warning("[%s] Tabela não encontrada na origem: %s", self.db_alias, exc)
+            else:
+                logger.exception("[%s] Erro ao executar consulta", self.db_alias)
             raise
 
     def iter_consulta(
@@ -131,8 +135,15 @@ class ReadOnlySQLServerConnectionFactory:
                         )
                         break
 
-        except Exception:
-            logger.exception("[%s] Erro ao executar consulta iterativa", self.db_alias)
+        except Exception as exc:
+            erro_str = str(exc).lower()
+            if "no such table" in erro_str or "invalid object name" in erro_str:
+                logger.warning(
+                    "[%s] Tabela não encontrada na consulta iterativa: %s", 
+                    self.db_alias, exc
+                )
+            else:
+                logger.exception("[%s] Erro ao executar consulta iterativa", self.db_alias)
             raise
 
     def executar_comando(self, sql: str) -> list[tuple[Any, ...]]:

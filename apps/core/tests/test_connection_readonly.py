@@ -203,3 +203,22 @@ class TestConnectionFactory(TestCase):
             factory.executar_consulta(sql)
 
             mock_cursor.execute.assert_called_once_with(sql)
+
+    @patch("django.conf.settings.DATABASES")
+    def test_error_tabela_nao_encontrada_consulta_e_iter(self, mock_databases: MagicMock) -> None:
+        """(Tabela não encontrada)."""
+        mock_databases.__contains__.return_value = True
+        mock_databases.__getitem__.return_value = {"NAME": "fake"}
+        factory = ReadOnlySQLServerConnectionFactory(db_alias="fake_db")
+        
+        with patch("apps.core.libs.connection_readonly.connections") as mock_connections:
+            mock_cursor = mock_connections["fake_db"].cursor.return_value.__enter__.return_value
+            # Caso 1: executar_consulta
+            mock_cursor.execute.side_effect = RuntimeError("no such table: XYZ")
+            with self.assertRaises(RuntimeError):
+                factory.executar_consulta("SELECT 1")
+            
+            # Caso 2: iter_consulta
+            mock_cursor.execute.side_effect = RuntimeError("invalid object name: 'ZYX'")
+            with self.assertRaises(RuntimeError):
+                list(factory.iter_consulta("SELECT 1"))
