@@ -160,7 +160,7 @@ class TestAlunosService(TestCase):
 
         self.service._executar_fase(config)
 
-        args, kwargs = mock_sync.call_args
+        args, _ = mock_sync.call_args
         fase_meta = args[1]
         self.assertEqual(fase_meta["model_class"], config.model_class)
         self.assertEqual(
