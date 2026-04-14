@@ -121,7 +121,7 @@ def _cod_agrupamento(
         f"{codigo_experiencia_pedagogica}_{rf_professor}_"
         f"{data_atribuicao}_{csv}"
     )
-    return int(hashlib.md5(chave.encode()).hexdigest()[:15], 16)
+    return int(hashlib.md5(chave.encode()).hexdigest()[:15], 16) # NOSONAR
 
 
 def _chave_grupo(row: AtribuicaoTerritorioSaberIn) -> tuple:
@@ -319,93 +319,131 @@ class EtlPedagogicoService(BaseEtlService):
         dto_in = config.dto_in
         model_class = config.model_class
 
-        if config.nome == "componente_curricular":
-
-            def transform(row: tuple[Any, ...]) -> TransformResult:
-                dto = dto_in(*row)
-                obj = model_class(**dto.to_domain(agora))
-                return str(obj.codigo), calcular_hash(obj, hash_fields), obj
-
-        elif config.nome == "componente_por_turma":
-            a2 = self._a2
-            exact = self._exact
-            fallback = self._fallback
-
-            def transform(
-                row: tuple[Any, ...]
-            ) -> TransformResult:  # noqa: F811
-                dto = dto_in(*row)
-                if dto.codigo is None or dto.turma_codigo is None:
-                    return None
-                codigo = int(dto.codigo)
-                disc = a2.get(codigo)
-                regencia = bool(disc.eh_regencia) if disc else False
-                territorio = bool(disc.eh_territorio) if disc else False
-                plan = _planejamento_regencia(
-                    codigo, dto.turno_turma, dto.ano_turma, exact, fallback
-                )
-                obj = model_class(
-                    **dto.to_domain(agora, regencia, territorio, plan)
-                )
-                pk = (
-                    f"{obj.codigo}"
-                    f"-{obj.turma_codigo or ''}"
-                    f"-{obj.professor or ''}"
-                )
-                return pk, calcular_hash(obj, hash_fields), obj
-
-        elif config.nome == "componente_regencia":
-            exact = self._exact
-            fallback = self._fallback
-
-            def transform(
-                row: tuple[Any, ...]
-            ) -> TransformResult:  # noqa: F811
-                dto = dto_in(*row)
-                codigo = int(dto.codigo_componente_curricular)
-                plan = _planejamento_regencia(
-                    codigo, dto.turno_turma, dto.ano_turma, exact, fallback
-                )
-                obj = model_class(**dto.to_domain(agora, plan))
-                pk = (
-                    f"{obj.codigo}"
-                    f"-{obj.turma_codigo or ''}"
-                    f"-{obj.professor or ''}"
-                    f"-{obj.ano_letivo}"
-                )
-                return pk, calcular_hash(obj, hash_fields), obj
-
-        elif config.nome == "dados_aula_turma":
-
-            def transform(
-                row: tuple[Any, ...]
-            ) -> TransformResult:  # noqa: F811
-                dto = dto_in(*row)
-                obj = model_class(**dto.to_domain(agora))
-                pk = f"{obj.componente_codigo}-{obj.turma_codigo}"
-                return pk, calcular_hash(obj, hash_fields), obj
-
-        elif config.nome == "componente_por_ano_letivo":
-
-            def transform(
-                row: tuple[Any, ...]
-            ) -> TransformResult:  # noqa: F811
-                dto = dto_in(*row)
-                if (
-                    dto.codigo_componente_curricular is None
-                    or dto.ano_letivo is None
-                ):
-                    return None
-                obj = model_class(**dto.to_domain(agora))
-                pk = (
-                    f"{obj.codigo_componente_curricular}"
-                    f"-{obj.ano_letivo}"
-                    f"-{obj.modalidade or ''}"
-                )
-                return pk, calcular_hash(obj, hash_fields), obj
-
-        else:
+        transform_factories = {
+            "componente_curricular": self._transform_componente_curricular,
+            "componente_por_turma": self._transform_componente_por_turma,
+            "componente_regencia": self._transform_componente_regencia,
+            "dados_aula_turma": self._transform_dados_aula_turma,
+            "componente_por_ano_letivo": (
+                self._transform_componente_por_ano_letivo
+            ),
+        }
+        factory = transform_factories.get(config.nome)
+        if factory is None:
             return super()._criar_transform(config)
+        return factory(dto_in, model_class, agora, hash_fields)
+
+    def _transform_componente_curricular(
+        self,
+        dto_in: Any,
+        model_class: Any,
+        agora: Any,
+        hash_fields: list[str],
+    ) -> Callable[[tuple[Any, ...]], TransformResult]:
+        def transform(row: tuple[Any, ...]) -> TransformResult:
+            dto = dto_in(*row)
+            obj = model_class(**dto.to_domain(agora))
+            return str(obj.codigo), calcular_hash(obj, hash_fields), obj
+
+        return transform
+
+    def _transform_componente_por_turma(
+        self,
+        dto_in: Any,
+        model_class: Any,
+        agora: Any,
+        hash_fields: list[str],
+    ) -> Callable[[tuple[Any, ...]], TransformResult]:
+        a2 = self._a2
+        exact = self._exact
+        fallback = self._fallback
+
+        def transform(row: tuple[Any, ...]) -> TransformResult:
+            dto = dto_in(*row)
+            if dto.codigo is None or dto.turma_codigo is None:
+                return None
+            codigo = int(dto.codigo)
+            disc = a2.get(codigo)
+            regencia = bool(disc.eh_regencia) if disc else False
+            territorio = bool(disc.eh_territorio) if disc else False
+            plan = _planejamento_regencia(
+                codigo, dto.turno_turma, dto.ano_turma, exact, fallback
+            )
+            obj = model_class(
+                **dto.to_domain(agora, regencia, territorio, plan)
+            )
+            pk = (
+                f"{obj.codigo}"
+                f"-{obj.turma_codigo or ''}"
+                f"-{obj.professor or ''}"
+            )
+            return pk, calcular_hash(obj, hash_fields), obj
+
+        return transform
+
+    def _transform_componente_regencia(
+        self,
+        dto_in: Any,
+        model_class: Any,
+        agora: Any,
+        hash_fields: list[str],
+    ) -> Callable[[tuple[Any, ...]], TransformResult]:
+        exact = self._exact
+        fallback = self._fallback
+
+        def transform(row: tuple[Any, ...]) -> TransformResult:
+            dto = dto_in(*row)
+            codigo = int(dto.codigo_componente_curricular)
+            plan = _planejamento_regencia(
+                codigo, dto.turno_turma, dto.ano_turma, exact, fallback
+            )
+            obj = model_class(**dto.to_domain(agora, plan))
+            pk = (
+                f"{obj.codigo}"
+                f"-{obj.turma_codigo or ''}"
+                f"-{obj.professor or ''}"
+                f"-{obj.ano_letivo}"
+            )
+            return pk, calcular_hash(obj, hash_fields), obj
+
+        return transform
+
+    def _transform_dados_aula_turma(
+        self,
+        dto_in: Any,
+        model_class: Any,
+        agora: Any,
+        hash_fields: list[str],
+    ) -> Callable[[tuple[Any, ...]], TransformResult]:
+        def transform(row: tuple[Any, ...]) -> TransformResult:
+            dto = dto_in(*row)
+            obj = model_class(**dto.to_domain(agora))
+            pk = f"{obj.componente_codigo}-{obj.turma_codigo}"
+            return pk, calcular_hash(obj, hash_fields), obj
+
+        return transform
+
+    def _transform_componente_por_ano_letivo(
+        self,
+        dto_in: Any,
+        model_class: Any,
+        agora: Any,
+        hash_fields: list[str],
+    ) -> Callable[[tuple[Any, ...]], TransformResult]:
+        def transform(row: tuple[Any, ...]) -> TransformResult:
+            dto = dto_in(*row)
+            if (
+                dto.codigo_componente_curricular is None
+                or dto.ano_letivo is None
+            ):
+                return None
+            obj = model_class(**dto.to_domain(agora))
+            pk = (
+                f"{obj.codigo_componente_curricular}"
+                f"-{obj.ano_letivo}"
+                f"-{obj.modalidade or ''}"
+            )
+            return pk, calcular_hash(obj, hash_fields), obj
 
         return transform
 

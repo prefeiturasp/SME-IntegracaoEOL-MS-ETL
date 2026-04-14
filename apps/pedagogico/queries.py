@@ -18,8 +18,6 @@ WHERE st_turma_escola IN ('O', 'A', 'C', 'E')
 ORDER BY an_letivo
 """
 
-# Alimenta: componente_curricular_por_turma
-# Parâmetro (?): ano_letivo (único, usado em todas as CTEs)
 SQL_COMPONENTES_POR_TURMA = f"""
 WITH
 -- Base comum: turmas ativas do ano com turno e tipo de escola
