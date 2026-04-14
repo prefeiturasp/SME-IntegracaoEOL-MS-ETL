@@ -43,5 +43,9 @@ class AlunosModelsTest(TestCase):
         self.assertEqual(str(obj), "999 (2024)")
 
     def test_matricula_turma_str(self) -> None:
-        obj = MatriculaTurma(matricula_id=100, codigo_turma=555)
+        obj = MatriculaTurma(codigo_matricula=100, codigo_turma=555)
         self.assertEqual(str(obj), "M: 100 - T: 555")
+
+    def test_matricula_turma_sem_matricula_str(self) -> None:
+        obj = MatriculaTurma(codigo_matricula=None, codigo_turma=777)
+        self.assertEqual(str(obj), "M: None - T: 777")

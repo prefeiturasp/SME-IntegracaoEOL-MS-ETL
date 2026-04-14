@@ -59,37 +59,13 @@ class BaseEtlCommand(BaseCommand):
             ),
         )
         parser.add_argument(
-            "--particao",
-            type=int,
-            default=0,
-            help="ID da partição atual (0 a total-1).",
-        )
-        parser.add_argument(
-            "--total-particoes",
-            type=int,
-            default=1,
-            help="Total de partições concorrentes.",
-        )
-        parser.add_argument(
             "--fase",
             type=int,
             default=0,
             help="Forçar início a partir desta fase (ignora checkpoint se > 0).",
         )
         parser.add_argument(
-            "--id-min",
-            type=int,
-            default=None,
-            help="ID mínimo do range para esta partição.",
-        )
-        parser.add_argument(
-            "--id-max",
-            type=int,
-            default=None,
-            help="ID máximo do range para esta partição.",
-        )
-        parser.add_argument(
-            "--full-sync",
+            "--carga-inicial",
             action="store_true",
             help=(
                 "Primeiro processamento: suprime a consulta de hashes "
@@ -97,22 +73,64 @@ class BaseEtlCommand(BaseCommand):
                 "Usar na carga inicial."
             ),
         )
+        parser.add_argument(
+            "--celery",
+            action="store_true",
+            help="Lança a execução via Celery (Assíncrono).",
+        )
 
     def handle(self, *args: Any, **options: Any) -> None:
-        """Execução padronizada do fluxo de ETL."""
+        """Execução padronizada do fluxo de ETL (Sync ou Async)."""
         repositorio = RepositorioAuditoriaPostgres()
         fase_inicial, token_ant = self._obter_ponto_partida(repositorio, **options)
         id_execucao = repositorio.iniciar_execucao(self.dominio)
 
+        if options.get("celery"):
+            self._handle_celery(fase_inicial, id_execucao, **options)
+            return
+
+        self._handle_sync(
+            fase_inicial, id_execucao, repositorio, token_ant, **options
+        )
+
+    def _handle_celery(
+        self,
+        fase_inicial: int,
+        id_execucao: Any,
+        **options: Any,
+    ) -> None:
+        """Lança execução assíncrona via Orquestrador."""
+        from apps.core.libs.base_etl_orquestrador import GenericEtlOrquestrador
+
+        orquestrador_class = getattr(self, "orquestrador_class", GenericEtlOrquestrador)
+        orquestrador = orquestrador_class(
+            dominio=self.dominio,
+            service_class=self.service_class,
+            db_alias=f"{self.dominio}_db",
+            id_execucao=id_execucao,
+            primeiro_run=options.get("carga_inicial", False),
+        )
+        orquestrador.lancar(fase_inicial=fase_inicial)
+        logger.info(
+            "[%s] Pipeline lançado via Celery na fase %d.",
+            self.dominio.upper(),
+            fase_inicial,
+        )
+
+    def _handle_sync(
+        self,
+        fase_inicial: int,
+        id_execucao: Any,
+        repositorio: Any,
+        token_ant: int,
+        **options: Any,
+    ) -> None:
+        """Execução síncrona local."""
         servico = self.service_class(
             db_alias=f"{self.dominio}_db",
             id_execucao=id_execucao,
             repositorio_auditoria=repositorio,
-            id_min=options.get("id_min"),
-            id_max=options.get("id_max"),
-            particao=options.get("particao", 0),
-            total_particoes=options.get("total_particoes", 1),
-            primeiro_run=options.get("full_sync", False),
+            primeiro_run=options.get("carga_inicial", False),
         )
 
         try:
@@ -120,18 +138,39 @@ class BaseEtlCommand(BaseCommand):
             self._finalizar_com_sucesso(
                 repositorio, id_execucao, servico, resultado, token_ant
             )
+        except KeyboardInterrupt:
+            self._finalizar_com_interrupcao(repositorio, id_execucao, servico)
+            raise
         except Exception as erro:
             self._finalizar_com_erro(
                 repositorio, id_execucao, servico, erro, token_ant
             )
 
+    def _finalizar_com_interrupcao(
+        self, repositorio: Any, id_exec: Any, servico: Any
+    ) -> None:
+        """Registra interrupção manual pelo usuário."""
+        token = servico.ultimo_token or "0"
+        fase = servico.ultima_fase_concluida + 1
+        repositorio.atualizar_checkpoint_dominio(
+            dominio=self.dominio.lower(),
+            ultimo_id_execucao=id_exec,
+            ultima_pagina=fase,
+            token_parada=token,
+            indice_sincronizacao=f"CTRL+C:offset:{token}",
+            ultima_situacao="interrompido",
+            sucesso=False,
+        )
+        repositorio.finalizar_execucao(id_exec, situacao="interrompido")
+        logger.warning("[%s] Execução interrompida pelo usuário.", self.dominio.upper())
+
     def _obter_ponto_partida(
         self, repositorio: Any, **options: Any
     ) -> tuple[int, int]:
         """Define fase e token inicial baseados em checkpoint ou flags."""
-        fase_forcada = options.get("fase", 0)
-        if fase_forcada > 0:
-            return fase_forcada, 0
+        fase_force = options.get("fase", 0)
+        if fase_force > 0:
+            return fase_force, 0
 
         if not options.get("continuar", False):
             return 1, 0
@@ -159,30 +198,25 @@ class BaseEtlCommand(BaseCommand):
         resultado: dict[str, int],
         token_ant: int,
     ) -> None:
-        """Registra métricas, finaliza execução e atualiza checkpoint."""
-        for tabela, linhas in resultado.items():
-            repositorio.registrar_tabela_escrita(
-                id_execucao=id_exec,
-                tabela_destino=tabela,
-                linhas_escritas=linhas,
-                modo_escrita=self.get_modo_escrita(tabela),
-            )
+        """Finaliza execução registrando sucesso total."""
+        token = servico.ultimo_token or str(token_ant)
+        fase = servico.ultima_fase_concluida
 
-        total = sum(resultado.values())
-        novo_token = token_ant + total
-        ultima = list(resultado.keys())[-1] if resultado else self.dominio
-        indice = f"{ultima}:offset:{novo_token}"
+        nome_tabela = "ultima_fase"
+        if 0 < fase <= len(servico._fases):
+            nome_tabela = servico._fases[fase - 1].table_name
 
         repositorio.atualizar_checkpoint_dominio(
-            dominio=self.dominio,
+            dominio=self.dominio.lower(),
             ultimo_id_execucao=id_exec,
-            ultima_pagina=servico.ultima_fase_concluida,
-            token_parada=str(novo_token),
-            indice_sincronizacao=indice,
+            ultima_pagina=fase,
+            token_parada=token,
+            indice_sincronizacao=f"{nome_tabela}:offset:{token}",
             ultima_situacao="concluido",
             sucesso=True,
         )
         repositorio.finalizar_execucao(id_exec, situacao="concluido")
+        total = sum(resultado.values())
         logger.info(
             "[ETL %s] Concluído. %d alterados.",
             self.dominio[:4].upper(),
@@ -206,11 +240,13 @@ class BaseEtlCommand(BaseCommand):
             ultimo_id_execucao=id_exec,
             ultima_pagina=fase,
             token_parada=token_erro,
-            indice_sincronizacao=f"ERRO:{fase}:{token_erro}",
+            indice_sincronizacao=f"ERRO:offset:{token_erro}",
             ultima_situacao="erro",
             sucesso=False,
         )
-        repositorio.finalizar_execucao(id_exec, situacao="erro", mensagem_erro=str(erro))
+        repositorio.finalizar_execucao(
+            id_exec, situacao="erro", mensagem_erro=str(erro)
+        )
         from django.core.management.base import CommandError
 
         raise CommandError(f"Falha ao executar {self.dominio}: {erro}")

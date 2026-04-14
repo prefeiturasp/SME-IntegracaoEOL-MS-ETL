@@ -12,6 +12,7 @@ from apps.alunos.dtos.model_in import (
     ResponsavelAlunoIn,
     TipoNecessidadeEspecialIn,
 )
+from apps.alunos.enums import SituacaoMatricula
 from apps.core.libs.helpers import strip_str
 
 
@@ -97,6 +98,23 @@ class AlunoInTest(SimpleTestCase):
         self.assertEqual(data["nacionalidade"], "0")
         self.assertEqual(data["raca_cor"], "NÃO INFORMADA")
 
+    def test_converte_string_iso_com_tempo_para_date(self) -> None:
+        """Celery/JSON pode converter date para string ISO com tempo."""
+        dto = AlunoIn(
+            codigo_aluno=1,
+            nome="Teste",
+            nome_social=None,
+            data_nascimento="2007-07-04T09:01:00",  # String com tempo
+            sexo=1,
+            nacionalidade="BR",
+            nis=None,
+            cpf=None,
+            raca_cor=None,
+        )
+        data = dto.to_domain()
+        self.assertEqual(data["data_nascimento"], date(2007, 7, 4))
+        self.assertIsInstance(data["data_nascimento"], date)
+
 
 class ResponsavelAlunoInTest(SimpleTestCase):
     """Testes de ResponsavelAlunoIn.to_domain()."""
@@ -142,7 +160,7 @@ class NecessidadeEspecialAlunoInTest(SimpleTestCase):
 class MatriculaInTest(SimpleTestCase):
     """Testes de MatriculaIn.to_domain()."""
 
-    def test_situacao_saneada(self) -> None:
+    def test_situacao_mapeada_via_enum(self) -> None:
         dto = MatriculaIn(
             codigo_matricula=1000,
             codigo_aluno=1,
@@ -150,12 +168,25 @@ class MatriculaInTest(SimpleTestCase):
             data_status=date(2023, 2, 2),
             ano_letivo=2023,
             codigo_situacao_matricula=1,
-            situacao_matricula=" Ativa ",
         )
         data = dto.to_domain()
         self.assertEqual(data["codigo_matricula"], 1000)
         self.assertEqual(data["aluno_id"], 1)
-        self.assertEqual(data["situacao_matricula"], "Ativa")
+        self.assertEqual(data["situacao_matricula"], "Ativo")
+
+    def test_situacao_fora_do_dominio(self) -> None:
+        dto = MatriculaIn(
+            codigo_matricula=1001,
+            codigo_aluno=2,
+            codigo_ue="UE123",
+            data_status=None,
+            ano_letivo=2023,
+            codigo_situacao_matricula=99,
+        )
+        data = dto.to_domain()
+        self.assertEqual(
+            data["situacao_matricula"], "Fora do domínio liberado pela PRODAM"
+        )
 
 
 class MatriculaTurmaInTest(SimpleTestCase):
@@ -169,7 +200,26 @@ class MatriculaTurmaInTest(SimpleTestCase):
             data_situacao=date(2023, 3, 3),
         )
         data = dto.to_domain()
-        self.assertEqual(data["matricula_id"], 1000)
+        self.assertEqual(data["codigo_matricula"], 1000)
         self.assertEqual(data["codigo_turma"], 55)
         self.assertEqual(data["numero_chamada"], "A1")
         self.assertEqual(data["data_situacao_aluno"], date(2023, 3, 3))
+
+
+class SituacaoMatriculaTest(SimpleTestCase):
+    """Testes diretos do Enum SituacaoMatricula."""
+
+    def test_get_descricao_nulo(self) -> None:
+        self.assertEqual(SituacaoMatricula.get_descricao(None), "Não Informada")
+
+    def test_get_descricao_invalido(self) -> None:
+        self.assertEqual(
+            SituacaoMatricula.get_descricao("ABC"),
+            "Fora do domínio liberado pela PRODAM",
+        )
+
+    def test_get_descricao_nao_mapeado(self) -> None:
+        self.assertEqual(
+            SituacaoMatricula.get_descricao(999),
+            "Fora do domínio liberado pela PRODAM",
+        )

@@ -1,11 +1,4 @@
-"""Motor de processamento e auditoria para serviços de ETL.
-
-Responsabilidade:
-    - Gerenciar o ciclo de vida do Upsert Incremental.
-    - Orquestrar a Auditoria via SHA-256 com comparação dentro do Postgres.
-    - Oferecer pipeline Producer-Consumer para overlap MSSQL↔Postgres.
-    - Escrita via COPY + staging para máxima throughput no Postgres.
-"""
+"""Motor de processamento e auditoria para serviços de ETL."""
 
 import io
 import logging
@@ -15,7 +8,7 @@ from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from queue import Empty, Queue
 from threading import Thread
-from typing import Any, Union
+from typing import Any
 from uuid import UUID
 
 from django.conf import settings
@@ -30,33 +23,44 @@ _SENTINEL = object()
 
 
 def _fmt_num(n: int) -> str:
+    """Formata números para exibição amigável em logs."""
     if n >= 1_000_000:
         return f"{n / 1_000_000:.1f}M"
-    if n >= 1_000:
-        return f"{n / 1_000:.0f}k"
-    return str(n)
+    return f"{n / 1_000:.0f}k" if n >= 1_000 else str(n)
+
+
+class StageTimer:
+    """Temporizador simples para logs de estágio."""
+
+    def __init__(self, name: str):
+        self.name = name
+        self.start = time.perf_counter()
+        self.end = 0.0
+
+    def stop(self):
+        self.end = time.perf_counter() - self.start
+        return self.end
 
 
 def retry_deadlock(max_retries: int = 3, backoff: float = 0.5) -> Callable:
-    """Decorador para repetir operações em caso de Lock/Deadlock do banco."""
+    """Decorator para retry em caso de deadlock ou timeout de banco."""
 
     def decorator(func: Callable) -> Callable:
         def wrapper(*args: Any, **kwargs: Any) -> Any:
-            last_err: Exception = RuntimeError(
-                "retry_deadlock chamado com max_retries=0"
-            )
+            last_err = RuntimeError("retry_deadlock")
             for i in range(max_retries):
                 try:
                     return func(*args, **kwargs)
                 except Exception as exc:
-                    msg = str(exc).lower()
-                    if "deadlock" not in msg and "lock timeout" not in msg:
+                    if (
+                        "deadlock" not in str(exc).lower()
+                        and "lock timeout" not in str(exc).lower()
+                    ):
                         raise
                     last_err = exc
                     wait = backoff * (2**i) + random.uniform(0, 0.1)
                     logger.warning(
-                        "Deadlock detectado. Tentativa %d/%d"
-                        " (espera %.2fs)",
+                        "Deadlock detectado. Tentativa %d/%d (espera %.2fs)",
                         i + 1,
                         max_retries,
                         wait,
@@ -69,156 +73,270 @@ def retry_deadlock(max_retries: int = 3, backoff: float = 0.5) -> Callable:
     return decorator
 
 
-@dataclass
-class StageTimer:
-    """Cronômetro para fases do ETL."""
-
-    name: str
-    start: float = field(default_factory=time.monotonic)
-    end: float = 0.0
-
-    def stop(self) -> float:
-        """Para o cronômetro e retorna o tempo decorrido em segundos."""
-        self.end = time.monotonic()
-        return self.end - self.start
-
-
-@dataclass
-class PipelineMetrics:
-    """Métricas de execução do pipeline."""
-
-    total_lidos: int = 0
-    total_escritos: int = 0
-    total_ignorados: int = 0
-    erros: list = field(default_factory=list)
-
-
 @dataclass(frozen=True)
 class PhaseConfig:
-    """Configuração de uma fase do pipeline ETL.
-
-    Centraliza todos os metadados de uma fase: SQL de extração, modelo
-    de destino, DTOs, campos de PK/hash e tabela de origem para auditoria.
-    Imutável para evitar mutações acidentais durante a execução.
-
-    Quando ``dto_out`` for ``None``, o pipeline usa ``dto_in.to_domain()``
-    (padrão Adapter). Quando fornecido, usa ``dto_out.to_dict(dto)``
-    para compatibilidade com apps que ainda não foram migrados.
-    """
+    """Configuração estável de uma fase do ETL."""
 
     nome: str
     sql: str
     table_name: str
-    model_class: Any
-    dto_in: Any
     pk_field: str | list[str]
     update_fields: tuple[str, ...]
     unique_fields: tuple[str, ...]
-    dto_out: Any = None
+    model_class: Any
+    dto_in: Any
+    dto_out: Any | None = None
     source_table: str = ""
     truncate_on_full_sync: bool = False
     audit_flush_size: int = 0
     suporta_bulk_insert: bool = False
+    modo_escrita: str = "upsert"  # "upsert" ou "full_refresh"
+
+    def to_meta(
+        self,
+        dominio: str,
+        db_alias: str,
+        id_execucao: str | None,
+        numero_fase: int,
+        total_fases: int,
+        options: dict[str, Any],
+    ) -> Any:
+        """Converte a configuração para metadados de fase do Celery."""
+        from apps.core.libs.base_etl_fase import BaseEtlFase
+
+        m_path = (
+            f"{self.model_class.__module__}.{self.model_class.__name__}"
+            if self.model_class
+            else "mock.Model"
+        )
+        d_path = (
+            f"{self.dto_in.__module__}.{self.dto_in.__name__}"
+            if self.dto_in
+            else "mock.Dto"
+        )
+
+        return BaseEtlFase(
+            nome=self.nome,
+            sql=self.sql,
+            table_name=self.table_name,
+            source_table=self.source_table or self.table_name,
+            model_path=m_path,
+            dto_in_path=d_path,
+            pk_field=self.pk_field,
+            update_fields=list(self.update_fields),
+            unique_fields=list(self.unique_fields),
+            db_alias=db_alias,
+            primeiro_run=options.get("primeiro_run", False),
+            suporta_bulk_insert=self.suporta_bulk_insert,
+            id_execucao=id_execucao,
+            numero_fase=numero_fase,
+            total_fases=total_fases,
+            dominio=dominio,
+            task_processamento_path=options.get("task_processamento_path", ""),
+            task_callback_path=options.get("task_callback_path", ""),
+        )
+
+
+@dataclass
+class PipelineMetrics:
+    """Métricas de execução de uma fase."""
+
+    total_lidos: int = 0
+    total_escritos: int = 0
+    total_ignorados: int = 0
+    erros: list[str] = field(default_factory=list)
 
 
 class PostgresUpsertEngine:
-    """Motor de baixa latência para escrita de hashes de auditoria no Postgres.
-
-    Todos os escritas são direcionadas ao banco ``default``, onde a tabela
-    de auditoria centralizada ``etl_auditoria_linha``.
-    """
+    """Motor de baixa escala para controle de auditoria e upserts."""
 
     @retry_deadlock()
-    def upsert_bulk(self, *args: Any, **kwargs: Any) -> int:
-        """Versão com retry de upsert_bulk."""
-        return self._upsert_bulk_full(*args, **kwargs)
-
-    def _upsert_bulk_full(
-        self,
-        table_name: str,
-        rows: list[tuple[str, str]],
-        batch_id: str = "batch",
+    def upsert_bulk(
+        self, table_name: str, rows: list[tuple[str, str]], batch_id: str = "batch"
     ) -> int:
-        """Executa upsert de hashes de auditoria via COPY + Temp Table.
-
-        Args:
-            table_name: Nome da tabela de destino no banco ``default``.
-            rows: Lista de tuplas ``(id_destino, hash_controle)``.
-            batch_id: Identificador do lote (compõe o nome da temp table).
-
-        Returns:
-            Número de linhas afetadas pelo upsert.
-        """
+        """Executa upsert massivo na tabela de auditoria."""
         if not rows:
             return 0
-
         rows.sort(key=lambda x: x[0])
+        buf = io.StringIO()
+        for r in rows:
+            buf.write(f"{r[0]}\t{r[1]}\n")
 
-        buffer = io.StringIO()
-        try:
-            for id_dest, h in rows:
-                buffer.write(f"{id_dest}\t{h}\n")
-            conteudo = buffer.getvalue()
-        finally:
-            buffer.close()
+        with transaction.atomic(using="default"), connections[
+            "default"
+        ].cursor() as cursor:
+            tmp = f"temp_audit_{str(batch_id).replace('-', '_')}"
+            cursor.execute(
+                sql.SQL(
+                    "CREATE TEMP TABLE IF NOT EXISTS {} "
+                    "(id_destino text, hash_controle text) ON COMMIT DROP"
+                ).format(sql.Identifier(tmp))
+            )
 
-        with (
-            transaction.atomic(using="default"),
-            connections["default"].cursor() as cursor,
-        ):
-            temp_table = f"temp_audit_{batch_id.replace('-', '_')}"
-            query_create = sql.SQL(
-                "CREATE TEMP TABLE {} "
-                "(id_destino text, hash_controle text) ON COMMIT DROP"
-            ).format(sql.Identifier(temp_table))
-            cursor.execute(query_create)
-
-            raw_cursor = cursor.cursor
-            if hasattr(raw_cursor, "copy"):
-                copy_query = sql.SQL(
-                    "COPY {} (id_destino, hash_controle) FROM STDIN"
-                ).format(sql.Identifier(temp_table))
-                with raw_cursor.copy(copy_query) as copy:
-                    copy.write(conteudo)
+            raw = cursor.cursor
+            if hasattr(raw, "copy"):
+                with raw.copy(
+                    sql.SQL("COPY {} (id_destino, hash_controle) FROM STDIN").format(
+                        sql.Identifier(tmp)
+                    )
+                ) as cp:
+                    cp.write(buf.getvalue())
             else:
-                raw_cursor.copy_from(
-                    io.StringIO(conteudo),
-                    temp_table,
+                raw.copy_from(
+                    io.StringIO(buf.getvalue()),
+                    tmp,
                     columns=("id_destino", "hash_controle"),
                 )
 
-            query_upsert = sql.SQL(
-                """
-                    INSERT INTO {table}
-                        (id_destino, hash_controle, atualizado_em)
-                    SELECT id_destino, hash_controle, NOW()
-                    FROM {temp}
-                    ON CONFLICT (id_destino) DO UPDATE
-                    SET hash_controle = EXCLUDED.hash_controle,
-                        atualizado_em = NOW()
-                    WHERE {table}.hash_controle
-                        <> EXCLUDED.hash_controle
-                """
-            ).format(
-                table=sql.Identifier(table_name),
-                temp=sql.Identifier(temp_table),
+            cursor.execute(
+                sql.SQL(
+                    "INSERT INTO {table} (id_destino, hash_controle, atualizado_em) "
+                    "SELECT id_destino, hash_controle, NOW() FROM {tmp} "
+                    "ON CONFLICT (id_destino) DO UPDATE SET "
+                    "hash_controle = EXCLUDED.hash_controle, atualizado_em = NOW() "
+                    "WHERE {table}.hash_controle <> EXCLUDED.hash_controle"
+                ).format(table=sql.Identifier(table_name), tmp=sql.Identifier(tmp))
             )
-            cursor.execute(query_upsert)
             return int(cursor.rowcount or 0)
+
+    def buscar_hashes(self, ids: list[str], bid: str) -> dict[str, str]:
+        """Busca hashes existentes no Postgres via COPY + JOIN temporário."""
+        if not ids:
+            return {}
+        buf = io.StringIO()
+        for i in ids:
+            buf.write(f"{i}\n")
+
+        tmp = f"temp_lookup_{(bid or 'manual').replace('-', '_')}"
+        with transaction.atomic(using="default"), connections[
+            "default"
+        ].cursor() as cursor:
+            cursor.execute(
+                sql.SQL(
+                    "CREATE TEMP TABLE IF NOT EXISTS {} (id_destino text) ON COMMIT DROP"
+                ).format(sql.Identifier(tmp))
+            )
+
+            raw = cursor.cursor
+            if hasattr(raw, "copy"):
+                with raw.copy(
+                    sql.SQL("COPY {} (id_destino) FROM STDIN").format(
+                        sql.Identifier(tmp)
+                    )
+                ) as cp:
+                    cp.write(buf.getvalue())
+            else:
+                raw.copy_from(
+                    io.StringIO(buf.getvalue()), tmp, columns=("id_destino",)
+                )
+
+            cursor.execute(
+                sql.SQL(
+                    "SELECT al.id_destino, al.hash_controle "
+                    "FROM etl_auditoria_linha al "
+                    "INNER JOIN {tmp} tl ON al.id_destino = tl.id_destino"
+                ).format(tmp=sql.Identifier(tmp))
+            )
+            return dict(cursor.fetchall())
+
+    def sincronizar_lote(
+        self,
+        processed: list[tuple[str, str, Any]],
+        fase_meta: Any,
+        batch_num: int = 0,
+    ) -> tuple[int, int]:
+        """Sincroniza um lote processado no banco de destino."""
+        if not processed:
+            return 0, 0
+
+        total = len(processed)
+        dedup = {pk: (h, obj) for pk, h, obj in processed}
+        del processed 
+
+        def _get(obj, key, default=None):
+            if isinstance(obj, dict):
+                return obj.get(key, default)
+            return getattr(obj, key, default)
+
+        tn = _get(fase_meta, "table_name", "")
+        db = _get(fase_meta, "db_alias", "default")
+        primeiro_run = _get(fase_meta, "primeiro_run", False)
+        modo = _get(fase_meta, "modo_escrita", "upsert")
+
+        if modo == "full_refresh":
+            objs = [item[1] for item in dedup.values()]
+            model_class = (
+                fase_meta.resolver_model()
+                if hasattr(fase_meta, "resolver_model")
+                else _get(fase_meta, "model_class")
+            )
+            self._persistir(objs, model_class, [], [], db, fast=True)
+            return len(objs), total - len(objs)
+
+        # Upsert incremental
+        if primeiro_run:
+            pendentes = [(pk, h, obj) for pk, (h, obj) in dedup.items()]
+        else:
+            full_ids = [f"{tn}:{pk}" for pk in dedup]
+            existentes = self.buscar_hashes(full_ids, f"{tn}-{batch_num}")
+            pendentes = [
+                (pk, h, obj)
+                for pk, (h, obj) in dedup.items()
+                if existentes.get(f"{tn}:{pk}") != h
+            ]
+
+        if not pendentes:
+            return 0, total
+
+        model_class = (
+            fase_meta.resolver_model()
+            if hasattr(fase_meta, "resolver_model")
+            else _get(fase_meta, "model_class")
+        )
+        objs = [p[2] for p in pendentes]
+        hashes = [(f"{tn}:{p[0]}", p[1]) for p in pendentes]
+        del pendentes 
+
+        uf = list(_get(fase_meta, "update_fields") or [])
+        unique = list(_get(fase_meta, "unique_fields") or [])
+
+        self._persistir(objs, model_class, uf, unique, db)
+        del objs
+
+        escritos = len(hashes)
+        self.upsert_bulk("etl_auditoria_linha", hashes, batch_id=f"{tn}-{batch_num}")
+        del hashes
+
+        return escritos, total - escritos
+
+    def _persistir(
+        self,
+        objs: list,
+        model_class: Any,
+        update_fields: list[str],
+        unique_fields: list[str],
+        db_alias: str,
+        fast: bool = False,
+    ) -> None:
+        """Persiste objetos no banco de destino."""
+        if not objs:
+            return
+        mgr = model_class.objects.using(db_alias)
+        with transaction.atomic(using=db_alias):
+            if fast:
+                mgr.bulk_create(objs, batch_size=500)
+            else:
+                mgr.bulk_create(
+                    objs,
+                    update_conflicts=True,
+                    unique_fields=unique_fields,
+                    update_fields=update_fields,
+                    batch_size=500,
+                )
 
 
 class BaseEtlService:
-    """Base para serviços de ETL orquestrados (High Performance).
-
-    Subclasses devem:
-        - Definir ``_dominio`` como atributo de classe.
-        - Implementar ``_iter_chunks(sql)`` para apontar à conexão de origem.
-        - Popular ``self._fases`` em ``__init__`` com a lista de
-          ``PhaseConfig`` do domínio.
-
-    Com isso herdam automaticamente o pipeline Producer-Consumer com
-    ThreadPool, auditoria por fase e controle de checkpoint.
-    """
+    """Base para serviços de ETL do domínio."""
 
     _dominio: str = "ETL"
 
@@ -227,483 +345,303 @@ class BaseEtlService:
         db_alias: str,
         id_execucao: UUID | None = None,
         repositorio_auditoria: Any | None = None,
-        id_min: int | None = None,
-        id_max: int | None = None,
-        particao: int = 0,
-        total_particoes: int = 1,
         primeiro_run: bool = False,
     ) -> None:
         self.db_alias = db_alias
         self.id_execucao = id_execucao
         self.auditor = repositorio_auditoria
-        self.id_min = id_min
-        self.id_max = id_max
-        self.particao = particao
-        self.total_particoes = total_particoes
         self.primeiro_run = primeiro_run
         self.pg_engine = PostgresUpsertEngine()
-        self._max_workers: int = settings.THREAD_POOL_MAX_WORKERS
-        self._n_consumers: int = getattr(settings, "ETL_N_CONSUMERS", 2)
-        self.ultima_fase_concluida: int = 0
-        self.ultimo_token: str | None = None
+        self._max_workers = getattr(settings, "THREAD_POOL_MAX_WORKERS", 4)
+        self.ultima_fase_concluida = 0
         self._fases: list[PhaseConfig] = []
+        self.ultimo_token: str | None = None
+        self._lote_objetos: list[Any] = []
+        self._lote_hashes: list[tuple[str, str]] = []
+        self._ultimo_audit_count = 0
 
+    def get_meta(
+        self, config: PhaseConfig, numero: int, total: int, id_execucao: Any = None
+    ) -> Any:
+        """Helper para criar metadados de fase para o Celery."""
+        from apps.core.tasks import finalizar_fase, processar_chunk
+
+        opts = {
+            "primeiro_run": self.primeiro_run,
+            "task_processamento_path": (
+                f"{processar_chunk.__module__}.{processar_chunk.__name__}"
+            ),
+            "task_callback_path": (
+                f"{finalizar_fase.__module__}.{finalizar_fase.__name__}"
+            ),
+        }
+        return config.to_meta(
+            dominio=self._dominio,
+            db_alias=self.db_alias,
+            id_execucao=str(id_execucao or self.id_execucao),
+            numero_fase=numero,
+            total_fases=total,
+            options=opts,
+        )
 
     def _iter_chunks(self, sql: str) -> Iterator[list[tuple]]:
-        """Itera chunks da fonte de origem."""
-        raise NotImplementedError(
-            f"{self.__class__.__name__} deve implementar _iter_chunks"
-        )
+        """Lê os dados brutos da origem (MSSQL) em chunks."""
+        raise NotImplementedError()
 
+    def sync_batch(
+        self,
+        processed_data: list[tuple[str, str, Any]],
+        fase_meta: Any,
+        batch_num: int = 0,
+    ) -> tuple[int, int]:
+        """Sincroniza um lote delegando para o motor de upsert."""
+        return self.pg_engine.sincronizar_lote(processed_data, fase_meta, batch_num)
 
-    def _get_partition_sql(self, sql: str, coluna_id: str) -> str:
-        """Adapta a query para particionamento horizontal.
-
-        Suporta dois modos:
-            - Range (id_min/id_max): scan direcionado, sem full scan.
-            - Módulo (total_particoes > 1): divisão uniforme por hash do ID.
-
-        Insere o filtro antes do ORDER BY quando presente.
-        """
-        if self.id_min is not None and self.id_max is not None:
-            filtro = (
-                f"({coluna_id} BETWEEN {self.id_min} AND {self.id_max})"
+    def _persistir_objs(
+        self,
+        objs: list,
+        model_class: Any,
+        update_fields: list[str],
+        unique_fields: list[str],
+    ) -> None:
+        """Executa gravação física no banco de destino."""
+        if not objs:
+            return
+        mgr = model_class.objects.using(self.db_alias)
+        with transaction.atomic(using=self.db_alias):
+            mgr.bulk_create(
+                objs,
+                update_conflicts=True,
+                unique_fields=unique_fields,
+                update_fields=update_fields,
+                batch_size=500,
             )
-        elif self.total_particoes > 1:
-            filtro = (
-                f"(ABS({coluna_id}) % {self.total_particoes}"
-                f" = {self.particao})"
-            )
-        else:
-            return sql
 
-        sql_lower = sql.lower()
-        order_idx = sql_lower.rfind("order by")
-        if order_idx >= 0:
-            before = sql[:order_idx]
-            after = sql[order_idx:]
-            conj = "AND" if "where" in sql_lower[:order_idx] else "WHERE"
-            return f"{before} {conj} {filtro} {after}"
+    def _processar_batch(self, config: PhaseConfig, chunk: list, **kwargs: Any) -> tuple[int, int]:
+        """Transforma e sincroniza um lote de dados."""
+        transform = kwargs.get("transform") or (lambda x: x)
+        lote_transformado = [transform(r) for r in chunk]
+        meta = self._get_batch_meta(config)
+        return self.sync_batch(lote_transformado, meta, batch_num=kwargs.get("batch_num", 0))
 
-        conj = "AND" if "where" in sql_lower else "WHERE"
-        return f"{sql} {conj} {filtro}"
+    def _get_batch_meta(self, cfg: PhaseConfig | None, **kwargs: Any) -> dict:
+        """Monta dicionário de metadados da fase."""
+        return {
+            "primeiro_run": self.primeiro_run,
+            "db_alias": self.db_alias,
+            "table_name": (cfg.table_name if cfg else None) or kwargs.get("table_name"),
+            "update_fields": list((cfg.update_fields if cfg else None) or kwargs.get("update_fields", [])),
+            "unique_fields": list((cfg.unique_fields if cfg else None) or kwargs.get("unique_fields", ["id"])),
+            "model_class": (cfg.model_class if cfg else None) or kwargs.get("model_class"),
+            "modo_escrita": (cfg.modo_escrita if cfg else None) or kwargs.get("modo_escrita", "upsert"),
+        }
 
-    def _get_union_partition_sql(self, union_sql: str, id_column: str) -> str:
-        """Aplica filtro de partição em todas as partes de um UNION ALL."""
-        if self.id_min is None or self.id_max is None:
-            return union_sql
-        partes = union_sql.split("UNION ALL")
-        partes_filtradas = [
-            self._get_partition_sql(p.strip(), id_column) for p in partes
-        ]
-        return "\nUNION ALL\n".join(partes_filtradas)
-
-
-    def _criar_transform(
-        self, config: PhaseConfig
-    ) -> Callable[[tuple], tuple[str, str, Any]]:
-        """Factory de função transform para uma fase do pipeline.
-
-        Elimina overhead de isinstance e sorted em cada linha.
-
-        Suporta dois caminhos:
-            - ``dto_out`` fornecido: caminho legado via ``dto_out.to_dict()``.
-            - ``dto_out`` ausente: caminho novo via ``dto_in.to_domain()``.
-        """
-        hash_fields = sorted(config.update_fields)
-        pk_field = config.pk_field
-        dto_in = config.dto_in
-        model_class = config.model_class
-
-        if isinstance(pk_field, list):
-            def _extrair_pk(dto: Any) -> str:
-                return "-".join(str(getattr(dto, f)) for f in pk_field)
-        else:
-            def _extrair_pk(dto: Any) -> str:
-                return str(getattr(dto, pk_field))
-
-        if config.dto_out is not None:
-            dto_out = config.dto_out
-
-            def transform(row: tuple) -> tuple[str, str, Any]:
-                dto = dto_in(*row)
-                obj = model_class(**dto_out.to_dict(dto))
-                return _extrair_pk(dto), calcular_hash(obj, hash_fields), obj
-        else:
-            def transform(row: tuple) -> tuple[str, str, Any]:
-                dto = dto_in(*row)
-                obj = model_class(**dto.to_domain())
-                return _extrair_pk(dto), calcular_hash(obj, hash_fields), obj
-
-        return transform
-
-    def _truncar_tabela(self, table_name: str) -> None:
-        """Trunca a tabela de destino antes do full-sync.
-
-        Usado apenas quando ``PhaseConfig.truncate_on_full_sync=True`` e
-        ``primeiro_run=True``. O nome da tabela é definido em código
-        (PhaseConfig), nunca vem de entrada externa.
-        """
-        query = sql.SQL("TRUNCATE TABLE {} CASCADE").format(
-            sql.Identifier(table_name)
-        )
-        with connections[self.db_alias].cursor() as cur:
-            cur.execute(query)
-        logger.info(
-            "[%s] Tabela %s truncada para full-sync.",
-            self._dominio,
-            table_name,
+    def _get_meta_attr(self, meta: Any, attr: str, default: Any = None) -> Any:
+        return (
+            meta.get(attr, default)
+            if isinstance(meta, dict)
+            else getattr(meta, attr, default)
         )
 
-    def _executar_fase(self, config: PhaseConfig) -> PipelineMetrics:
-        """Executa fase com padrão Producer-Consumer."""
-        if config.truncate_on_full_sync and self.primeiro_run:
+    def _executar_fase(
+        self, config: PhaseConfig, numero_fase: int = 0
+    ) -> PipelineMetrics:
+        queue: Queue = Queue(maxsize=self._max_workers)
+        metrics, erros = PipelineMetrics(), []
+
+        if config.modo_escrita == "full_refresh" and config.truncate_on_full_sync:
             self._truncar_tabela(config.table_name)
 
-        self._fase_suporta_bulk_insert = config.suporta_bulk_insert
-        queue: Queue[list[tuple] | None] = Queue(
-            maxsize=getattr(settings, "THREAD_POOL_MAX_WORKERS", 4)
-        )
-        metrics = PipelineMetrics()
-        transform_func = self._criar_transform(config)
-        erros: list[Exception] = []
+        self._ultimo_audit_count = 0
+        thread = self._iniciar_producer(config, queue, erros)
 
-        thread = Thread(
-            target=self._producer, args=(config, queue, erros), daemon=True
+        trans = self._criar_transform(config)
+        bn, start = 0, time.perf_counter()
+
+        while True:
+            chunk = self._get_next_chunk(queue)
+            if chunk is None:
+                break
+
+            esc, ign = self._processar_batch(
+                batch_num=bn, chunk=chunk, transform=trans, config=config
+            )
+            self._atualizar_metricas(metrics, len(chunk), esc, ign)
+            bn += 1
+            self._log_progresso(bn, metrics, start, config)
+            queue.task_done()
+
+        self._finalizar_threads(thread, erros)
+        self._registrar_auditoria_fase(
+            config,
+            metrics,
+            numero_fase=numero_fase,
+            total_fases=len(self._fases),
+            ultimo_lote=bn,
         )
+        return metrics
+
+    def _iniciar_producer(self, config: PhaseConfig, queue: Queue, erros: list) -> Thread:
+        def producer():
+            try:
+                for chunk in self._iter_chunks(config.sql):
+                    queue.put(chunk)
+                queue.put(None)
+            except Exception as e:
+                erros.append(e)
+                queue.put(None)
+
+        thread = Thread(target=producer, daemon=True)
         thread.start()
+        return thread
 
-        self._consumir_pedacos(config, queue, transform_func, metrics, erros)
+    def _get_next_chunk(self, queue: Queue) -> list | None:
+        try:
+            return queue.get(timeout=getattr(settings, "THREAD_POOL_CHUNK_TIMEOUT", 30))
+        except Empty:
+            raise RuntimeError("Timeout waiting for Producer")
 
-        thread.join(timeout=settings.THREAD_POOL_CHUNK_TIMEOUT)
+    def _atualizar_metricas(
+        self, metrics: PipelineMetrics, lidos: int, esc: int, ign: int
+    ) -> None:
+        metrics.total_lidos += lidos
+        metrics.total_escritos += esc
+        metrics.total_ignorados += ign
+        self.ultimo_token = str(metrics.total_lidos)
+
+    def _log_progresso(
+        self, bn: int, metrics: PipelineMetrics, start: float, config: PhaseConfig
+    ) -> None:
+        if bn % 10 == 0 or bn == 1:
+            duracao = time.perf_counter() - start
+            rate = int(metrics.total_lidos / (duracao or 1))
+            logger.info(
+                "[%s] throughput: %d itens em %.2fs (%s reg/s)",
+                self._dominio,
+                metrics.total_lidos,
+                duracao,
+                _fmt_num(rate),
+            )
+
+        intervalo = getattr(settings, "EOL_CHUNK_SIZE", 50_000)
+        if metrics.total_lidos - self._ultimo_audit_count >= intervalo:
+            self._registrar_progresso_parcial(config, metrics, bn)
+            self._ultimo_audit_count = metrics.total_lidos
+
+    def _registrar_progresso_parcial(
+        self, config: PhaseConfig, metrics: PipelineMetrics, batch_num: int
+    ) -> None:
+        """Registra progresso intermediário no banco de auditoria."""
+        if not (self.auditor and self.id_execucao):
+            return
+
+        if config.source_table:
+            self.auditor.registrar_tabela_lida(
+                id_execucao=self.id_execucao,
+                tabela_origem=config.source_table,
+                numero_pagina=batch_num,
+                linhas_lidas=metrics.total_lidos,
+            )
+
+        token = self.ultimo_token or "0"
+        self.auditor.atualizar_checkpoint_dominio(
+            dominio=self._dominio.lower(),
+            ultimo_id_execucao=self.id_execucao,
+            ultima_pagina=self.ultima_fase_concluida + 1,
+            token_parada=token,
+            indice_sincronizacao=f"{config.nome}:offset:{token}",
+            ultima_situacao="em_execucao",
+            sucesso=False,
+        )
+
+    def _finalizar_threads(self, thread: Thread, erros: list) -> None:
+        thread.join(timeout=30)
         if thread.is_alive():
-            raise RuntimeError(f"[{config.nome}] Producer não encerrou.")
+            raise RuntimeError("Producer thread did not terminate")
         if erros:
             raise erros[0]
 
-        return metrics
-
-    def _producer(self, config: PhaseConfig, queue: Queue, erros: list) -> None:
-        """Busca pedaços da origem e alimenta a queue."""
-        try:
-            for chunk in self._iter_chunks(config.sql):
-                queue.put(chunk)
-            queue.put(None)
-        except Exception as exc:
-            erros.append(exc)
-            queue.put(None)
-
-    def _consumir_pedacos(
+    def _registrar_auditoria_fase(
         self,
         config: PhaseConfig,
-        queue: Queue,
-        transform: Callable,
         metrics: PipelineMetrics,
-        erros: list,
+        numero_fase: int = 0,
+        total_fases: int = 0,
+        ultimo_lote: int = 0,
     ) -> None:
-        """Transforma e sincroniza pedaços da queue."""
-        timeout = settings.THREAD_POOL_CHUNK_TIMEOUT
-        batch_num = 0
-        processor = ThreadPoolProcessor(
-            max_workers=settings.THREAD_POOL_MAX_WORKERS,
-            timeout=timeout,
-            prefixo_log=f"{self._dominio}/{config.nome}",
-        )
-
-        with processor:
-            while True:
-                try:
-                    chunk = queue.get(timeout=timeout)
-                except Empty:
-                    raise RuntimeError(f"[{config.nome}] Producer Timeout.")
-
-                if chunk is None:
-                    break
-                if erros:
-                    raise erros[0]
-
-                t0 = time.monotonic()
-                lote = processor.processar(chunk, transform)
-                escritos, ignorados = self._sync_batch(
-                    processed_data=lote,
-                    model_class=config.model_class,
-                    table_name=config.table_name,
-                    update_fields=list(config.update_fields),
-                    unique_fields=list(config.unique_fields),
-                    batch_num=batch_num,
-                )
-
-                metrics.total_lidos += len(chunk)
-                metrics.total_escritos += escritos
-                metrics.total_ignorados += ignorados
-                if lote:
-                    self.ultimo_token = str(lote[-1][0])
-
-                elapsed = time.monotonic() - t0
-                throughput = len(chunk) / elapsed if elapsed > 0 else 0
-                logger.info(
-                    "[%s] %s | LOTE: %d | Lidos: %s | Sync: %s | %.0f reg/s",
-                    self._dominio,
-                    config.table_name,
-                    batch_num,
-                    _fmt_num(metrics.total_lidos),
-                    _fmt_num(escritos),
-                    throughput,
-                )
-                batch_num += 1
-
-    def _registrar_auditoria_fase(
-        self, config: PhaseConfig, metrics: PipelineMetrics
-    ) -> None:
-        """Registra leitura da fase em ``etl_execucao_tabela_lida``."""
-        if not self.auditor or not self.id_execucao:
+        """Registra métricas da fase e atualiza o checkpoint de progresso."""
+        if not (self.auditor and self.id_execucao):
             return
-        if not config.source_table:
-            return
-        self.auditor.registrar_tabela_lida(
-            id_execucao=self.id_execucao,
-            tabela_origem=config.source_table,
-            numero_pagina=self.ultima_fase_concluida,
-            linhas_lidas=metrics.total_lidos,
-        )
 
-    def executar(self, fase_inicial: int = 1) -> dict[str, int]:
-        """Executa o pipeline em fases, registrando auditoria de leitura."""
-        resultados: dict[str, int] = {}
-        logger.info(
-            "[%s] Início Execução %s (Partição %d/%d) | full_sync=%s",
-            self._dominio,
-            self.id_execucao,
-            self.particao,
-            self.total_particoes,
-            self.primeiro_run,
-        )
-
-        for i, config in enumerate(self._fases, 1):
-            if i < fase_inicial:
-                continue
-
-            logger.info(
-                "[%s] Início Fase %d: %s", self._dominio, i, config.nome
+        if config.source_table:
+            self.auditor.registrar_tabela_lida(
+                id_execucao=self.id_execucao,
+                tabela_origem=config.source_table,
+                numero_pagina=ultimo_lote,
+                linhas_lidas=metrics.total_lidos,
             )
-            metrics = self._executar_fase(config)
-            resultados[config.nome] = metrics.total_escritos
-            self.ultima_fase_concluida = i
-            self._registrar_auditoria_fase(config, metrics)
+        self.auditor.registrar_tabela_escrita(
+            id_execucao=self.id_execucao,
+            tabela_destino=config.table_name,
+            linhas_escritas=metrics.total_escritos,
+            modo_escrita=config.modo_escrita,
+        )
 
-        return resultados
+        # Atualiza o checkpoint para permitir retomada granular
+        is_ultima = numero_fase > 0 and numero_fase == total_fases
+        token = self.ultimo_token or "0"
+        
+        self.auditor.atualizar_checkpoint_dominio(
+            dominio=self._dominio.lower(),
+            ultimo_id_execucao=self.id_execucao,
+            ultima_pagina=numero_fase or self.ultima_fase_concluida,
+            token_parada=token,
+            indice_sincronizacao=f"{config.nome}:offset:{token}",
+            ultima_situacao="concluido" if is_ultima else "em_execucao",
+            sucesso=is_ultima,
+        )
 
-    # ------------------------------------------------------------------
-    # Escrita no destino
-    # ------------------------------------------------------------------
+    def _truncar_tabela(self, tn: str) -> None:
+        """Limpa a tabela de destino antes do Full Sync."""
+        with connections[self.db_alias].cursor() as cur:
+            cur.execute(
+                sql.SQL("TRUNCATE TABLE {} CASCADE").format(sql.Identifier(tn))
+            )
 
-    def create_transformer(
-        self,
-        dto_in: Any,
-        dto_out: Any,
-        model_class: Any,
-        pk_field: str | list[str],
-    ) -> Callable[[tuple], tuple[Any, Any]]:
-        """Factory de transformadores otimizados para DTOs.
+    def _criar_transform(self, config: PhaseConfig) -> Callable:
+        """Cria função de transformação de linha MSSQL para objeto Model."""
+        hf, pkf = sorted(config.update_fields), config.pk_field
+        din, mc, dout = config.dto_in, config.model_class, config.dto_out
 
-        Args:
-            dto_in: Classe DTO de entrada (In-Bound).
-            dto_out: Classe DTO de saída (Out-Bound).
-            model_class: Classe do modelo Django.
-            pk_field: Nome(s) do(s) campo(s) que compõe(m) a PK.
+        def _pk(d):
+            if isinstance(pkf, list):
+                return "-".join(str(getattr(d, f)) for f in pkf)
+            return str(getattr(d, pkf))
 
-        Returns:
-            Função transformadora ``(row) -> (pk, model_instance)``.
-        """
-
-        def transform(row: tuple) -> tuple[Any, Any]:
-            dto = dto_in(*row)
-            if isinstance(pk_field, list):
-                val_pk = "-".join(str(getattr(dto, f)) for f in pk_field)
-            else:
-                val_pk = getattr(dto, pk_field)
-            return val_pk, model_class(**dto_out.to_dict(dto))
+        def transform(row):
+            d = din(*row)
+            data = dout.to_dict(d) if dout else d.to_domain()
+            obj = mc(**data)
+            return _pk(d), calcular_hash(obj, hf), obj
 
         return transform
 
-    def sync_table(self, *args: Any, **kwargs: Any) -> None:
-        """Método depreciado e removido. Use _execute_pipeline em seu lugar."""
-        raise NotImplementedError(
-            "sync_table foi removido. Use o novo padrão de pipeline explícito."
-        )
-
-    @retry_deadlock()
-    def _sync_batch(
-        self,
-        processed_data: list[tuple[str, str, Any]],
-        model_class: Any,
-        table_name: str,
-        update_fields: list[str] | None = None,
-        unique_fields: list[str] | None = None,
-        batch_num: int = 0,
-    ) -> tuple[int, int]:
-        """Helper para sincronizar um lote processado com o banco de destino."""
-        return self._processar_batch(
-            batch_num=batch_num,
-            batch_data=processed_data,
-            model_class=model_class,
-            db_table=table_name,
-            update_fields=update_fields,
-            unique_fields=unique_fields,
-        )
-
-    def _processar_batch(
-        self,
-        batch_num: int,
-        batch_data: list[tuple[str, str, Any]],
-        model_class: Any,
-        db_table: str,
-        update_fields: list[str] | None = None,
-        unique_fields: list[str] | None = None,
-    ) -> tuple[int, int]:
-        """Filtra, escreve no domínio e atualiza auditoria."""
-        if not batch_data:
-            return 0, 0
-
-        dedup = {id_dest: (h, obj) for id_dest, h, obj in batch_data}
-        dedup_data = sorted(
-            [(k, v[0], v[1]) for k, v in dedup.items()], key=lambda x: x[0]
-        )
-        ignorados = len(batch_data) - len(dedup_data)
-
-        objs, hashes = self._obter_dados_pendentes(
-            dedup_data, db_table, batch_num
-        )
-        ignorados += len(dedup_data) - len(objs)
-
-        if objs:
-            self._persistir_batch(
-                objs, hashes, model_class, db_table, batch_num,
-                update_fields, unique_fields
+    def executar(self, fase_inicial: int = 1) -> dict[str, int]:
+        """Executa todas as fases do serviço sequencialmente."""
+        res = {}
+        total = len(self._fases)
+        for i, config in enumerate(self._fases, 1):
+            if i < fase_inicial:
+                continue
+            logger.info(
+                "Executando fase %d/%d: %s", i, total, config.nome
             )
+            m = self._executar_fase(config, numero_fase=i)
+            res[config.nome] = m.total_escritos
+            self.ultima_fase_concluida = i
+        return res
 
-        return len(objs), ignorados
+    def _buscar_hashes_por_copy(self, ids: list[str], tn: str) -> dict[str, str]:
+        """Busca hashes via PostgresUpsertEngine."""
+        return self.pg_engine.buscar_hashes(ids, tn)
 
-    def _obter_dados_pendentes(
-        self, dedup_data: list, db_table: str, batch_num: int
-    ) -> tuple[list, list]:
-        """Identifica quais registros realmente mudaram."""
-        if self.primeiro_run:
-            return (
-                [obj for _, _, obj in dedup_data],
-                [(f"{db_table}:{r[0]}", r[1]) for r in dedup_data],
-            )
-
-        ids_audit = [f"{db_table}:{r[0]}" for r in dedup_data]
-        existentes = self._buscar_hashes_por_copy(
-            ids_audit, f"{db_table}_{batch_num}"
-        )
-
-        objs, hashes = [], []
-        for id_dest, h, obj in dedup_data:
-            id_audit = f"{db_table}:{id_dest}"
-            if existentes.get(id_audit) != h:
-                objs.append(obj)
-                hashes.append((id_audit, h))
-
-        return objs, hashes
-
-    def _persistir_batch(
-        self,
-        objs: list,
-        hashes: list,
-        model_class: Any,
-        db_table: str,
-        batch_num: int,
-        update_fields: list | None,
-        unique_fields: list | None,
-    ) -> None:
-        """Executa a persistência no domínio e na auditoria."""
-        usar_bulk = self.primeiro_run and getattr(
-            self, "_fase_suporta_bulk_insert", False
-        )
-        with transaction.atomic(using=self.db_alias):
-            if usar_bulk:
-                model_class.objects.using(self.db_alias).bulk_create(objs)
-            else:
-                v_unique = unique_fields or getattr(
-                    model_class, "unique_fields", ["id"]
-                )
-                v_update = update_fields or [
-                    f.name
-                    for f in model_class._meta.fields
-                    if not f.primary_key and f.name != "id"
-                ]
-                model_class.objects.using(self.db_alias).bulk_create(
-                    objs,
-                    update_conflicts=True,
-                    unique_fields=v_unique,
-                    update_fields=v_update,
-                )
-
-        batch_id = f"{db_table}_{batch_num}"
-        if self.auditor:
-            self.auditor.upsert_bulk_hashes(hashes, batch_id)
-        else:
-            self.pg_engine.upsert_bulk(
-                "etl_auditoria_linha", hashes, batch_id
-            )
-
-    def _buscar_hashes_por_copy(
-        self,
-        ids_audit: list[str],
-        batch_id: str,
-    ) -> dict[str, str]:
-        """Busca hashes via COPY + JOIN, evitando IN (N ids).
-
-        Clausulas IN com 100k IDs forçam o Postgres a alocar ~15 MB de
-        shared memory por query. Com 4 partições × 4 consumers rodando
-        em paralelo, isso esgota o limite do container. A substituição
-        por COPY + temp table + INNER JOIN usa memória local (work_mem)
-        e elimina o risco de "No space left on device".
-        """
-        if not ids_audit:
-            return {}
-
-        buffer = io.StringIO()
-        try:
-            for id_dest in ids_audit:
-                buffer.write(f"{id_dest}\n")
-            conteudo = buffer.getvalue()
-        finally:
-            buffer.close()
-
-        safe_id = batch_id.replace("-", "_")
-        temp_table = f"temp_lookup_{safe_id}"
-
-        with (
-            transaction.atomic(using="default"),
-            connections["default"].cursor() as cursor,
-        ):
-            query_create = sql.SQL(
-                "CREATE TEMP TABLE {} (id_destino text) ON COMMIT DROP"
-            ).format(sql.Identifier(temp_table))
-            cursor.execute(query_create)
-            raw_cursor = cursor.cursor
-            if hasattr(raw_cursor, "copy"):
-                copy_query = sql.SQL(
-                    "COPY {} (id_destino) FROM STDIN"
-                ).format(sql.Identifier(temp_table))
-                with raw_cursor.copy(copy_query) as copy:
-                    copy.write(conteudo)
-            else:
-                raw_cursor.copy_from(
-                    io.StringIO(conteudo),
-                    temp_table,
-                    columns=("id_destino",),
-                )
-            query_select = sql.SQL(
-                """
-                SELECT al.id_destino, al.hash_controle
-                FROM etl_auditoria_linha al
-                INNER JOIN {temp} tl
-                    ON al.id_destino = tl.id_destino
-                """
-            ).format(temp=sql.Identifier(temp_table))
-            cursor.execute(query_select)
-            return dict(cursor.fetchall())

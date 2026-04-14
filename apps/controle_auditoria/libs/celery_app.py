@@ -15,7 +15,10 @@ def create_celery_app() -> Celery:
 
     app.conf.update(
         task_default_queue="fila_etl_padrao",
-        imports=("apps.controle_auditoria.libs.tasks",),
+        imports=(
+            "apps.controle_auditoria.libs.tasks",
+            "apps.core.tasks",
+        ),
         broker_connection_retry=True,
         broker_connection_retry_on_startup=True,
         broker_connection_max_retries=10,

@@ -144,11 +144,10 @@ class MatriculaTurma(models.Model):
     """Matricula do aluno em turma."""
 
     id = models.BigAutoField(primary_key=True)
-    matricula = models.ForeignKey(
-        Matricula,
-        db_column="codigo_matricula",
-        on_delete=models.CASCADE,
-        related_name="matriculas_turmas",
+    codigo_matricula = models.BigIntegerField(
+        db_index=True,
+        null=True,
+        blank=True,
     )
     codigo_turma = models.BigIntegerField()
     numero_chamada = models.CharField(max_length=5, null=True, blank=True)
@@ -157,7 +156,7 @@ class MatriculaTurma(models.Model):
     class Meta:
         app_label = "alunos"
         db_table = "matricula_turma"
-        unique_together = [("matricula", "codigo_turma")]
+        unique_together = [("codigo_matricula", "codigo_turma")]
         indexes = [
             models.Index(
                 fields=["codigo_turma"], name="idx_matricula_turma_codigo"
@@ -165,4 +164,4 @@ class MatriculaTurma(models.Model):
         ]
 
     def __str__(self) -> str:
-        return f"M: {self.matricula_id} - T: {self.codigo_turma}"
+        return f"M: {self.codigo_matricula} - T: {self.codigo_turma}"

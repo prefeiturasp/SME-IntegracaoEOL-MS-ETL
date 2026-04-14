@@ -1,6 +1,5 @@
-"""Serviço de ETL do domínio Alunos (ALUNOS_DB)."""
+"""Serviço de ETL do domínio Alunos."""
 
-import logging
 from collections.abc import Iterator
 from typing import Any
 from uuid import UUID
@@ -23,8 +22,6 @@ from apps.alunos.models import (
 )
 from apps.core.libs.base_etl_service import BaseEtlService, PhaseConfig
 from apps.eol_connection.libs.servico_eol import EOLService
-
-logger = logging.getLogger(__name__)
 
 SQL_TIPO_NEE = """
 SELECT
@@ -82,8 +79,8 @@ FROM necessidade_especial_aluno
 
 SQL_MATRICULA = """
 SELECT
-    q.cd_matricula, q.cd_aluno, q.codigo_ue, q.data_status, q.ano_letivo,
-    q.codigo_situacao_matricula, q.situacao_matricula
+    cd_matricula, cd_aluno, codigo_ue, data_status, ano_letivo,
+    codigo_situacao_matricula
 FROM (
     SELECT
         cd_matricula
@@ -92,25 +89,6 @@ FROM (
       , dt_status_matricula AS data_status
       , an_letivo AS ano_letivo
       , st_matricula AS codigo_situacao_matricula
-      , CASE
-            WHEN st_matricula = 1  THEN 'Ativo'
-            WHEN st_matricula = 2  THEN 'Desistente'
-            WHEN st_matricula = 3  THEN 'Transferido'
-            WHEN st_matricula = 4  THEN 'Vínculo Indevido'
-            WHEN st_matricula = 5  THEN 'Concluído'
-            WHEN st_matricula = 6  THEN 'Pendente de Rematrícula'
-            WHEN st_matricula = 7  THEN 'Falecido'
-            WHEN st_matricula = 8  THEN 'Não Compareceu'
-            WHEN st_matricula = 10 THEN 'Rematriculado'
-            WHEN st_matricula = 11 THEN 'Deslocamento'
-            WHEN st_matricula = 12 THEN 'Cessado'
-            WHEN st_matricula = 13 THEN 'Sem continuidade'
-            WHEN st_matricula = 14 THEN 'Remanejado Saída'
-            WHEN st_matricula = 15 THEN 'Reclassificado Saída'
-            WHEN st_matricula = 16 THEN 'Transferido SED'
-            WHEN st_matricula = 17 THEN 'Dispensado Ed. Física'
-            ELSE 'Fora do domínio liberado pela PRODAM'
-        END situacao_matricula
     FROM v_matricula_cotic
     UNION ALL
     SELECT
@@ -120,25 +98,6 @@ FROM (
       , dt_status_matricula AS data_status
       , an_letivo AS ano_letivo
       , st_matricula AS codigo_situacao_matricula
-      , CASE
-            WHEN st_matricula = 1  THEN 'Ativo'
-            WHEN st_matricula = 2  THEN 'Desistente'
-            WHEN st_matricula = 3  THEN 'Transferido'
-            WHEN st_matricula = 4  THEN 'Vínculo Indevido'
-            WHEN st_matricula = 5  THEN 'Concluído'
-            WHEN st_matricula = 6  THEN 'Pendente de Rematrícula'
-            WHEN st_matricula = 7  THEN 'Falecido'
-            WHEN st_matricula = 8  THEN 'Não Compareceu'
-            WHEN st_matricula = 10 THEN 'Rematriculado'
-            WHEN st_matricula = 11 THEN 'Deslocamento'
-            WHEN st_matricula = 12 THEN 'Cessado'
-            WHEN st_matricula = 13 THEN 'Sem continuidade'
-            WHEN st_matricula = 14 THEN 'Remanejado Saída'
-            WHEN st_matricula = 15 THEN 'Reclassificado Saída'
-            WHEN st_matricula = 16 THEN 'Transferido SED'
-            WHEN st_matricula = 17 THEN 'Dispensado Ed. Física'
-            ELSE 'Fora do domínio liberado pela PRODAM'
-        END situacao_matricula
     FROM v_historico_matricula_cotic
 ) AS q
 ORDER BY q.cd_matricula
@@ -151,19 +110,14 @@ WITH CteMatriculaTurma AS (
       , mt.cd_turma_escola AS codigo_turma
       , mt.nr_chamada_aluno AS numero_chamada
       , mt.dt_situacao_aluno AS data_situacao
-      , m.cd_aluno
     FROM matricula_turma_escola mt
-    INNER JOIN v_matricula_cotic m ON m.cd_matricula = mt.cd_matricula
     UNION ALL
     SELECT
         mt.cd_matricula
       , mt.cd_turma_escola AS codigo_turma
       , mt.nr_chamada_aluno AS numero_chamada
       , mt.dt_situacao_aluno AS data_situacao
-      , m.cd_aluno
     FROM historico_matricula_turma_escola mt
-    INNER JOIN v_historico_matricula_cotic m
-        ON m.cd_matricula = mt.cd_matricula
 )
 SELECT mt.cd_matricula, mt.codigo_turma, mt.numero_chamada, mt.data_situacao
 FROM CteMatriculaTurma mt
@@ -171,12 +125,7 @@ FROM CteMatriculaTurma mt
 
 
 class EtlAlunosService(BaseEtlService):
-    """Serviço de ETL otimizado para Alunos.
-
-    Define as 6 fases do domínio e aponta ``_iter_chunks`` para o EOL.
-    Todo o pipeline Producer-Consumer, particionamento e auditoria são
-    herdados de ``BaseEtlService``.
-    """
+    """Pipeline ETL de Alunos."""
 
     _dominio = "ALUNOS"
 
@@ -185,35 +134,28 @@ class EtlAlunosService(BaseEtlService):
         db_alias: str,
         id_execucao: UUID | None = None,
         repositorio_auditoria: Any | None = None,
-        id_min: int | None = None,
-        id_max: int | None = None,
-        particao: int = 0,
-        total_particoes: int = 1,
         eol: EOLService | None = None,
         primeiro_run: bool = False,
     ) -> None:
+        """Inicializa o serviço de alunos conectando ao EOL."""
         super().__init__(
             db_alias=db_alias,
             id_execucao=id_execucao,
             repositorio_auditoria=repositorio_auditoria,
-            id_min=id_min,
-            id_max=id_max,
-            particao=particao,
-            total_particoes=total_particoes,
             primeiro_run=primeiro_run,
         )
         self.eol = eol or EOLService()
         self._fases = self._init_fases()
 
     def _iter_chunks(self, sql: str) -> Iterator[list[tuple]]:
-        """Delega a extração para o EOLService (SQL Server)."""
+        """Lê os dados brutos da origem (MSSQL) em chunks."""
         return self.eol.iter_query(sql)
 
     def _init_fases(self) -> list[PhaseConfig]:
-        """Define as 6 fases do ETL de Alunos."""
+        """Define as fases do domínio Alunos."""
         return [
             PhaseConfig(
-                nome="tipo_nee",
+                nome="tipo_necessidade_especial",
                 sql=SQL_TIPO_NEE,
                 table_name="tipo_necessidade_especial",
                 source_table="tipo_necessidade_especial",
@@ -227,11 +169,12 @@ class EtlAlunosService(BaseEtlService):
                     "data_cancelamento",
                 ),
                 unique_fields=("codigo_necessidade_especial",),
-                suporta_bulk_insert=False,
+                suporta_bulk_insert=True,
+                truncate_on_full_sync=True,
             ),
             PhaseConfig(
                 nome="aluno",
-                sql=self._get_partition_sql(SQL_ALUNO, "a.cd_aluno"),
+                sql=SQL_ALUNO,
                 table_name="aluno",
                 source_table="aluno",
                 model_class=Aluno,
@@ -251,8 +194,8 @@ class EtlAlunosService(BaseEtlService):
                 suporta_bulk_insert=True,
             ),
             PhaseConfig(
-                nome="responsavel",
-                sql=self._get_partition_sql(SQL_RESPONSAVEL, "ra.cd_aluno"),
+                nome="responsavel_aluno",
+                sql=SQL_RESPONSAVEL,
                 table_name="responsavel_aluno",
                 source_table="responsavel_aluno",
                 model_class=ResponsavelAluno,
@@ -275,7 +218,7 @@ class EtlAlunosService(BaseEtlService):
             ),
             PhaseConfig(
                 nome="nee_aluno",
-                sql=self._get_partition_sql(SQL_NEE_ALUNO, "cd_aluno"),
+                sql=SQL_NEE_ALUNO,
                 table_name="necessidade_especial_aluno",
                 source_table="necessidade_especial_aluno",
                 model_class=NecessidadeEspecialAluno,
@@ -292,7 +235,7 @@ class EtlAlunosService(BaseEtlService):
             ),
             PhaseConfig(
                 nome="matricula",
-                sql=self._get_partition_sql(SQL_MATRICULA, "q.cd_aluno"),
+                sql=SQL_MATRICULA,
                 table_name="matricula",
                 source_table="v_matricula_cotic",
                 model_class=Matricula,
@@ -310,16 +253,14 @@ class EtlAlunosService(BaseEtlService):
             ),
             PhaseConfig(
                 nome="matricula_turma",
-                sql=self._get_partition_sql(
-                    SQL_MATRICULA_TURMA, "mt.cd_aluno"
-                ),
+                sql=SQL_MATRICULA_TURMA,
                 table_name="matricula_turma",
                 source_table="matricula_turma_escola",
                 model_class=MatriculaTurma,
                 dto_in=MatriculaTurmaIn,
                 pk_field=["codigo_matricula", "codigo_turma"],
                 update_fields=("numero_chamada", "data_situacao_aluno"),
-                unique_fields=("matricula_id", "codigo_turma"),
+                unique_fields=("codigo_matricula", "codigo_turma"),
                 suporta_bulk_insert=False,
             ),
         ]

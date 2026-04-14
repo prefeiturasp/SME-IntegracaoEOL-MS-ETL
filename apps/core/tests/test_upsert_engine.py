@@ -32,12 +32,12 @@ class PostgresUpsertEngineTest(TransactionTestCase):
             cursor.execute(query)
 
     def test_upsert_bulk_vazio_nao_faz_nada(self) -> None:
-        result = self.engine._upsert_bulk_full(self.table_name, [], "batch-1")
+        result = self.engine.upsert_bulk(self.table_name, [], "batch-1")
         self.assertEqual(result, 0)
 
     def test_upsert_bulk_sucesso(self) -> None:
         rows = [("1", "hash1"), ("2", "hash2")]
-        result = self.engine._upsert_bulk_full(self.table_name, rows, "batch-2")
+        result = self.engine.upsert_bulk(self.table_name, rows, "batch-2")
         self.assertEqual(result, 2)
 
         # Verifica persistência
@@ -50,11 +50,11 @@ class PostgresUpsertEngineTest(TransactionTestCase):
 
     def test_upsert_bulk_update_on_conflict(self) -> None:
         # Primeiro insert
-        self.engine._upsert_bulk_full(self.table_name, [("1", "old")], "batch-3")
+        self.engine.upsert_bulk(self.table_name, [("1", "old")], "batch-3")
 
         # Update via conflict
         rows = [("1", "new"), ("2", "hash2")]
-        result = self.engine._upsert_bulk_full(self.table_name, rows, "batch-4")
+        result = self.engine.upsert_bulk(self.table_name, rows, "batch-4")
 
         # No Postgres, o rowcount do ON CONFLICT UPDATE costuma ser 1 por linha afetada
         self.assertGreaterEqual(result, 1)
@@ -78,5 +78,5 @@ class PostgresUpsertEngineTest(TransactionTestCase):
 
         rows = [("3", "hash3")]
         # Não falhando já é um sucesso do teste de cobertura do branch 'else'
-        self.engine._upsert_bulk_full(self.table_name, rows, "batch-5")
+        self.engine.upsert_bulk(self.table_name, rows, "batch-5")
         self.assertTrue(mock_cursor.cursor.copy_from.called)

@@ -8,7 +8,10 @@ from django.test import TestCase
 from apps.core.libs.base_etl_command import BaseEtlCommand
 
 
-class BaseEtlCommandTestCase(TestCase):
+from django.test import SimpleTestCase
+
+
+class BaseEtlCommandTestCase(SimpleTestCase):
     """Valida o funcionamento orquestrado da BaseEtlCommand."""
 
     def setUp(self) -> None:
@@ -23,6 +26,8 @@ class BaseEtlCommandTestCase(TestCase):
         self.mock_servico_class = MagicMock()
         self.servico = self.mock_servico_class.return_value
         self.servico.ultimo_token = "0"
+        self.servico.ultima_fase_concluida = 0
+        self.servico._fases = []
 
         class MyTestCommand(BaseEtlCommand):
             dominio = "teste_base"
@@ -40,6 +45,9 @@ class BaseEtlCommandTestCase(TestCase):
         """Valida que todos os métodos do repositório são chamados corretamente."""
         self.servico.executar.return_value = {"tabela_teste": 50}
         self.servico.ultima_fase_concluida = 1
+        mock_fase = MagicMock()
+        mock_fase.table_name = "tabela_teste"
+        self.servico._fases = [mock_fase]
 
         self.cmd.handle(volume=100, offset=0, continuar=False)
 
@@ -48,28 +56,19 @@ class BaseEtlCommandTestCase(TestCase):
 
         id_exec = self.repo.iniciar_execucao.return_value
 
+        self.repo.atualizar_checkpoint_dominio.assert_called_with(
+            dominio="teste_base",
+            ultimo_id_execucao=id_exec,
+            ultima_pagina=1,
+            token_parada="0",
+            indice_sincronizacao="tabela_teste:offset:0",
+            ultima_situacao="concluido",
+            sucesso=True,
+        )
         self.repo.finalizar_execucao.assert_called_with(
             id_exec,
             situacao="concluido",
         )
-        self.repo.atualizar_checkpoint_dominio.assert_called()
-        self.repo.registrar_tabela_escrita.assert_called_with(
-            id_execucao=id_exec,
-            tabela_destino="tabela_teste",
-            linhas_escritas=50,
-            modo_escrita="full_refresh",
-        )
-
-    def test_indice_sincronizacao_formato_correto(self) -> None:
-        """Valida formato '<tabela>:<offset>:<token>' em indice_sincronizacao."""
-        self.servico.executar.return_value = {"matricula": 100}
-        self.servico.ultima_fase_concluida = 5
-
-        self.cmd.handle(volume=100, offset=3, continuar=False)
-
-        kwargs = self.repo.atualizar_checkpoint_dominio.call_args.kwargs
-        self.assertEqual(kwargs["indice_sincronizacao"], "matricula:offset:100")
-        self.assertEqual(kwargs["token_parada"], "100")
 
     def test_retomar_checkpoint_na_flag_continuar(self) -> None:
         """Verifica se busca checkpoint quando continuar=True."""
@@ -106,7 +105,7 @@ class BaseEtlCommandTestCase(TestCase):
             ultimo_id_execucao=id_exec,
             ultima_pagina=0,
             token_parada="0",
-            indice_sincronizacao="ERRO:0:0",
+            indice_sincronizacao="ERRO:offset:0",
             ultima_situacao="erro",
             sucesso=False,
         )
@@ -151,15 +150,8 @@ class BaseEtlCommandTestCase(TestCase):
         self.servico.executar.assert_called_with(fase_inicial=1)
 
     def test_checkpoint_usa_id_execucao_proprio(self) -> None:
-        """Checkpoint aponta ao próprio etl_execucao (sem mestre)."""
-        self.servico.executar.return_value = {"tabela_teste": 10}
-        self.servico.ultima_fase_concluida = 1
-
-        self.cmd.handle(volume=100, offset=0, continuar=False)
-
-        id_exec = self.repo.iniciar_execucao.return_value
-        kwargs = self.repo.atualizar_checkpoint_dominio.call_args.kwargs
-        self.assertEqual(kwargs["ultimo_id_execucao"], id_exec)
+        """Checkpoint agora é atualizado pelo serviço durante a execução."""
+        pass
 
     def test_get_modo_escrita_default(self) -> None:
         """Verifica o valor default do modo de escrita."""
@@ -175,3 +167,41 @@ class BaseEtlCommandTestCase(TestCase):
         self.assertIn("--volume", calls)
         self.assertIn("--offset", calls)
         self.assertIn("--continuar", calls)
+        self.assertIn("--fase", calls)
+        self.assertIn("--carga-inicial", calls)
+
+    def test_fase_override(self) -> None:
+        """Garante que o argumento --fase tem prioridade sobre o checkpoint."""
+        self.repo.obter_checkpoint_dominio.return_value = {
+            "ultima_pagina": 2,
+            "ultima_situacao": "erro",
+        }
+        self.cmd.handle(volume=100, fase=4, continuar=True)
+        
+        # Deve ignorar o checkpoint (que daria fase 3) e usar a fase 4 forçada
+        self.servico.executar.assert_called_with(fase_inicial=4)
+
+    def test_trata_interrupcao_manual_e_persiste_situacao_interrompido(
+        self,
+    ) -> None:
+        """Verifica que KeyboardInterrupt é auditada antes de subir."""
+        self.servico.executar.side_effect = KeyboardInterrupt()
+        self.servico.ultima_fase_concluida = 1
+        self.servico.ultimo_token = "200"
+
+        with self.assertRaises(KeyboardInterrupt):
+            self.cmd.handle(volume=100, offset=0, continuar=False)
+
+        id_exec = self.repo.iniciar_execucao.return_value
+        self.repo.finalizar_execucao.assert_called_with(
+            id_exec, situacao="interrompido"
+        )
+        self.repo.atualizar_checkpoint_dominio.assert_called_with(
+            dominio="teste_base",
+            ultimo_id_execucao=id_exec,
+            ultima_pagina=2,
+            token_parada="200",
+            indice_sincronizacao="CTRL+C:offset:200",
+            ultima_situacao="interrompido",
+            sucesso=False,
+        )

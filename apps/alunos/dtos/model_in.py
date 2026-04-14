@@ -1,20 +1,14 @@
-"""DTOs de entrada para o domínio Alunos (dados extraídos do EOL).
-
-Cada dataclass implementa ``to_domain()`` que encapsula a tradução dos
-campos do legado (EOL) para os nomes esperados pelo Django Model de destino.
-A fronteira de nomenclatura EOL→Domínio está nos aliases da query SQL;
-este módulo cuida apenas de saneamento e valores padrão.
-"""
+"""DTOs de entrada para o domínio Alunos."""
 
 from dataclasses import dataclass
 from datetime import date
 
-from apps.core.libs.helpers import strip_str
+from apps.core.libs.helpers import parse_date, strip_str
 
 
 @dataclass(slots=True)
 class TipoNecessidadeEspecialIn:
-    """Dados de tipo de necessidade especial extraídos da tabela EOL."""
+    """Dados brutos da tabela `tipo_necessidade_especial`."""
 
     codigo_necessidade_especial: int
     descricao: str
@@ -22,19 +16,18 @@ class TipoNecessidadeEspecialIn:
     dt_cancelamento: date | None
 
     def to_domain(self) -> dict:
-        """Mapeia para o formato do modelo ``TipoNecessidadeEspecial``."""
         return {
             "codigo_necessidade_especial": self.codigo_necessidade_especial,
             "descricao": strip_str(self.descricao),
             "codigo_estado": self.codigo_estado,
-            "data_cancelamento": self.dt_cancelamento,
+            "data_cancelamento": parse_date(self.dt_cancelamento),
             "ativo": self.dt_cancelamento is None,
         }
 
 
 @dataclass(slots=True)
 class AlunoIn:
-    """Dados de aluno extraídos da view ``v_aluno_cotic`` do EOL."""
+    """Dados brutos da view `v_aluno_cotic`."""
 
     codigo_aluno: int
     nome: str
@@ -47,12 +40,11 @@ class AlunoIn:
     raca_cor: str | None
 
     def to_domain(self) -> dict:
-        """Mapeia para o formato do modelo ``Aluno``."""
         return {
             "codigo_aluno": self.codigo_aluno,
             "nome": strip_str(self.nome) or "NÃO INFORMADO",
             "nome_social": strip_str(self.nome_social),
-            "data_nascimento": self.data_nascimento,
+            "data_nascimento": parse_date(self.data_nascimento),
             "sexo": self.sexo or "U",
             "nacionalidade": strip_str(self.nacionalidade) or "0",
             "nis": strip_str(self.nis),
@@ -63,7 +55,7 @@ class AlunoIn:
 
 @dataclass(slots=True)
 class ResponsavelAlunoIn:
-    """Dados de responsável extraídos da tabela ``responsavel_aluno`` do EOL."""
+    """Dados brutos da tabela `responsavel_aluno`."""
 
     codigo_responsavel: int
     codigo_aluno: int
@@ -79,7 +71,6 @@ class ResponsavelAlunoIn:
     data_fim_vinculo_aluno: date | None
 
     def to_domain(self) -> dict:
-        """Mapeia para o formato do modelo ``ResponsavelAluno``."""
         return {
             "codigo_responsavel": self.codigo_responsavel,
             "aluno_id": self.codigo_aluno,
@@ -92,13 +83,13 @@ class ResponsavelAlunoIn:
             "autoriza_sms": self.autoriza_sms,
             "logradouro": strip_str(self.logradouro),
             "cep": self.cep,
-            "data_fim_vinculo": self.data_fim_vinculo_aluno,
+            "data_fim_vinculo": parse_date(self.data_fim_vinculo_aluno),
         }
 
 
 @dataclass(slots=True)
 class NecessidadeEspecialAlunoIn:
-    """Dados do vínculo de necessidade especial extraídos do EOL."""
+    """Dados brutos da tabela `necessidade_especial_aluno`."""
 
     codigo_necessidade_especial_aluno: int
     codigo_aluno: int
@@ -107,21 +98,20 @@ class NecessidadeEspecialAlunoIn:
     dt_fim: date | None
 
     def to_domain(self) -> dict:
-        """Mapeia para o formato do modelo ``NecessidadeEspecialAluno``."""
         return {
             "codigo_necessidade_especial_aluno": (
                 self.codigo_necessidade_especial_aluno
             ),
             "aluno_id": self.codigo_aluno,
             "necessidade_especial_id": self.codigo_necessidade_especial,
-            "data_inicio": self.dt_inicio,
-            "data_fim": self.dt_fim,
+            "data_inicio": parse_date(self.dt_inicio),
+            "data_fim": parse_date(self.dt_fim),
         }
 
 
 @dataclass(slots=True)
 class MatriculaIn:
-    """Dados de matrícula extraídos da view ``v_matricula_cotic`` do EOL."""
+    """Dados brutos da view `v_matricula_cotic`."""
 
     codigo_matricula: int
     codigo_aluno: int
@@ -129,35 +119,36 @@ class MatriculaIn:
     data_status: date | None
     ano_letivo: int
     codigo_situacao_matricula: int
-    situacao_matricula: str
 
     def to_domain(self) -> dict:
-        """Mapeia para o formato do modelo ``Matricula``."""
+        from apps.alunos.enums import SituacaoMatricula
+
         return {
             "codigo_matricula": self.codigo_matricula,
             "aluno_id": self.codigo_aluno,
             "codigo_ue": strip_str(self.codigo_ue),
-            "data_status": self.data_status,
+            "data_status": parse_date(self.data_status),
             "ano_letivo": self.ano_letivo,
             "codigo_situacao_matricula": self.codigo_situacao_matricula,
-            "situacao_matricula": strip_str(self.situacao_matricula),
+            "situacao_matricula": SituacaoMatricula.get_descricao(
+                self.codigo_situacao_matricula
+            ),
         }
 
 
 @dataclass(slots=True)
 class MatriculaTurmaIn:
-    """Dados do vínculo matrícula-turma extraídos do EOL."""
+    """Dados brutos da tabela `matricula_turma_escola`."""
 
-    codigo_matricula: int
+    codigo_matricula: int | None
     codigo_turma: int
     numero_chamada: str | None
     data_situacao: date | None
 
     def to_domain(self) -> dict:
-        """Mapeia para o formato do modelo ``MatriculaTurma``."""
         return {
-            "matricula_id": self.codigo_matricula,
+            "codigo_matricula": self.codigo_matricula,
             "codigo_turma": self.codigo_turma,
             "numero_chamada": strip_str(self.numero_chamada),
-            "data_situacao_aluno": self.data_situacao,
+            "data_situacao_aluno": parse_date(self.data_situacao),
         }
