@@ -155,9 +155,9 @@ class TestTurmaProgramaOut(TestCase):
         obj = TurmaProgramaOut.from_in(TurmaProgramaIn(*_row_turma(turno=None)))
         self.assertIsNone(obj.tipo_turno)
 
-    def test_descricao_turno_vazia_vira_none(self) -> None:
+    def test_descricao_turno_vazia_vira_string_vazia(self) -> None:
         obj = TurmaProgramaOut.from_in(TurmaProgramaIn(*_row_turma(desc_turno="")))
-        self.assertIsNone(obj.descricao_turno)
+        self.assertEqual(obj.descricao_turno, "")
 
     def test_nome_trimado(self) -> None:
         obj = TurmaProgramaOut.from_in(TurmaProgramaIn(*_row_turma(nome="  TURMA  ")))
