@@ -16,12 +16,15 @@ Mapeamento:
 import hashlib
 import json
 import logging
+from dataclasses import dataclass
 from typing import Any
+from uuid import UUID
 
 from django.utils import timezone
 
 from apps.controle_auditoria.models import EtlAuditoriaLinha
 from apps.eol_connection.libs.servico_eol import EOLService
+from apps.programas.enums import ComponenteCurricularEOL, TipoProgramaEOL
 from apps.programas.dtos.model_in import (
     ComponenteCurricularProgramaIn,
     MatriculaTurmaProgramaIn,
@@ -50,28 +53,28 @@ logger = logging.getLogger(__name__)
 # SQLs — Extração
 # ---------------------------------------------------------------------------
 
-SQL_TIPO_PROGRAMA = """
+# Listas de códigos aceitos (derivadas dos enums — fonte única de verdade)
+_TIPOS_PROGRAMA_IN = ", ".join(str(c) for c in TipoProgramaEOL.codigos())
+_COMPONENTES_IN = ", ".join(str(c) for c in ComponenteCurricularEOL.codigos())
+
+SQL_TIPO_PROGRAMA = f"""
 SELECT
     cd_tipo_programa
   , LTRIM(RTRIM(sg_tipo_programa)) AS sigla
   , LTRIM(RTRIM(dc_tipo_programa)) AS descricao
 FROM tipo_programa
-WHERE cd_tipo_programa IN (649, 650, 656, 657, 658)
+WHERE cd_tipo_programa IN ({_TIPOS_PROGRAMA_IN})
 """
 
-SQL_COMPONENTE_CURRICULAR_PROGRAMA = """
+SQL_COMPONENTE_CURRICULAR_PROGRAMA = f"""
 SELECT
     cc.cd_componente_curricular
   , LTRIM(RTRIM(cc.dc_componente_curricular)) AS nome_componente_curricular
 FROM componente_curricular cc
-WHERE cc.cd_componente_curricular IN (
-    1322, 1770, 1804, 1805,
-    1033, 1051, 1052, 1053, 1054,
-    1030
-)
+WHERE cc.cd_componente_curricular IN ({_COMPONENTES_IN})
 """
 
-SQL_TURMA_PROGRAMA = """
+SQL_TURMA_PROGRAMA = f"""
 SELECT
     te.cd_turma_escola
   , LTRIM(RTRIM(te.dc_turma_escola)) AS nome_turma
@@ -88,11 +91,11 @@ INNER JOIN v_cadastro_unidade_educacao vcue
 LEFT JOIN tipo_turno tt
     ON tt.cd_tipo_turno = te.cd_tipo_turno
 WHERE te.cd_tipo_turma = 3
-  AND te.cd_tipo_programa IN (649, 650, 656, 657, 658)
+  AND te.cd_tipo_programa IN ({_TIPOS_PROGRAMA_IN})
 ORDER BY te.cd_turma_escola
 """
 
-SQL_TURMA_PROGRAMA_COMPONENTE_CURRICULAR = """
+SQL_TURMA_PROGRAMA_COMPONENTE_CURRICULAR = f"""
 SELECT DISTINCT
     tegp.cd_turma_escola
   , gcc.cd_componente_curricular
@@ -107,41 +110,18 @@ INNER JOIN componente_curricular cc
 INNER JOIN turma_escola te
     ON te.cd_turma_escola = tegp.cd_turma_escola
 WHERE te.cd_tipo_turma = 3
-  AND te.cd_tipo_programa IN (649, 650, 656, 657, 658)
-  AND gcc.cd_componente_curricular IN (
-    1322, 1770, 1804, 1805,
-    1033, 1051, 1052, 1053, 1054,
-    1030
-  )
+  AND te.cd_tipo_programa IN ({_TIPOS_PROGRAMA_IN})
+  AND gcc.cd_componente_curricular IN ({_COMPONENTES_IN})
 ORDER BY tegp.cd_turma_escola
 """
 
-SQL_MATRICULA_TURMA_PROGRAMA = """
+SQL_MATRICULA_TURMA_PROGRAMA = f"""
 SELECT
       vm.cd_aluno
     , m.cd_turma_escola
     , gcc.cd_componente_curricular
     , LTRIM(RTRIM(cc.dc_componente_curricular)) AS nome_componente_curricular
     , m.cd_situacao_aluno
-    , CASE m.cd_situacao_aluno
-          WHEN 1 THEN 'Ativo'
-          WHEN 2 THEN 'Desistente'
-          WHEN 3 THEN 'Transferido'
-          WHEN 4 THEN 'Vínculo Indevido'
-          WHEN 5 THEN 'Concluído'
-          WHEN 6 THEN 'Pendente de Rematrícula'
-          WHEN 7 THEN 'Falecido'
-          WHEN 8 THEN 'Não Compareceu'
-          WHEN 10 THEN 'Rematriculado'
-          WHEN 11 THEN 'Deslocamento'
-          WHEN 12 THEN 'Cessado'
-          WHEN 13 THEN 'Sem continuidade'
-          WHEN 14 THEN 'Remanejado Saída'
-          WHEN 15 THEN 'Reclassificado Saída'
-          WHEN 16 THEN 'Transferido SED'
-          WHEN 17 THEN 'Dispensado Ed. Física'
-          ELSE 'Desconhecido'
-      END AS descricao_situacao_matricula
     , m.dt_situacao_aluno
     , m.dt_situacao_aluno AS dt_situacao
     , te.an_letivo
@@ -164,12 +144,8 @@ SELECT
   INNER JOIN componente_curricular cc
       ON cc.cd_componente_curricular = gcc.cd_componente_curricular
   WHERE te.cd_tipo_turma = 3
-    AND te.cd_tipo_programa IN (649, 650, 656, 657, 658)
-    AND gcc.cd_componente_curricular IN (
-      1322, 1770, 1804, 1805,
-      1033, 1051, 1052, 1053, 1054,
-      1030
-    )
+    AND te.cd_tipo_programa IN ({_TIPOS_PROGRAMA_IN})
+    AND gcc.cd_componente_curricular IN ({_COMPONENTES_IN})
   ORDER BY vm.cd_aluno, te.cd_turma_escola
 """
 
@@ -276,13 +252,45 @@ def _upsert_incremental(
 # ---------------------------------------------------------------------------
 
 
+@dataclass
+class _FaseInfo:
+    """Metadados mínimos de fase — compat com contrato do BaseEtlCommand."""
+
+    table_name: str
+
+
 class EtlProgramasService:
     """Orquestra o ETL unificado para o domínio Programas."""
 
-    def __init__(self, eol: EOLService | None = None) -> None:
-        """Inicia o serviço injetando dependências mockáveis."""
+    _FASES: tuple[_FaseInfo, ...] = (
+        _FaseInfo(table_name="tipo_programa"),
+        _FaseInfo(table_name="componente_curricular_programa"),
+        _FaseInfo(table_name="turma_programa"),
+        _FaseInfo(table_name="turma_programa_componente_curricular"),
+        _FaseInfo(table_name="matricula_turma_programa"),
+    )
+
+    def __init__(
+        self,
+        db_alias: str = "programas_db",
+        id_execucao: UUID | None = None,
+        repositorio_auditoria: Any | None = None,
+        primeiro_run: bool = False,
+        eol: EOLService | None = None,
+    ) -> None:
+        """Inicia o serviço injetando dependências mockáveis.
+
+        A assinatura espelha BaseEtlService para compatibilidade com
+        BaseEtlCommand._handle_sync, mas o service é síncrono próprio.
+        """
+        self.db_alias = db_alias
+        self.id_execucao = id_execucao
+        self.repositorio_auditoria = repositorio_auditoria
+        self.primeiro_run = primeiro_run
         self.eol = eol or EOLService()
         self.ultima_fase_concluida = 0
+        self.ultimo_token: str | None = None
+        self._fases = list(self._FASES)
 
     def popular_tipos_programa(self) -> int:
         """Fase 1: Extrai e persiste TipoPrograma (seed do EOL).
