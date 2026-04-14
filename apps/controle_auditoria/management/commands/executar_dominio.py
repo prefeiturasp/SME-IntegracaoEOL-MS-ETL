@@ -13,7 +13,7 @@ from apps.controle_auditoria.libs.servico_sinc_rec_db import (
 class Command(BaseCommand):
     """Executa um dominio ETL independente."""
 
-    help = "Executa dominio ETL: sinc_rec_db, institucional, professores"
+    help = "Executa dominio ETL: sinc_rec_db, institucional, professores, pedagogico"
 
     def add_arguments(self, parser: Any) -> None:
         """Adiciona argumentos ao comando."""
@@ -52,6 +52,13 @@ class Command(BaseCommand):
             if continuar:
                 argumentos.append("--continuar")
             call_command("etl_alunos", *argumentos)
+            return
+
+        if dominio == "pedagogico":
+            argumentos = ["--volume", str(volume), "--offset", str(offset)]
+            if continuar:
+                argumentos.append("--continuar")
+            call_command("etl_pedagogico", *argumentos)
             return
 
         raise CommandError(
