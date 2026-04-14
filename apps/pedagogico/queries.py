@@ -411,8 +411,6 @@ GROUP BY
     CAST(aa_ext.dt_disponibilizacao AS DATE), te.dt_fim_turma, aa_ext.an_atribuicao
 """
 
-# Alimenta: componente_curricular
-# Parâmetros: nenhum
 SQL_COMPONENTES_NAO_CANCELADOS = """
 SELECT
     cd_componente_curricular              AS Codigo,

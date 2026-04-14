@@ -121,7 +121,7 @@ def _cod_agrupamento(
         f"{codigo_experiencia_pedagogica}_{rf_professor}_"
         f"{data_atribuicao}_{csv}"
     )
-    return int(hashlib.md5(chave.encode()).hexdigest()[:15], 16) # NOSONAR
+    return int(hashlib.md5(chave.encode()).hexdigest()[:15], 16)  # NOSONAR
 
 
 def _chave_grupo(row: AtribuicaoTerritorioSaberIn) -> tuple:
@@ -604,10 +604,12 @@ class EtlPedagogicoService(BaseEtlService):
     # Override _executar_fase para fase 3
     # ------------------------------------------------------------------
 
-    def _executar_fase(self, config: PhaseConfig) -> PipelineMetrics:
+    def _executar_fase(
+        self, config: PhaseConfig, numero_fase: int = 0
+    ) -> PipelineMetrics:
         if config.nome == "agrupamento_territorio_saber":
             return self._executar_agrupamentos(config)
-        return super()._executar_fase(config)
+        return super()._executar_fase(config, numero_fase=numero_fase)
 
     # ------------------------------------------------------------------
     # Definição das fases
