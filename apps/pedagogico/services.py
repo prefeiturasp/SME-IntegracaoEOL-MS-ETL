@@ -19,7 +19,7 @@ Estratégia de escrita: upsert incremental com hash SHA-256 via BaseEtlService.
 
 import hashlib
 import logging
-from collections.abc import Callable, Iterator, Sequence
+from collections.abc import Callable, Iterator
 from datetime import datetime
 from itertools import groupby
 from typing import Any, cast
@@ -283,8 +283,8 @@ class EtlPedagogicoService(BaseEtlService):
         self.eol = eol or EOLService()
         self._agora = timezone.now()
         self._a2: dict[int, DisciplinaEolIn] = {}
-        self._exact: set = set()
-        self._fallback: set = set()
+        self._exact: A3ExactSet = set()
+        self._fallback: A3FallbackSet = set()
         self._total_itens_agrupamento: int = 0
         self._cache_anos: list[int] | None = None
         self._fases = self._init_fases()
@@ -409,20 +409,6 @@ class EtlPedagogicoService(BaseEtlService):
 
         return transform
 
-    def _sync_batch(
-        self,
-        processed_data: Sequence[TransformResult],
-        **kwargs: Any,
-    ) -> tuple[int, int]:
-        """Override: filtra None gerado por transforms que pulam linhas."""
-        filtered_data: list[ProcessedRecord] = [
-            cast(ProcessedRecord, t) for t in processed_data if t is not None
-        ]
-        return cast(
-            tuple[int, int],
-            super()._sync_batch(processed_data=filtered_data, **kwargs),
-        )
-
     def _processar_batch(
         self,
         config: PhaseConfig,
@@ -518,14 +504,19 @@ class EtlPedagogicoService(BaseEtlService):
             (str(a.cod_agrupamento), calcular_hash(a, hash_agrup), a)
             for a in agrupamentos
         ]
+        meta_agrup = self._get_batch_meta(
+            None,
+            table_name="agrupamento_atribuicao_territorio_saber",
+            model_class=AgrupamentoAtribuicaoTerritorioSaber,
+            update_fields=list(_UPDATE_AGRUP),
+            unique_fields=["cod_agrupamento"],
+            modo_escrita="upsert",
+        )
         total_agrup = 0
         for i in range(0, len(proc_agrup), 500):
-            escritos, _ = self._sync_batch(
-                processed_data=proc_agrup[i : i + 500],
-                model_class=AgrupamentoAtribuicaoTerritorioSaber,
-                table_name="agrupamento_atribuicao_territorio_saber",
-                update_fields=list(_UPDATE_AGRUP),
-                unique_fields=["cod_agrupamento"],
+            escritos, _ = self.sync_batch(
+                proc_agrup[i : i + 500],
+                meta_agrup,
                 batch_num=i,
             )
             total_agrup += escritos
@@ -540,18 +531,23 @@ class EtlPedagogicoService(BaseEtlService):
             )
             for it in itens
         ]
+        meta_itens = self._get_batch_meta(
+            None,
+            table_name="componente_curricular_agrupamento",
+            model_class=ComponenteCurricularAgrupamento,
+            update_fields=list(_UPDATE_ITEM),
+            unique_fields=[
+                "componente_codigo",
+                "turma_codigo",
+                "codigo_agrupamento",
+            ],
+            modo_escrita="upsert",
+        )
         total_itens = 0
         for i in range(0, len(proc_itens), 500):
-            escritos, _ = self._sync_batch(
-                processed_data=proc_itens[i : i + 500],
-                model_class=ComponenteCurricularAgrupamento,
-                table_name="componente_curricular_agrupamento",
-                update_fields=list(_UPDATE_ITEM),
-                unique_fields=[
-                    "componente_codigo",
-                    "turma_codigo",
-                    "codigo_agrupamento",
-                ],
+            escritos, _ = self.sync_batch(
+                proc_itens[i : i + 500],
+                meta_itens,
                 batch_num=i,
             )
             total_itens += escritos

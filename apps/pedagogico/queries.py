@@ -10,10 +10,7 @@ _TIPO_UNIDADE_ADMINISTRATIVA_DRE = 24
 # CEI_INDIR=11, CRP_CONV=12, EMEFPFOM=32, EMEIPFOM=33
 _TIPOS_ESCOLA_EXTERNOS = "(11, 12, 32, 33)"
 
-# ---------------------------------------------------------------------------
 # Anos letivos disponíveis no EOL (EolConnection)
-# ---------------------------------------------------------------------------
-
 SQL_ANOS_LETIVOS = """
 SELECT DISTINCT an_letivo
 FROM turma_escola (NOLOCK)
@@ -21,11 +18,8 @@ WHERE st_turma_escola IN ('O', 'A', 'C', 'E')
 ORDER BY an_letivo
 """
 
-# ---------------------------------------------------------------------------
 # Alimenta: componente_curricular_por_turma
 # Parâmetro (?): ano_letivo (único, usado em todas as CTEs)
-# ---------------------------------------------------------------------------
-
 SQL_COMPONENTES_POR_TURMA = f"""
 WITH
 -- Base comum: turmas ativas do ano com turno e tipo de escola
@@ -269,13 +263,10 @@ INNER JOIN pessoa (NOLOCK) pe ON pe.cd_pessoa = ce.cd_pessoa
 WHERE t.tp_escola IN {_TIPOS_ESCOLA_EXTERNOS}
 """
 
-# ---------------------------------------------------------------------------
 # Alimenta: componente_curricular_regencia
 # Parâmetros (?):
 #   1 — ano_letivo (SME)
 #   2 — ano_letivo (Externo)
-# ---------------------------------------------------------------------------
-
 SQL_COMPONENTES_TERRITORIO_ATRIBUIDOS = f"""
 -- SME — professor via RF
 SELECT
@@ -422,11 +413,8 @@ GROUP BY
     CAST(aa_ext.dt_disponibilizacao AS DATE), te.dt_fim_turma, aa_ext.an_atribuicao
 """
 
-# ---------------------------------------------------------------------------
 # Alimenta: componente_curricular
 # Parâmetros: nenhum
-# ---------------------------------------------------------------------------
-
 SQL_COMPONENTES_NAO_CANCELADOS = """
 SELECT
     cd_componente_curricular              AS Codigo,
@@ -435,15 +423,12 @@ FROM componente_curricular
 WHERE dt_cancelamento IS NULL
 """
 
-# ---------------------------------------------------------------------------
 # Alimenta: dados_aula_turma
 # Parâmetros (?):
 #   1 — ano_letivo
 #
 # Obs: ue_codigo e ano_letivo vêm no SELECT (não são filtros do ETL).
 #      O microsserviço filtra por ue_codigo e componentes no PEDAGOGICO_DB.
-# ---------------------------------------------------------------------------
-
 SQL_DADOS_AULA_TURMA = """
 SELECT DISTINCT
     cc.cd_componente_curricular AS ComponenteCurricularCodigo,
@@ -485,12 +470,9 @@ WHERE te.st_turma_escola IN ('O', 'A', 'C', 'E')
   AND te.dt_atualizacao_tabela > '##DATA_CORTE##'
 """
 
-# ---------------------------------------------------------------------------
 # Alimenta: componente_curricular_por_ano_letivo
 # Parâmetros (?):
 #   1 — ano_letivo
-# ---------------------------------------------------------------------------
-
 SQL_COMPONENTES_POR_ANO_LETIVO = """
 ;WITH componentesAnoTurmas AS (
     SELECT DISTINCT
@@ -553,15 +535,11 @@ WHERE Modalidade > 0
   AND CodigoSerieEnsino IS NOT NULL
 """
 
-# ---------------------------------------------------------------------------
 # Alimenta: lookup para enriquecer componente_curricular_por_turma
 # Parâmetros: nenhum (carga total)
-#
 # EhRegencia: lista hardcoded de IDs
 # EhTerritorio: presença na tabela turma_grade_territorio_experiencia
 # CodigoPai: resolvido via MAPA_COMPONENTE_PAI (constante hardcoded)
-# ---------------------------------------------------------------------------
-
 _IDS_REGENCIA = (
     508,
     511,
@@ -605,10 +583,7 @@ FROM componente_curricular cc
 WHERE cc.dt_cancelamento IS NULL
 """
 
-# ---------------------------------------------------------------------------
 # Alimenta: cruzamento para derivar planejamento_regencia
-# ---------------------------------------------------------------------------
-
 SQL_REGENCIA_COMPONENTE_CURRICULAR = f"""
 SELECT DISTINCT
     gcc.cd_componente_curricular   AS IdComponenteCurricular,
@@ -638,14 +613,11 @@ WHERE gcc.cd_componente_curricular IN ({_PLACEHOLDERS_REGENCIA})
   AND te.st_turma_escola IN ('O', 'A', 'C')
 """
 
-# ---------------------------------------------------------------------------
 # Mapeamento componente → componente pai (constante hardcoded)
 # Origem: tabela componentecurricularpai (ApiEolConnection) — dados estáticos
 #
 # Alimenta: campo codigo_componente_curricular_pai em ComponenteCurricularPorTurma (T2)
 #   → lookup: MAPA_COMPONENTE_PAI.get(codigo)  → None se não tem pai
-# ---------------------------------------------------------------------------
-
 MAPA_COMPONENTE_PAI: dict[int, int] = {
     # idcomponentecurricular → idcomponentecurricularpai  (vigencia: 2021-12-31)
     512: 512,  # V40
@@ -658,11 +630,8 @@ MAPA_COMPONENTE_PAI: dict[int, int] = {
 }
 
 
-# ---------------------------------------------------------------------------
 # Alimenta: agrupamento_atribuicao_territorio_saber
-#           e componente_curricular_agrupamento
-# ---------------------------------------------------------------------------
-
+# e componente_curricular_agrupamento
 SQL_ATRIBUICOES_TERRITORIO_SABER = f"""
 -- SME — professor via RF
 SELECT

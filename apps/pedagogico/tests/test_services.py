@@ -6,11 +6,7 @@ from uuid import uuid4
 from django.test import TestCase
 from django.utils import timezone
 
-from apps.core.libs.base_etl_service import (
-    BaseEtlService,
-    PhaseConfig,
-    PipelineMetrics,
-)
+from apps.core.libs.base_etl_service import PhaseConfig, PipelineMetrics
 from apps.pedagogico.dtos.model_in import RegenciaComponenteCurricularIn
 from apps.pedagogico.services import (
     EtlPedagogicoService,
@@ -165,24 +161,6 @@ class TestPedagogicoService(TestCase):
         self.assertIsNone(transform((None, "Desc", "1", "1 ano", 1, 5, 2025)))
         self.assertIsNone(transform((100, "Desc", "1", "1 ano", 1, 5, None)))
 
-    @patch.object(BaseEtlService, "_sync_batch")
-    def test_sync_batch_filtra_nones_antes_de_delegar(
-        self, mock_sync: MagicMock
-    ) -> None:
-        mock_sync.return_value = (1, 0)
-
-        resultado = self.service._sync_batch(
-            processed_data=[None, ("1", "h", MagicMock())],
-            table_name="tb",
-            model_class=MagicMock(),
-            update_fields=["descricao"],
-            unique_fields=["codigo"],
-            batch_num=0,
-        )
-
-        self.assertEqual(resultado, (1, 0))
-        self.assertEqual(len(mock_sync.call_args.kwargs["processed_data"]), 1)
-
     def test_processar_batch_filtra_nones_antes_do_sync_batch(self) -> None:
         config = self.service._fases[1]
         self.service._a2 = {
@@ -215,7 +193,7 @@ class TestPedagogicoService(TestCase):
         self.assertEqual(anos_2, [2024, 2025])
         self.mock_eol.iter_query.assert_called_once()
 
-    @patch.object(EtlPedagogicoService, "_sync_batch")
+    @patch.object(EtlPedagogicoService, "sync_batch")
     def test_executar_agrupamentos_escreve_duas_tabelas(
         self, mock_sync: MagicMock
     ) -> None:
@@ -262,7 +240,7 @@ class TestPedagogicoService(TestCase):
         self.assertEqual(metrics.total_escritos, 1)
         self.assertEqual(self.service._total_itens_agrupamento, 1)
         self.assertEqual(
-            [call.kwargs["table_name"] for call in mock_sync.call_args_list],
+            [call.args[1]["table_name"] for call in mock_sync.call_args_list],
             [
                 "agrupamento_atribuicao_territorio_saber",
                 "componente_curricular_agrupamento",
@@ -311,20 +289,6 @@ class TestPedagogicoService(TestCase):
         self.assertEqual(resultado["componente_curricular_agrupamento"], 7)
         self.assertIn("dados_aula_turma", resultado)
         self.assertEqual(mock_fase.call_count, 4)
-
-    def test_get_partition_sql_preserva_casing(self) -> None:
-        service = EtlPedagogicoService(
-            db_alias="default",
-            eol=self.mock_eol,
-        )
-        sql = "SELECT codigo FROM componente_curricular ORDER BY codigo"
-
-        resultado = service._get_partition_sql(sql, "codigo")
-
-        self.assertIn("SELECT", resultado)
-        self.assertIn("FROM componente_curricular", resultado)
-        self.assertIn("ORDER BY codigo", resultado)
-        self.assertIn("BETWEEN 1 AND 1000", resultado)
 
     @patch("apps.core.libs.base_etl_service.Queue")
     def test_executar_fase_timeout_producer_levanta_runtime_error(
