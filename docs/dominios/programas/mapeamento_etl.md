@@ -16,7 +16,7 @@ SQL: `SQL_TIPO_PROGRAMA` em `services.py`
 | *(derivado do id em `TipoProgramaOut`)* | `categoria` | `"PAP"` ou `"PAEE"` |
 | *(fixo: `True`)* | `ativo` | Sempre ativo no seed |
 
-**Filtro EOL:** `cd_tipo_programa IN (649, 650, 656, 657, 658)`
+**Filtro EOL:** `cd_tipo_programa IN (...)` — a lista é montada a partir de `TipoProgramaEOL.codigos()` em `services.py` (fonte única de verdade). Valores: 649, 650, 656, 657, 658.
 
 ---
 
@@ -28,12 +28,10 @@ SQL: `SQL_COMPONENTE_CURRICULAR_PROGRAMA` em `services.py`
 |-----------|--------------|-----------|
 | `cc.cd_componente_curricular` | `codigo_componente_curricular` | Chave natural única |
 | `LTRIM(RTRIM(cc.dc_componente_curricular))` | `nome_componente_curricular` | Nome do componente |
-| `cc.dt_inicio` | `data_inicio` | Início da vigência |
-| `cc.dt_fim` | `data_fim` | Fim da vigência (`NULL` se sem prazo) |
-| *(derivado do id em `ComponenteCurricularProgramaOut`)* | `categoria` | `"PAP"` ou `"PAEE"` |
-| *(derivado do id em `ComponenteCurricularProgramaOut`)* | `vigente` | `True` se não legado |
+| *(derivado do id via `ComponenteCurricularEOL.categoria()`)* | `categoria` | `"PAP"` ou `"PAEE"` |
+| *(derivado do id via `ComponenteCurricularEOL.vigente()`)* | `vigente` | `True` se não legado |
 
-**Filtro EOL:** `cd_componente_curricular IN (1322, 1770, 1804, 1805, 1033, 1051, 1052, 1053, 1054, 1030)`
+**Filtro EOL:** `cd_componente_curricular IN (...)` — a lista é montada a partir de `ComponenteCurricularEOL.codigos()` no próprio `services.py`, não é hardcoded na SQL.
 
 ---
 
@@ -50,13 +48,13 @@ SQL: `SQL_TURMA_PROGRAMA` em `services.py`
 | `te.an_letivo` | `ano_letivo` | Ano letivo |
 | `te.cd_tipo_turno` | `tipo_turno` | Código do turno (nullable) |
 | `tt.dc_exibicao_portal` | `descricao_turno` | Descrição do turno — desnormalizado |
-| `te.sg_tipo_situacao_turma` | `situacao` | `O`, `A`, `C` ou `E` |
+| `te.st_turma_escola` | `situacao` | `O`, `A`, `C` ou `E` — valores do enum `SituacaoTurma` |
 | `te.cd_tipo_programa` | `codigo_tipo_programa` | FK lógica para `tipo_programa` |
-| *(derivado via `TurmaProgramaOut`)* | `categoria` | `"PAP"` ou `"PAEE"` |
+| *(derivado via `TipoProgramaEOL.categoria()` em `TurmaProgramaOut`)* | `categoria` | `"PAP"` ou `"PAEE"` |
 
 **Filtros EOL:**
 - `te.cd_tipo_turma = 3`
-- `te.cd_tipo_programa IN (649, 650, 656, 657, 658)`
+- `te.cd_tipo_programa IN (...)` — lista montada a partir de `TipoProgramaEOL.codigos()`
 
 **JOINs:**
 - `v_cadastro_unidade_educacao` — para `codigo_dre`
@@ -78,7 +76,7 @@ SQL: `SQL_TURMA_PROGRAMA_COMPONENTE_CURRICULAR` em `services.py`
 - `turma_escola_grade_programa` → `escola_grade_programa` → `grade_componente_curricular` → `componente_curricular`
 - `turma_escola` (filtro de tipo e programa)
 
-**Filtros EOL:** mesmos da Fase 3 + `gcc.cd_componente_curricular` na lista de componentes do seed
+**Filtros EOL:** mesmos da Fase 3 + `gcc.cd_componente_curricular IN (...)` montado de `ComponenteCurricularEOL.codigos()`
 
 ---
 
@@ -88,22 +86,26 @@ SQL: `SQL_MATRICULA_TURMA_PROGRAMA` em `services.py`
 
 | Campo EOL | Campo Destino | Descrição |
 |-----------|--------------|-----------|
-| `m.cd_aluno` | `codigo_aluno` | FK lógica → `PEDAGOGICO_DB` |
-| `m.cd_turma_escola` | `codigo_turma` | FK lógica → `turma_programa` |
+| `vm.cd_aluno` | `codigo_aluno` | FK lógica → `PEDAGOGICO_DB` (de `v_matricula_cotic`) |
+| `m.cd_turma_escola` | `codigo_turma` | FK lógica → `turma_programa` (de `matricula_turma_escola`) |
 | `gcc.cd_componente_curricular` | `codigo_componente_curricular` | FK lógica → `componente_curricular_programa` |
 | `LTRIM(RTRIM(cc.dc_componente_curricular))` | `nome_componente_curricular` | Desnormalizado |
-| `m.st_matricula` | `codigo_situacao_matricula` | Código numérico da situação |
-| `LTRIM(RTRIM(sm.dc_situacao_matricula))` | `descricao_situacao_matricula` | Texto da situação — desnormalizado |
-| `m.dt_status_matricula` | `data_matricula` | Data da situação da matrícula |
-| `m.dt_situacao_aluno` | `data_situacao` | Data da situação do aluno (nullable) |
+| `m.cd_situacao_aluno` | `codigo_situacao_matricula` | Situação **turma-específica** (de `matricula_turma_escola`) |
+| *(derivado via `SituacaoMatricula.get_descricao()` em `MatriculaTurmaProgramaOut`)* | `descricao_situacao_matricula` | Texto resolvido em Python a partir do código |
+| `m.dt_situacao_aluno` | `data_matricula` | Data da situação da matrícula |
+| `m.dt_situacao_aluno` | `data_situacao` | Mesma data (alias `dt_situacao` na SQL) |
 | `te.an_letivo` | `ano_letivo` | Desnormalizado da turma |
 | `CAST(te.cd_escola AS VARCHAR(20))` | `codigo_ue` | Desnormalizado da turma |
 | `CAST(vcue.cd_unidade_administrativa_referencia AS VARCHAR(20))` | `codigo_dre` | Desnormalizado da turma |
-| *(derivado via `MatriculaTurmaProgramaOut`)* | `categoria` | `"PAP"` ou `"PAEE"` |
+| *(derivado via `TipoProgramaEOL.categoria()` em `MatriculaTurmaProgramaOut`)* | `categoria` | `"PAP"` ou `"PAEE"` |
 
 **JOINs:**
-- `turma_escola`, `v_cadastro_unidade_educacao` — dados da turma
-- `turma_escola_grade_programa` → `escola_grade_programa` → `grade_componente_curricular` → `componente_curricular` — componentes
-- `situacao_matricula` (LEFT JOIN) — descrição da situação
+- `matricula_turma_escola m` ⟕ `v_matricula_cotic vm` — matrícula e aluno
+- `turma_escola te` ⟕ `v_cadastro_unidade_educacao vcue` — dados da turma e DRE
+- `turma_escola_grade_programa → escola_grade → grade_componente_curricular → componente_curricular` — componentes
 
-**Filtros EOL:** mesmos da Fase 4
+> **Nota:** Após o refactor dos enums, o `CASE WHEN` que traduzia `cd_situacao_aluno` em texto foi **removido da SQL**. A tradução acontece em Python via `SituacaoMatricula.get_descricao()`. Não há JOIN com uma tabela `situacao_matricula`.
+
+**Filtros EOL:** mesmos da Fase 4 — `te.cd_tipo_turma = 3`, `te.cd_tipo_programa IN (TipoProgramaEOL.codigos())`, `gcc.cd_componente_curricular IN (ComponenteCurricularEOL.codigos())`
+
+> **Lacuna conhecida:** a SQL atual lê apenas de `matricula_turma_escola` + `v_matricula_cotic` (ano vigente). Matrículas arquivadas em `historico_matricula_turma_escola` + `v_historico_matricula_cotic` não entram — follow-up para cobrir anos passados. O domínio `alunos` já faz o `UNION ALL` correspondente em `SQL_MATRICULA` (`apps/alunos/services.py`).

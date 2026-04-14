@@ -33,15 +33,41 @@ resultados = service.executar(fase_inicial=1)
 O atributo `ultima_fase_concluida` é atualizado ao final de cada fase — usado pelo
 comando para registrar o checkpoint de retomada.
 
-### Injeção de dependência
+### Assinatura e injeção de dependência
+
+A assinatura do `__init__` espelha `BaseEtlService` para compatibilizar com
+`BaseEtlCommand._handle_sync`, mas o service é síncrono próprio (não herda).
 
 ```python
-# Produção
-service = EtlProgramasService()
+EtlProgramasService(
+    db_alias: str = "programas_db",
+    id_execucao: UUID | None = None,
+    repositorio_auditoria: Any | None = None,
+    primeiro_run: bool = False,
+    eol: EOLService | None = None,
+)
+```
+
+Exemplos:
+
+```python
+# Produção — via BaseEtlCommand._handle_sync
+service = EtlProgramasService(
+    db_alias="programas_db",
+    id_execucao=id_execucao,
+    repositorio_auditoria=repositorio,
+    primeiro_run=False,
+)
 
 # Testes
 service = EtlProgramasService(eol=EOLServiceMock())
 ```
+
+Atributos expostos para o contrato com `BaseEtlCommand`:
+
+- `ultima_fase_concluida: int` — atualizado ao fim de cada fase
+- `ultimo_token: str | None` — inicializado em `None`
+- `_fases: list[_FaseInfo]` — 5 posições com `.table_name` para o finalizador da auditoria
 
 ## Controle incremental por hash
 
@@ -62,7 +88,8 @@ O comando `etl_programas` (via `BaseEtlCommand`) registra:
 - `EtlExecucao` — início, fim, status e total de linhas alteradas.
 - `EtlExecucaoTabelaLeitura` — linhas lidas por tabela do EOL.
 - `EtlExecucaoTabelaEscrita` — linhas escritas por tabela destino,
-  com `modo_escrita="incremental_hash"` para todas as tabelas do domínio.
+  com `modo_escrita="upsert"` para todas as tabelas do domínio (todas estão em
+  `_TABELAS_UPSERT` no `etl_programas.py`).
 - `EtlCheckpoint` — fase atual para suporte a retomada.
 
 ## Exemplo de execução via API

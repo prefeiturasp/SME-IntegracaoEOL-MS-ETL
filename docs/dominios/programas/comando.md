@@ -2,11 +2,15 @@
 
 Arquivo: `apps/programas/management/commands/etl_programas.py`
 
-## Argumentos suportados
+## Argumentos suportados (via `BaseEtlCommand`)
 
-- `--volume`
-- `--offset`
-- `--continuar`
+| Flag | Descrição |
+|------|-----------|
+| `--volume N` | Tamanho do chunk lido do EOL (herdado; o service síncrono do programas não usa paginação por volume) |
+| `--offset N` | Offset inicial (idem) |
+| `--fase N` | Força início a partir da fase N (1–5). Ignora checkpoint |
+| `--continuar` | Lê o checkpoint mais recente; se `ultima_situacao == "erro"`, retoma em `ultima_pagina + 1` |
+| `--carga-inicial` | Passa `primeiro_run=True` para o service (usado pela infraestrutura genérica) |
 
 ## Comportamento real
 

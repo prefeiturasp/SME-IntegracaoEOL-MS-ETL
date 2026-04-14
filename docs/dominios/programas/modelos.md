@@ -44,10 +44,8 @@ Camada de configuração que substitui as constantes hardcoded
 |-------|------|-----------|
 | `codigo_componente_curricular` | `BigIntegerField` (unique) | `cd_componente_curricular` do EOL |
 | `nome_componente_curricular` | `CharField(200)` | `dc_componente_curricular` do EOL |
-| `categoria` | `CharField(10)` | `"PAP"` ou `"PAEE"` |
-| `vigente` | `BooleanField` | `True` = ativo; `False` = legado |
-| `data_inicio` | `DateField` | Início da vigência |
-| `data_fim` | `DateField` (nullable) | Fim da vigência; `NULL` = sem prazo |
+| `categoria` | `CharField(10)` | `"PAP"` ou `"PAEE"` — derivada via `ComponenteCurricularEOL.categoria()` |
+| `vigente` | `BooleanField` | `True` = ativo; `False` = legado — derivada via `ComponenteCurricularEOL.vigente()` |
 
 **Dados esperados (seed — PAP vigentes):**
 

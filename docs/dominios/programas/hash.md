@@ -5,17 +5,19 @@
 O controle incremental é implementado em `_calcular_hash` e `_upsert_incremental`.
 
 ### `_calcular_hash`
-- ordena os campos relevantes
-- serializa como `chave=valor`
+- lê os campos relevantes da instância Django
+- serializa como JSON com chaves ordenadas (`json.dumps(..., sort_keys=True, default=str)`)
 - calcula SHA-256 em hexadecimal
 
 ### `_upsert_incremental`
-1. monta `id_destino = "{tabela}:{pk}"`
-2. calcula hash dos `update_fields`
-3. busca hashes existentes em lotes de 1000
-4. filtra apenas registros novos ou alterados
-5. faz upsert no `programas_db`
-6. atualiza `EtlAuditoriaLinha`
+1. deduplica os objetos por chave natural (`unique_fields`), mantendo o último em caso de duplicata da origem
+2. monta `id_destino = "{tabela}:{v1}:{v2}..."` (concatena todos os valores da chave)
+3. calcula hash SHA-256 dos `update_fields`, **excluindo** o `timestamp_field` (para que o timestamp não force reescrita)
+4. consulta `EtlAuditoriaLinha` **em uma única query** (`filter(id_destino__in=ids_destino)`)
+5. filtra apenas registros novos ou com hash diferente
+6. atualiza `timestamp_field` dos registros alterados
+7. faz `bulk_create(update_conflicts=True)` no `programas_db` com `batch_size=500`
+8. grava os novos hashes de volta em `EtlAuditoriaLinha` (também com `batch_size=500`)
 
 ## Fluxo
 
@@ -37,10 +39,17 @@ digraph G {
 
 ## Formato do identificador
 
-Exemplos de `id_destino`:
-- `dre:0012345`
-- `tipo_escola:123456`
-- `unidade_educacional:9988776`
+O `id_destino` concatena o nome da tabela com os valores da chave natural (`unique_fields`) separados por `:`. Para chaves compostas, todos os valores entram.
+
+Exemplos reais para o domínio `programas`:
+
+| Tabela | `unique_fields` | Exemplo de `id_destino` |
+|--------|-----------------|-------------------------|
+| `tipo_programa` | `[codigo_tipo_programa]` | `tipo_programa:649` |
+| `componente_curricular_programa` | `[codigo_componente_curricular]` | `componente_curricular_programa:1322` |
+| `turma_programa` | `[codigo_turma]` | `turma_programa:2528310` |
+| `turma_programa_componente_curricular` | `[codigo_turma, codigo_componente_curricular]` | `turma_programa_componente_curricular:2528310:1322` |
+| `matricula_turma_programa` | `[codigo_turma, codigo_aluno, codigo_componente_curricular]` | `matricula_turma_programa:2528310:8374625:1322` |
 
 ## Benefícios reais no código
 - evita reescrita desnecessária

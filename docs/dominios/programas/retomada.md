@@ -5,28 +5,31 @@ evitando reprocessar fases já gravadas em caso de falha ou interrupção.
 
 ## Como funciona
 
-O `BaseEtlCommand` persiste um `EtlCheckpoint` ao final de cada fase com:
+O `BaseEtlCommand` persiste um checkpoint em `EtlCheckpoint` ao final de cada fase com:
 
 - `dominio = "programas"`
-- `ultima_fase_concluida` = número da última fase concluída com sucesso
-- `ultima_situacao` = `"em_andamento"` durante a execução, `"concluido"` ao fim,
-  `"erro"` em caso de exceção
+- `ultima_pagina` = número da última fase concluída com sucesso (o campo no banco chama `ultima_pagina` por razões históricas — o atributo equivalente no service é `ultima_fase_concluida`)
+- `token_parada` = token retornado pela fase
+- `ultima_situacao` = `"concluido"` em caso de sucesso ou `"erro"` em caso de exceção
 
-Ao iniciar com `--continuar`, o comando:
+Ao iniciar com `--continuar`, o `_obter_ponto_partida` do `BaseEtlCommand`:
 
 1. Lê o checkpoint mais recente para o domínio `"programas"`.
-2. Define `fase_inicial = ultima_fase_concluida + 1`.
-3. Chama `EtlProgramasService.executar(fase_inicial=N)`.
+2. Se `ultima_situacao == "erro"` e `0 < ultima_pagina < fase_final (5)`, define `fase_inicial = ultima_pagina + 1`.
+3. Caso contrário (checkpoint concluído ou inexistente), define `fase_inicial = 1`.
+4. Chama `EtlProgramasService.executar(fase_inicial=N)`.
 
 ## Fases e retomada
 
-| Falhou na fase | Retomada inicia em |
-|---------------|--------------------|
-| 1 (TipoPrograma) | Fase 1 |
-| 2 (ComponenteCurricularPrograma) | Fase 2 |
-| 3 (TurmaPrograma) | Fase 3 |
-| 4 (TurmaProgramaComponenteCurricular) | Fase 4 |
-| 5 (MatriculaTurmaPrograma) | Fase 5 |
+| Falhou **durante** a fase | Última concluída (`ultima_pagina`) | Retomada inicia em |
+|---------------------------|------------------------------------|--------------------|
+| 1 (TipoPrograma) | 0 | Fase 1 (recomeço) |
+| 2 (ComponenteCurricularPrograma) | 1 | Fase 2 |
+| 3 (TurmaPrograma) | 2 | Fase 3 |
+| 4 (TurmaProgramaComponenteCurricular) | 3 | Fase 4 |
+| 5 (MatriculaTurmaPrograma) | 4 | Fase 5 |
+
+> **Nota:** se a fase 5 concluir mas o pipeline falhar no `_finalizar_com_sucesso`, o checkpoint fica com `ultima_pagina=5 == fase_final` e o `--continuar` recomeça da fase 1 (porque a condição `ultima_pagina < fase_final` não é satisfeita). Isso é seguro por causa da idempotência.
 
 ## Uso
 

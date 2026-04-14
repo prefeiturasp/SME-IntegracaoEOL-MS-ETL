@@ -15,6 +15,7 @@ ordem_carga
 estrategia
 hash
 modelos
+enums
 comando
 orquestracao
 retomada
