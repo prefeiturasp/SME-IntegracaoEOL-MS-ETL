@@ -1,6 +1,7 @@
 """Tasks Celery genéricas para orquestração de ETL."""
 
 import logging
+from typing import Any
 from uuid import UUID
 
 from celery import Task, chord, group, shared_task
@@ -25,10 +26,14 @@ logger = logging.getLogger(__name__)
     prefetch_multiplier=1,
     rate_limit="30/m",
 )
+
 def processar_chunk(
-    self: Task, chunk: list[tuple], fase_meta_dict: dict
+    self: Task,
+    chunk: list[tuple],
+    fase_meta_dict: dict[str, Any],
 ) -> tuple[int, int]:
-    """Task worker genérica: transforma e persiste um chunk do domínio."""
+    """Processa chunk do domínio, transformando e persistindo dados."""
+
     try:
         fase_meta = BaseEtlFase.from_dict(fase_meta_dict)
         transform = fase_meta.get_transformer()
@@ -58,8 +63,8 @@ def processar_chunk(
 )
 def finalizar_fase(
     resultados: list[tuple[int, int]],
-    fase_meta_dict: dict,
-    todas_fases_dict: list[dict],
+    fase_meta_dict: dict[str, Any],
+    todas_fases_dict: list[dict[str, Any]],
 ) -> None:
     """Agrega resultados, registra auditoria e lança a próxima fase."""
     fase_meta = BaseEtlFase.from_dict(fase_meta_dict)
@@ -120,7 +125,7 @@ def finalizar_fase(
 
 
 def _lancar_fase_seguinte(
-    fase_atual: BaseEtlFase, todas_fases: list[dict]
+    fase_atual: BaseEtlFase, todas_fases: list[dict[str, Any]]
 ) -> None:
     """Dispara o chord da próxima fase utilizando o motor genérico."""
     proxima_meta_dict = todas_fases[fase_atual.numero_fase]

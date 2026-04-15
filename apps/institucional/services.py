@@ -1,38 +1,22 @@
-"""Serviço de ETL do domínio INSTITUCIONAL_DB.
-
-Responsabilidade:
-    Orquestrar a extração de dados do EOL (SQL Server) e a persistência
-    incremental no banco institucional_db.
-
-Estratégia:
-    Usa processamento incremental baseado em Hash SHA-256 (EtlAuditoriaLinha)
-    para minimizar escritas no banco destino.
-
-Mapeamento:
-    Utiliza DTOs (ModelIn/ModelOut) para garantir tipagem e garantir que
-    a lógica de transformação esteja centralizada.
-"""
+"""Serviço de ETL do domínio INSTITUCIONAL_DB."""
 
 import logging
+from collections.abc import Callable, Iterator
 from typing import Any
+from uuid import UUID
 
-from apps.controle_auditoria.models import EtlAuditoriaLinha
-from functools import partial
-
-from apps.core.libs.thread_processor import ThreadPoolProcessor, decorar_para_hash
+from apps.core.libs.base_etl_service import (
+    BaseEtlService,
+    PhaseConfig,
+)
 from apps.core.libs.cache import CacheService
+from apps.core.libs.thread_processor import calcular_hash
 from apps.eol_connection.libs.servico_eol import EOLService
 from apps.institucional.dtos.model_in import (
     DREIn,
     SubprefeituraIn,
     TipoEscolaIn,
     UnidadeEducacionalIn,
-)
-from apps.institucional.dtos.model_out import (
-    DREOut,
-    SubprefeituraOut,
-    TipoEscolaOut,
-    UnidadeEducacionalOut,
 )
 from apps.institucional.libs.repositorio_core_sso import RepositorioCoreSSO
 from apps.institucional.models import (
@@ -43,10 +27,6 @@ from apps.institucional.models import (
 )
 
 logger = logging.getLogger(__name__)
-
-# ---------------------------------------------------------------------------
-# SQLs — Extração Completa (Migrado de Offset para Full-Incremental)
-# ---------------------------------------------------------------------------
 
 SQL_TIPO_ESCOLA = """
 SELECT
@@ -110,7 +90,8 @@ capacidadeVaga AS (
     INNER JOIN serie_turma_escola
         ON serie_turma_escola.cd_turma_escola = t.cd_turma_escola
     INNER JOIN serie_turma_grade
-        ON serie_turma_grade.cd_turma_escola = serie_turma_escola.cd_turma_escola
+        ON serie_turma_grade.cd_turma_escola
+        = serie_turma_escola.cd_turma_escola
     INNER JOIN escola_grade
         ON serie_turma_grade.cd_escola_grade = escola_grade.cd_escola_grade
     INNER JOIN grade
@@ -184,7 +165,8 @@ SELECT
   , vcue.cd_sub_prefeitura AS codigo_sub_prefeitura
 FROM v_cadastro_unidade_educacao vcue
 INNER JOIN unidade_administrativa dre
-    ON dre.cd_unidade_administrativa = vcue.cd_unidade_administrativa_referencia
+    ON dre.cd_unidade_administrativa
+    = vcue.cd_unidade_administrativa_referencia
 LEFT JOIN v_unidade_educacao_dados_gerais vuedg
     ON vuedg.cd_unidade_educacao = vcue.cd_unidade_educacao
 LEFT JOIN escola
@@ -197,272 +179,204 @@ LEFT JOIN municipio mun
     ON mun.cd_municipio = vcue.cd_municipio
 WHERE dre.tp_unidade_administrativa = 24
 AND  vcue.tp_unidade_educacao  <> 15
-ORDER BY codigo_ue
 """
 
-# ---------------------------------------------------------------------------
 
-# Helpers de Controle Incremental (Padrão Professores)
-# ---------------------------------------------------------------------------
+class EtlInstitucionalService(BaseEtlService):
+    """Serviço de ETL do domínio Institucional.
 
+    Orquestra 4 fases: DRE, TipoEscola, SubPrefeitura,
+    UnidadeEducacional. A fase 4 enriquece cada UE com o
+    código de integração obtido via Core SSO (pré-cacheado).
+    """
 
-def _upsert_incremental(
-    model_class: Any,
-    tabela: str,
-    objs: list[Any],
-    update_fields: list[str],
-) -> int:
-    """Upsert incremental: salva apenas o que mudou comparando com EtlAuditoriaLinha."""
-    if not objs:
-        return 0
-
-    pk_name = model_class._meta.pk.name
-
-    # 1. Deduplicar por PK (garante que não enviamos duplicados no bulk_create)
-    # se houver duplicados na origem, mantemos o último da lista.
-    objs_unicos: dict[Any, Any] = {getattr(obj, pk_name): obj for obj in objs}
-
-    processor = ThreadPoolProcessor(prefixo_log=f"ETL {tabela[:6].upper()}")
-    func = partial(decorar_para_hash, tabela, update_fields)
-    linhas_com_hash = processor.processar(list(objs_unicos.items()), func)
-
-    # Busca hashes existentes no banco de auditoria (banco default)
-    ids_destino = [item[0] for item in linhas_com_hash]
-    hashes_existentes = dict(
-        EtlAuditoriaLinha.objects.filter(id_destino__in=ids_destino).values_list(
-            "id_destino", "hash_controle"
-        )
-    )
-
-    # Filtra apenas o que mudou ou é novo
-    objs_para_salvar = []
-    novos_hashes = {}
-    for id_destino, novo_hash, obj in linhas_com_hash:
-        if hashes_existentes.get(id_destino) != novo_hash:
-            objs_para_salvar.append(obj)
-            novos_hashes[id_destino] = novo_hash
-
-    if not objs_para_salvar:
-        return 0
-
-    # Gravar no banco destino (institucional_db)
-    model_class.objects.using("institucional_db").bulk_create(
-        objs_para_salvar,
-        update_conflicts=True,
-        unique_fields=[pk_name],
-        update_fields=update_fields,
-        batch_size=500,
-    )
-
-    # Atualizar hashes no banco de auditoria (banco default)
-    hash_objs = [
-        EtlAuditoriaLinha(id_destino=id_d, hash_controle=h)
-        for id_d, h in novos_hashes.items()
-    ]
-    EtlAuditoriaLinha.objects.bulk_create(
-        hash_objs,
-        update_conflicts=True,
-        unique_fields=["id_destino"],
-        update_fields=["hash_controle"],
-        batch_size=500,
-    )
-
-    return len(objs_para_salvar)
-
-
-# ---------------------------------------------------------------------------
-# Serviço Principal: EtlInstitucionalService
-# ---------------------------------------------------------------------------
-
-
-class EtlInstitucionalService:
-    """Orquestra o ETL unificado para o domínio Institucional."""
+    _dominio = "INSTITUCIONAL"
 
     def __init__(
         self,
+        db_alias: str,
+        id_execucao: UUID | None = None,
+        repositorio_auditoria: Any | None = None,
+        primeiro_run: bool = False,
         eol: EOLService | None = None,
-        core_sso: RepositorioCoreSSO | None = None,
         cache: CacheService | None = None,
+        core_sso: RepositorioCoreSSO | None = None,
     ) -> None:
-        """Inicia o serviço injetando dependências mockáveis."""
+        super().__init__(
+            db_alias=db_alias,
+            id_execucao=id_execucao,
+            repositorio_auditoria=repositorio_auditoria,
+            primeiro_run=primeiro_run,
+        )
         self.eol = eol or EOLService()
-        self.core_sso = core_sso or RepositorioCoreSSO()
         self.cache = cache or CacheService()
-        self.ultima_fase_concluida = 0
+        self.core_sso = core_sso or RepositorioCoreSSO()
+        self._fases = self._init_fases()
 
-    def popular_dre(self) -> int:
-        """Fase 1: Extrai e persiste DRE."""
-        rows = self.eol.executar_query(SQL_DRE)
-        objs = [DREOut.from_in(DREIn(*r)) for r in rows]
+    def _iter_chunks(self, sql: str) -> Iterator[list[tuple]]:
+        return self.eol.iter_query(sql)
 
-        # Tenta popular os códigos de integração das UEs
+    def _init_fases(self) -> list[PhaseConfig]:
+        return [
+            PhaseConfig(
+                nome="dre",
+                sql=SQL_DRE,
+                table_name="dre",
+                source_table="unidade_administrativa",
+                model_class=DRE,
+                dto_in=DREIn,
+                pk_field="codigo_dre",
+                update_fields=(
+                    "nome",
+                    "sigla",
+                    "tipo_unidade_adm",
+                    "descricao_unidade_adm",
+                ),
+                unique_fields=("codigo_dre",),
+                modo_escrita="upsert",
+            ),
+            PhaseConfig(
+                nome="tipo_escola",
+                sql=SQL_TIPO_ESCOLA,
+                table_name="tipo_escola",
+                source_table="tipo_escola",
+                model_class=TipoEscola,
+                dto_in=TipoEscolaIn,
+                pk_field="codigo_tipo_escola",
+                update_fields=("sigla", "descricao"),
+                unique_fields=("codigo_tipo_escola",),
+                modo_escrita="upsert",
+            ),
+            PhaseConfig(
+                nome="sub_prefeitura",
+                sql=SQL_SUBPREFEITURA,
+                table_name="sub_prefeitura",
+                source_table="sub_prefeitura",
+                model_class=SubPrefeitura,
+                dto_in=SubprefeituraIn,
+                pk_field="codigo_sub_prefeitura",
+                update_fields=("sigla", "nome"),
+                unique_fields=("codigo_sub_prefeitura",),
+                modo_escrita="upsert",
+            ),
+            PhaseConfig(
+                nome="unidade_educacional",
+                sql=SQL_UNIDADE_EDUCACIONAL,
+                table_name="unidade_educacional",
+                source_table="v_cadastro_unidade_educacao",
+                model_class=UnidadeEducacional,
+                dto_in=UnidadeEducacionalIn,
+                pk_field="codigo_ue",
+                update_fields=(
+                    "nome",
+                    "nome_nao_oficial",
+                    "tipo_ue",
+                    "tipo_logradouro",
+                    "logradouro",
+                    "numero",
+                    "bairro",
+                    "cep",
+                    "municipio",
+                    "distrito",
+                    "email",
+                    "telefone_1",
+                    "telefone_2",
+                    "ano_construcao",
+                    "propriedade",
+                    "organizacao_parceira",
+                    "vagas_matutino",
+                    "vagas_vespertino",
+                    "vagas_noturno",
+                    "vagas_intermediario",
+                    "vagas_integral",
+                    "vagas_total",
+                    "quantidade_funcionarios",
+                    "codigo_inep",
+                    "status",
+                    "dre_id",
+                    "tipo_escola_id",
+                    "subprefeitura_id",
+                    "codigo_ue_integracao",
+                ),
+                unique_fields=("codigo_ue",),
+                modo_escrita="upsert",
+            ),
+        ]
+
+    def executar(self, fase_inicial: int = 1) -> dict[str, int]:
+        """Executa as fases, pré-carregando cache SSO antes da fase 1."""
+        if fase_inicial <= 1:
+            self._popular_cache_integracao_ue()
+        return super().executar(fase_inicial)
+
+    def _popular_cache_integracao_ue(self) -> None:
+        """Pré-carrega no cache os códigos de integração das UEs por DRE."""
         sso_offline = False
-        for obj in objs:
+        try:
+            rows = self.eol.executar_query(SQL_DRE)
+        except Exception:
+            return
+
+        for row in rows:
             if sso_offline:
                 break
-
+            dre = DREIn(*row)
+            codigo_dre = str(dre.codigo_dre)
+            key_cache = (
+                f"etl_institucional:dre:{codigo_dre}" ":codigos_ues_integracao"
+            )
+            if self.cache.exist_hash_value(key_cache):
+                continue
             try:
-                codigo_dre = str(obj.codigo_dre)
-                key_cache_dre = (
-                    f"etl_institucional:dre:{codigo_dre}:codigos_ues_integracao"
-                )
-
-                if self.cache.exist_hash_value(key_cache_dre):
-                    continue
-
                 ue_rows = self.eol.executar_query(
-                    SQL_OBTER_CODIGOS_UES_POR_DRE, parametros=[codigo_dre]
+                    SQL_OBTER_CODIGOS_UES_POR_DRE, [codigo_dre]
                 )
-                codigo_ues = [str(r[0]) for r in ue_rows]
-
-                if codigo_ues:
-                    sso_rows = self.core_sso.obter_codigos_integracao_ues(codigo_ues)
-                    novos_mapeamentos = {str(r[0]): str(r[2]) for r in sso_rows if r[2]}
-
-                    if novos_mapeamentos:
-                        self.cache.set_hash(
-                            key_cache_dre,
-                            mapping=novos_mapeamentos,
-                            expire_seconds=14400,
-                        )
+                codigos_ues = [str(r[0]) for r in ue_rows]
+                if not codigos_ues:
+                    continue
+                sso_rows = self.core_sso.obter_codigos_integracao_ues(
+                    codigos_ues
+                )
+                mapeamentos = {str(r[0]): str(r[2]) for r in sso_rows if r[2]}
+                if mapeamentos:
+                    self.cache.set_hash(
+                        key_cache,
+                        mapping=mapeamentos,
+                        expire_seconds=14400,
+                    )
             except Exception as erro:
                 logger.warning(
-                    "[ETL] Falha ao popular cache de codigos de integração "
-                    "das UEs para DRE %s: %s",
+                    "[ETL INST] Falha SSO para DRE %s: %s",
                     codigo_dre,
-                    str(erro),
+                    erro,
                 )
                 sso_offline = True
 
-        update_fields = [
-            "nome",
-            "sigla",
-            "tipo_unidade_adm",
-            "descricao_unidade_adm",
-        ]
-        total = _upsert_incremental(DRE, "dre", objs, update_fields)
-        logger.info("[ETL INST] dre: %d", total)
-        return total
+    def _criar_transform(self, config: PhaseConfig) -> Callable:
+        """Delegado ao base, exceto para a fase UE."""
+        if config.nome != "unidade_educacional":
+            return super()._criar_transform(config)
+        return self._build_transform_ue(config)
 
-    def popular_tipos_escola(self) -> int:
-        """Fase 2: Extrai e persiste TipoEscola."""
-        rows = self.eol.executar_query(SQL_TIPO_ESCOLA)
-        objs = [TipoEscolaOut.from_in(TipoEscolaIn(*r)) for r in rows]
-        update_fields = ["sigla", "descricao"]
-        total = _upsert_incremental(TipoEscola, "tipo_escola", objs, update_fields)
-        logger.info("[ETL INST] tipo_escola: %d", total)
-        return total
+    def _build_transform_ue(self, config: PhaseConfig) -> Callable:
+        """Transform para UE com código integração."""
+        hf = sorted(config.update_fields)
+        cache_por_dre: dict[str, dict[str, str]] = {}
 
-    def popular_subprefeituras(self) -> int:
-        """Fase 3: Extrai e persiste SubPrefeitura."""
-        rows = self.eol.executar_query(SQL_SUBPREFEITURA)
-        objs = [SubprefeituraOut.from_in(SubprefeituraIn(*r)) for r in rows]
-        update_fields = ["sigla", "nome"]
-        total = _upsert_incremental(
-            SubPrefeitura, "sub_prefeitura", objs, update_fields
-        )
-        logger.info("[ETL INST] sub_prefeitura: %d", total)
-        return total
-
-    def popular_unidades_educacionais(self) -> int:
-        """Fase 4: Extrai e persiste UnidadeEducacional com enriquecimento.
-
-        O processo é segmentado por DRE.
-        """
-        rows = self.eol.executar_query(SQL_UNIDADE_EDUCACIONAL)
-        dto_ins = [UnidadeEducacionalIn(*r) for r in rows]
-
-        # Agrupa UEs por DRE para carregar cache segmentado eficientemente
-        ues_por_dre: dict[str, list[UnidadeEducacionalIn]] = {}
-        for d in dto_ins:
-            ues_por_dre.setdefault(str(d.codigo_dre), []).append(d)
-
-        objs: list[UnidadeEducacionalOut] = []
-        for codigo_dre, ues_lote in ues_por_dre.items():
-            key_cache = f"etl_institucional:dre:{codigo_dre}:codigos_ues_integracao"
-            cache_dre = self.cache.get_hash(key_cache)
-
-            # Enriquece cada UE do lote da DRE
-            for dto_in in ues_lote:
-                codigo_integracao = cache_dre.get(str(dto_in.codigo_ue))
-                objs.append(
-                    UnidadeEducacionalOut.from_in(
-                        dto_in, codigo_ue_integracao=codigo_integracao
-                    )
+        def transform(row: tuple) -> tuple:
+            dto = UnidadeEducacionalIn(*row)
+            codigo_dre = str(dto.codigo_dre) if dto.codigo_dre else ""
+            if codigo_dre not in cache_por_dre:
+                key = (
+                    f"etl_institucional:dre:{codigo_dre}"
+                    ":codigos_ues_integracao"
                 )
+                cache_por_dre[codigo_dre] = self.cache.get_hash(key)
+            dto.codigo_ue_integracao = cache_por_dre[codigo_dre].get(
+                str(dto.codigo_ue)
+            )
+            data = dto.to_domain()
+            obj = UnidadeEducacional(**data)
+            return str(dto.codigo_ue), calcular_hash(obj, hf), obj
 
-        update_fields = [
-            "nome",
-            "nome_nao_oficial",
-            "tipo_ue",
-            "tipo_logradouro",
-            "logradouro",
-            "numero",
-            "bairro",
-            "cep",
-            "municipio",
-            "distrito",
-            "email",
-            "telefone_1",
-            "telefone_2",
-            "ano_construcao",
-            "propriedade",
-            "organizacao_parceira",
-            "vagas_matutino",
-            "vagas_vespertino",
-            "vagas_noturno",
-            "vagas_intermediario",
-            "vagas_integral",
-            "vagas_total",
-            "quantidade_funcionarios",
-            "codigo_inep",
-            "status",
-            "dre_id",
-            "tipo_escola_id",
-            "subprefeitura_id",
-            "codigo_ue_integracao",
-        ]
-        total = _upsert_incremental(
-            UnidadeEducacional, "unidade_educacional", objs, update_fields
-        )
-        logger.info("[ETL INST] unidade_educacional: %d", total)
-        return total
-
-    def executar(self, fase_inicial: int = 1) -> dict[str, int]:
-        """Executa as fases do ETL institucional em ordem de dependência."""
-        resultados: dict[str, int] = {}
-        log = logger.info
-
-        log("[ETL INST] Iniciando carga a partir da fase %d...", fase_inicial)
-
-        if fase_inicial <= 1:
-            log("[ETL INST] === Fase 1: DRE / Cache SSO ===")
-            resultados["dre"] = self.popular_dre()
-            self.ultima_fase_concluida = 1
-            log("[ETL INST] Fase 1 concluída.")
-
-        if fase_inicial <= 2:
-            log("[ETL INST] === Fase 2: Tipo Escola ===")
-            resultados["tipo_escola"] = self.popular_tipos_escola()
-            self.ultima_fase_concluida = 2
-            log("[ETL INST] Fase 2 concluída.")
-
-        if fase_inicial <= 3:
-            log("[ETL INST] === Fase 3: Subprefeitura ===")
-            resultados["sub_prefeitura"] = self.popular_subprefeituras()
-            self.ultima_fase_concluida = 3
-            log("[ETL INST] Fase 3 concluída.")
-
-        if fase_inicial <= 4:
-            log("[ETL INST] === Fase 4: Unidade Educacional ===")
-            resultados["unidade_educacional"] = self.popular_unidades_educacionais()
-            self.ultima_fase_concluida = 4
-            log("[ETL INST] Fase 4 concluída.")
-
-        total = sum(resultados.values())
-        log(
-            "[ETL INST] Concluído. Linhas alteradas: %d (fases %d–4).",
-            total,
-            fase_inicial,
-        )
-        return resultados
+        return transform

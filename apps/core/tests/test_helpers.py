@@ -1,8 +1,10 @@
-from datetime import date, datetime
+from datetime import datetime
 
 from django.test import SimpleTestCase
+from django.utils import timezone
+from datetime import date
 
-from apps.core.libs.helpers import parse_date, strip_str
+from apps.core.libs.helpers import make_aware, parse_date, strip_str
 
 
 class StripStrTest(SimpleTestCase):
@@ -51,3 +53,26 @@ class ParseDateTest(SimpleTestCase):
 
     def test_tipo_invalido_retorna_none(self) -> None:
         self.assertIsNone(parse_date(123))
+
+
+class MakeAwareTest(SimpleTestCase):
+    """Valida make_aware para os ramos de None, str, naive e aware."""
+
+    def test_none_retorna_none(self) -> None:
+        self.assertIsNone(make_aware(None))
+
+    def test_string_iso_retorna_aware(self) -> None:
+        result = make_aware("2025-01-01T10:00:00")
+        self.assertFalse(timezone.is_naive(result))
+
+    def test_naive_datetime_retorna_aware(self) -> None:
+        naive = datetime(2025, 1, 1, 12, 0, 0)
+        result = make_aware(naive)
+        self.assertFalse(timezone.is_naive(result))
+
+    def test_aware_datetime_retorna_mesmo_objeto(self) -> None:
+        aware = timezone.make_aware(
+            datetime(2025, 1, 1, 12, 0, 0),
+            timezone.get_current_timezone(),
+        )
+        self.assertIs(make_aware(aware), aware)

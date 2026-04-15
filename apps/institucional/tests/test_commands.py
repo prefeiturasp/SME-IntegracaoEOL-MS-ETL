@@ -1,8 +1,4 @@
-"""Testes do comando de gerenciamento etl_institucional.
-
-Valida a orquestração do comando, o uso de checkpoints e a integração
-com o RepositorioAuditoriaPostgres (banco default).
-"""
+"""Testes do comando de gerenciamento etl_institucional."""
 
 from unittest.mock import patch
 from uuid import UUID
@@ -21,7 +17,6 @@ class EtlInstitucionalCommandTestCase(TestCase):
 
     def setUp(self) -> None:
         """Mocka dependências externas."""
-        # Patch do repositório
         self.patcher_repo = patch(
             "apps.core.libs.base_etl_command.RepositorioAuditoriaPostgres"
         )
@@ -29,7 +24,6 @@ class EtlInstitucionalCommandTestCase(TestCase):
         self.repo = self.mock_repo_class.return_value
         self.repo.iniciar_execucao.return_value = _ID_EXECUCAO
 
-        # Patch do serviço
         self.patcher_servico = patch(
             "apps.institucional.management.commands.etl_institucional.Command.service_class"
         )
@@ -49,11 +43,9 @@ class EtlInstitucionalCommandTestCase(TestCase):
 
         call_command("etl_institucional")
 
-        # Verificações
         self.repo.iniciar_execucao.assert_called_once_with("institucional")
         self.servico.executar.assert_called_once_with(fase_inicial=1)
 
-        # Status de sucesso no projeto é "concluido"
         self.repo.finalizar_execucao.assert_called_once_with(
             _ID_EXECUCAO, situacao="concluido"
         )
@@ -63,20 +55,16 @@ class EtlInstitucionalCommandTestCase(TestCase):
         """Valida que --continuar retoma da fase seguinte ao erro."""
         self.repo.obter_checkpoint_dominio.return_value = {
             "ultima_situacao": "erro",
-            "ultima_pagina": 2,  # parou na fase 2
+            "ultima_pagina": 2,
             "token_parada": "100",
         }
 
         call_command("etl_institucional", "--continuar")
 
-        # Deve retomar da fase 3 (2+1)
         self.servico.executar.assert_called_once_with(fase_inicial=3)
 
     def test_rejeita_volume_invalido(self) -> None:
         """Valida validação básica de parâmetros."""
-        # Se o comando não valida volume ainda, ele vai chamar o serviço.
-        # No futuro, se adicionarmos validação, este teste deve capturar CommandError.
-        # Por enquanto, garantimos que se for chamado com volume, ele executa.
         call_command("etl_institucional", "--volume", "100")
         self.servico.executar.assert_called()
 
@@ -94,7 +82,6 @@ class EtlInstitucionalCommandTestCase(TestCase):
 
     def test_execucao_com_continuar_sem_erro_anterior(self) -> None:
         """Valida retomada para fase 1 caso o checkpoint não indique erro parcial."""
-        # Checkpoint indica que foi concluído com sucesso
         self.repo.obter_checkpoint_dominio.return_value = {
             "ultima_situacao": "concluido",
             "ultima_pagina": 4,
@@ -102,5 +89,14 @@ class EtlInstitucionalCommandTestCase(TestCase):
 
         call_command("etl_institucional", "--continuar")
 
-        # Como já estava concluído, volta para a fase 1 por default no comando atual
         self.servico.executar.assert_called_once_with(fase_inicial=1)
+
+    def test_get_modo_escrita(self) -> None:
+        """Valida a lógica de modo de escrita para tabelas do domínio."""
+        from apps.institucional.management.commands.etl_institucional import (
+            Command,
+        )
+
+        cmd = Command()
+        self.assertEqual(cmd.get_modo_escrita("dre"), "upsert")
+        self.assertEqual(cmd.get_modo_escrita("outra_tabela"), "full_refresh")

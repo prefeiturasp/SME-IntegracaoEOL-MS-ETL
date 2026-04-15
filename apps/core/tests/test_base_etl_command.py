@@ -22,7 +22,6 @@ class BaseEtlCommandTestCase(SimpleTestCase):
         self.mock_repo_class = self.patcher_repo.start()
         self.repo = self.mock_repo_class.return_value
 
-        # Mock do serviço local por teste
         self.mock_servico_class = MagicMock()
         self.servico = self.mock_servico_class.return_value
         self.servico.ultimo_token = "0"
@@ -51,7 +50,6 @@ class BaseEtlCommandTestCase(SimpleTestCase):
 
         self.cmd.handle(volume=100, offset=0, continuar=False)
 
-        # Verificações
         self.assertTrue(self.repo.iniciar_execucao.called)
 
         id_exec = self.repo.iniciar_execucao.return_value
@@ -162,7 +160,6 @@ class BaseEtlCommandTestCase(SimpleTestCase):
         mock_parser = MagicMock()
         self.cmd.add_arguments(mock_parser)
 
-        # Verifica se add_argument foi chamado para cada opção
         calls = [c[0][0] for c in mock_parser.add_argument.call_args_list]
         self.assertIn("--volume", calls)
         self.assertIn("--offset", calls)
@@ -178,7 +175,6 @@ class BaseEtlCommandTestCase(SimpleTestCase):
         }
         self.cmd.handle(volume=100, fase=4, continuar=True)
         
-        # Deve ignorar o checkpoint (que daria fase 3) e usar a fase 4 forçada
         self.servico.executar.assert_called_with(fase_inicial=4)
 
     def test_trata_interrupcao_manual_e_persiste_situacao_interrompido(
@@ -205,3 +201,13 @@ class BaseEtlCommandTestCase(SimpleTestCase):
             ultima_situacao="interrompido",
             sucesso=False,
         )
+
+    @patch("apps.core.libs.base_etl_orquestrador.GenericEtlOrquestrador")
+    def test_handle_celery_lanca_orquestrador(
+        self, mock_orq_cls: MagicMock
+    ) -> None:
+        """Garante que handle com celery=True delega ao orquestrador."""
+        mock_orq = mock_orq_cls.return_value
+        self.cmd.handle(celery=True, volume=100, offset=0, continuar=False)
+        mock_orq_cls.assert_called_once()
+        mock_orq.lancar.assert_called_once()
