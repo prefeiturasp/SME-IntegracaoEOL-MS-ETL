@@ -103,8 +103,7 @@ class TestProgramasService(TestCase):
             649,  # codigo_tipo_programa
         )
         pk, _, _ = transform(row)
-
-        # pk_field=[codigo_turma, codigo_aluno, codigo_componente_curricular]
+        
         self.assertEqual(pk, "12345-99999-1322")
 
     @patch.object(EtlProgramasService, "sync_batch")
