@@ -36,7 +36,37 @@ from collections.abc import Callable, Iterator
 from typing import Any
 
 from apps.controle_auditoria.models import EtlAuditoriaLinha
+from apps.core.libs.thread_processor import ThreadPoolProcessor
 from apps.eol_connection.libs.servico_eol import EOLService
+from apps.professores.dtos.model_in import (
+    AtribuicaoAulaIn,
+    AtribuicaoExternoIn,
+    CargoBaseServidorIn,
+    CargoSobrepostoServidorIn,
+    ContratoExternoIn,
+    FuncaoAtividadeCargoServidorIn,
+    LaudoMedicoIn,
+    LotacaoServidorIn,
+    PessoaIn,
+    ProfessorIn,
+    SerieTurmaGradeIn,
+    TurmaEscolaGradeProgramaIn,
+    TurmaEscolaIn,
+    TurmaGradeTerritorioExperienciaIn,
+    UnidadeEducacionalIn,
+)
+from apps.professores.dtos.model_out import (
+    AtribuicaoAulaOut,
+    AtribuicaoExternoOut,
+    CargoBaseServidorOut,
+    ContratoExternoOut,
+    PessoaOut,
+    ProfessorOut,
+    SerieTurmaGradeOut,
+    TurmaEscolaGradeProgramaOut,
+    TurmaEscolaOut,
+    UnidadeEducacionalOut,
+)
 from apps.professores.models import (
     AtribuicaoAula,
     AtribuicaoExterno,
@@ -281,166 +311,68 @@ SQL_ATRIBUICOES_EXTERNO = """
 
 
 # ---------------------------------------------------------------------------
-# Transformadores: tupla EOL → dict de campos do model
+# Transformadores de linha (row → dict)
 # ---------------------------------------------------------------------------
 
 
-def _row_to_unidade_educacional(row: tuple[Any, ...]) -> dict[str, Any]:
-    return {
-        "codigo_ue": str(row[0]).strip(),
-        "codigo_dre": str(row[1]).strip() if row[1] else None,
-        "codigo_tipo_escola": row[2] or None,
-    }
+def _row_to_unidade_educacional(row: tuple) -> dict:
+    return UnidadeEducacionalIn(*row).to_domain().to_dict()
 
 
-def _row_to_turma_escola(row: tuple[Any, ...]) -> dict[str, Any]:
-    return {
-        "codigo_turma": row[0],
-        "codigo_escola": str(row[1]).strip(),
-        "ano_letivo": row[2],
-        "status": row[3] or "",
-        "tipo_turma": row[4],
-        "dt_inicio_turma": row[5],
-        "dt_fim_turma": row[6],
-        "dt_fim": row[7],
-    }
+def _row_to_turma_escola(row: tuple) -> dict:
+    return TurmaEscolaIn(*row).to_domain().to_dict()
 
 
-def _row_to_serie_turma_grade(row: tuple[Any, ...]) -> dict[str, Any]:
-    return {
-        "codigo_serie_grade": row[0],
-        "codigo_turma": row[1],
-        "codigo_escola": str(row[2]).strip(),
-        "codigo_escola_grade": row[3],
-        "dt_fim": row[4],
-    }
+def _row_to_serie_turma_grade(row: tuple) -> dict:
+    return SerieTurmaGradeIn(*row).to_domain().to_dict()
 
 
-def _row_to_turma_escola_grade_programa(
-    row: tuple[Any, ...]
-) -> dict[str, Any]:
-    return {
-        "codigo": row[0],
-        "codigo_turma": row[1],
-        "codigo_escola_grade": row[2],
-        "dt_fim": row[3],
-    }
+def _row_to_turma_escola_grade_programa(row: tuple) -> dict:
+    return TurmaEscolaGradeProgramaIn(*row).to_domain().to_dict()
 
 
-def _row_to_turma_grade_territorio(row: tuple[Any, ...]) -> dict[str, Any]:
-    return {
-        "codigo_serie_grade": row[0],
-        "codigo_componente_curricular": row[1],
-        "codigo_territorio_saber": row[2],
-        "codigo_experiencia_pedagogica": row[3],
-        "dt_inicio": row[4],
-    }
+def _row_to_turma_grade_territorio(row: tuple) -> dict:
+    return TurmaGradeTerritorioExperienciaIn(*row).to_domain().to_dict()
 
 
-def _row_to_professor(row: tuple[Any, ...]) -> dict[str, Any]:
-    return {
-        "codigo_rf": str(row[0]).strip(),
-        "nome": row[1] or "",
-        "nome_social": row[2] or None,
-        "cpf": str(row[3]).strip() if row[3] else None,
-    }
+def _row_to_professor(row: tuple) -> dict:
+    return ProfessorIn(*row).to_domain().to_dict()
 
 
-def _row_to_cargo_base(row: tuple[Any, ...]) -> dict[str, Any]:
-    return {
-        "id": row[0],
-        "professor_id": str(row[1]).strip(),
-        "codigo_cargo": row[2],
-        "situacao_funcional": row[3],
-        "dt_posse": row[4],
-        "dt_fim_nomeacao": row[5],
-        "dt_cancelamento": row[6],
-    }
+def _row_to_cargo_base(row: tuple) -> dict:
+    return CargoBaseServidorIn(*row).to_domain().to_dict()
 
 
-def _row_to_lotacao(row: tuple[Any, ...]) -> dict[str, Any]:
-    return {
-        "cargo_base_id": row[0],
-        "codigo_unidade_educacao": str(row[1]).strip(),
-        "dt_inicio": row[2],
-        "dt_fim": row[3],
-    }
+def _row_to_lotacao(row: tuple) -> dict:
+    return LotacaoServidorIn(*row).to_domain().to_dict()
 
 
-def _row_to_cargo_sobreposto(row: tuple[Any, ...]) -> dict[str, Any]:
-    return {
-        "cargo_base_id": row[0],
-        "codigo_cargo": row[1],
-        "codigo_unidade_local_servico": str(row[2]).strip(),
-        "dt_fim_cargo_sobreposto": row[3],
-    }
+def _row_to_cargo_sobreposto(row: tuple) -> dict:
+    return CargoSobrepostoServidorIn(*row).to_domain().to_dict()
 
 
-def _row_to_funcao_atividade(row: tuple[Any, ...]) -> dict[str, Any]:
-    return {
-        "cargo_base_id": row[0],
-        "codigo_unidade_local_servico": str(row[1]).strip(),
-        "dt_fim_funcao_atividade": row[2],
-    }
+def _row_to_funcao_atividade(row: tuple) -> dict:
+    return FuncaoAtividadeCargoServidorIn(*row).to_domain().to_dict()
 
 
-def _row_to_laudo(row: tuple[Any, ...]) -> dict[str, Any]:
-    return {"cargo_base_id": row[0]}
+def _row_to_laudo(row: tuple) -> dict:
+    return LaudoMedicoIn(*row).to_domain().to_dict()
 
 
-def _row_to_pessoa(row: tuple[Any, ...]) -> dict[str, Any]:
-    return {
-        "codigo_pessoa": row[0],
-        "cpf": str(row[1]).strip(),
-        "nome": row[2] or "",
-        "nome_social": row[3] or None,
-    }
+def _row_to_pessoa(row: tuple) -> dict:
+    return PessoaIn(*row).to_domain().to_dict()
 
 
-def _row_to_contrato_externo(row: tuple[Any, ...]) -> dict[str, Any]:
-    return {
-        "codigo_contrato": row[0],
-        "pessoa_id": row[1],
-        "codigo_tipo_funcao": row[2],
-        "codigo_unidade_educacao": str(row[3]).strip(),
-        "dt_cancelamento": row[4],
-        "codigo_motivo_desligamento": row[5],
-    }
+def _row_to_contrato_externo(row: tuple) -> dict:
+    return ContratoExternoIn(*row).to_domain().to_dict()
 
 
-def _row_to_atribuicao_aula(row: tuple[Any, ...]) -> dict[str, Any]:
-    return {
-        "id": row[0],
-        "cargo_base_id": row[1],
-        "codigo_unidade_educacao": str(row[2]).strip(),
-        "codigo_turma_escola": row[3],
-        "codigo_turma_escola_grade_programa": row[4],
-        "codigo_grade": row[5],
-        "codigo_componente_curricular": row[6],
-        "codigo_serie_grade": row[7],
-        "ano_atribuicao": row[8],
-        "dt_atribuicao_aula": row[9],
-        "dt_disponibilizacao_aulas": row[10],
-        "codigo_motivo_disponibilizacao": row[11],
-        "dt_cancelamento": row[12],
-    }
+def _row_to_atribuicao_aula(row: tuple) -> dict:
+    return AtribuicaoAulaIn(*row).to_domain().to_dict()
 
 
-def _row_to_atribuicao_externo(row: tuple[Any, ...]) -> dict[str, Any]:
-    return {
-        "id": row[0],
-        "contrato_externo_id": row[1],
-        "codigo_unidade_educacao": str(row[2]).strip(),
-        "codigo_grade": row[3],
-        "codigo_componente_curricular": row[4],
-        "codigo_serie_grade": row[5],
-        "codigo_turma_escola_grade_programa": row[6],
-        "ano_atribuicao": row[7],
-        "dt_atribuicao": row[8],
-        "dt_disponibilizacao": row[9],
-        "codigo_motivo_disponibilizacao_externo": row[10],
-        "dt_cancelamento": row[11],
-    }
+def _row_to_atribuicao_externo(row: tuple) -> dict:
+    return AtribuicaoExternoIn(*row).to_domain().to_dict()
 
 
 # ---------------------------------------------------------------------------
@@ -686,57 +618,79 @@ class EtlProfessoresService:
     def popular_unidades_educacionais(self) -> int:
         """Popula UnidadeEducacional com IDs de DRE e tipo escola."""
         total = 0
-        for chunk in self.eol.iter_query(SQL_UNIDADES_EDUCACIONAIS):
-            total += _upsert_incremental(
-                UnidadeEducacional,
-                "unidade_educacional",
-                [_row_to_unidade_educacional(r) for r in chunk],
-                ["codigo_dre", "codigo_tipo_escola"],
-            )
+        with ThreadPoolProcessor(
+            prefixo_log="PROF:unidades_educacionais"
+        ) as proc:
+            for chunk in self.eol.iter_query(SQL_UNIDADES_EDUCACIONAIS):
+                out_objs: list[UnidadeEducacionalOut] = proc.processar(
+                    chunk,
+                    lambda r: UnidadeEducacionalIn(*r).to_domain(),
+                )
+                total += _upsert_incremental(
+                    UnidadeEducacional,
+                    "unidade_educacional",
+                    [o.to_dict() for o in out_objs],
+                    ["codigo_dre", "codigo_tipo_escola"],
+                )
         return total
 
     def popular_turmas_escola(self) -> int:
         """Popula TurmaEscola com campos necessários para filtros."""
         total = 0
-        for chunk in self.eol.iter_query(SQL_TURMAS_ESCOLA):
-            total += _upsert_incremental(
-                TurmaEscola,
-                "turma_escola",
-                [_row_to_turma_escola(r) for r in chunk],
-                [
-                    "codigo_escola",
-                    "ano_letivo",
-                    "status",
-                    "tipo_turma",
-                    "dt_inicio_turma",
-                    "dt_fim_turma",
-                    "dt_fim",
-                ],
-            )
+        with ThreadPoolProcessor(prefixo_log="PROF:turma_escola") as proc:
+            for chunk in self.eol.iter_query(SQL_TURMAS_ESCOLA):
+                out_objs: list[TurmaEscolaOut] = proc.processar(
+                    chunk,
+                    lambda r: TurmaEscolaIn(*r).to_domain(),
+                )
+                total += _upsert_incremental(
+                    TurmaEscola,
+                    "turma_escola",
+                    [o.to_dict() for o in out_objs],
+                    [
+                        "codigo_escola",
+                        "ano_letivo",
+                        "status",
+                        "tipo_turma",
+                        "dt_inicio_turma",
+                        "dt_fim_turma",
+                        "dt_fim",
+                    ],
+                )
         return total
 
     def popular_professores(self) -> int:
         """Popula a tabela Professor."""
         total = 0
-        for chunk in self.eol.iter_query(SQL_PROFESSORES, _params_cargo()):
-            total += _upsert_incremental(
-                Professor,
-                "professor",
-                [_row_to_professor(r) for r in chunk],
-                ["nome", "nome_social", "cpf"],
-            )
+        with ThreadPoolProcessor(prefixo_log="PROF:professor") as proc:
+            for chunk in self.eol.iter_query(SQL_PROFESSORES, _params_cargo()):
+                out_objs: list[ProfessorOut] = proc.processar(
+                    chunk,
+                    lambda r: ProfessorIn(*r).to_domain(),
+                )
+                total += _upsert_incremental(
+                    Professor,
+                    "professor",
+                    [o.to_dict() for o in out_objs],
+                    ["nome", "nome_social", "cpf"],
+                )
         return total
 
     def popular_pessoas(self) -> int:
         """Popula a tabela Pessoa."""
         total = 0
-        for chunk in self.eol.iter_query(SQL_PESSOAS):
-            total += _upsert_incremental(
-                Pessoa,
-                "pessoa",
-                [_row_to_pessoa(r) for r in chunk],
-                ["cpf", "nome", "nome_social"],
-            )
+        with ThreadPoolProcessor(prefixo_log="PROF:pessoa") as proc:
+            for chunk in self.eol.iter_query(SQL_PESSOAS):
+                out_objs: list[PessoaOut] = proc.processar(
+                    chunk,
+                    lambda r: PessoaIn(*r).to_domain(),
+                )
+                total += _upsert_incremental(
+                    Pessoa,
+                    "pessoa",
+                    [o.to_dict() for o in out_objs],
+                    ["cpf", "nome", "nome_social"],
+                )
         return total
 
     # ------------------------------------------------------------------
@@ -746,67 +700,91 @@ class EtlProfessoresService:
     def popular_serie_turma_grade(self) -> int:
         """Popula a tabela SerieTurmaGrade."""
         total = 0
-        for chunk in self.eol.iter_query(SQL_SERIE_TURMA_GRADE):
-            total += _upsert_incremental(
-                SerieTurmaGrade,
-                "serie_turma_grade",
-                [_row_to_serie_turma_grade(r) for r in chunk],
-                [
-                    "codigo_turma",
-                    "codigo_escola",
-                    "codigo_escola_grade",
-                    "dt_fim",
-                ],
-            )
+        with ThreadPoolProcessor(prefixo_log="PROF:serie_turma_grade") as proc:
+            for chunk in self.eol.iter_query(SQL_SERIE_TURMA_GRADE):
+                out_objs: list[SerieTurmaGradeOut] = proc.processar(
+                    chunk,
+                    lambda r: SerieTurmaGradeIn(*r).to_domain(),
+                )
+                total += _upsert_incremental(
+                    SerieTurmaGrade,
+                    "serie_turma_grade",
+                    [o.to_dict() for o in out_objs],
+                    [
+                        "codigo_turma",
+                        "codigo_escola",
+                        "codigo_escola_grade",
+                        "dt_fim",
+                    ],
+                )
         return total
 
     def popular_turma_escola_grade_programa(self) -> int:
         """Popula a tabela TurmaEscolaGradePrograma."""
         total = 0
-        for chunk in self.eol.iter_query(SQL_TURMA_ESCOLA_GRADE_PROGRAMA):
-            total += _upsert_incremental(
-                TurmaEscolaGradePrograma,
-                "turma_escola_grade_programa",
-                [_row_to_turma_escola_grade_programa(r) for r in chunk],
-                ["codigo_turma", "codigo_escola_grade", "dt_fim"],
-            )
+        with ThreadPoolProcessor(
+            prefixo_log="PROF:turma_escola_grade_programa"
+        ) as proc:
+            for chunk in self.eol.iter_query(SQL_TURMA_ESCOLA_GRADE_PROGRAMA):
+                out_objs: list[TurmaEscolaGradeProgramaOut] = proc.processar(
+                    chunk,
+                    lambda r: TurmaEscolaGradeProgramaIn(*r).to_domain(),
+                )
+                total += _upsert_incremental(
+                    TurmaEscolaGradePrograma,
+                    "turma_escola_grade_programa",
+                    [o.to_dict() for o in out_objs],
+                    ["codigo_turma", "codigo_escola_grade", "dt_fim"],
+                )
         return total
 
     def popular_cargos_base(self) -> int:
         """Popula a tabela CargoBaseServidor."""
         total = 0
-        for chunk in self.eol.iter_query(SQL_CARGOS_BASE, _params_cargo()):
-            total += _upsert_incremental(
-                CargoBaseServidor,
-                "cargo_base_servidor",
-                [_row_to_cargo_base(r) for r in chunk],
-                [
-                    "professor_id",
-                    "codigo_cargo",
-                    "situacao_funcional",
-                    "dt_posse",
-                    "dt_fim_nomeacao",
-                    "dt_cancelamento",
-                ],
-            )
+        with ThreadPoolProcessor(
+            prefixo_log="PROF:cargo_base_servidor"
+        ) as proc:
+            for chunk in self.eol.iter_query(SQL_CARGOS_BASE, _params_cargo()):
+                out_objs: list[CargoBaseServidorOut] = proc.processar(
+                    chunk,
+                    lambda r: CargoBaseServidorIn(*r).to_domain(),
+                )
+                total += _upsert_incremental(
+                    CargoBaseServidor,
+                    "cargo_base_servidor",
+                    [o.to_dict() for o in out_objs],
+                    [
+                        "professor_id",
+                        "codigo_cargo",
+                        "situacao_funcional",
+                        "dt_posse",
+                        "dt_fim_nomeacao",
+                        "dt_cancelamento",
+                    ],
+                )
         return total
 
     def popular_contratos_externos(self) -> int:
         """Popula a tabela ContratoExterno."""
         total = 0
-        for chunk in self.eol.iter_query(SQL_CONTRATOS_EXTERNOS):
-            total += _upsert_incremental(
-                ContratoExterno,
-                "contrato_externo",
-                [_row_to_contrato_externo(r) for r in chunk],
-                [
-                    "pessoa_id",
-                    "codigo_tipo_funcao",
-                    "codigo_unidade_educacao",
-                    "dt_cancelamento",
-                    "codigo_motivo_desligamento",
-                ],
-            )
+        with ThreadPoolProcessor(prefixo_log="PROF:contrato_externo") as proc:
+            for chunk in self.eol.iter_query(SQL_CONTRATOS_EXTERNOS):
+                out_objs: list[ContratoExternoOut] = proc.processar(
+                    chunk,
+                    lambda r: ContratoExternoIn(*r).to_domain(),
+                )
+                total += _upsert_incremental(
+                    ContratoExterno,
+                    "contrato_externo",
+                    [o.to_dict() for o in out_objs],
+                    [
+                        "pessoa_id",
+                        "codigo_tipo_funcao",
+                        "codigo_unidade_educacao",
+                        "dt_cancelamento",
+                        "codigo_motivo_desligamento",
+                    ],
+                )
         return total
 
     # ------------------------------------------------------------------
@@ -815,68 +793,105 @@ class EtlProfessoresService:
 
     def popular_turma_grade_territorio_experiencia(self) -> int:
         """Full-refresh por lote — sem chave natural para upsert."""
-        return _full_refresh_por_lote(
-            TurmaGradeTerritorioExperiencia,
-            (
-                [
-                    TurmaGradeTerritorioExperiencia(
-                        **_row_to_turma_grade_territorio(r)
+        _dto_in = TurmaGradeTerritorioExperienciaIn
+        with ThreadPoolProcessor(
+            prefixo_log="PROF:turma_grade_territorio"
+        ) as proc:
+            return _full_refresh_por_lote(
+                TurmaGradeTerritorioExperiencia,
+                (
+                    [
+                        TurmaGradeTerritorioExperiencia(**o.to_dict())
+                        for o in proc.processar(
+                            chunk,
+                            lambda r: _dto_in(*r).to_domain(),
+                        )
+                    ]
+                    for chunk in self.eol.iter_query(
+                        SQL_TURMA_GRADE_TERRITORIO
                     )
-                    for r in chunk
-                ]
-                for chunk in self.eol.iter_query(SQL_TURMA_GRADE_TERRITORIO)
-            ),
-        )
+                ),
+            )
 
     def popular_lotacoes(self) -> int:
         """Popula a tabela LotacaoServidor por lote."""
-        return _full_refresh_por_lote(
-            LotacaoServidor,
-            (
-                [LotacaoServidor(**_row_to_lotacao(r)) for r in chunk]
-                for chunk in self.eol.iter_query(SQL_LOTACOES)
-            ),
-        )
+        with ThreadPoolProcessor(prefixo_log="PROF:lotacao_servidor") as proc:
+            return _full_refresh_por_lote(
+                LotacaoServidor,
+                (
+                    [
+                        LotacaoServidor(**o.to_dict())
+                        for o in proc.processar(
+                            chunk,
+                            lambda r: LotacaoServidorIn(*r).to_domain(),
+                        )
+                    ]
+                    for chunk in self.eol.iter_query(SQL_LOTACOES)
+                ),
+            )
 
     def popular_cargos_sobrepostos(self) -> int:
         """Popula a tabela CargoSobrepostoServidor por lote."""
-        return _full_refresh_por_lote(
-            CargoSobrepostoServidor,
-            (
-                [
-                    CargoSobrepostoServidor(**_row_to_cargo_sobreposto(r))
-                    for r in chunk
-                ]
-                for chunk in self.eol.iter_query(
-                    SQL_CARGOS_SOBREPOSTOS, _params_cargo()
-                )
-            ),
-        )
+        _dto_in = CargoSobrepostoServidorIn
+        with ThreadPoolProcessor(
+            prefixo_log="PROF:cargo_sobreposto_servidor"
+        ) as proc:
+            return _full_refresh_por_lote(
+                CargoSobrepostoServidor,
+                (
+                    [
+                        CargoSobrepostoServidor(**o.to_dict())
+                        for o in proc.processar(
+                            chunk,
+                            lambda r: _dto_in(*r).to_domain(),
+                        )
+                    ]
+                    for chunk in self.eol.iter_query(
+                        SQL_CARGOS_SOBREPOSTOS, _params_cargo()
+                    )
+                ),
+            )
 
     def popular_funcoes_atividade(self) -> int:
         """Popula a tabela FuncaoAtividadeCargoServidor por lote."""
-        return _full_refresh_por_lote(
-            FuncaoAtividadeCargoServidor,
-            (
-                [
-                    FuncaoAtividadeCargoServidor(**_row_to_funcao_atividade(r))
-                    for r in chunk
-                ]
-                for chunk in self.eol.iter_query(
-                    SQL_FUNCOES_ATIVIDADE, _params_cargo()
-                )
-            ),
-        )
+        _dto_in = FuncaoAtividadeCargoServidorIn
+        with ThreadPoolProcessor(
+            prefixo_log="PROF:funcao_atividade_cargo_servidor"
+        ) as proc:
+            return _full_refresh_por_lote(
+                FuncaoAtividadeCargoServidor,
+                (
+                    [
+                        FuncaoAtividadeCargoServidor(**o.to_dict())
+                        for o in proc.processar(
+                            chunk,
+                            lambda r: _dto_in(*r).to_domain(),
+                        )
+                    ]
+                    for chunk in self.eol.iter_query(
+                        SQL_FUNCOES_ATIVIDADE, _params_cargo()
+                    )
+                ),
+            )
 
     def popular_laudos(self) -> int:
         """Popula a tabela LaudoMedico por lote."""
-        return _full_refresh_por_lote(
-            LaudoMedico,
-            (
-                [LaudoMedico(**_row_to_laudo(r)) for r in chunk]
-                for chunk in self.eol.iter_query(SQL_LAUDOS, _params_cargo())
-            ),
-        )
+        with ThreadPoolProcessor(prefixo_log="PROF:laudo_medico") as proc:
+            return _full_refresh_por_lote(
+                LaudoMedico,
+                (
+                    [
+                        LaudoMedico(**o.to_dict())
+                        for o in proc.processar(
+                            chunk,
+                            lambda r: LaudoMedicoIn(*r).to_domain(),
+                        )
+                    ]
+                    for chunk in self.eol.iter_query(
+                        SQL_LAUDOS, _params_cargo()
+                    )
+                ),
+            )
 
     def popular_atribuicoes_aula(self) -> int:
         """Popula a tabela AtribuicaoAula via hash incremental.
@@ -886,52 +901,64 @@ class EtlProfessoresService:
         campo atualizado e o hash diverge, forçando a escrita.
         """
         total = 0
-        for chunk in self.eol.iter_query(
-            SQL_ATRIBUICOES_AULA, _params_cargo()
-        ):
-            total += _upsert_incremental(
-                AtribuicaoAula,
-                "atribuicao_aula",
-                [_row_to_atribuicao_aula(r) for r in chunk],
-                [
-                    "cargo_base_id",
-                    "codigo_unidade_educacao",
-                    "codigo_turma_escola",
-                    "codigo_turma_escola_grade_programa",
-                    "codigo_grade",
-                    "codigo_componente_curricular",
-                    "codigo_serie_grade",
-                    "ano_atribuicao",
-                    "dt_atribuicao_aula",
-                    "dt_disponibilizacao_aulas",
-                    "codigo_motivo_disponibilizacao",
-                    "dt_cancelamento",
-                ],
-            )
+        with ThreadPoolProcessor(prefixo_log="PROF:atribuicao_aula") as proc:
+            for chunk in self.eol.iter_query(
+                SQL_ATRIBUICOES_AULA, _params_cargo()
+            ):
+                out_objs: list[AtribuicaoAulaOut] = proc.processar(
+                    chunk,
+                    lambda r: AtribuicaoAulaIn(*r).to_domain(),
+                )
+                total += _upsert_incremental(
+                    AtribuicaoAula,
+                    "atribuicao_aula",
+                    [o.to_dict() for o in out_objs],
+                    [
+                        "cargo_base_id",
+                        "codigo_unidade_educacao",
+                        "codigo_turma_escola",
+                        "codigo_turma_escola_grade_programa",
+                        "codigo_grade",
+                        "codigo_componente_curricular",
+                        "codigo_serie_grade",
+                        "ano_atribuicao",
+                        "dt_atribuicao_aula",
+                        "dt_disponibilizacao_aulas",
+                        "codigo_motivo_disponibilizacao",
+                        "dt_cancelamento",
+                    ],
+                )
         return total
 
     def popular_atribuicoes_externo(self) -> int:
         """Popula a tabela AtribuicaoExterno via hash incremental."""
         total = 0
-        for chunk in self.eol.iter_query(SQL_ATRIBUICOES_EXTERNO):
-            total += _upsert_incremental(
-                AtribuicaoExterno,
-                "atribuicao_externo",
-                [_row_to_atribuicao_externo(r) for r in chunk],
-                [
-                    "contrato_externo_id",
-                    "codigo_unidade_educacao",
-                    "codigo_grade",
-                    "codigo_componente_curricular",
-                    "codigo_serie_grade",
-                    "codigo_turma_escola_grade_programa",
-                    "ano_atribuicao",
-                    "dt_atribuicao",
-                    "dt_disponibilizacao",
-                    "codigo_motivo_disponibilizacao_externo",
-                    "dt_cancelamento",
-                ],
-            )
+        with ThreadPoolProcessor(
+            prefixo_log="PROF:atribuicao_externo"
+        ) as proc:
+            for chunk in self.eol.iter_query(SQL_ATRIBUICOES_EXTERNO):
+                out_objs: list[AtribuicaoExternoOut] = proc.processar(
+                    chunk,
+                    lambda r: AtribuicaoExternoIn(*r).to_domain(),
+                )
+                total += _upsert_incremental(
+                    AtribuicaoExterno,
+                    "atribuicao_externo",
+                    [o.to_dict() for o in out_objs],
+                    [
+                        "contrato_externo_id",
+                        "codigo_unidade_educacao",
+                        "codigo_grade",
+                        "codigo_componente_curricular",
+                        "codigo_serie_grade",
+                        "codigo_turma_escola_grade_programa",
+                        "ano_atribuicao",
+                        "dt_atribuicao",
+                        "dt_disponibilizacao",
+                        "codigo_motivo_disponibilizacao_externo",
+                        "dt_cancelamento",
+                    ],
+                )
         return total
 
     # ------------------------------------------------------------------

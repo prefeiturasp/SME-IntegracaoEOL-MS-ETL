@@ -3,14 +3,14 @@
 import logging
 from uuid import UUID
 
-from celery import chord, group, shared_task
+from celery import Task, chord, group, shared_task
 
 from apps.controle_auditoria.libs.repositorio_auditoria import (
     RepositorioAuditoriaPostgres,
 )
-from apps.core.libs.base_etl_service import PostgresUpsertEngine
 from apps.core.libs.base_etl_chunck import BaseEtlChunk
 from apps.core.libs.base_etl_fase import BaseEtlFase
+from apps.core.libs.base_etl_service import PostgresUpsertEngine
 from apps.core.libs.thread_processor import ThreadPoolProcessor
 
 logger = logging.getLogger(__name__)
@@ -26,9 +26,9 @@ logger = logging.getLogger(__name__)
     rate_limit="30/m",
 )
 def processar_chunk(
-    self, chunk: list[tuple], fase_meta_dict: dict
+    self: Task, chunk: list[tuple], fase_meta_dict: dict
 ) -> tuple[int, int]:
-    """Task worker genérica: transforma e persiste um chunk de qualquer domínio."""
+    """Task worker genérica: transforma e persiste um chunk do domínio."""
     try:
         fase_meta = BaseEtlFase.from_dict(fase_meta_dict)
         transform = fase_meta.get_transformer()
@@ -49,7 +49,7 @@ def processar_chunk(
             fase_meta_dict.get("dominio", "ETL").upper(),
             exc,
         )
-        raise self.retry(exc=exc, countdown=30)
+        raise self.retry(exc=exc, countdown=30) from exc
 
 
 @shared_task(
@@ -61,7 +61,7 @@ def finalizar_fase(
     fase_meta_dict: dict,
     todas_fases_dict: list[dict],
 ) -> None:
-    """Callback genérico: agrega resultados, audita e lança próxima fase."""
+    """Agrega resultados, registra auditoria e lança a próxima fase."""
     fase_meta = BaseEtlFase.from_dict(fase_meta_dict)
     total_escritos = sum(r[0] for r in resultados)
     total_lidos = sum(r[0] + r[1] for r in resultados)
@@ -146,9 +146,7 @@ def _lancar_fase_seguinte(
             proxima_meta.dominio.upper(),
             proxima_meta.numero_fase,
         )
-        task_callback.apply_async(
-            args=[[], proxima_meta_dict, todas_fases]
-        )
+        task_callback.apply_async(args=[[], proxima_meta_dict, todas_fases])
         return
 
     callback = task_callback.s(proxima_meta_dict, todas_fases)

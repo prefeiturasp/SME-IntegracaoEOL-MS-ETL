@@ -13,7 +13,7 @@ class Migration(migrations.Migration):
     dependencies = [
         (
             "professores",
-            "0003_alter_atribuicaoaula_cargo_base_and_more",
+            "0006_alter_atribuicaoexterno_codigo_serie_grade",
         ),
     ]
 

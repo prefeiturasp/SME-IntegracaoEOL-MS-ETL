@@ -71,7 +71,9 @@ class RepositorioAuditoriaPostgres:
             modo_escrita=modo_escrita,
         )
 
-    def obter_checkpoint_dominio(self, dominio: str) -> dict[str, object] | None:
+    def obter_checkpoint_dominio(
+        self, dominio: str
+    ) -> dict[str, object] | None:
         """Retorna checkpoint atual do dominio."""
         resultado = (
             EtlCheckpointDominio.objects.filter(dominio=dominio)
@@ -141,4 +143,5 @@ class RepositorioAuditoriaPostgres:
         from apps.core.libs.base_etl_service import PostgresUpsertEngine
 
         engine = PostgresUpsertEngine()
-        return engine.upsert_bulk("etl_auditoria_linha", rows, batch_id)
+        result: int = engine.upsert_bulk("etl_auditoria_linha", rows, batch_id)
+        return result

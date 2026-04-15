@@ -4,7 +4,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("professores", "0004_cargobaseservidor_situacao_funcional_and_more"),
+        ("professores", "0004_alter_atribuicaoaula_codigo_grade_and_more"),
     ]
 
     operations = [

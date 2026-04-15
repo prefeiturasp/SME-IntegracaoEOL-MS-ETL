@@ -5,8 +5,8 @@ import hashlib
 from django.test import TestCase
 
 from apps.controle_auditoria.models import EtlAuditoriaLinha
-from apps.professores.services import _upsert_incremental
 from apps.core.libs.thread_processor import calcular_hash as _calcular_hash
+from apps.professores.services import _upsert_incremental
 
 
 class CalcularHashTest(TestCase):
@@ -37,21 +37,25 @@ class CalcularHashTest(TestCase):
 
     def test_campos_diferentes_geram_hashes_diferentes(self) -> None:
         """Verifica que valores diferentes geram hashes distintos."""
-        h1 = _calcular_hash({"nome": "Ana"})
-        h2 = _calcular_hash({"nome": "Bia"})
+        h1 = _calcular_hash({"nome": "Ana"}, ["nome"])
+        h2 = _calcular_hash({"nome": "Bia"}, ["nome"])
         self.assertNotEqual(h1, h2)
 
     def test_valor_none_e_aceito(self) -> None:
         """Verifica que campos com valor None não causam exceção."""
-        resultado = _calcular_hash({"nome": None, "codigo": 123}, ["nome", "codigo"])
+        resultado = _calcular_hash(
+            {"nome": None, "codigo": 123}, ["nome", "codigo"]
+        )
         self.assertEqual(len(resultado), 64)
 
     def test_hash_correto_manualmente(self) -> None:
         """Verifica que o hash calculado corresponde ao SHA-256 esperado."""
         campos = {"z": "b", "a": "x"}
-        conteudo = "a='x'|z='b'"
+        # thread_processor.calcular_hash serializa como field=value (sem repr),
+        # ordenado alfabeticamente pelos nomes dos campos.
+        conteudo = "a=x|z=b"
         esperado = hashlib.sha256(conteudo.encode("utf-8")).hexdigest()
-        self.assertEqual(_calcular_hash(campos), esperado)
+        self.assertEqual(_calcular_hash(campos, ["a", "z"]), esperado)
 
 
 class UpsertIncrementalTest(TestCase):
