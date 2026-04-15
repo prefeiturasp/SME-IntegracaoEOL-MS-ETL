@@ -13,7 +13,9 @@ from apps.programas.models import (
 
 class TestTipoProgramaStr(TestCase):
     def test_str(self) -> None:
-        tp = TipoPrograma(codigo_tipo_programa=649, nome="PAP Recuperação", categoria="PAP")
+        tp = TipoPrograma(
+            codigo_tipo_programa=649, nome="PAP Recuperação", categoria="PAP"
+        )
         self.assertEqual(str(tp), "PAP Recuperação (649)")
 
 
@@ -33,10 +35,14 @@ class TestComponenteCurricularProgramaStr(TestCase):
 class TestTurmaProgramaStr(TestCase):
     def test_str(self) -> None:
         t = TurmaPrograma(
-            codigo_turma=12345, nome_turma="TURMA PAP 1A",
-            codigo_ue="000001", codigo_dre="108900",
-            ano_letivo=2025, situacao="O",
-            codigo_tipo_programa=649, categoria="PAP",
+            codigo_turma=12345,
+            nome_turma="TURMA PAP 1A",
+            codigo_ue="000001",
+            codigo_dre="108900",
+            ano_letivo=2025,
+            situacao="O",
+            codigo_tipo_programa=649,
+            categoria="PAP",
         )
         resultado = str(t)
         self.assertIn("12345", resultado)
@@ -58,7 +64,8 @@ class TestTurmaProgramaComponenteCurricularStr(TestCase):
 class TestMatriculaTurmaProgramaStr(TestCase):
     def test_str(self) -> None:
         m = MatriculaTurmaPrograma(
-            codigo_aluno=99999, codigo_turma=12345,
+            codigo_aluno=99999,
+            codigo_turma=12345,
             codigo_componente_curricular=1322,
         )
         resultado = str(m)
