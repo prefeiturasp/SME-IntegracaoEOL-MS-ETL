@@ -1,6 +1,5 @@
 """Base para implementação de comandos de ETL com controle de auditoria."""
 
-import logging
 from typing import Any
 
 from django.core.management.base import BaseCommand
@@ -8,8 +7,7 @@ from django.core.management.base import BaseCommand
 from apps.controle_auditoria.libs.repositorio_auditoria import (
     RepositorioAuditoriaPostgres,
 )
-
-logger = logging.getLogger(__name__)
+from apps.core.libs.contextual_logger import ContextualLogger
 
 
 class BaseEtlCommand(BaseCommand):
@@ -20,15 +18,15 @@ class BaseEtlCommand(BaseCommand):
         - Leitura e atualização de checkpoint de retomada.
         - Registro de métricas de tabelas lidas/escritas.
         - Tratamento de exceções com persistência de erro no auditoria.
+
+    Atributos obrigatórios nas subclasses: dominio e service_class.
     """
 
-    # Atributos obrigatórios nas subclasses
     dominio: str = ""
     fase_final: int = 4
     service_class: Any = None
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
-        """Inicializa o comando de ETL validando os atributos mandatórios."""
         super().__init__(*args, **kwargs)
         if not self.dominio or not self.service_class:
             raise NotImplementedError(
@@ -80,10 +78,24 @@ class BaseEtlCommand(BaseCommand):
         )
 
     def handle(self, *args: Any, **options: Any) -> None:
-        """Execução padronizada do fluxo de ETL (Sync ou Async)."""
+        """Execução padronizada do fluxo de ETL (Sync ou Async).
+
+        O job_name é derivado do módulo da subclasse concreta, não da base.
+        O execution_id só fica disponível após iniciar_execucao, por isso o
+        contexto do logger é atualizado via update_context logo após o registro.
+        """
         repositorio = RepositorioAuditoriaPostgres()
         fase_inicial, token_ant = self._obter_ponto_partida(repositorio, **options)
+
+        job_name = type(self).__module__.split(".")[-1]
+        self._etl_logger = ContextualLogger.get_etl_logger(
+            __name__,
+            dominio=self.dominio,
+            job_name=job_name,
+        )
+
         id_execucao = repositorio.iniciar_execucao(self.dominio)
+        self._etl_logger.update_context(execution_id=str(id_execucao))
 
         if options.get("celery"):
             self._handle_celery(fase_inicial, id_execucao, **options)
@@ -111,10 +123,10 @@ class BaseEtlCommand(BaseCommand):
             primeiro_run=options.get("carga_inicial", False),
         )
         orquestrador.lancar(fase_inicial=fase_inicial)
-        logger.info(
-            "[%s] Pipeline lançado via Celery na fase %d.",
-            self.dominio.upper(),
+        self._etl_logger.info(
+            "Pipeline lançado via Celery na fase %d.",
             fase_inicial,
+            extra={"etapa": "celery", "status": "RUNNING"},
         )
 
     def _handle_sync(
@@ -162,7 +174,10 @@ class BaseEtlCommand(BaseCommand):
             sucesso=False,
         )
         repositorio.finalizar_execucao(id_exec, situacao="interrompido")
-        logger.warning("[%s] Execução interrompida pelo usuário.", self.dominio.upper())
+        self._etl_logger.warning(
+            "Execução interrompida pelo usuário.",
+            extra={"etapa": "interrupcao", "status": "INTERRUPTED"},
+        )
 
     def _obter_ponto_partida(
         self, repositorio: Any, **options: Any
@@ -184,8 +199,6 @@ class BaseEtlCommand(BaseCommand):
         token = int(str(checkpoint.get("token_parada") or 0))
 
         if situacao == "erro" and 0 < fase < self.fase_final:
-            label = self.dominio[:4].upper()
-            logger.warning("[ETL %s] Retomando da fase %d.", label, fase + 1)
             return fase + 1, token
 
         return 1, 0
@@ -217,10 +230,9 @@ class BaseEtlCommand(BaseCommand):
         )
         repositorio.finalizar_execucao(id_exec, situacao="concluido")
         total = sum(resultado.values())
-        logger.info(
-            "[ETL %s] Concluído. %d alterados.",
-            self.dominio[:4].upper(),
-            total,
+        self._etl_logger.info(
+            "ETL concluído com sucesso.",
+            extra={"etapa": "conclusao", "status": "SUCCESS", "records_written": total},
         )
 
     def _finalizar_com_erro(
@@ -246,6 +258,11 @@ class BaseEtlCommand(BaseCommand):
         )
         repositorio.finalizar_execucao(
             id_exec, situacao="erro", mensagem_erro=str(erro)
+        )
+        self._etl_logger.error(
+            "Falha na execução do ETL.",
+            extra={"etapa": "erro", "status": "FAILED", "erro": str(erro)},
+            exc_info=True,
         )
         from django.core.management.base import CommandError
 

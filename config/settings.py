@@ -16,7 +16,11 @@ _POOL_OPTIONS = {
     "PRE_PING": True,
 }
 
+THREAD_POOL_MAX_WORKERS = int(os.getenv("THREAD_POOL_MAX_WORKERS", "4"))
+THREAD_POOL_CHUNK_TIMEOUT = int(os.getenv("THREAD_POOL_CHUNK_TIMEOUT", "120"))
+
 def _parse_db_url(url: Any) -> dict:
+    """Faz o parse de uma URL PostgreSQL para dict de configuração Django."""
     if not url:
         # Fallback para evitar ImproperlyConfigured no CI/Testes
         return {
@@ -62,6 +66,7 @@ ALLOWED_HOSTS = [
 ]
 
 INSTALLED_APPS = [
+    "elasticapm.contrib.django",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -81,6 +86,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    "elasticapm.contrib.django.middleware.TracingMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -166,7 +172,7 @@ DATABASES = {
         "ENGINE": "dj_db_conn_pool.backends.postgresql",
         "NAME": os.getenv("POSTGRES_DB", "postgres"),
         "USER": os.getenv("POSTGRES_USER", "postgres"),
-        "PASSWORD": os.getenv("POSTGRES_PASSWORD", ""),
+        "PASSWORD": os.getenv("POSTGRES_PASSWORD", "postgres"),
         "HOST": os.getenv("POSTGRES_HOST", "localhost"),
         "PORT": os.getenv("POSTGRES_PORT", "5432"),
         "POOL_OPTIONS": _POOL_OPTIONS,
@@ -198,6 +204,8 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 NOME_APLICACAO = os.getenv("NOME_APLICACAO", "SME-IntegracaoEOL-MS-ETL")
 AMBIENTE_APLICACAO = os.getenv("AMBIENTE_APLICACAO", "local")
 NIVEL_LOG = os.getenv("NIVEL_LOG", "INFO")
+LOG_ENVIRONMENT = os.getenv("LOG_ENVIRONMENT", AMBIENTE_APLICACAO)
+ENABLE_RABBITMQ_LOGGING = os.getenv("ENABLE_RABBITMQ_LOGGING", "0") == "1"
 URL_KEYDB = os.getenv("URL_KEYDB", "redis://localhost:6379/0")
 EOL_DB = os.getenv("EOL_DB", "")
 CORE_SSO_DB = os.getenv("CORE_SSO_DB", "")
@@ -207,12 +215,8 @@ INTERVALO_EXECUCAO_ETL_SEGUNDOS = int(
 API_KEY = os.getenv("API_KEY", "dev-key-default")
 API_KEY_HEADER = os.getenv("API_KEY_HEADER", "X-API-Key")
 CELERY_BROKER_URL = URL_KEYDB
-CELERY_BROKER_BACKEND = URL_KEYDB
 # Execução síncrona automática em testes/CI
 CELERY_TASK_ALWAYS_EAGER = os.getenv("CELERY_TASK_ALWAYS_EAGER", "1") == "1"
-
-THREAD_POOL_MAX_WORKERS = int(os.getenv("THREAD_POOL_MAX_WORKERS", "4"))
-THREAD_POOL_CHUNK_TIMEOUT = int(os.getenv("THREAD_POOL_CHUNK_TIMEOUT", "120"))
 
 REST_FRAMEWORK = {
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
@@ -241,22 +245,64 @@ SPECTACULAR_SETTINGS = {
     "SECURITY": [{"ApiKeyAuth": []}],
 }
 
+_logging_handlers: dict = {
+    "console": {
+        "class": "logging.StreamHandler",
+        "formatter": "json",
+    }
+}
+
+if ENABLE_RABBITMQ_LOGGING:
+    _logging_handlers["rabbitmq"] = {
+        "level": os.getenv("RABBITMQ_LOG_LEVEL", "INFO"),
+        "class": "apps.core.libs.rabbitmq_handler.RabbitMQHandler",
+        "host": os.getenv("RABBITMQ_HOST", ""),
+        "virtual_host": os.getenv("RABBITMQ_VIRTUAL_HOST", "/"),
+        "queue": os.getenv("RABBITMQ_LOG_QUEUE", ""),
+        "username": os.getenv("RABBITMQ_USERNAME", ""),
+        "password": os.getenv("RABBITMQ_PASSWORD", ""),
+    }
+
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
     "formatters": {
-        "padrao": {
-            "format": "%(asctime)s %(levelname)s %(name)s %(message)s",
+        "json": {
+            "()": "pythonjsonlogger.json.JsonFormatter",
+            "fmt": "%(asctime)s %(levelname)s %(name)s %(message)s",
+            "rename_fields": {
+                "asctime": "timestamp",
+                "levelname": "level",
+                "name": "logger",
+            },
         }
     },
-    "handlers": {
-        "console": {
-            "class": "logging.StreamHandler",
-            "formatter": "padrao",
-        }
+    "handlers": _logging_handlers,
+    "loggers": {
+        "etl_apps": {
+            "handlers": ["console"] + (["rabbitmq"] if ENABLE_RABBITMQ_LOGGING else []),
+            "level": NIVEL_LOG,
+            "propagate": False,
+        },
     },
     "root": {
         "handlers": ["console"],
         "level": NIVEL_LOG,
     },
+}
+
+ELASTIC_APM = {
+    "SERVICE_NAME": os.getenv("ELASTIC_APM_SERVICE_NAME", NOME_APLICACAO),
+    "SECRET_TOKEN": os.getenv("ELASTIC_APM_SECRET_TOKEN", ""),
+    "SERVER_URL": os.getenv("ELASTIC_APM_SERVER_URL", "http://localhost:8200"),
+    "ENVIRONMENT": os.getenv("ELASTIC_APM_ENVIRONMENT", AMBIENTE_APLICACAO),
+    "ENABLED": os.getenv("ELASTIC_APM_ENABLED", "0") == "1",
+    "CAPTURE_HEADERS": os.getenv("ELASTIC_APM_CAPTURE_HEADERS", "1") == "1",
+    "TRANSACTION_SAMPLE_RATE": float(os.getenv("ELASTIC_APM_TRANSACTION_SAMPLE_RATE", "0.3")),
+    "METRICS_INTERVAL": os.getenv("ELASTIC_APM_METRICS_INTERVAL", "10s"),
+    "FLUSH_INTERVAL": os.getenv("ELASTIC_APM_FLUSH_INTERVAL", "10s"),
+    "MAX_BATCH_EVENT_COUNT": int(os.getenv("ELASTIC_APM_MAX_BATCH_EVENT_COUNT", "1000")),
+    "MAX_QUEUE_EVENT_COUNT": int(os.getenv("ELASTIC_APM_MAX_QUEUE_EVENT_COUNT", "1000")),
+    "TRANSACTION_MAX_SPANS": int(os.getenv("ELASTIC_APM_TRANSACTION_MAX_SPANS", "500")),
+    "LOG_LEVEL": os.getenv("ELASTIC_APM_LOG_LEVEL", "INFO"),
 }
