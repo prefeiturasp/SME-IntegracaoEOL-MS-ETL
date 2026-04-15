@@ -9,11 +9,21 @@ from apps.controle_auditoria.libs.servico_sinc_rec_db import (
     exibir_validacao_sinc_rec_db,
 )
 
+COMANDOS_POR_DOMINIO: dict[str, str] = {
+    "institucional": "etl_institucional",
+    "professores": "etl_professores",
+    "alunos": "etl_alunos",
+    "pedagogico": "etl_pedagogico",
+    "programas": "etl_programas",
+}
+
+DOMINIOS_VALIDOS = ["sinc_rec_db", *COMANDOS_POR_DOMINIO.keys()]
+
 
 class Command(BaseCommand):
     """Executa um dominio ETL independente."""
 
-    help = "Executa dominio ETL: sinc_rec_db, institucional, professores, pedagogico"
+    help = f"Executa dominio ETL: {', '.join(DOMINIOS_VALIDOS)}"
 
     def add_arguments(self, parser: Any) -> None:
         """Adiciona argumentos ao comando."""
@@ -33,34 +43,13 @@ class Command(BaseCommand):
             exibir_validacao_sinc_rec_db()
             return
 
-        if dominio == "institucional":
-            argumentos = ["--volume", str(volume), "--offset", str(offset)]
-            if continuar:
-                argumentos.append("--continuar")
-            call_command("etl_institucional", *argumentos)
-            return
+        comando_etl = COMANDOS_POR_DOMINIO.get(dominio)
+        if comando_etl is None:
+            raise CommandError(
+                f"Dominio invalido. Use: {', '.join(DOMINIOS_VALIDOS)}"
+            )
 
-        if dominio == "professores":
-            argumentos = ["--volume", str(volume), "--offset", str(offset)]
-            if continuar:
-                argumentos.append("--continuar")
-            call_command("etl_professores", *argumentos)
-            return
-
-        if dominio == "alunos":
-            argumentos = ["--volume", str(volume), "--offset", str(offset)]
-            if continuar:
-                argumentos.append("--continuar")
-            call_command("etl_alunos", *argumentos)
-            return
-
-        if dominio == "pedagogico":
-            argumentos = ["--volume", str(volume), "--offset", str(offset)]
-            if continuar:
-                argumentos.append("--continuar")
-            call_command("etl_pedagogico", *argumentos)
-            return
-
-        raise CommandError(
-            "Dominio invalido. Use: sinc_rec_db, institucional, professores, alunos"
-        )
+        argumentos = ["--volume", str(volume), "--offset", str(offset)]
+        if continuar:
+            argumentos.append("--continuar")
+        call_command(comando_etl, *argumentos)
