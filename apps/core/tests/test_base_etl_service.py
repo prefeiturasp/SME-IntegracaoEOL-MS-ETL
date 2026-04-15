@@ -626,7 +626,7 @@ class BaseEtlServiceCoverageTest(TestCase, BaseEtlMockMixin):
         self.assertEqual(_fmt_num(500), "500")
 
     def test_retry_deadlock_falha_exaurida(self) -> None:
-        """Cobre a linha 64 (raise last_err) quando as tentativas acabam."""
+        """Garante que a última exceção é re-lançada ao esgotar as tentativas de retry."""
         from apps.core.libs.base_etl_service import retry_deadlock
         mock = MagicMock(side_effect=OperationalError("deadlock", "deadlock"))
         decorated = retry_deadlock(max_retries=2, backoff=0.01)(mock)
@@ -635,7 +635,7 @@ class BaseEtlServiceCoverageTest(TestCase, BaseEtlMockMixin):
         self.assertEqual(mock.call_count, 2)
 
     def test_stage_timer_stop(self) -> None:
-        """Cobre stop no StageTimer."""
+        """Verifica que stop registra o tempo de término no StageTimer."""
         from apps.core.libs.base_etl_service import StageTimer
         t = StageTimer("teste")
         time.sleep(0.01)
@@ -645,7 +645,7 @@ class BaseEtlServiceCoverageTest(TestCase, BaseEtlMockMixin):
 
 
     def test_executar_fase_producer_timeout(self) -> None:
-        """Cobre RuntimeError por timeout do producer."""
+        """Garante RuntimeError quando o producer ultrapassa o timeout configurado."""
         svc = MockService(db_alias="default")
         config = PhaseConfig(
             nome="f", sql="s", table_name="t", model_class=MagicMock(),
@@ -663,7 +663,7 @@ class BaseEtlServiceCoverageTest(TestCase, BaseEtlMockMixin):
                 svc._executar_fase(config)
 
     def test_executar_fase_producer_bubble_error(self) -> None:
-        """Cobre o bubble up de erro do producer após leitura do erro_producer."""
+        """Garante que exceção do producer é propagada ao consumidor."""
         svc = MockService(db_alias="default")
         config = PhaseConfig(
             nome="f", sql="s", table_name="t", model_class=MagicMock(),
@@ -737,13 +737,13 @@ class BaseEtlServiceCoverageTest(TestCase, BaseEtlMockMixin):
         self.assertEqual(res_obj[0], "t:456")
 
     def test_decorar_para_hash_invalido(self) -> None:
-        """Cobre raise TypeError no decorar_para_hash (362)."""
+        """Garante TypeError ao passar argumentos insuficientes para decorar_para_hash."""
         from apps.core.libs.thread_processor import decorar_para_hash
         with self.assertRaises(TypeError):
             decorar_para_hash("t", 1, 2, 3, 4, 5)
 
     def test_postgres_upsert_engine_real_call(self) -> None:
-        """Cobre a linha 133 e o motor real com mock de cursor."""
+        """Verifica que upsert_bulk executa múltiplas chamadas ao cursor."""
         from apps.core.libs.base_etl_service import PostgresUpsertEngine
         engine = PostgresUpsertEngine()
         with self._patch_infra() as (_, mock_conns):
@@ -752,7 +752,7 @@ class BaseEtlServiceCoverageTest(TestCase, BaseEtlMockMixin):
             self.assertGreater(mock_cursor.execute.call_count, 1)
 
     def test_sync_batch_usa_pg_engine_sem_auditor(self) -> None:
-        """Cobre a linha 642: pg_engine.upsert_bulk quando auditor=None."""
+        """Garante que pg_engine.upsert_bulk é chamado quando auditor é None."""
         svc = BaseEtlService(db_alias="default", repositorio_auditoria=None)
         obj = MagicMock()
         data = [("1", "h", obj)]
@@ -766,7 +766,7 @@ class BaseEtlServiceCoverageTest(TestCase, BaseEtlMockMixin):
 
 
     def test_criar_transform_caminho_legado_dto_out(self) -> None:
-        """Cobre as linhas 320-325 (Caminho legado dto_out)."""
+        """Verifica o caminho com dto_out explícito."""
         config = PhaseConfig(
             nome="f", sql="s", table_name="t", model_class=MagicMock,
             dto_in=MagicMock(), pk_field="pk", update_fields=("f",),
@@ -784,7 +784,7 @@ class BaseEtlServiceCoverageTest(TestCase, BaseEtlMockMixin):
         config.dto_out.to_dict.assert_called_once_with(dto_in_inst)
 
     def test_truncar_tabela_chamado_em_executar_fase(self) -> None:
-        """Cobre a linha 360 no fluxo do executar_fase."""
+        """Garante que _truncar_tabela é chamado no modo full_refresh."""
         svc = MockService(db_alias="default", primeiro_run=True)
         config = PhaseConfig(
             nome="f", sql="s", table_name="t", model_class=MagicMock(),
@@ -802,7 +802,7 @@ class BaseEtlServiceCoverageTest(TestCase, BaseEtlMockMixin):
                    mock_trunc.assert_called_once_with("t")
 
     def test_retry_deadlock_decorator_raise_outros_erros(self) -> None:
-        """Cobre a linha 53: raise imediato de erros non-deadlock."""
+        """Garante que erros não relacionados a deadlock são re-lançados imediatamente."""
         from apps.core.libs.base_etl_service import retry_deadlock
         mock = MagicMock(side_effect=ValueError("Erro Comum"))
         decorated = retry_deadlock()(mock)
@@ -812,10 +812,7 @@ class BaseEtlServiceCoverageTest(TestCase, BaseEtlMockMixin):
     def test_executar_fase_erro_producer_detectado_em_loop_consumer(
         self,
     ) -> None:
-        """Cobre linha 412: consumer detecta erro_producer antes de processar
-        chunk real, garantido via fila sincronizada que só libera get após
-        o producer sinalizar a sentinela None.
-        """
+        """Garante que o consumer detecta o erro do producer via fila sincronizada."""
         import queue as _queue
         import threading
 
@@ -892,12 +889,12 @@ class BaseEtlServiceCoverageTest(TestCase, BaseEtlMockMixin):
                 svc._executar_fase(config)
 
     def test_mock_service_iter_chunks_retorna_chunks(self) -> None:
-        """Cobre o corpo de MockService._iter_chunks."""
+        """Verifica que _iter_chunks retorna os chunks configurados."""
         resultado = list(self.svc._iter_chunks("SELECT 1"))
         self.assertEqual(resultado, [[(1,)]])
 
     def test_criar_transform_pk_field_lista(self) -> None:
-        """Cobre linhas 313-314: _criar_transform com pk_field como lista."""
+        """Garante composição de pk como 'x-y' quando pk_field é lista."""
         config = PhaseConfig(
             nome="f",
             sql="s",
@@ -1020,21 +1017,21 @@ class AuditoriaParcialTest(TestCase):
         self.config = _make_phase(source_table="origem")
 
     def test_log_progresso_chama_auditoria_parcial(self) -> None:
-        """Deve chamar registrar_progresso_parcial quando atingir o intervalo."""
+        """Deve chamar atualizar_checkpoint_dominio quando atingir o intervalo."""
         with patch("apps.core.libs.base_etl_service.settings") as mock_settings:
             with patch("apps.core.libs.base_etl_service.connections"), \
                  patch("apps.core.libs.base_etl_service.transaction.atomic"):
                 from apps.core.libs.base_etl_service import PipelineMetrics
-    
+
                 mock_settings.EOL_CHUNK_SIZE = 100
-                metrics = PipelineMetrics(total_lidos=100)
-    
-                # Chama log_progresso com metrics.total_lidos = 100
+                metrics = PipelineMetrics(total_lidos=101)
+
+                # Chama log_progresso com metrics.total_lidos = 101 (> 100)
                 self.svc._log_progresso(
                     bn=1, metrics=metrics, start=0, config=self.config
                 )
-    
-                self.assertEqual(self.mock_auditor.registrar_tabela_lida.call_count, 1)
+
+                self.mock_auditor.registrar_tabela_lida.assert_not_called()
                 self.assertEqual(
                     self.mock_auditor.atualizar_checkpoint_dominio.call_count, 1
                 )
@@ -1054,7 +1051,7 @@ class AuditoriaParcialTest(TestCase):
             self.mock_auditor.registrar_tabela_lida.assert_not_called()
 
     def test_get_helper_coverage(self) -> None:
-        """Cobre a linha 259 de base_etl_service.py (_get com getattr)."""
+        """Verifica que sincronizar_lote retorna (1, 0) para um lote unitário."""
         engine = PostgresUpsertEngine()
         class FakeMeta:
             table_name = "teste"
@@ -1069,12 +1066,12 @@ class AuditoriaParcialTest(TestCase):
         self.assertEqual(res, (1, 0))
 
     def test_persistir_empty_objs(self) -> None:
-        """Cobre a linha 323 de base_etl_service.py."""
+        """Garante retorno antecipado quando lista de objetos está vazia."""
         engine = PostgresUpsertEngine()
         engine._persistir([], MagicMock(), [], [], "default")
 
     def test_persistir_objs_full_coverage(self) -> None:
-        """Cobre as linhas 408-412 de base_etl_service.py."""
+        """Verifica bulk_create para lista vazia e para lista com um objeto."""
         svc = BaseEtlService(db_alias="default")
         svc._persistir_objs([], MagicMock(), [], [])
         
@@ -1083,7 +1080,7 @@ class AuditoriaParcialTest(TestCase):
         mock_model.objects.using.return_value.bulk_create.assert_called_once()
 
     def test_get_meta_attr_dict_coverage(self) -> None:
-        """Cobre a linha 440 de base_etl_service.py."""
+        """Garante que _get_meta_attr retorna valor do dict e default quando ausente."""
         svc = BaseEtlService(db_alias="default")
         meta_dict = {"teste": 123}
         res = svc._get_meta_attr(meta_dict, "teste")

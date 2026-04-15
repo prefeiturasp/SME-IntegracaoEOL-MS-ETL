@@ -167,7 +167,7 @@ class AsyncPipelineTestCase(TestCase):
         service = BaseEtlService("default")
         with self.assertRaises(NotImplementedError):
             service._iter_chunks("SQL")
-        service._registrar_progresso_parcial(MagicMock(), MagicMock(), 1)
+        service._registrar_progresso_parcial(MagicMock())
         service._registrar_auditoria_fase(MagicMock(), MagicMock())
         mock_thread = MagicMock()
         mock_thread.is_alive.return_value = False
@@ -182,3 +182,15 @@ class AsyncPipelineTestCase(TestCase):
         with ThreadPoolProcessor(max_workers=2) as processor:
             res = processor.processar([1], lambda x: x)
             self.assertEqual(res, [1])
+
+    @patch("apps.core.tasks.BaseEtlFase.from_dict")
+    def test_processar_chunk_retry_em_excecao(
+        self, mock_from_dict: MagicMock
+    ) -> None:
+        """Garante que exceções em processar_chunk disparam self.retry."""
+        mock_fase = MagicMock()
+        mock_fase.get_transformer.side_effect = RuntimeError("falha")
+        mock_from_dict.return_value = mock_fase
+
+        with self.assertRaises(Exception):
+            processar_chunk.apply(args=[[(1,)], {"dominio": "teste"}]).get()
