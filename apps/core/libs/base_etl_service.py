@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """Motor de processamento e auditoria para serviços de ETL."""
 
 import io
@@ -8,14 +10,17 @@ from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from queue import Empty, Queue
 from threading import Thread
-from typing import Any
+from typing import TYPE_CHECKING, Any, TypeVar, cast
+
+if TYPE_CHECKING:
+    from apps.core.libs.base_etl_fase import BaseEtlFase
 from uuid import UUID
 
 from django.conf import settings
 from django.db import connections, transaction
 from psycopg import sql
 
-from apps.core.libs.thread_processor import ThreadPoolProcessor, calcular_hash
+from apps.core.libs.thread_processor import calcular_hash
 
 logger = logging.getLogger(__name__)
 
@@ -37,17 +42,20 @@ class StageTimer:
         self.start = time.perf_counter()
         self.end = 0.0
 
-    def stop(self):
+    def stop(self) -> float:
         self.end = time.perf_counter() - self.start
         return self.end
 
 
-def retry_deadlock(max_retries: int = 3, backoff: float = 0.5) -> Callable:
+T = TypeVar("T", bound=Callable[..., Any])
+
+
+def retry_deadlock(max_retries: int = 3, backoff: float = 0.5) -> Callable[[T], T]:
     """Decorator para retry em caso de deadlock ou timeout de banco."""
 
-    def decorator(func: Callable) -> Callable:
+    def decorator(func: T) -> T:
         def wrapper(*args: Any, **kwargs: Any) -> Any:
-            last_err = RuntimeError("retry_deadlock")
+            last_err: Exception = RuntimeError("retry_deadlock")
             for i in range(max_retries):
                 try:
                     return func(*args, **kwargs)
@@ -68,7 +76,7 @@ def retry_deadlock(max_retries: int = 3, backoff: float = 0.5) -> Callable:
                     time.sleep(wait)
             raise last_err
 
-        return wrapper
+        return cast(T, wrapper)
 
     return decorator
 
@@ -90,7 +98,7 @@ class PhaseConfig:
     truncate_on_full_sync: bool = False
     audit_flush_size: int = 0
     suporta_bulk_insert: bool = False
-    modo_escrita: str = "upsert"  # "upsert" ou "full_refresh"
+    modo_escrita: str = "upsert"
 
     def to_meta(
         self,
@@ -100,7 +108,7 @@ class PhaseConfig:
         numero_fase: int,
         total_fases: int,
         options: dict[str, Any],
-    ) -> Any:
+    ) -> "BaseEtlFase":
         """Converte a configuração para metadados de fase do Celery."""
         from apps.core.libs.base_etl_fase import BaseEtlFase
 
@@ -253,7 +261,7 @@ class PostgresUpsertEngine:
         dedup = {pk: (h, obj) for pk, h, obj in processed}
         del processed
 
-        def _get(obj, key, default=None):
+        def _get(obj: Any, key: str, default: Any = None) -> Any:
             if isinstance(obj, dict):
                 return obj.get(key, default)
             return getattr(obj, key, default)
@@ -448,7 +456,8 @@ class BaseEtlService:
         self, config: PhaseConfig, numero_fase: int = 0
     ) -> PipelineMetrics:
         queue: Queue = Queue(maxsize=self._max_workers)
-        metrics, erros = PipelineMetrics(), []
+        metrics: PipelineMetrics = PipelineMetrics()
+        erros: list[Exception] = []
 
         if config.modo_escrita == "full_refresh" and config.truncate_on_full_sync:
             self._truncar_tabela(config.table_name)
@@ -482,8 +491,8 @@ class BaseEtlService:
         )
         return metrics
 
-    def _iniciar_producer(self, config: PhaseConfig, queue: Queue, erros: list) -> Thread:
-        def producer():
+    def _iniciar_producer(self, config: PhaseConfig, queue: Queue, erros: list[Exception]) -> Thread:
+        def producer() -> None:
             try:
                 for chunk in self._iter_chunks(config.sql):
                     queue.put(chunk)
@@ -496,9 +505,9 @@ class BaseEtlService:
         thread.start()
         return thread
 
-    def _get_next_chunk(self, queue: Queue) -> list | None:
+    def _get_next_chunk(self, queue: Queue) -> list[Any] | None:
         try:
-            return queue.get(timeout=getattr(settings, "THREAD_POOL_CHUNK_TIMEOUT", 30))
+            return cast(list[Any] | None, queue.get(timeout=getattr(settings, "THREAD_POOL_CHUNK_TIMEOUT", 30)))
         except Empty:
             raise RuntimeError("Timeout waiting for Producer")
 
@@ -525,24 +534,18 @@ class BaseEtlService:
             )
 
         intervalo = getattr(settings, "EOL_CHUNK_SIZE", 50_000)
-        if metrics.total_lidos - self._ultimo_audit_count >= intervalo:
-            self._registrar_progresso_parcial(config, metrics, bn)
+        if metrics.total_lidos - self._ultimo_audit_count > intervalo:
+            self._registrar_progresso_parcial(config)
             self._ultimo_audit_count = metrics.total_lidos
 
-    def _registrar_progresso_parcial(
-        self, config: PhaseConfig, metrics: PipelineMetrics, batch_num: int
-    ) -> None:
-        """Registra progresso intermediário no banco de auditoria."""
+    def _registrar_progresso_parcial(self, config: PhaseConfig) -> None:
+        """Atualiza checkpoint intermediário para retomada em caso de falha.
+
+        Não grava em EtlExecucaoTabelaLida — o registro definitivo
+        é feito exclusivamente por _registrar_auditoria_fase ao final.
+        """
         if not (self.auditor and self.id_execucao):
             return
-
-        if config.source_table:
-            self.auditor.registrar_tabela_lida(
-                id_execucao=self.id_execucao,
-                tabela_origem=config.source_table,
-                numero_pagina=batch_num,
-                linhas_lidas=metrics.total_lidos,
-            )
 
         token = self.ultimo_token or "0"
         self.auditor.atualizar_checkpoint_dominio(
@@ -588,7 +591,6 @@ class BaseEtlService:
             modo_escrita=config.modo_escrita,
         )
 
-        # Atualiza o checkpoint para permitir retomada granular
         is_ultima = numero_fase > 0 and numero_fase == total_fases
         token = self.ultimo_token or "0"
 
@@ -614,12 +616,12 @@ class BaseEtlService:
         hf, pkf = sorted(config.update_fields), config.pk_field
         din, mc, dout = config.dto_in, config.model_class, config.dto_out
 
-        def _pk(d):
+        def _pk(d: Any) -> str:
             if isinstance(pkf, list):
                 return "-".join(str(getattr(d, f)) for f in pkf)
             return str(getattr(d, pkf))
 
-        def transform(row):
+        def transform(row: tuple) -> tuple:
             d = din(*row)
             data = dout.to_dict(d) if dout else d.to_domain()
             obj = mc(**data)

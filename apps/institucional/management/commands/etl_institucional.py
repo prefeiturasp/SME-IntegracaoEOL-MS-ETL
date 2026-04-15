@@ -1,6 +1,7 @@
 """Comando Django para executar o ETL do domínio INSTITUCIONAL_DB."""
 
 from apps.core.libs.base_etl_command import BaseEtlCommand
+from apps.institucional.orquestrador import EtlInstitucionalOrquestrador
 from apps.institucional.services import EtlInstitucionalService
 
 _TABELAS_UPSERT = frozenset(
@@ -20,6 +21,7 @@ class Command(BaseEtlCommand):
     dominio = "institucional"
     fase_final = 4
     service_class = EtlInstitucionalService
+    orquestrador_class = EtlInstitucionalOrquestrador
 
     def get_modo_escrita(self, tabela: str) -> str:
         """Determina o modo de escrita da tabela (pode ser sobrescrito)."""

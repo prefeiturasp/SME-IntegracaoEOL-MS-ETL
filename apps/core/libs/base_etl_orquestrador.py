@@ -1,8 +1,11 @@
 """Base para orquestradores assíncronos de pipeline ETL via Celery."""
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
+
+if TYPE_CHECKING:
+    from apps.core.libs.base_etl_service import PhaseConfig
 
 from celery import chord, group
 
@@ -50,7 +53,7 @@ class BaseEtlOrquestrador:
 
     def _fase_meta_from_config(
         self,
-        config: Any,
+        config: "PhaseConfig",
         numero_fase: int,
         total_fases: int,
     ) -> BaseEtlFase:
@@ -124,7 +127,6 @@ class GenericEtlOrquestrador(BaseEtlOrquestrador):
         dominio = kwargs.pop("dominio", "ETL")
         db_alias = kwargs.pop("db_alias", f"{dominio}_db")
         
-        # Instancia o service se for uma classe, senão usa a instância
         if isinstance(service_class, type):
             service = service_class(db_alias=db_alias, **kwargs)
         else:

@@ -53,13 +53,18 @@ def executar_dominio_task(
 
             checkpoint_depois = repositorio.obter_checkpoint_dominio(dominio)
 
-            token_depois_valor = (checkpoint_depois or {}).get("token_parada", 0)
+            situacao = str(
+                (checkpoint_depois or {}).get("ultima_situacao", "")
+            )
+            token_depois_valor = (checkpoint_depois or {}).get(
+                "token_parada", 0
+            )
             token_depois = int(cast(int | str, token_depois_valor))
 
             linhas = max(token_depois - token_antes, 0)
             total_linhas_processadas += linhas
 
-            if linhas < volume:
+            if situacao == "concluido" or linhas < volume:
                 break
 
             continuar_execucao = True
