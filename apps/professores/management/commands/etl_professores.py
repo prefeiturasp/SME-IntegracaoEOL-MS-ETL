@@ -86,70 +86,9 @@ class Command(BaseCommand):
 
         repositorio = RepositorioAuditoriaPostgres()
 
-        # ------------------------------------------------------------------
-        # Determinar fase/tabela de retomada e token acumulado anterior
-        # ------------------------------------------------------------------
-        fase_inicial = 1
-        pular_ate: str | None = None
-        token_anterior = 0
-
-        lote_inicial = 0
-
-        if continuar:
-            checkpoint = repositorio.obter_checkpoint_dominio("professores")
-            if checkpoint:
-                ultima_fase = int(str(checkpoint.get("ultima_pagina") or 0))
-                raw_indice = str(checkpoint.get("indice_sincronizacao") or "")
-                token_anterior = int(str(checkpoint.get("token_parada") or 0))
-
-                # Se tudo foi concluído (fase 4, sem índice parcial),
-                # reinicia do zero; caso contrário avança para a próxima.
-                fase_inicial = ultima_fase + 1 if ultima_fase < 4 else 1
-
-                if raw_indice:
-                    if ":" in raw_indice:
-                        # "tabela:lote" — tabela interrompida no meio
-                        tabela_interrompida, lote_str = raw_indice.split(
-                            ":", 1
-                        )
-                        lote_salvo = int(lote_str)
-                        # Tabelas full-refresh não suportam retomada por
-                        # lote: sempre reprocessam do início.
-                        if tabela_interrompida in _TABELAS_FULL_REFRESH:
-                            lote_inicial = 0
-                        else:
-                            lote_inicial = lote_salvo
-                        # Pula tudo antes da tabela interrompida.
-                        idx = (
-                            _ORDEM_TABELAS.index(tabela_interrompida)
-                            if tabela_interrompida in _ORDEM_TABELAS
-                            else -1
-                        )
-                        pular_ate = (
-                            _ORDEM_TABELAS[idx - 1] if idx > 0 else None
-                        )
-                        self.stdout.write(
-                            self.style.WARNING(
-                                f"[ETL PROF] Retomando '{tabela_interrompida}'"
-                                f" do lote {lote_salvo + 1}"
-                                f" (fase {fase_inicial})."
-                            )
-                        )
-                    else:
-                        # "tabela" — tabela concluída; próxima começa do 0
-                        pular_ate = raw_indice
-                        self.stdout.write(
-                            self.style.WARNING(
-                                f"[ETL PROF] Retomando da fase {fase_inicial}"
-                                f", após '{pular_ate}'."
-                            )
-                        )
-                else:
-                    self.stdout.write(
-                        self.style.WARNING(
-                            f"[ETL PROF] Retomando da fase {fase_inicial}."
-                        )
-                    )
+        fase_inicial, pular_ate, token_anterior, lote_inicial = (
+            self._obter_contexto_retomada(continuar, repositorio)
+        )
 
         # ------------------------------------------------------------------
         # Executar ETL
@@ -254,3 +193,103 @@ class Command(BaseCommand):
                 mensagem_erro=str(erro),
             )
             raise
+
+    # ------------------------------------------------------------------
+    # Helpers de retomada
+    # ------------------------------------------------------------------
+
+    def _interpretar_checkpoint(
+        self, checkpoint: dict
+    ) -> tuple[int, str, int]:
+        """Extrai ultima_fase, raw_indice e token_anterior do checkpoint."""
+        ultima_fase = int(str(checkpoint.get("ultima_pagina") or 0))
+        raw_indice = str(checkpoint.get("indice_sincronizacao") or "")
+        token_anterior = int(str(checkpoint.get("token_parada") or 0))
+        return ultima_fase, raw_indice, token_anterior
+
+    def _log_retomada(
+        self,
+        fase_inicial: int,
+        tabela_interrompida: str | None,
+        lote_salvo: int | None,
+        pular_ate: str | None,
+    ) -> None:
+        """Emitir mensagem de retomada adequada ao contexto."""
+        if tabela_interrompida is not None and lote_salvo is not None:
+            self.stdout.write(
+                self.style.WARNING(
+                    f"[ETL PROF] Retomando '{tabela_interrompida}'"
+                    f" do lote {lote_salvo + 1}"
+                    f" (fase {fase_inicial})."
+                )
+            )
+        elif pular_ate is not None:
+            self.stdout.write(
+                self.style.WARNING(
+                    f"[ETL PROF] Retomando da fase {fase_inicial}"
+                    f", após '{pular_ate}'."
+                )
+            )
+        else:
+            self.stdout.write(
+                self.style.WARNING(
+                    f"[ETL PROF] Retomando da fase {fase_inicial}."
+                )
+            )
+
+    def _calcular_pulo_e_lote(
+        self, raw_indice: str, fase_inicial: int
+    ) -> tuple[str | None, int]:
+        """Determina pular_ate e lote_inicial a partir do índice salvo."""
+        if not raw_indice:
+            self._log_retomada(fase_inicial, None, None, None)
+            return None, 0
+
+        if ":" in raw_indice:
+            # "tabela:lote" — tabela interrompida no meio
+            tabela_interrompida, lote_str = raw_indice.split(":", 1)
+            lote_salvo = int(lote_str)
+            # Tabelas full-refresh não suportam retomada por lote.
+            lote_inicial = (
+                0
+                if tabela_interrompida in _TABELAS_FULL_REFRESH
+                else lote_salvo
+            )
+            idx = (
+                _ORDEM_TABELAS.index(tabela_interrompida)
+                if tabela_interrompida in _ORDEM_TABELAS
+                else -1
+            )
+            pular_ate = _ORDEM_TABELAS[idx - 1] if idx > 0 else None
+            self._log_retomada(
+                fase_inicial, tabela_interrompida, lote_salvo, pular_ate
+            )
+            return pular_ate, lote_inicial
+
+        # "tabela" — tabela concluída; próxima começa do lote 0
+        pular_ate = raw_indice
+        self._log_retomada(fase_inicial, None, None, pular_ate)
+        return pular_ate, 0
+
+    def _obter_contexto_retomada(
+        self,
+        continuar: bool,
+        repositorio: RepositorioAuditoriaPostgres,
+    ) -> tuple[int, str | None, int, int]:
+        """Retorna (fase_inicial, pular_ate, token_anterior, lote_inicial)."""
+        if not continuar:
+            return 1, None, 0, 0
+
+        checkpoint = repositorio.obter_checkpoint_dominio("professores")
+        if not checkpoint:
+            return 1, None, 0, 0
+
+        ultima_fase, raw_indice, token_anterior = self._interpretar_checkpoint(
+            checkpoint
+        )
+        # Se tudo foi concluído (fase 4), reinicia do zero.
+        fase_inicial = ultima_fase + 1 if ultima_fase < 4 else 1
+        pular_ate, lote_inicial = self._calcular_pulo_e_lote(
+            raw_indice, fase_inicial
+        )
+        return fase_inicial, pular_ate, token_anterior, lote_inicial

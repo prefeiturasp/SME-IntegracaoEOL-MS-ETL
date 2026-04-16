@@ -89,15 +89,8 @@ class Command(BaseCommand):
         mostrar_detalhes: bool = options["detalhes"]
         arquivo_saida: str | None = options["saida"]
 
-        # ------------------------------------------------------------------
-        # Etapa 1 — ETL amostral (opcional)
-        # ------------------------------------------------------------------
-        if rodar_etl:
-            self._executar_etl_amostral(limite)
+        self._executar_etl_se_necessario(limite, rodar_etl)
 
-        # ------------------------------------------------------------------
-        # Etapa 2 — Verificação de compatibilidade
-        # ------------------------------------------------------------------
         self.stdout.write(
             self.style.HTTP_INFO(
                 f"\n[compat] Iniciando verificação de compatibilidade "
@@ -110,9 +103,52 @@ class Command(BaseCommand):
         resultados = executor.executar_todos()
         sumario = executor.resumo(resultados)
 
-        # ------------------------------------------------------------------
-        # Etapa 3 — Exibição do relatório
-        # ------------------------------------------------------------------
+        self._imprimir_relatorio(resultados, mostrar_detalhes)
+        self._imprimir_sumario(sumario)
+        self._exportar_json_se_necessario(arquivo_saida, sumario, resultados)
+
+        if not sumario["compativel"]:
+            sys.exit(1)
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    def _executar_etl_se_necessario(
+        self, limite: int, rodar_etl: bool
+    ) -> None:
+        """Executa ETL amostral se --rodar-etl foi passado."""
+        if rodar_etl:
+            self._executar_etl_amostral(limite)
+
+    def _imprimir_resultado(
+        self, resultado: Any, mostrar_detalhes: bool
+    ) -> None:
+        """Imprime linha do relatório para um único verificador."""
+        if (
+            resultado.aprovado
+            and not resultado.ignorado
+            and not resultado.erro
+        ):
+            linha = self.style.SUCCESS(str(resultado))
+        elif resultado.ignorado:
+            linha = self.style.WARNING(str(resultado))
+        else:
+            linha = self.style.ERROR(str(resultado))
+
+        self.stdout.write(linha)
+
+        if mostrar_detalhes and resultado.divergencias:
+            self.stdout.write(
+                self.style.WARNING("  Divergências (máx. 5 exemplos):")
+            )
+            for ex in resultado.divergencias:
+                self.stdout.write(f"    {ex}")
+
+    def _imprimir_relatorio(
+        self, resultados: Any, mostrar_detalhes: bool
+    ) -> None:
+        """Imprime cabeçalho e todos os resultados por verificador."""
         self.stdout.write("=" * 72)
         self.stdout.write(
             self.style.HTTP_INFO(
@@ -120,30 +156,11 @@ class Command(BaseCommand):
             )
         )
         self.stdout.write("=" * 72)
-
         for resultado in resultados:
-            if (
-                resultado.aprovado
-                and not resultado.ignorado
-                and not resultado.erro
-            ):
-                linha = self.style.SUCCESS(str(resultado))
-            elif resultado.ignorado:
-                linha = self.style.WARNING(str(resultado))
-            elif resultado.erro:
-                linha = self.style.ERROR(str(resultado))
-            else:
-                linha = self.style.ERROR(str(resultado))
+            self._imprimir_resultado(resultado, mostrar_detalhes)
 
-            self.stdout.write(linha)
-
-            if mostrar_detalhes and resultado.divergencias:
-                self.stdout.write(
-                    self.style.WARNING("  Divergências (máx. 5 exemplos):")
-                )
-                for ex in resultado.divergencias:
-                    self.stdout.write(f"    {ex}")
-
+    def _imprimir_sumario(self, sumario: dict) -> None:
+        """Imprime totais e lista de falhas do sumário."""
         self.stdout.write("=" * 72)
         self.stdout.write(
             f"Total: {sumario['total']}  "
@@ -170,9 +187,13 @@ class Command(BaseCommand):
                 for falha in sumario["falhas"]:
                     self.stdout.write(f"    {falha}")
 
-        # ------------------------------------------------------------------
-        # Etapa 4 — Exportar JSON (opcional)
-        # ------------------------------------------------------------------
+    def _exportar_json_se_necessario(
+        self,
+        arquivo_saida: str | None,
+        sumario: dict,
+        resultados: Any,
+    ) -> None:
+        """Salva resultado em JSON se --saida foi informado."""
         if arquivo_saida:
             self._salvar_json(arquivo_saida, sumario, resultados)
             self.stdout.write(
@@ -180,16 +201,6 @@ class Command(BaseCommand):
                     f"[compat] Resultado salvo em: {arquivo_saida}"
                 )
             )
-
-        # ------------------------------------------------------------------
-        # Código de saída
-        # ------------------------------------------------------------------
-        if not sumario["compativel"]:
-            sys.exit(1)
-
-    # ------------------------------------------------------------------
-    # Helpers
-    # ------------------------------------------------------------------
 
     def _executar_etl_amostral(self, limite: int) -> None:
         """Executa o ETL com limite de amostragem via variáveis de ambiente."""

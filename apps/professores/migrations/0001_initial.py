@@ -3,6 +3,8 @@
 import django.db.models.deletion
 from django.db import migrations, models
 
+HELP_TEXT_TURMA_ESCOLA_ID = "ID da TurmaEscola neste DB."
+
 
 class Migration(migrations.Migration):
 
@@ -115,7 +117,7 @@ class Migration(migrations.Migration):
                     "codigo_turma",
                     models.BigIntegerField(
                         blank=True,
-                        help_text="ID da TurmaEscola neste DB.",
+                        help_text=HELP_TEXT_TURMA_ESCOLA_ID,
                         null=True,
                     ),
                 ),
@@ -265,7 +267,7 @@ class Migration(migrations.Migration):
                 (
                     "codigo_turma",
                     models.BigIntegerField(
-                        help_text="ID da TurmaEscola neste DB."
+                        help_text=HELP_TEXT_TURMA_ESCOLA_ID
                     ),
                 ),
                 (
@@ -354,7 +356,7 @@ class Migration(migrations.Migration):
                 (
                     "codigo_turma",
                     models.BigIntegerField(
-                        help_text="ID da TurmaEscola neste DB."
+                        help_text=HELP_TEXT_TURMA_ESCOLA_ID
                     ),
                 ),
                 (
@@ -479,7 +481,7 @@ class Migration(migrations.Migration):
                     "codigo_turma_escola",
                     models.BigIntegerField(
                         blank=True,
-                        help_text="ID da TurmaEscola neste DB.",
+                        help_text=HELP_TEXT_TURMA_ESCOLA_ID,
                         null=True,
                     ),
                 ),

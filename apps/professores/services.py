@@ -1224,6 +1224,65 @@ class EtlProfessoresService:
         )
 
     # ------------------------------------------------------------------
+    # Fases de execução
+    # ------------------------------------------------------------------
+
+    def _fase_1(
+        self,
+        executar_tabela: Callable[[str, Callable[[], int]], None],
+    ) -> None:
+        """Fase 1 — tabelas sem dependências internas."""
+        logger.info("[ETL PROF] === Fase 1: Suporte e Professores ===")
+        executar_tabela(
+            "unidade_educacional", self.popular_unidades_educacionais
+        )
+        executar_tabela("turma_escola", self.popular_turmas_escola)
+        executar_tabela("professor", self.popular_professores)
+        executar_tabela("pessoa", self.popular_pessoas)
+        self.ultima_fase_concluida = 1
+        logger.info("[ETL PROF] Fase 1 concluída.")
+
+    def _fase_2(
+        self,
+        executar_tabela: Callable[[str, Callable[[], int]], None],
+    ) -> None:
+        """Fase 2 — vínculos cargo/contrato (dependem da fase 1)."""
+        logger.info("[ETL PROF] === Fase 2: Vínculos ===")
+        executar_tabela("serie_turma_grade", self.popular_serie_turma_grade)
+        executar_tabela(
+            "turma_escola_grade_programa",
+            self.popular_turma_escola_grade_programa,
+        )
+        executar_tabela("cargo_base_servidor", self.popular_cargos_base)
+        executar_tabela("contrato_externo", self.popular_contratos_externos)
+        self.ultima_fase_concluida = 2
+        logger.info("[ETL PROF] Fase 2 concluída.")
+
+    def _fase_3(
+        self,
+        executar_tabela: Callable[[str, Callable[[], int]], None],
+    ) -> None:
+        """Fase 3 — atribuições e bloqueios (dependem da fase 2)."""
+        logger.info("[ETL PROF] === Fase 3: Atribuições e Bloqueios ===")
+        executar_tabela(
+            "turma_grade_territorio_experiencia",
+            self.popular_turma_grade_territorio_experiencia,
+        )
+        executar_tabela("lotacao_servidor", self.popular_lotacoes)
+        executar_tabela(
+            "cargo_sobreposto_servidor", self.popular_cargos_sobrepostos
+        )
+        executar_tabela(
+            "funcao_atividade_cargo_servidor",
+            self.popular_funcoes_atividade,
+        )
+        executar_tabela("laudo_medico", self.popular_laudos)
+        executar_tabela("atribuicao_aula", self.popular_atribuicoes_aula)
+        executar_tabela("atribuicao_externo", self.popular_atribuicoes_externo)
+        self.ultima_fase_concluida = 3
+        logger.info("[ETL PROF] Fase 3 concluída.")
+
+    # ------------------------------------------------------------------
     # Execucao completa na ordem correta
     # ------------------------------------------------------------------
 
@@ -1329,66 +1388,16 @@ class EtlProfessoresService:
             if on_tabela_concluida is not None:
                 on_tabela_concluida(nome, r[nome])
 
-        # ------------------------------------------------------------------
-        # Fase 1 — Sem dependências internas
-        # ------------------------------------------------------------------
         if fase_inicial <= 1:
-            log("[ETL PROF] === Fase 1: Suporte e Professores ===")
-            _executar_tabela(
-                "unidade_educacional",
-                self.popular_unidades_educacionais,
-            )
-            _executar_tabela("turma_escola", self.popular_turmas_escola)
-            _executar_tabela("professor", self.popular_professores)
-            _executar_tabela("pessoa", self.popular_pessoas)
-            self.ultima_fase_concluida = 1
+            self._fase_1(_executar_tabela)
             _pular = None  # fases seguintes rodam completas
-            log("[ETL PROF] Fase 1 concluída.")
 
-        # ------------------------------------------------------------------
-        # Fase 2 — Dependem de fase 1
-        # ------------------------------------------------------------------
         if fase_inicial <= 2:
-            log("[ETL PROF] === Fase 2: Vínculos ===")
-            _executar_tabela(
-                "serie_turma_grade", self.popular_serie_turma_grade
-            )
-            _executar_tabela(
-                "turma_escola_grade_programa",
-                self.popular_turma_escola_grade_programa,
-            )
-            _executar_tabela("cargo_base_servidor", self.popular_cargos_base)
-            _executar_tabela(
-                "contrato_externo", self.popular_contratos_externos
-            )
-            self.ultima_fase_concluida = 2
+            self._fase_2(_executar_tabela)
             _pular = None
-            log("[ETL PROF] Fase 2 concluída.")
 
-        # ------------------------------------------------------------------
-        # Fase 3 — Dependem de fase 2
-        # ------------------------------------------------------------------
         if fase_inicial <= 3:
-            log("[ETL PROF] === Fase 3: Atribuições e Bloqueios ===")
-            _executar_tabela(
-                "turma_grade_territorio_experiencia",
-                self.popular_turma_grade_territorio_experiencia,
-            )
-            _executar_tabela("lotacao_servidor", self.popular_lotacoes)
-            _executar_tabela(
-                "cargo_sobreposto_servidor", self.popular_cargos_sobrepostos
-            )
-            _executar_tabela(
-                "funcao_atividade_cargo_servidor",
-                self.popular_funcoes_atividade,
-            )
-            _executar_tabela("laudo_medico", self.popular_laudos)
-            _executar_tabela("atribuicao_aula", self.popular_atribuicoes_aula)
-            _executar_tabela(
-                "atribuicao_externo", self.popular_atribuicoes_externo
-            )
-            self.ultima_fase_concluida = 3
-            log("[ETL PROF] Fase 3 concluída.")
+            self._fase_3(_executar_tabela)
 
         # ------------------------------------------------------------------
         # Fase 4 — Agrupamentos território do saber

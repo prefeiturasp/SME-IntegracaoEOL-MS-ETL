@@ -170,7 +170,6 @@ class VerificadorTitularServidorTest(TestCase):
             (" 012345 ", " 012345 ", 200, 10, 2024, 300)
         ]
         v = VerificadorTitularServidor()
-        result = v.buscar_origem(eol, 10)
         # row: (id, rf, serie_grade, componente, ano, id_tegp)
         eol.executar_query.return_value = [
             (9001, " 012345 ", 200, 10, 2024, 300)
