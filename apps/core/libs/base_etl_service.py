@@ -10,7 +10,7 @@ from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from queue import Empty, Queue
 from threading import Thread
-from typing import TYPE_CHECKING, Any, TypeVar, cast
+from typing import TYPE_CHECKING, Any, TypeVar, cast, Callable
 
 if TYPE_CHECKING:
     from apps.core.libs.base_etl_fase import BaseEtlFase
@@ -50,30 +50,37 @@ class StageTimer:
 T = TypeVar("T", bound=Callable[..., Any])
 
 
-def retry_deadlock(max_retries: int = 3, backoff: float = 0.5) -> Callable[[T], T]:
-    """Decorator para retry em caso de deadlock ou timeout de banco."""
+def retry_deadlock(
+    max_retries: int = 3, backoff: float = 0.5
+) -> Callable[[T], T]:
+    """Executa retry em caso de deadlock ou timeout de banco."""
 
     def decorator(func: T) -> T:
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             last_err: Exception = RuntimeError("retry_deadlock")
+
             for i in range(max_retries):
                 try:
                     return func(*args, **kwargs)
                 except Exception as exc:
-                    if (
-                        "deadlock" not in str(exc).lower()
-                        and "lock timeout" not in str(exc).lower()
-                    ):
+                    msg = str(exc).lower()
+
+                    if "deadlock" not in msg and "lock timeout" not in msg:
                         raise
+
                     last_err = exc
+
                     wait = backoff * (2**i) + random.uniform(0, 0.1)
+
                     logger.warning(
                         "Deadlock detectado. Tentativa %d/%d (espera %.2fs)",
                         i + 1,
                         max_retries,
                         wait,
                     )
+
                     time.sleep(wait)
+
             raise last_err
 
         return cast(T, wrapper)
@@ -109,7 +116,7 @@ class PhaseConfig:
         total_fases: int,
         options: dict[str, Any],
     ) -> "BaseEtlFase":
-        """Converte a configuração para metadados de fase do Celery."""
+        """Gera metadados de fase do Celery."""
         from apps.core.libs.base_etl_fase import BaseEtlFase
 
         m_path = (
@@ -160,7 +167,10 @@ class PostgresUpsertEngine:
 
     @retry_deadlock()
     def upsert_bulk(
-        self, table_name: str, rows: list[tuple[str, str]], batch_id: str = "batch"
+        self,
+        table_name: str,
+        rows: list[tuple[str, str]],
+        batch_id: str = "batch",
     ) -> int:
         """Executa upsert massivo na tabela de auditoria."""
         if not rows:
@@ -170,9 +180,10 @@ class PostgresUpsertEngine:
         for r in rows:
             buf.write(f"{r[0]}\t{r[1]}\n")
 
-        with transaction.atomic(using="default"), connections[
-            "default"
-        ].cursor() as cursor:
+        with (
+            transaction.atomic(using="default"),
+            connections["default"].cursor() as cursor,
+        ):
             tmp = f"temp_audit_{str(batch_id).replace('-', '_')}"
             cursor.execute(
                 sql.SQL(
@@ -184,9 +195,9 @@ class PostgresUpsertEngine:
             raw = cursor.cursor
             if hasattr(raw, "copy"):
                 with raw.copy(
-                    sql.SQL("COPY {} (id_destino, hash_controle) FROM STDIN").format(
-                        sql.Identifier(tmp)
-                    )
+                    sql.SQL(
+                        "COPY {} (id_destino, hash_controle) FROM STDIN"
+                    ).format(sql.Identifier(tmp))
                 ) as cp:
                     cp.write(buf.getvalue())
             else:
@@ -198,12 +209,17 @@ class PostgresUpsertEngine:
 
             cursor.execute(
                 sql.SQL(
-                    "INSERT INTO {table} (id_destino, hash_controle, atualizado_em) "
-                    "SELECT id_destino, hash_controle, NOW() FROM {tmp} "
+                    "INSERT INTO {table}"
+                    " (id_destino, hash_controle, atualizado_em) "
+                    "SELECT id_destino, hash_controle, NOW()"
+                    " FROM {tmp} "
                     "ON CONFLICT (id_destino) DO UPDATE SET "
-                    "hash_controle = EXCLUDED.hash_controle, atualizado_em = NOW() "
+                    "hash_controle = EXCLUDED.hash_controle,"
+                    " atualizado_em = NOW() "
                     "WHERE {table}.hash_controle <> EXCLUDED.hash_controle"
-                ).format(table=sql.Identifier(table_name), tmp=sql.Identifier(tmp))
+                ).format(
+                    table=sql.Identifier(table_name), tmp=sql.Identifier(tmp)
+                )
             )
             return int(cursor.rowcount or 0)
 
@@ -216,12 +232,14 @@ class PostgresUpsertEngine:
             buf.write(f"{i}\n")
 
         tmp = f"temp_lookup_{(bid or 'manual').replace('-', '_')}"
-        with transaction.atomic(using="default"), connections[
-            "default"
-        ].cursor() as cursor:
+        with (
+            transaction.atomic(using="default"),
+            connections["default"].cursor() as cursor,
+        ):
             cursor.execute(
                 sql.SQL(
-                    "CREATE TEMP TABLE IF NOT EXISTS {} (id_destino text) ON COMMIT DROP"
+                    "CREATE TEMP TABLE IF NOT EXISTS {}"
+                    " (id_destino text) ON COMMIT DROP"
                 ).format(sql.Identifier(tmp))
             )
 
@@ -312,8 +330,9 @@ class PostgresUpsertEngine:
         del objs
 
         escritos = len(hashes)
-        self.upsert_bulk("etl_auditoria_linha", hashes,
-                         batch_id=f"{tn}-{batch_num}")
+        self.upsert_bulk(
+            "etl_auditoria_linha", hashes, batch_id=f"{tn}-{batch_num}"
+        )
         del hashes
 
         return escritos, total - escritos
@@ -327,7 +346,7 @@ class PostgresUpsertEngine:
         db_alias: str,
         fast: bool = False,
     ) -> None:
-        """Persiste objetos no banco de destino."""
+        """Salva objetos no banco de dados de destino."""
         if not objs:
             return
         mgr = model_class.objects.using(db_alias)
@@ -370,9 +389,13 @@ class BaseEtlService:
         self._ultimo_audit_count = 0
 
     def get_meta(
-        self, config: PhaseConfig, numero: int, total: int, id_execucao: Any = None
+        self,
+        config: PhaseConfig,
+        numero: int,
+        total: int,
+        id_execucao: Any = None,
     ) -> Any:
-        """Helper para criar metadados de fase para o Celery."""
+        """Cria metadados de fase para o Celery."""
         from apps.core.tasks import finalizar_fase, processar_chunk
 
         opts = {
@@ -404,7 +427,9 @@ class BaseEtlService:
         batch_num: int = 0,
     ) -> tuple[int, int]:
         """Sincroniza um lote delegando para o motor de upsert."""
-        return self.pg_engine.sincronizar_lote(processed_data, fase_meta, batch_num)
+        return self.pg_engine.sincronizar_lote(
+            processed_data, fase_meta, batch_num
+        )
 
     def _persistir_objs(
         self,
@@ -426,23 +451,36 @@ class BaseEtlService:
                 batch_size=500,
             )
 
-    def _processar_batch(self, config: PhaseConfig, chunk: list, **kwargs: Any) -> tuple[int, int]:
+    def _processar_batch(
+        self, config: PhaseConfig, chunk: list, **kwargs: Any
+    ) -> tuple[int, int]:
         """Transforma e sincroniza um lote de dados."""
         transform = kwargs.get("transform") or (lambda x: x)
         lote_transformado = [transform(r) for r in chunk]
         meta = self._get_batch_meta(config)
-        return self.sync_batch(lote_transformado, meta, batch_num=kwargs.get("batch_num", 0))
+        return self.sync_batch(
+            lote_transformado, meta, batch_num=kwargs.get("batch_num", 0)
+        )
 
     def _get_batch_meta(self, cfg: PhaseConfig | None, **kwargs: Any) -> dict:
         """Monta dicionário de metadados da fase."""
         return {
             "primeiro_run": self.primeiro_run,
             "db_alias": self.db_alias,
-            "table_name": (cfg.table_name if cfg else None) or kwargs.get("table_name"),
-            "update_fields": list((cfg.update_fields if cfg else None) or kwargs.get("update_fields", [])),
-            "unique_fields": list((cfg.unique_fields if cfg else None) or kwargs.get("unique_fields", ["id"])),
-            "model_class": (cfg.model_class if cfg else None) or kwargs.get("model_class"),
-            "modo_escrita": (cfg.modo_escrita if cfg else None) or kwargs.get("modo_escrita", "upsert"),
+            "table_name": (cfg.table_name if cfg else None)
+            or kwargs.get("table_name"),
+            "update_fields": list(
+                (cfg.update_fields if cfg else None)
+                or kwargs.get("update_fields", [])
+            ),
+            "unique_fields": list(
+                (cfg.unique_fields if cfg else None)
+                or kwargs.get("unique_fields", ["id"])
+            ),
+            "model_class": (cfg.model_class if cfg else None)
+            or kwargs.get("model_class"),
+            "modo_escrita": (cfg.modo_escrita if cfg else None)
+            or kwargs.get("modo_escrita", "upsert"),
         }
 
     def _get_meta_attr(self, meta: Any, attr: str, default: Any = None) -> Any:
@@ -459,7 +497,10 @@ class BaseEtlService:
         metrics: PipelineMetrics = PipelineMetrics()
         erros: list[Exception] = []
 
-        if config.modo_escrita == "full_refresh" and config.truncate_on_full_sync:
+        if (
+            config.modo_escrita == "full_refresh"
+            and config.truncate_on_full_sync
+        ):
             self._truncar_tabela(config.table_name)
 
         self._ultimo_audit_count = 0
@@ -507,9 +548,12 @@ class BaseEtlService:
 
     def _get_next_chunk(self, queue: Queue) -> list[Any] | None:
         try:
-            return cast(list[Any] | None, queue.get(timeout=getattr(settings, "THREAD_POOL_CHUNK_TIMEOUT", 30)))
-        except Empty:
-            raise RuntimeError("Timeout waiting for Producer")
+            chunk: list | None = queue.get(
+                timeout=getattr(settings, "THREAD_POOL_CHUNK_TIMEOUT", 30)
+            )
+            return chunk
+        except Empty as err:
+            raise RuntimeError("Timeout waiting for Producer") from err
 
     def _atualizar_metricas(
         self, metrics: PipelineMetrics, lidos: int, esc: int, ign: int
@@ -520,7 +564,11 @@ class BaseEtlService:
         self.ultimo_token = str(metrics.total_lidos)
 
     def _log_progresso(
-        self, bn: int, metrics: PipelineMetrics, start: float, config: PhaseConfig
+        self,
+        bn: int,
+        metrics: PipelineMetrics,
+        start: float,
+        config: PhaseConfig,
     ) -> None:
         if bn % 10 == 0 or bn == 1:
             duracao = time.perf_counter() - start
@@ -621,7 +669,7 @@ class BaseEtlService:
                 return "-".join(str(getattr(d, f)) for f in pkf)
             return str(getattr(d, pkf))
 
-        def transform(row: tuple) -> tuple:
+        def transform(row: tuple) -> tuple[str, str, Any]:
             d = din(*row)
             data = dout.to_dict(d) if dout else d.to_domain()
             obj = mc(**data)
@@ -636,14 +684,14 @@ class BaseEtlService:
         for i, config in enumerate(self._fases, 1):
             if i < fase_inicial:
                 continue
-            logger.info(
-                "Executando fase %d/%d: %s", i, total, config.nome
-            )
+            logger.info("Executando fase %d/%d: %s", i, total, config.nome)
             m = self._executar_fase(config, numero_fase=i)
             res[config.nome] = m.total_escritos
             self.ultima_fase_concluida = i
         return res
 
-    def _buscar_hashes_por_copy(self, ids: list[str], tn: str) -> dict[str, str]:
+    def _buscar_hashes_por_copy(
+        self, ids: list[str], tn: str
+    ) -> dict[str, str]:
         """Busca hashes via PostgresUpsertEngine."""
         return self.pg_engine.buscar_hashes(ids, tn)

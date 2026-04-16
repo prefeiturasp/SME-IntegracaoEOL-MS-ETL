@@ -21,16 +21,18 @@ class EtlProfessoresCommandTest(TestCase):
     databases = ["default", "professores_db"]
 
     def _executar(self, args=None) -> None:  # type: ignore[no-untyped-def]
-        """Executa o management command etl_professores com os argumentos fornecidos."""
+        """Executa o command etl_professores com os argumentos fornecidos."""
         from django.core.management import call_command
 
         call_command("etl_professores", *(args or []))
 
-    @patch("apps.professores.management.commands.etl_professores.EtlProfessoresService")
+    @patch(
+        "apps.professores.management.commands.etl_professores.EtlProfessoresService"
+    )
     def test_cria_execucao_e_finaliza_com_sucesso(
         self, mock_servico: MagicMock
     ) -> None:
-        """Verifica que o command cria uma execução e a finaliza com sucesso."""
+        """Verifica que o command cria e finaliza execução com sucesso."""
         mock_servico.return_value.executar.return_value = _RESULTADO_MOCK
         mock_servico.return_value.ultima_fase_concluida = 3
 
@@ -40,9 +42,13 @@ class EtlProfessoresCommandTest(TestCase):
         self.assertEqual(execucao.situacao, "concluido")
         self.assertIsNotNone(execucao.finalizado_em)
 
-    @patch("apps.professores.management.commands.etl_professores.EtlProfessoresService")
-    def test_cria_checkpoint_apos_sucesso(self, mock_servico: MagicMock) -> None:
-        """Verifica que o command cria um checkpoint após execução bem-sucedida."""
+    @patch(
+        "apps.professores.management.commands.etl_professores.EtlProfessoresService"
+    )
+    def test_cria_checkpoint_apos_sucesso(
+        self, mock_servico: MagicMock
+    ) -> None:
+        """Verifica que o command cria checkpoint após exec bem-sucedida."""
         mock_servico.return_value.executar.return_value = _RESULTADO_MOCK
         mock_servico.return_value.ultima_fase_concluida = 3
 
@@ -54,9 +60,13 @@ class EtlProfessoresCommandTest(TestCase):
         total = sum(_RESULTADO_MOCK.values())
         self.assertEqual(checkpoint.token_parada, str(total))
 
-    @patch("apps.professores.management.commands.etl_professores.EtlProfessoresService")
-    def test_token_acumula_entre_execucoes(self, mock_servico: MagicMock) -> None:
-        """Verifica que o token de parada acumula entre execuções consecutivas."""
+    @patch(
+        "apps.professores.management.commands.etl_professores.EtlProfessoresService"
+    )
+    def test_token_acumula_entre_execucoes(
+        self, mock_servico: MagicMock
+    ) -> None:
+        """Token de parada acumula entre execuções consecutivas."""
         mock_servico.return_value.executar.return_value = {"professor": 100}
         mock_servico.return_value.ultima_fase_concluida = 3
 
@@ -66,12 +76,16 @@ class EtlProfessoresCommandTest(TestCase):
         checkpoint = EtlCheckpointDominio.objects.get(dominio="professores")
         self.assertEqual(checkpoint.token_parada, "200")
 
-    @patch("apps.professores.management.commands.etl_professores.EtlProfessoresService")
+    @patch(
+        "apps.professores.management.commands.etl_professores.EtlProfessoresService"
+    )
     def test_erro_persiste_checkpoint_com_situacao_erro(
         self, mock_servico: MagicMock
     ) -> None:
-        """Verifica que em caso de erro o checkpoint é persistido com situacao erro."""
-        mock_servico.return_value.executar.side_effect = RuntimeError("conexão falhou")
+        """Checkpoint é persistido com situacao erro após falha."""
+        mock_servico.return_value.executar.side_effect = RuntimeError(
+            "conexão falhou"
+        )
         mock_servico.return_value.ultima_fase_concluida = 1
 
         with self.assertRaises(RuntimeError):
@@ -85,13 +99,17 @@ class EtlProfessoresCommandTest(TestCase):
         self.assertEqual(checkpoint.ultima_situacao, "erro")
         self.assertEqual(checkpoint.ultima_pagina, 1)
 
-    @patch("apps.professores.management.commands.etl_professores.EtlProfessoresService")
+    @patch(
+        "apps.professores.management.commands.etl_professores.EtlProfessoresService"
+    )
     def test_continuar_apos_erro_retoma_fase_seguinte(
         self, mock_servico: MagicMock
     ) -> None:
-        """Ao usar --continuar após erro, retoma a execução da fase seguinte."""
+        """Ao usar --continuar, retoma execução da fase seguinte após erro."""
         # Simula erro na fase 2
-        mock_servico.return_value.executar.side_effect = RuntimeError("erro fase 2")
+        mock_servico.return_value.executar.side_effect = RuntimeError(
+            "erro fase 2"
+        )
         mock_servico.return_value.ultima_fase_concluida = 1
         with self.assertRaises(RuntimeError):
             self._executar()
@@ -105,13 +123,15 @@ class EtlProfessoresCommandTest(TestCase):
         _, kwargs = mock_servico.return_value.executar.call_args
         self.assertEqual(kwargs.get("fase_inicial", 1), 2)
 
-    @patch("apps.professores.management.commands.etl_professores.EtlProfessoresService")
+    @patch(
+        "apps.professores.management.commands.etl_professores.EtlProfessoresService"
+    )
     def test_continuar_apos_sucesso_reinicia_da_fase_1(
         self, mock_servico: MagicMock
     ) -> None:
         """Ao usar --continuar após sucesso, reinicia a execução da fase 1."""
         mock_servico.return_value.executar.return_value = _RESULTADO_MOCK
-        mock_servico.return_value.ultima_fase_concluida = 3
+        mock_servico.return_value.ultima_fase_concluida = 4
 
         self._executar()
         self._executar(["--continuar"])

@@ -23,6 +23,9 @@ A ordem abaixo é exatamente a que o método `executar` aplica no serviço.
 14. `atribuicao_aula`
 15. `atribuicao_externo`
 
+## Fase 4 — dependem das Fases 1–3
+16. `agrupamento_atribuicao_territorio_saber`
+
 ## Diagrama
 
 ```{graphviz}
@@ -33,7 +36,8 @@ digraph G {
     F1 [label="Fase 1"];
     F2 [label="Fase 2"];
     F3 [label="Fase 3"];
+    F4 [label="Fase 4"];
 
-    F1 -> F2 -> F3;
+    F1 -> F2 -> F3 -> F4;
 }
 ```

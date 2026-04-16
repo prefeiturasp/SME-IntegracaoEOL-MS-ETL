@@ -26,10 +26,14 @@ logger = logging.getLogger(__name__)
     prefetch_multiplier=1,
     rate_limit="30/m",
 )
+
 def processar_chunk(
-    self: Task, chunk: list[tuple], fase_meta_dict: dict[str, Any]
+    self: Task,
+    chunk: list[tuple],
+    fase_meta_dict: dict[str, Any],
 ) -> tuple[int, int]:
-    """Processar worker genérica: transforma e persiste um chunk."""
+    """Processa chunk do domínio, transformando e persistindo dados."""
+
     try:
         fase_meta = BaseEtlFase.from_dict(fase_meta_dict)
         transform = fase_meta.get_transformer()
@@ -62,7 +66,7 @@ def finalizar_fase(
     fase_meta_dict: dict[str, Any],
     todas_fases_dict: list[dict[str, Any]],
 ) -> None:
-    """Finalizar fase: agrega resultados, audita e lança próxima fase."""
+    """Agrega resultados, registra auditoria e lança a próxima fase."""
     fase_meta = BaseEtlFase.from_dict(fase_meta_dict)
     total_escritos = sum(r[0] for r in resultados)
     total_lidos = sum(r[0] + r[1] for r in resultados)
