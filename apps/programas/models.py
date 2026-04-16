@@ -155,7 +155,9 @@ class TurmaPrograma(models.Model):
         max_length=20,
         help_text="EOL unidade_administrativa.cd_unidade_administrativa.",
     )
-    ano_letivo = models.SmallIntegerField(help_text="EOL turma_escola.an_letivo.")
+    ano_letivo = models.SmallIntegerField(
+        help_text="EOL turma_escola.an_letivo."
+    )
     tipo_turno = models.SmallIntegerField(
         null=True,
         blank=True,
@@ -194,7 +196,9 @@ class TurmaPrograma(models.Model):
         indexes = [
             models.Index(fields=["ano_letivo"], name="idx_turma_prog_ano"),
             models.Index(fields=["codigo_ue"], name="idx_turma_prog_ue"),
-            models.Index(fields=["categoria"], name="idx_turma_prog_categoria"),
+            models.Index(
+                fields=["categoria"], name="idx_turma_prog_categoria"
+            ),
         ]
 
     def __str__(self) -> str:
@@ -237,7 +241,9 @@ class TurmaProgramaComponenteCurricular(models.Model):
             )
         ]
         indexes = [
-            models.Index(fields=["codigo_turma"], name="idx_turma_prog_comp_turma"),
+            models.Index(
+                fields=["codigo_turma"], name="idx_turma_prog_comp_turma"
+            ),
         ]
 
     def __str__(self) -> str:
@@ -331,7 +337,11 @@ class MatriculaTurmaPrograma(models.Model):
         verbose_name_plural = "matrículas em turmas de programa"
         constraints = [
             models.UniqueConstraint(
-                fields=["codigo_turma", "codigo_aluno", "codigo_componente_curricular"],
+                fields=[
+                    "codigo_turma",
+                    "codigo_aluno",
+                    "codigo_componente_curricular",
+                ],
                 name="uq_matricula_turma_aluno_componente",
             )
         ]
@@ -348,4 +358,3 @@ class MatriculaTurmaPrograma(models.Model):
             f" — turma {self.codigo_turma}"
             f" / CC {self.codigo_componente_curricular}"
         )
-

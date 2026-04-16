@@ -1,490 +1,203 @@
-"""Testes do service ETL do app programas."""
+"""Testes do EtlProgramasService (arquitetura BaseEtlService/PhaseConfig)."""
 
-import datetime
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
+from uuid import uuid4
 
 from django.test import TestCase
 
-from apps.programas.models import (
-    ComponenteCurricularPrograma,
-    MatriculaTurmaPrograma,
-    TipoPrograma,
-    TurmaPrograma,
-    TurmaProgramaComponenteCurricular,
-)
-from apps.programas.services import (
-    EtlProgramasService,
-    _calcular_hash,
-    _upsert_incremental,
-)
-
-_DATA_MATRICULA = datetime.date(2025, 2, 1)
+from apps.core.libs.base_etl_service import PhaseConfig, PipelineMetrics
+from apps.programas.services import EtlProgramasService
 
 
-def _row_tipo(id_=649, sigla="PAP-RECUP", descricao="PAP Recuperação"):
-    return (id_, sigla, descricao)
+class TestProgramasService(TestCase):
+    """Testes para EtlProgramasService."""
 
+    def setUp(self) -> None:
+        """Inicializa service com EOL mockado."""
+        self.mock_eol = MagicMock()
+        self.service = EtlProgramasService(
+            db_alias="programas_db",
+            eol=self.mock_eol,
+            id_execucao=uuid4(),
+        )
+        self.service._truncar_tabela = MagicMock()
 
-def _row_componente(id_=1322, nome="PAP Rec Aprend"):
-    return (id_, nome)
+    def test_phase_config_e_imutavel(self) -> None:
+        """Valida que PhaseConfig é frozen."""
+        config = PhaseConfig(
+            nome="teste",
+            sql="SELECT 1",
+            table_name="tb",
+            model_class=None,
+            dto_in=None,
+            dto_out=None,
+            pk_field="id",
+            update_fields=("f1",),
+            unique_fields=("id",),
+        )
+        with self.assertRaises(AttributeError):
+            config.nome = "mudar"  # type: ignore[misc]
 
+    def test_fases_contem_5_configs(self) -> None:
+        """Valida que o service define as 5 fases esperadas."""
+        self.assertEqual(len(self.service._fases), 5)
+        nomes = [f.nome for f in self.service._fases]
+        self.assertEqual(
+            nomes,
+            [
+                "tipo_programa",
+                "componente_curricular_programa",
+                "turma_programa",
+                "turma_programa_componente_curricular",
+                "matricula_turma_programa",
+            ],
+        )
 
-def _row_turma(
-    codigo=12345, nome="TURMA PAP 1A", ue="000001", dre="108900",
-    ano=2025, turno=1, desc_turno="Manhã", situacao="O", tipo_prog=649,
-):
-    return (codigo, nome, ue, dre, ano, turno, desc_turno, situacao, tipo_prog)
+    def test_iter_chunks_delega_ao_eol(self) -> None:
+        """Valida que _iter_chunks usa eol.iter_query."""
+        self.mock_eol.iter_query.return_value = iter([[("a",)]])
+        list(self.service._iter_chunks("SELECT 1"))
+        self.mock_eol.iter_query.assert_called_once_with("SELECT 1")
 
+    def test_criar_transform_retorna_tripla(self) -> None:
+        """Valida que a factory de transform gera a tripla (pk, hash, obj)."""
+        config = self.service._fases[0]  # tipo_programa
+        transform = self.service._criar_transform(config)
 
-def _row_comp_turma(codigo_turma=12345, codigo_comp=1322, nome="PAP Rec"):
-    return (codigo_turma, codigo_comp, nome)
+        row = (649, "PAP-RECUP", "PAP Recuperação")
+        pk, h, obj = transform(row)
 
-
-def _row_matricula(
-    aluno=99999, turma=12345, comp=1322, nome_comp="PAP Rec",
-    sit=1, dt_mat=_DATA_MATRICULA, dt_sit=None,
-    ano=2025, ue="000001", dre="108900", tipo_prog=649,
-):
-    return (aluno, turma, comp, nome_comp, sit, dt_mat, dt_sit, ano, ue, dre, tipo_prog)
-
-
-class TestCalcularHash(TestCase):
-    def test_retorna_sha256_de_64_chars(self) -> None:
-        tp = TipoPrograma(codigo_tipo_programa=649, nome="PAP Rec", categoria="PAP", ativo=True)
-        h = _calcular_hash(tp, ["nome", "categoria", "ativo"])
+        self.assertEqual(pk, "649")
         self.assertIsInstance(h, str)
         self.assertEqual(len(h), 64)
+        self.assertEqual(obj.codigo_tipo_programa, 649)
 
-    def test_hash_muda_com_campo_alterado(self) -> None:
-        t1 = TipoPrograma(codigo_tipo_programa=649, nome="PAP Rec", categoria="PAP", ativo=True)
-        t2 = TipoPrograma(codigo_tipo_programa=649, nome="PAP Rec NOVO", categoria="PAP", ativo=True)
-        campos = ["nome", "categoria", "ativo"]
-        self.assertNotEqual(_calcular_hash(t1, campos), _calcular_hash(t2, campos))
+    def test_criar_transform_pk_composta_turma_componente(self) -> None:
+        """Valida geração de PK composta para turma_programa_componente."""
+        config = self.service._fases[3]  # turma_programa_componente_curricular
+        transform = self.service._criar_transform(config)
 
-    def test_hash_igual_para_mesmos_dados(self) -> None:
-        t1 = TipoPrograma(codigo_tipo_programa=649, nome="PAP Rec", categoria="PAP", ativo=True)
-        t2 = TipoPrograma(codigo_tipo_programa=649, nome="PAP Rec", categoria="PAP", ativo=True)
-        campos = ["nome", "categoria", "ativo"]
-        self.assertEqual(_calcular_hash(t1, campos), _calcular_hash(t2, campos))
+        row = (12345, 1322, "PAP Rec")
+        pk, _, _ = transform(row)
 
-    def test_hash_ignora_campo_nao_listado(self) -> None:
-        """Campos fora da lista não afetam o hash."""
-        t1 = TipoPrograma(codigo_tipo_programa=649, nome="PAP", categoria="PAP", ativo=True)
-        t2 = TipoPrograma(codigo_tipo_programa=999, nome="PAP", categoria="PAP", ativo=False)
-        self.assertEqual(_calcular_hash(t1, ["nome"]), _calcular_hash(t2, ["nome"]))
+        self.assertEqual(pk, "12345-1322")
 
+    def test_criar_transform_pk_composta_matricula(self) -> None:
+        """Valida geração de PK composta de 3 campos para matricula."""
+        import datetime
 
-class TestUpsertIncrementalProgramas(TestCase):
-    databases = ["programas_db", "default"]
+        config = self.service._fases[4]  # matricula_turma_programa
+        transform = self.service._criar_transform(config)
 
-    def _make_tipo(self, id_=649, nome="PAP Rec", categoria="PAP") -> TipoPrograma:
-        return TipoPrograma(codigo_tipo_programa=id_, nome=nome, categoria=categoria, ativo=True)
-
-    def _upsert_tipo(self, objs: list, nome_alt: str | None = None) -> int:
-        campos = ["nome", "categoria", "ativo"]
-        return _upsert_incremental(TipoPrograma, "tipo_programa", objs, campos)
-
-    def test_lista_vazia_retorna_zero(self) -> None:
-        resultado = self._upsert_tipo([])
-        self.assertEqual(resultado, 0)
-
-    def test_insere_novo_e_retorna_count(self) -> None:
-        resultado = self._upsert_tipo([self._make_tipo()])
-        self.assertEqual(resultado, 1)
-        self.assertTrue(
-            TipoPrograma.objects.using("programas_db").filter(codigo_tipo_programa=649).exists()
+        row = (
+            99999,  # codigo_aluno
+            12345,  # codigo_turma
+            1322,  # codigo_componente_curricular
+            "PAP Rec",  # nome_componente_curricular
+            1,  # codigo_situacao_matricula
+            datetime.date(2025, 2, 1),  # data_matricula
+            None,  # data_situacao
+            2025,  # ano_letivo
+            "000001",  # codigo_ue
+            "108900",  # codigo_dre
+            649,  # codigo_tipo_programa
         )
+        pk, _, _ = transform(row)
+        
+        self.assertEqual(pk, "12345-99999-1322")
 
-    def test_nao_reescreve_se_nao_mudou(self) -> None:
-        objs = [self._make_tipo()]
-        self._upsert_tipo(objs)
-        resultado = self._upsert_tipo(objs)
-        self.assertEqual(resultado, 0)
-        self.assertEqual(TipoPrograma.objects.using("programas_db").count(), 1)
-
-    def test_atualiza_se_dado_mudou(self) -> None:
-        self._upsert_tipo([self._make_tipo(nome="PAP Rec")])
-        resultado = self._upsert_tipo([self._make_tipo(nome="PAP Rec ALTERADO")])
-        self.assertEqual(resultado, 1)
-        tp = TipoPrograma.objects.using("programas_db").get(codigo_tipo_programa=649)
-        self.assertEqual(tp.nome, "PAP Rec ALTERADO")
-
-    def test_deduplica_por_chave_mantém_ultimo(self) -> None:
-        """Se a origem enviar a mesma PK duas vezes, persiste apenas o último."""
-        objs = [self._make_tipo(nome="PRIMEIRO"), self._make_tipo(nome="SEGUNDO")]
-        resultado = self._upsert_tipo(objs)
-        self.assertEqual(resultado, 1)
-        tp = TipoPrograma.objects.using("programas_db").get(codigo_tipo_programa=649)
-        self.assertEqual(tp.nome, "SEGUNDO")
-
-    def test_multiplos_registros_novos(self) -> None:
-        objs = [self._make_tipo(649, "PAP Rec"), self._make_tipo(650, "PAP Col", "PAP")]
-        resultado = self._upsert_tipo(objs)
-        self.assertEqual(resultado, 2)
-        self.assertEqual(TipoPrograma.objects.using("programas_db").count(), 2)
-
-    def test_unique_fields_compostos(self) -> None:
-        """Upsert com chave composta em TurmaProgramaComponenteCurricular."""
-        objs = [
-            TurmaProgramaComponenteCurricular(
-                codigo_turma=12345,
-                codigo_componente_curricular=1322,
-                nome_componente_curricular="PAP Rec",
-            )
+    @patch.object(EtlProgramasService, "sync_batch")
+    def test_executar_fase_chama_sync_batch_por_chunk(
+        self, mock_sync: MagicMock
+    ) -> None:
+        """Valida o pipeline Producer-Consumer com 2 chunks."""
+        config = self.service._fases[0]
+        self.mock_eol.iter_query.return_value = [
+            [(649, "PAP-RECUP", "PAP Recuperação")],
+            [(650, "PAP-COL", "PAP Colaborativo")],
         ]
-        resultado = _upsert_incremental(
-            TurmaProgramaComponenteCurricular,
-            "turma_programa_componente_curricular",
-            objs,
-            ["nome_componente_curricular"],
-            unique_fields=["codigo_turma", "codigo_componente_curricular"],
+        mock_sync.return_value = (1, 0)
+
+        metrics = self.service._executar_fase(config)
+
+        self.assertEqual(metrics.total_lidos, 2)
+        self.assertEqual(metrics.total_escritos, 2)
+        self.assertEqual(mock_sync.call_count, 2)
+
+    def test_executar_fase_erro_producer_e_propagado(self) -> None:
+        """Valida que erros na extração (Producer thread) param o ETL."""
+        config = self.service._fases[0]
+        self.mock_eol.iter_query.side_effect = RuntimeError("Falha SQL")
+
+        with self.assertRaises(RuntimeError):
+            self.service._executar_fase(config)
+
+    def test_executar_pula_fases_anteriores(self) -> None:
+        """Valida o parâmetro fase_inicial."""
+        with patch.object(EtlProgramasService, "_executar_fase") as mock_fase:
+            mock_fase.return_value = PipelineMetrics(total_escritos=1)
+
+            res = self.service.executar(fase_inicial=5)
+
+            self.assertEqual(len(res), 1)
+            self.assertIn("matricula_turma_programa", res)
+            self.assertEqual(mock_fase.call_count, 1)
+
+    def test_executar_completo_acumula_resultados(self) -> None:
+        """Valida execução completa das 5 fases."""
+        with patch.object(EtlProgramasService, "_executar_fase") as mock_fase:
+            mock_fase.return_value = PipelineMetrics(total_escritos=10)
+
+            res = self.service.executar(fase_inicial=1)
+
+            self.assertEqual(len(res), 5)
+            self.assertEqual(res["tipo_programa"], 10)
+            self.assertEqual(mock_fase.call_count, 5)
+
+    @patch.object(EtlProgramasService, "sync_batch")
+    def test_sync_batch_argumentos_corretos(
+        self, mock_sync: MagicMock
+    ) -> None:
+        """Valida que model_class, table_name, update/unique_fields são passados."""
+        config = self.service._fases[0]
+        self.mock_eol.iter_query.return_value = [
+            [(649, "PAP-RECUP", "PAP Recuperação")]
+        ]
+        mock_sync.return_value = (1, 0)
+
+        self.service._executar_fase(config)
+
+        args, _ = mock_sync.call_args
+        fase_meta = args[1]
+        self.assertEqual(fase_meta["model_class"], config.model_class)
+        self.assertEqual(
+            fase_meta["update_fields"], list(config.update_fields)
         )
-        self.assertEqual(resultado, 1)
-        self.assertTrue(
-            TurmaProgramaComponenteCurricular.objects.using("programas_db")
-            .filter(codigo_turma=12345, codigo_componente_curricular=1322)
-            .exists()
+        self.assertEqual(
+            fase_meta["unique_fields"], list(config.unique_fields)
         )
+        self.assertEqual(fase_meta["modo_escrita"], config.modo_escrita)
+        self.assertEqual(fase_meta["table_name"], "tipo_programa")
 
-    def test_timestamp_field_preenchido_no_insert(self) -> None:
-        """atualizado_em é preenchido pelo ETL quando há alteração."""
-        turma = TurmaPrograma(
-            codigo_turma=12345, nome_turma="TURMA PAP",
-            codigo_ue="000001", codigo_dre="108900",
-            ano_letivo=2025, situacao="O",
-            codigo_tipo_programa=649, categoria="PAP",
-        )
-        _upsert_incremental(
-            TurmaPrograma, "turma_programa",
-            [turma],
-            ["nome_turma", "situacao", "atualizado_em"],
-            unique_fields=["codigo_turma"],
-            timestamp_field="atualizado_em",
-        )
-        salva = TurmaPrograma.objects.using("programas_db").get(codigo_turma=12345)
-        self.assertIsNotNone(salva.atualizado_em)
-
-    def test_timestamp_field_excluido_do_hash(self) -> None:
-        """Segunda carga com mesmo conteúdo não deve ser contabilizada."""
-        turma = TurmaPrograma(
-            codigo_turma=12345, nome_turma="TURMA PAP",
-            codigo_ue="000001", codigo_dre="108900",
-            ano_letivo=2025, situacao="O",
-            codigo_tipo_programa=649, categoria="PAP",
-        )
-        campos = ["nome_turma", "situacao", "atualizado_em"]
-        _upsert_incremental(TurmaPrograma, "turma_programa", [turma], campos,
-                            unique_fields=["codigo_turma"], timestamp_field="atualizado_em")
-        resultado = _upsert_incremental(TurmaPrograma, "turma_programa", [turma], campos,
-                                        unique_fields=["codigo_turma"], timestamp_field="atualizado_em")
-        self.assertEqual(resultado, 0)
-
-
-class TestEtlProgramasServiceInit(TestCase):
-    databases = ["programas_db", "default"]
-
-    def test_init_default_cria_eol(self) -> None:
-        service = EtlProgramasService()
-        self.assertIsNotNone(service.eol)
-        self.assertEqual(service.ultima_fase_concluida, 0)
-        self.assertIsNone(service.ultimo_token)
-        self.assertEqual(len(service._fases), 5)
-
-    def test_init_com_eol_injetado(self) -> None:
-        mock_eol = MagicMock()
-        service = EtlProgramasService(eol=mock_eol)
-        self.assertIs(service.eol, mock_eol)
-
-    def test_init_aceita_kwargs_do_base_command(self) -> None:
-        """Contrato com BaseEtlCommand._handle_sync."""
+    def test_primeiro_run_repassado_ao_base(self) -> None:
+        """Valida que primeiro_run=True chega ao BaseEtlService."""
         service = EtlProgramasService(
             db_alias="programas_db",
-            id_execucao=None,
-            repositorio_auditoria=MagicMock(),
+            eol=self.mock_eol,
             primeiro_run=True,
-            eol=MagicMock(),
         )
-        self.assertEqual(service.db_alias, "programas_db")
         self.assertTrue(service.primeiro_run)
 
+    def test_modo_escrita_upsert_em_todas_fases(self) -> None:
+        """Todas as fases de programas usam upsert (sem full_refresh)."""
+        for fase in self.service._fases:
+            with self.subTest(fase=fase.nome):
+                self.assertEqual(fase.modo_escrita, "upsert")
 
-class TestEtlProgramasServiceFase1(TestCase):
-    databases = ["programas_db", "default"]
-
-    def setUp(self) -> None:
-        self.mock_eol = MagicMock()
-        self.service = EtlProgramasService(eol=self.mock_eol)
-
-    def test_insere_tipo_programa(self) -> None:
-        self.mock_eol.executar_query.return_value = [_row_tipo(649)]
-        resultado = self.service.popular_tipos_programa()
-        self.assertEqual(resultado, 1)
-        tp = TipoPrograma.objects.using("programas_db").get(codigo_tipo_programa=649)
-        self.assertEqual(tp.categoria, "PAP")
-
-    def test_nao_reescreve_se_nao_mudou(self) -> None:
-        self.mock_eol.executar_query.return_value = [_row_tipo(649)]
-        self.service.popular_tipos_programa()
-        resultado = self.service.popular_tipos_programa()
-        self.assertEqual(resultado, 0)
-
-    def test_vazio_retorna_zero(self) -> None:
-        self.mock_eol.executar_query.return_value = []
-        self.assertEqual(self.service.popular_tipos_programa(), 0)
-
-    def test_insere_multiplos_tipos(self) -> None:
-        self.mock_eol.executar_query.return_value = [
-            _row_tipo(649, "PAP-R", "PAP Rec"),
-            _row_tipo(656, "PAEE-SRM", "PAEE SRM"),
-        ]
-        resultado = self.service.popular_tipos_programa()
-        self.assertEqual(resultado, 2)
-
-
-class TestEtlProgramasServiceFase2(TestCase):
-    databases = ["programas_db", "default"]
-
-    def setUp(self) -> None:
-        self.mock_eol = MagicMock()
-        self.service = EtlProgramasService(eol=self.mock_eol)
-
-    def test_insere_componente(self) -> None:
-        self.mock_eol.executar_query.return_value = [_row_componente(1322)]
-        resultado = self.service.popular_componentes_curriculares()
-        self.assertEqual(resultado, 1)
-        cc = ComponenteCurricularPrograma.objects.using("programas_db").get(
-            codigo_componente_curricular=1322
-        )
-        self.assertEqual(cc.categoria, "PAP")
-        self.assertTrue(cc.vigente)
-
-    def test_nao_reescreve_se_nao_mudou(self) -> None:
-        self.mock_eol.executar_query.return_value = [_row_componente(1322)]
-        self.service.popular_componentes_curriculares()
-        resultado = self.service.popular_componentes_curriculares()
-        self.assertEqual(resultado, 0)
-
-    def test_insere_paee(self) -> None:
-        self.mock_eol.executar_query.return_value = [_row_componente(1030, "SRM")]
-        self.service.popular_componentes_curriculares()
-        cc = ComponenteCurricularPrograma.objects.using("programas_db").get(
-            codigo_componente_curricular=1030
-        )
-        self.assertEqual(cc.categoria, "PAEE")
-
-
-class TestEtlProgramasServiceFase3(TestCase):
-    databases = ["programas_db", "default"]
-
-    def setUp(self) -> None:
-        self.mock_eol = MagicMock()
-        self.service = EtlProgramasService(eol=self.mock_eol)
-
-    def test_insere_turma_pap(self) -> None:
-        self.mock_eol.executar_query.return_value = [_row_turma()]
-        resultado = self.service.popular_turmas_programa()
-        self.assertEqual(resultado, 1)
-        t = TurmaPrograma.objects.using("programas_db").get(codigo_turma=12345)
-        self.assertEqual(t.categoria, "PAP")
-        self.assertEqual(t.codigo_tipo_programa, 649)
-
-    def test_insere_turma_paee(self) -> None:
-        self.mock_eol.executar_query.return_value = [_row_turma(tipo_prog=656)]
-        self.service.popular_turmas_programa()
-        t = TurmaPrograma.objects.using("programas_db").get(codigo_turma=12345)
-        self.assertEqual(t.categoria, "PAEE")
-
-    def test_nao_reescreve_se_nao_mudou(self) -> None:
-        self.mock_eol.executar_query.return_value = [_row_turma()]
-        self.service.popular_turmas_programa()
-        resultado = self.service.popular_turmas_programa()
-        self.assertEqual(resultado, 0)
-
-    def test_atualiza_situacao_e_preenche_atualizado_em(self) -> None:
-        self.mock_eol.executar_query.return_value = [_row_turma(situacao="O")]
-        self.service.popular_turmas_programa()
-        self.mock_eol.executar_query.return_value = [_row_turma(situacao="C")]
-        resultado = self.service.popular_turmas_programa()
-        self.assertEqual(resultado, 1)
-        t = TurmaPrograma.objects.using("programas_db").get(codigo_turma=12345)
-        self.assertEqual(t.situacao, "C")
-        self.assertIsNotNone(t.atualizado_em)
-
-
-class TestEtlProgramasServiceFase4(TestCase):
-    databases = ["programas_db", "default"]
-
-    def setUp(self) -> None:
-        self.mock_eol = MagicMock()
-        self.service = EtlProgramasService(eol=self.mock_eol)
-
-    def test_insere_componente_turma(self) -> None:
-        self.mock_eol.executar_query.return_value = [_row_comp_turma()]
-        resultado = self.service.popular_turmas_programa_componentes()
-        self.assertEqual(resultado, 1)
-
-    def test_nao_reescreve_se_nao_mudou(self) -> None:
-        self.mock_eol.executar_query.return_value = [_row_comp_turma()]
-        self.service.popular_turmas_programa_componentes()
-        resultado = self.service.popular_turmas_programa_componentes()
-        self.assertEqual(resultado, 0)
-
-    def test_atualiza_nome_componente(self) -> None:
-        self.mock_eol.executar_query.return_value = [_row_comp_turma(nome="PAP Rec")]
-        self.service.popular_turmas_programa_componentes()
-        self.mock_eol.executar_query.return_value = [_row_comp_turma(nome="PAP Rec NOVO")]
-        resultado = self.service.popular_turmas_programa_componentes()
-        self.assertEqual(resultado, 1)
-
-    def test_insere_sem_turma_existente_sem_fk_fisica(self) -> None:
-        """Sem FK física, deve inserir mesmo sem TurmaPrograma correspondente."""
-        self.mock_eol.executar_query.return_value = [_row_comp_turma(codigo_turma=99999)]
-        resultado = self.service.popular_turmas_programa_componentes()
-        self.assertEqual(resultado, 1)
-
-
-class TestEtlProgramasServiceFase5(TestCase):
-    databases = ["programas_db", "default"]
-
-    def setUp(self) -> None:
-        self.mock_eol = MagicMock()
-        self.service = EtlProgramasService(eol=self.mock_eol)
-
-    def test_insere_matricula_pap(self) -> None:
-        self.mock_eol.executar_query.return_value = [_row_matricula()]
-        resultado = self.service.popular_matriculas_turma_programa()
-        self.assertEqual(resultado, 1)
-        m = MatriculaTurmaPrograma.objects.using("programas_db").get(
-            codigo_aluno=99999, codigo_turma=12345, codigo_componente_curricular=1322
-        )
-        self.assertEqual(m.categoria, "PAP")
-        self.assertEqual(m.nome_componente_curricular, "PAP Rec")
-        self.assertEqual(m.descricao_situacao_matricula, "Ativo")
-
-    def test_insere_matricula_paee(self) -> None:
-        self.mock_eol.executar_query.return_value = [_row_matricula(tipo_prog=656)]
-        self.service.popular_matriculas_turma_programa()
-        m = MatriculaTurmaPrograma.objects.using("programas_db").get(
-            codigo_aluno=99999, codigo_turma=12345, codigo_componente_curricular=1322
-        )
-        self.assertEqual(m.categoria, "PAEE")
-
-    def test_nao_reescreve_se_nao_mudou(self) -> None:
-        self.mock_eol.executar_query.return_value = [_row_matricula()]
-        self.service.popular_matriculas_turma_programa()
-        resultado = self.service.popular_matriculas_turma_programa()
-        self.assertEqual(resultado, 0)
-
-    def test_atualiza_situacao_e_preenche_atualizado_em(self) -> None:
-        self.mock_eol.executar_query.return_value = [_row_matricula(sit=1)]
-        self.service.popular_matriculas_turma_programa()
-        self.mock_eol.executar_query.return_value = [_row_matricula(sit=5)]
-        resultado = self.service.popular_matriculas_turma_programa()
-        self.assertEqual(resultado, 1)
-        m = MatriculaTurmaPrograma.objects.using("programas_db").get(
-            codigo_aluno=99999, codigo_turma=12345, codigo_componente_curricular=1322
-        )
-        self.assertEqual(m.codigo_situacao_matricula, 5)
-        self.assertIsNotNone(m.atualizado_em)
-
-    def test_insere_sem_turma_existente_sem_fk_fisica(self) -> None:
-        """Sem FK física, deve inserir mesmo sem TurmaPrograma correspondente."""
-        self.mock_eol.executar_query.return_value = [_row_matricula(turma=88888)]
-        resultado = self.service.popular_matriculas_turma_programa()
-        self.assertEqual(resultado, 1)
-
-    def test_vazio_retorna_zero(self) -> None:
-        self.mock_eol.executar_query.return_value = []
-        self.assertEqual(self.service.popular_matriculas_turma_programa(), 0)
-
-
-class TestEtlProgramasServiceExecutar(TestCase):
-    databases = ["programas_db", "default"]
-
-    def _make_service_mockado(self, retorno: int = 1) -> EtlProgramasService:
-        """Cria serviço com todos os métodos popular_* mockados."""
-        mock_eol = MagicMock()
-        srv = EtlProgramasService(eol=mock_eol)
-        for nome in [m for m in dir(srv) if m.startswith("popular_")]:
-            setattr(srv, nome, MagicMock(return_value=retorno))
-        return srv
-
-    def test_executar_completo_retorna_5_chaves(self) -> None:
-        srv = self._make_service_mockado()
-        resultado = srv.executar(fase_inicial=1)
-        self.assertEqual(len(resultado), 5)
-        self.assertIn("tipo_programa", resultado)
-        self.assertIn("componente_curricular_programa", resultado)
-        self.assertIn("turma_programa", resultado)
-        self.assertIn("turma_programa_componente_curricular", resultado)
-        self.assertIn("matricula_turma_programa", resultado)
-
-    def test_executar_atualiza_ultima_fase_concluida(self) -> None:
-        srv = self._make_service_mockado()
-        srv.executar(fase_inicial=1)
-        self.assertEqual(srv.ultima_fase_concluida, 5)
-
-    def test_executar_fase_inicial_3_pula_1_e_2(self) -> None:
-        srv = self._make_service_mockado()
-        resultado = srv.executar(fase_inicial=3)
-        self.assertNotIn("tipo_programa", resultado)
-        self.assertNotIn("componente_curricular_programa", resultado)
-        self.assertIn("turma_programa", resultado)
-
-    def test_executar_fase_inicial_5_retorna_so_matriculas(self) -> None:
-        srv = self._make_service_mockado()
-        resultado = srv.executar(fase_inicial=5)
-        self.assertEqual(len(resultado), 1)
-        self.assertIn("matricula_turma_programa", resultado)
-        self.assertEqual(srv.ultima_fase_concluida, 5)
-
-    def test_executar_real_fluxo_completo(self) -> None:
-        """Fluxo completo com banco em memória — valida integração dos 5 estágios."""
-        mock_eol = MagicMock()
-        mock_eol.executar_query.side_effect = [
-            [_row_tipo(649)],           # Fase 1 — TipoPrograma
-            [_row_componente(1322)],    # Fase 2 — ComponenteCurricularPrograma
-            [_row_turma()],             # Fase 3 — TurmaPrograma
-            [_row_comp_turma()],        # Fase 4 — TurmaProgramaComponenteCurricular
-            [_row_matricula()],         # Fase 5 — MatriculaTurmaPrograma
-        ]
-        srv = EtlProgramasService(eol=mock_eol)
-        resultado = srv.executar()
-
-        self.assertEqual(resultado["tipo_programa"], 1)
-        self.assertEqual(resultado["componente_curricular_programa"], 1)
-        self.assertEqual(resultado["turma_programa"], 1)
-        self.assertEqual(resultado["turma_programa_componente_curricular"], 1)
-        self.assertEqual(resultado["matricula_turma_programa"], 1)
-        self.assertEqual(srv.ultima_fase_concluida, 5)
-
-        # Valida que os dados foram persistidos com os campos desnormalizados
-        self.assertEqual(
-            TurmaPrograma.objects.using("programas_db").get(codigo_turma=12345).categoria,
-            "PAP",
-        )
-        self.assertEqual(
-            MatriculaTurmaPrograma.objects.using("programas_db").get(
-                codigo_aluno=99999
-            ).categoria,
-            "PAP",
-        )
-
-    def test_executar_segunda_vez_retorna_zero_alteracoes(self) -> None:
-        """Segunda execução com mesmos dados não deve gerar alterações."""
-        mock_eol = MagicMock()
-        rows = [
-            [_row_tipo(649)],
-            [_row_componente(1322)],
-            [_row_turma()],
-            [_row_comp_turma()],
-            [_row_matricula()],
-        ]
-        mock_eol.executar_query.side_effect = rows[:]
-        srv = EtlProgramasService(eol=mock_eol)
-        srv.executar()
-
-        mock_eol.executar_query.side_effect = rows[:]
-        resultado = srv.executar()
-
-        self.assertTrue(all(v == 0 for v in resultado.values()))
+    def test_source_table_diferentes_de_table_name(self) -> None:
+        """As fases ETL leem de tabelas EOL diferentes do destino."""
+        # tipo_programa lê de tipo_programa (mesmo nome — dado de seed)
+        # mas turma_programa lê de turma_escola
+        turma_fase = self.service._fases[2]
+        self.assertEqual(turma_fase.table_name, "turma_programa")
+        self.assertEqual(turma_fase.source_table, "turma_escola")

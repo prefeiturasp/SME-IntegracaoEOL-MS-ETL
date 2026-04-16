@@ -1,6 +1,7 @@
 """Comando Django para executar o ETL do domínio PROGRAMAS_DB."""
 
 from apps.core.libs.base_etl_command import BaseEtlCommand
+from apps.programas.orquestrador import EtlProgramasOrquestrador
 from apps.programas.services import EtlProgramasService
 
 _TABELAS_UPSERT = frozenset(
@@ -15,13 +16,14 @@ _TABELAS_UPSERT = frozenset(
 
 
 class Command(BaseEtlCommand):
-    """Executa ETL completo ou parcial do domínio PROGRAMAS_DB."""
+    """Execução do pipeline ETL de Programas via Celery."""
 
-    help = "Popula programas_db a partir do EOL (SQL Server)"
+    help = "Executa pipeline ETL do domínio PROGRAMAS_DB (Sync ou Celery)"
     dominio = "programas"
     fase_final = 5
     service_class = EtlProgramasService
+    orquestrador_class = EtlProgramasOrquestrador
 
     def get_modo_escrita(self, tabela: str) -> str:
-        """Determina o modo de escrita da tabela (pode ser sobrescrito)."""
+        """Determina o modo de escrita da tabela."""
         return "upsert" if tabela in _TABELAS_UPSERT else "full_refresh"

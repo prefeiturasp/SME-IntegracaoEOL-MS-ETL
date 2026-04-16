@@ -1,30 +1,18 @@
 """Serviço de ETL do domínio PROGRAMAS_DB.
 
-Responsabilidade:
-    Orquestrar a extração de dados do EOL (SQL Server) e a persistência
-    incremental no banco programas_db.
-
-Estratégia:
-    Usa processamento incremental baseado em Hash SHA-256 (EtlAuditoriaLinha)
-    para minimizar escritas no banco destino.
-
-Mapeamento:
-    Utiliza DTOs (ModelIn/ModelOut) para garantir tipagem e centralizar
-    a lógica de transformação.
+Herda de ``BaseEtlService`` para reutilizar o pipeline genérico:
+threadpool producer/consumer, upsert incremental via hash SHA-256
+em ``etl_auditoria_linha`` e registro automático em
+``etl_execucao_tabela_lida`` / ``etl_execucao_tabela_escrita``.
 """
 
-import hashlib
-import json
 import logging
-from dataclasses import dataclass
+from collections.abc import Iterator
 from typing import Any
 from uuid import UUID
 
-from django.utils import timezone
-
-from apps.controle_auditoria.models import EtlAuditoriaLinha
+from apps.core.libs.base_etl_service import BaseEtlService, PhaseConfig
 from apps.eol_connection.libs.servico_eol import EOLService
-from apps.programas.enums import ComponenteCurricularEOL, TipoProgramaEOL
 from apps.programas.dtos.model_in import (
     ComponenteCurricularProgramaIn,
     MatriculaTurmaProgramaIn,
@@ -32,13 +20,7 @@ from apps.programas.dtos.model_in import (
     TurmaProgramaComponenteCurricularIn,
     TurmaProgramaIn,
 )
-from apps.programas.dtos.model_out import (
-    ComponenteCurricularProgramaOut,
-    MatriculaTurmaProgramaOut,
-    TipoProgramaOut,
-    TurmaProgramaComponenteCurricularOut,
-    TurmaProgramaOut,
-)
+from apps.programas.enums import ComponenteCurricularEOL, TipoProgramaEOL
 from apps.programas.models import (
     ComponenteCurricularPrograma,
     MatriculaTurmaPrograma,
@@ -53,7 +35,6 @@ logger = logging.getLogger(__name__)
 # SQLs — Extração
 # ---------------------------------------------------------------------------
 
-# Listas de códigos aceitos (derivadas dos enums — fonte única de verdade)
 _TIPOS_PROGRAMA_IN = ", ".join(str(c) for c in TipoProgramaEOL.codigos())
 _COMPONENTES_IN = ", ".join(str(c) for c in ComponenteCurricularEOL.codigos())
 
@@ -149,314 +130,130 @@ SELECT
   ORDER BY vm.cd_aluno, te.cd_turma_escola
 """
 
-# ---------------------------------------------------------------------------
-# Helpers de Controle Incremental
-# ---------------------------------------------------------------------------
 
+class EtlProgramasService(BaseEtlService):
+    """Pipeline ETL de Programas (PAP/PAEE)."""
 
-def _calcular_hash(obj: Any, campos: list[str]) -> str:
-    """Calcula SHA-256 dos campos de conteúdo de uma instância Django."""
-    data = {f: getattr(obj, f) for f in campos}
-    conteudo = json.dumps(data, sort_keys=True, default=str).encode("utf-8")
-    return hashlib.sha256(conteudo).hexdigest()
-
-
-def _upsert_incremental(
-    model_class: Any,
-    tabela: str,
-    objs: list[Any],
-    update_fields: list[str],
-    unique_fields: list[str] | None = None,
-    timestamp_field: str | None = None,
-) -> int:
-    """Upsert incremental: salva apenas o que mudou comparando com EtlAuditoriaLinha.
-
-    Args:
-        unique_fields: campos que formam a chave de conflito no bulk_create.
-            Padrão: PK do model. Aceita campos simples ou compostos.
-        timestamp_field: campo de timestamp atualizado nos registros alterados.
-            Excluído do cálculo de hash para não forçar escrita em toda execução.
-    """
-    if not objs:
-        return 0
-
-    pk_name = model_class._meta.pk.name
-    key_fields = unique_fields or [pk_name]
-
-    # Campos de conteúdo para hash: exclui o timestamp de atualização
-    campos_hash = [f for f in update_fields if f != timestamp_field]
-
-    def _chave(obj: Any) -> tuple:
-        return tuple(getattr(obj, f) for f in key_fields)
-
-    # Deduplicar por chave natural (mantém o último em caso de duplicata na origem)
-    objs_unicos: dict[tuple, Any] = {_chave(obj): obj for obj in objs}
-
-    linhas_com_hash = []
-    for chave, obj in objs_unicos.items():
-        id_destino = tabela + ":" + ":".join(str(v) for v in chave)
-        linhas_com_hash.append((id_destino, _calcular_hash(obj, campos_hash), obj))
-
-    # Busca hashes existentes no banco de auditoria (banco default)
-    ids_destino = [item[0] for item in linhas_com_hash]
-    hashes_existentes = dict(
-        EtlAuditoriaLinha.objects.filter(id_destino__in=ids_destino).values_list(
-            "id_destino", "hash_controle"
-        )
-    )
-
-    # Filtra apenas o que mudou ou é novo
-    objs_para_salvar = []
-    novos_hashes: dict[str, str] = {}
-    for id_destino, novo_hash, obj in linhas_com_hash:
-        if hashes_existentes.get(id_destino) != novo_hash:
-            objs_para_salvar.append(obj)
-            novos_hashes[id_destino] = novo_hash
-
-    if not objs_para_salvar:
-        return 0
-
-    # Atualiza timestamp nos registros que mudaram
-    if timestamp_field:
-        agora = timezone.now()
-        for obj in objs_para_salvar:
-            setattr(obj, timestamp_field, agora)
-
-    # Grava no banco destino (programas_db)
-    model_class.objects.using("programas_db").bulk_create(
-        objs_para_salvar,
-        update_conflicts=True,
-        unique_fields=key_fields,
-        update_fields=update_fields,
-        batch_size=500,
-    )
-
-    # Atualiza hashes no banco de auditoria (banco default)
-    hash_objs = [
-        EtlAuditoriaLinha(id_destino=id_d, hash_controle=h)
-        for id_d, h in novos_hashes.items()
-    ]
-    EtlAuditoriaLinha.objects.bulk_create(
-        hash_objs,
-        update_conflicts=True,
-        unique_fields=["id_destino"],
-        update_fields=["hash_controle"],
-        batch_size=500,
-    )
-
-    return len(objs_para_salvar)
-
-
-# ---------------------------------------------------------------------------
-# Serviço Principal: EtlProgramasService
-# ---------------------------------------------------------------------------
-
-
-@dataclass
-class _FaseInfo:
-    """Metadados mínimos de fase — compat com contrato do BaseEtlCommand."""
-
-    table_name: str
-
-
-class EtlProgramasService:
-    """Orquestra o ETL unificado para o domínio Programas."""
+    _dominio = "PROGRAMAS"
 
     def __init__(
         self,
-        db_alias: str = "programas_db",
+        db_alias: str,
         id_execucao: UUID | None = None,
         repositorio_auditoria: Any | None = None,
         primeiro_run: bool = False,
         eol: EOLService | None = None,
     ) -> None:
-        """Inicia o serviço injetando dependências mockáveis.
-
-        A assinatura espelha BaseEtlService para compatibilidade com
-        BaseEtlCommand._handle_sync, mas o service é síncrono próprio.
-        """
-        self.db_alias = db_alias
-        self.id_execucao = id_execucao
-        self.repositorio_auditoria = repositorio_auditoria
-        self.primeiro_run = primeiro_run
+        """Inicializa o serviço de programas conectando ao EOL."""
+        super().__init__(
+            db_alias=db_alias,
+            id_execucao=id_execucao,
+            repositorio_auditoria=repositorio_auditoria,
+            primeiro_run=primeiro_run,
+        )
         self.eol = eol or EOLService()
-        self.ultima_fase_concluida = 0
-        self.ultimo_token: str | None = None
-        # Contrato com BaseEtlCommand: `servico._fases[i].table_name`
-        self._fases: list[_FaseInfo] = [
-            _FaseInfo(table_name="tipo_programa"),
-            _FaseInfo(table_name="componente_curricular_programa"),
-            _FaseInfo(table_name="turma_programa"),
-            _FaseInfo(table_name="turma_programa_componente_curricular"),
-            _FaseInfo(table_name="matricula_turma_programa"),
+        self._fases = self._init_fases()
+
+    def _iter_chunks(self, sql: str) -> Iterator[list[tuple]]:
+        """Lê os dados brutos da origem (MSSQL) em chunks."""
+        return self.eol.iter_query(sql)
+
+    def _init_fases(self) -> list[PhaseConfig]:
+        """Define as fases do domínio Programas em ordem de dependência."""
+        return [
+            PhaseConfig(
+                nome="tipo_programa",
+                sql=SQL_TIPO_PROGRAMA,
+                table_name="tipo_programa",
+                source_table="tipo_programa",
+                model_class=TipoPrograma,
+                dto_in=TipoProgramaIn,
+                pk_field="codigo_tipo_programa",
+                update_fields=("nome", "categoria", "ativo"),
+                unique_fields=("codigo_tipo_programa",),
+                modo_escrita="upsert",
+            ),
+            PhaseConfig(
+                nome="componente_curricular_programa",
+                sql=SQL_COMPONENTE_CURRICULAR_PROGRAMA,
+                table_name="componente_curricular_programa",
+                source_table="componente_curricular",
+                model_class=ComponenteCurricularPrograma,
+                dto_in=ComponenteCurricularProgramaIn,
+                pk_field="codigo_componente_curricular",
+                update_fields=(
+                    "nome_componente_curricular",
+                    "categoria",
+                    "vigente",
+                ),
+                unique_fields=("codigo_componente_curricular",),
+                modo_escrita="upsert",
+            ),
+            PhaseConfig(
+                nome="turma_programa",
+                sql=SQL_TURMA_PROGRAMA,
+                table_name="turma_programa",
+                source_table="turma_escola",
+                model_class=TurmaPrograma,
+                dto_in=TurmaProgramaIn,
+                pk_field="codigo_turma",
+                update_fields=(
+                    "nome_turma",
+                    "codigo_ue",
+                    "codigo_dre",
+                    "ano_letivo",
+                    "tipo_turno",
+                    "descricao_turno",
+                    "situacao",
+                    "codigo_tipo_programa",
+                    "categoria",
+                ),
+                unique_fields=("codigo_turma",),
+                modo_escrita="upsert",
+            ),
+            PhaseConfig(
+                nome="turma_programa_componente_curricular",
+                sql=SQL_TURMA_PROGRAMA_COMPONENTE_CURRICULAR,
+                table_name="turma_programa_componente_curricular",
+                source_table="turma_escola_grade_programa",
+                model_class=TurmaProgramaComponenteCurricular,
+                dto_in=TurmaProgramaComponenteCurricularIn,
+                pk_field=["codigo_turma", "codigo_componente_curricular"],
+                update_fields=("nome_componente_curricular",),
+                unique_fields=(
+                    "codigo_turma",
+                    "codigo_componente_curricular",
+                ),
+                modo_escrita="upsert",
+            ),
+            PhaseConfig(
+                nome="matricula_turma_programa",
+                sql=SQL_MATRICULA_TURMA_PROGRAMA,
+                table_name="matricula_turma_programa",
+                source_table="matricula_turma_escola",
+                model_class=MatriculaTurmaPrograma,
+                dto_in=MatriculaTurmaProgramaIn,
+                pk_field=[
+                    "codigo_turma",
+                    "codigo_aluno",
+                    "codigo_componente_curricular",
+                ],
+                update_fields=(
+                    "nome_componente_curricular",
+                    "codigo_situacao_matricula",
+                    "descricao_situacao_matricula",
+                    "data_matricula",
+                    "data_situacao",
+                    "ano_letivo",
+                    "codigo_ue",
+                    "codigo_dre",
+                    "categoria",
+                ),
+                unique_fields=(
+                    "codigo_turma",
+                    "codigo_aluno",
+                    "codigo_componente_curricular",
+                ),
+                modo_escrita="upsert",
+            ),
         ]
-
-    def popular_tipos_programa(self) -> int:
-        """Fase 1: Extrai e persiste TipoPrograma (seed do EOL).
-
-        O codigo_tipo_programa preserva o cd_tipo_programa do EOL.
-        A categoria (PAP/PAEE) é derivada do id via mapeamento em model_out.
-        """
-        rows = self.eol.executar_query(SQL_TIPO_PROGRAMA)
-        objs = [TipoProgramaOut.from_in(TipoProgramaIn(*r)) for r in rows]
-        update_fields = ["nome", "categoria", "ativo"]
-        total = _upsert_incremental(TipoPrograma, "tipo_programa", objs, update_fields)
-        logger.info("[ETL PROG] tipo_programa: %d", total)
-        return total
-
-    def popular_componentes_curriculares(self) -> int:
-        """Fase 2: Extrai e persiste ComponenteCurricularPrograma (seed do EOL).
-
-        Substitui as constantes hardcoded IDS_COMPONENTES_CURRICULARES_PAP_NOVO
-        e COMPONENTE_CURRICULAR_ID_SRM do Pedagogico-API.
-        A categoria e o flag vigente são derivados do id via mapeamento em model_out.
-        """
-        rows = self.eol.executar_query(SQL_COMPONENTE_CURRICULAR_PROGRAMA)
-        objs = [
-            ComponenteCurricularProgramaOut.from_in(ComponenteCurricularProgramaIn(*r))
-            for r in rows
-        ]
-        update_fields = [
-            "nome_componente_curricular",
-            "categoria",
-            "vigente",
-        ]
-        total = _upsert_incremental(
-            ComponenteCurricularPrograma,
-            "componente_curricular_programa",
-            objs,
-            update_fields,
-            unique_fields=["codigo_componente_curricular"],
-        )
-        logger.info("[ETL PROG] componente_curricular_programa: %d", total)
-        return total
-
-    def popular_turmas_programa(self) -> int:
-        """Fase 3: Extrai e persiste TurmaPrograma (ETL incremental).
-
-        Cobre turmas com cd_tipo_turma=3 e cd_tipo_programa PAP/PAEE do EOL.
-        """
-        rows = self.eol.executar_query(SQL_TURMA_PROGRAMA)
-        objs = [TurmaProgramaOut.from_in(TurmaProgramaIn(*r)) for r in rows]
-        update_fields = [
-            "nome_turma",
-            "codigo_ue",
-            "codigo_dre",
-            "ano_letivo",
-            "tipo_turno",
-            "descricao_turno",
-            "situacao",
-            "codigo_tipo_programa",
-            "categoria",
-            "atualizado_em",
-        ]
-        total = _upsert_incremental(
-            TurmaPrograma,
-            "turma_programa",
-            objs,
-            update_fields,
-            unique_fields=["codigo_turma"],
-            timestamp_field="atualizado_em",
-        )
-        logger.info("[ETL PROG] turma_programa: %d", total)
-        return total
-
-    def popular_turmas_programa_componentes(self) -> int:
-        """Fase 4: Extrai e persiste TurmaProgramaComponenteCurricular (ETL incremental).
-
-        Depende de TurmaPrograma estar carregado (FK lógica).
-        """
-        rows = self.eol.executar_query(SQL_TURMA_PROGRAMA_COMPONENTE_CURRICULAR)
-        objs = [
-            TurmaProgramaComponenteCurricularOut.from_in(
-                TurmaProgramaComponenteCurricularIn(*r)
-            )
-            for r in rows
-        ]
-        update_fields = ["nome_componente_curricular"]
-        total = _upsert_incremental(
-            TurmaProgramaComponenteCurricular,
-            "turma_programa_componente_curricular",
-            objs,
-            update_fields,
-            unique_fields=["codigo_turma", "codigo_componente_curricular"],
-        )
-        logger.info("[ETL PROG] turma_programa_componente_curricular: %d", total)
-        return total
-
-    def popular_matriculas_turma_programa(self) -> int:
-        """Fase 5: Extrai e persiste MatriculaTurmaPrograma (ETL incremental).
-
-        Depende de TurmaPrograma estar carregado (FK lógica).
-        """
-        rows = self.eol.executar_query(SQL_MATRICULA_TURMA_PROGRAMA)
-        objs = [MatriculaTurmaProgramaOut.from_in(MatriculaTurmaProgramaIn(*r)) for r in rows]
-        update_fields = [
-            "nome_componente_curricular",
-            "codigo_situacao_matricula",
-            "descricao_situacao_matricula",
-            "data_matricula",
-            "data_situacao",
-            "ano_letivo",
-            "codigo_ue",
-            "codigo_dre",
-            "categoria",
-            "atualizado_em",
-        ]
-        total = _upsert_incremental(
-            MatriculaTurmaPrograma,
-            "matricula_turma_programa",
-            objs,
-            update_fields,
-            unique_fields=["codigo_turma", "codigo_aluno", "codigo_componente_curricular"],
-            timestamp_field="atualizado_em",
-        )
-        logger.info("[ETL PROG] matricula_turma_programa: %d", total)
-        return total
-
-    def executar(self, fase_inicial: int = 1) -> dict[str, int]:
-        """Executa as fases do ETL de programas em ordem de dependência."""
-        resultados: dict[str, int] = {}
-        log = logger.info
-
-        log("[ETL PROG] Iniciando carga a partir da fase %d...", fase_inicial)
-
-        if fase_inicial <= 1:
-            log("[ETL PROG] === Fase 1: TipoPrograma ===")
-            resultados["tipo_programa"] = self.popular_tipos_programa()
-            self.ultima_fase_concluida = 1
-            log("[ETL PROG] Fase 1 concluída.")
-
-        if fase_inicial <= 2:
-            log("[ETL PROG] === Fase 2: ComponenteCurricularPrograma ===")
-            resultados["componente_curricular_programa"] = self.popular_componentes_curriculares()
-            self.ultima_fase_concluida = 2
-            log("[ETL PROG] Fase 2 concluída.")
-
-        if fase_inicial <= 3:
-            log("[ETL PROG] === Fase 3: TurmaPrograma ===")
-            resultados["turma_programa"] = self.popular_turmas_programa()
-            self.ultima_fase_concluida = 3
-            log("[ETL PROG] Fase 3 concluída.")
-
-        if fase_inicial <= 4:
-            log("[ETL PROG] === Fase 4: TurmaProgramaComponenteCurricular ===")
-            resultados["turma_programa_componente_curricular"] = (
-                self.popular_turmas_programa_componentes()
-            )
-            self.ultima_fase_concluida = 4
-            log("[ETL PROG] Fase 4 concluída.")
-
-        if fase_inicial <= 5:
-            log("[ETL PROG] === Fase 5: MatriculaTurmaPrograma ===")
-            resultados["matricula_turma_programa"] = self.popular_matriculas_turma_programa()
-            self.ultima_fase_concluida = 5
-            log("[ETL PROG] Fase 5 concluída.")
-
-        total = sum(resultados.values())
-        log(
-            "[ETL PROG] Concluído. Linhas alteradas: %d (fases %d–5).",
-            total,
-            fase_inicial,
-        )
-        return resultados
