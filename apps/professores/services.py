@@ -188,6 +188,7 @@ SQL_PROFESSORES = f"""
     INNER JOIN v_cargo_base_cotic cbs
         ON cbs.cd_servidor = sc.cd_servidor
     WHERE cbs.cd_cargo IN ({_PLACEHOLDERS_CARGO})
+      AND sc.cd_registro_funcional IS NOT NULL
 """
 
 SQL_CARGOS_BASE = f"""
