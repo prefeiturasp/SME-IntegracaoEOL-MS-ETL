@@ -1,6 +1,7 @@
 """Adaptador de logger com contexto fixo para correlação de execuções ETL."""
 
 import logging
+from typing import Any
 
 
 class ContextualLogger(logging.LoggerAdapter):
@@ -37,7 +38,7 @@ class ContextualLogger(logging.LoggerAdapter):
                 raise ValueError("Todas as chaves do contexto devem ser strings")
 
     @classmethod
-    def get_etl_logger(cls, name: str, **kwargs: object) -> "ContextualLogger":
+    def get_etl_logger(cls, name: str, **kwargs: Any) -> "ContextualLogger":
         """Retorna um ContextualLogger com prefixo 'etl_' no nome do logger."""
         logger = logging.getLogger(f"etl_{name}")
         context = {k: v for k, v in kwargs.items() if v is not None}
