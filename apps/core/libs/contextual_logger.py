@@ -41,5 +41,5 @@ class ContextualLogger(logging.LoggerAdapter):
     def get_etl_logger(cls, name: str, **kwargs: Any) -> "ContextualLogger":
         """Retorna um ContextualLogger com prefixo 'etl_' no nome do logger."""
         logger = logging.getLogger(f"etl_{name}")
-        context = {k: v for k, v in kwargs.items() if v is not None}
+        context = {k: kwargs[k] for k in kwargs if kwargs[k] is not None}
         return cls(logger, context)
