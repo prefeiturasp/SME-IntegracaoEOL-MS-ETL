@@ -131,7 +131,7 @@ class EtlProfessoresCommandTest(TestCase):
     ) -> None:
         """Ao usar --continuar após sucesso, reinicia a execução da fase 1."""
         mock_servico.return_value.executar.return_value = _RESULTADO_MOCK
-        mock_servico.return_value.ultima_fase_concluida = 3
+        mock_servico.return_value.ultima_fase_concluida = 4
 
         self._executar()
         self._executar(["--continuar"])

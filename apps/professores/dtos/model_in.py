@@ -364,6 +364,28 @@ class AtribuicaoAulaIn:
 
 
 @dataclass(slots=True)
+class AtribuicaoTerritorioSaberIn:
+    """Linha bruta da query SQL_AGRUPAMENTOS_TERRITORIO_SABER.
+
+    Cada linha representa um componente curricular de território do saber
+    atribuído a um professor numa turma. O agrupamento ocorre em Python:
+    linhas com mesma chave natural e mais de 1 componente geram registros
+    em AgrupamentoAtribuicaoTerritorioSaber.
+    """
+
+    codigo_componente_curricular: Any
+    codigo_turma: Any
+    ano_letivo: Any
+    rf_professor: Any
+    codigo_territorio_saber: Any
+    codigo_experiencia_pedagogica: Any
+    data_atribuicao: Any
+    data_disponibilizacao: Any
+    codigo_motivo_disponibilizacao: Any
+    data_fim_turma: Any
+
+
+@dataclass(slots=True)
 class AtribuicaoExternoIn:
     """Dados brutos da tabela `atribuicao_externo`."""
 

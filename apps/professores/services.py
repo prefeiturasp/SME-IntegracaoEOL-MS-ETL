@@ -10,37 +10,39 @@ Responsabilidade:
     Descrições são resolvidas pelo Transition Gateway.
 
 Estrategia de escrita por tabela:
-    upsert (bulk_create update_conflicts):
-        UnidadeEducacional, TurmaEscola, SerieTurmaGrade,
-        TurmaEscolaGradePrograma,
-        Professor, Pessoa,
+    upsert incremental (bulk_create update_conflicts + hash SHA-256):
+        UnidadeEducacional, TurmaEscola, Professor, Pessoa,
+        SerieTurmaGrade, TurmaEscolaGradePrograma,
         CargoBaseServidor, ContratoExterno,
-        AtribuicaoAula, AtribuicaoExterno
+        AtribuicaoAula, AtribuicaoExterno,
+        AgrupamentoAtribuicaoTerritorioSaber
 
-    full-refresh (delete + bulk_create em transação):
+    full-refresh (delete-all + bulk_create por lote, sem transação global):
         TurmaGradeTerritorioExperiencia (PK auto-gerada — sem chave natural)
         LotacaoServidor, CargoSobrepostoServidor,
         FuncaoAtividadeCargoServidor, LaudoMedico
 
-    pendente (ApiEolConnection — PostgreSQL separado):
-        AgrupamentoAtribuicaoTerritorioSaber
-
 Cargos de professor reconhecidos pelo EOL:
     3239, 3247, 3255, 3263, 3271, 3280, 3298, 3301,
-    3336, 3344, 3840, 3859, 3867, 3874, 3883, 3884
+    3310, 3336, 3344, 3840, 3859, 3867, 3874, 3875,
+    3883, 3884
 """
 
 import hashlib
 import logging
 from collections.abc import Callable, Iterator
+from datetime import datetime
+from itertools import groupby
 from typing import Any
 
 from apps.controle_auditoria.models import EtlAuditoriaLinha
+from apps.core.libs.helpers import make_aware
 from apps.core.libs.thread_processor import ThreadPoolProcessor
 from apps.eol_connection.libs.servico_eol import EOLService
 from apps.professores.dtos.model_in import (
     AtribuicaoAulaIn,
     AtribuicaoExternoIn,
+    AtribuicaoTerritorioSaberIn,
     CargoBaseServidorIn,
     CargoSobrepostoServidorIn,
     ContratoExternoIn,
@@ -68,6 +70,7 @@ from apps.professores.dtos.model_out import (
     UnidadeEducacionalOut,
 )
 from apps.professores.models import (
+    AgrupamentoAtribuicaoTerritorioSaber,
     AtribuicaoAula,
     AtribuicaoExterno,
     CargoBaseServidor,
@@ -561,6 +564,214 @@ def _upsert_incremental(
 
 
 # ---------------------------------------------------------------------------
+# Helpers — agrupamento território do saber
+# ---------------------------------------------------------------------------
+
+# Alimenta: agrupamento_atribuicao_territorio_saber
+# UNION ALL: professor via RF (SME) + professor externo via CPF
+SQL_AGRUPAMENTOS_TERRITORIO_SABER = """
+-- SME — professor via RF
+SELECT
+    cc.cd_componente_curricular       AS CodigoComponenteCurricular,
+    te.cd_turma_escola                AS CodigoTurma,
+    te.an_letivo                      AS AnoLetivo,
+    vsc.cd_registro_funcional         AS RfProfessor,
+    tgt.cd_territorio_saber           AS CodigoTerritorioSaber,
+    tgt.cd_experiencia_pedagogica     AS CodigoExperienciaPedagogica,
+    aa.dt_atribuicao_aula             AS DataAtribuicao,
+    aa.dt_disponibilizacao_aulas      AS DataDisponibilizacao,
+    aa.cd_motivo_disponibilizacao     AS CodigoMotivoDisponibilizacao,
+    te.dt_fim_turma                   AS DataFimTurma
+FROM turma_escola te
+    INNER JOIN escola esc ON te.cd_escola = esc.cd_escola
+    INNER JOIN serie_turma_escola ste
+        ON ste.cd_turma_escola = te.cd_turma_escola
+    INNER JOIN serie_turma_grade stg
+        ON stg.cd_turma_escola = ste.cd_turma_escola
+        AND stg.dt_fim IS NULL
+    INNER JOIN escola_grade eg ON eg.cd_escola_grade = stg.cd_escola_grade
+    INNER JOIN grade g ON g.cd_grade = eg.cd_grade
+    INNER JOIN grade_componente_curricular gcc ON gcc.cd_grade = g.cd_grade
+    INNER JOIN componente_curricular cc
+        ON cc.cd_componente_curricular = gcc.cd_componente_curricular
+        AND cc.dt_cancelamento IS NULL
+    INNER JOIN serie_ensino se ON se.cd_serie_ensino = g.cd_serie_ensino
+    INNER JOIN turma_grade_territorio_experiencia tgt
+        ON tgt.cd_serie_grade = stg.cd_serie_grade
+        AND tgt.cd_componente_curricular = cc.cd_componente_curricular
+    INNER JOIN tipo_experiencia_pedagogica exp
+        ON exp.cd_experiencia_pedagogica = tgt.cd_experiencia_pedagogica
+    INNER JOIN território_saber ter
+        ON ter.cd_territorio_saber = tgt.cd_territorio_saber
+    INNER JOIN atribuicao_aula aa
+        ON gcc.cd_grade = aa.cd_grade
+        AND gcc.cd_componente_curricular = aa.cd_componente_curricular
+        AND aa.cd_serie_grade = stg.cd_serie_grade
+        AND aa.dt_cancelamento IS NULL
+        AND aa.an_atribuicao = te.an_letivo
+        AND (aa.cd_motivo_disponibilizacao <> 26
+             OR aa.cd_motivo_disponibilizacao IS NULL)
+    INNER JOIN v_cargo_base_cotic vcbc
+        ON vcbc.cd_cargo_base_servidor = aa.cd_cargo_base_servidor
+    INNER JOIN v_servidor_cotic vsc ON vsc.cd_servidor = vcbc.cd_servidor
+WHERE te.st_turma_escola IN ('O', 'A', 'C', 'E')
+
+UNION ALL
+
+-- Externos (CEI_INDIR=11, CRP_CONV=12, EMEFPFOM=32, EMEIPFOM=33)
+SELECT
+    cc.cd_componente_curricular           AS CodigoComponenteCurricular,
+    te.cd_turma_escola                    AS CodigoTurma,
+    te.an_letivo                          AS AnoLetivo,
+    pe.cd_cpf_pessoa                      AS RfProfessor,
+    tgt.cd_territorio_saber               AS CodigoTerritorioSaber,
+    tgt.cd_experiencia_pedagogica         AS CodigoExperienciaPedagogica,
+    ae.dt_atribuicao                      AS DataAtribuicao,
+    ae.dt_disponibilizacao                AS DataDisponibilizacao,
+    ae.cd_motivo_disponibilizacao_externo AS CodigoMotivoDisponibilizacao,
+    te.dt_fim_turma                       AS DataFimTurma
+FROM turma_escola te
+    INNER JOIN escola esc ON te.cd_escola = esc.cd_escola
+    INNER JOIN serie_turma_escola ste
+        ON ste.cd_turma_escola = te.cd_turma_escola
+    INNER JOIN serie_turma_grade stg
+        ON stg.cd_turma_escola = ste.cd_turma_escola
+        AND stg.dt_fim IS NULL
+    INNER JOIN escola_grade eg ON eg.cd_escola_grade = stg.cd_escola_grade
+    INNER JOIN grade g ON g.cd_grade = eg.cd_grade
+    INNER JOIN grade_componente_curricular gcc ON gcc.cd_grade = g.cd_grade
+    INNER JOIN componente_curricular cc
+        ON cc.cd_componente_curricular = gcc.cd_componente_curricular
+        AND cc.dt_cancelamento IS NULL
+    INNER JOIN turma_grade_territorio_experiencia tgt
+        ON tgt.cd_serie_grade = stg.cd_serie_grade
+        AND tgt.cd_componente_curricular = cc.cd_componente_curricular
+    INNER JOIN tipo_experiencia_pedagogica exp
+        ON exp.cd_experiencia_pedagogica = tgt.cd_experiencia_pedagogica
+    INNER JOIN território_saber ter
+        ON ter.cd_territorio_saber = tgt.cd_territorio_saber
+    INNER JOIN atribuicao_externo ae
+        ON gcc.cd_grade = ae.cd_grade
+        AND gcc.cd_componente_curricular = ae.cd_componente_curricular
+        AND ae.dt_cancelamento IS NULL
+        AND ae.an_atribuicao = te.an_letivo
+        AND (ae.cd_motivo_disponibilizacao_externo <> 1
+             OR ae.cd_motivo_disponibilizacao_externo IS NULL)
+    INNER JOIN contrato_externo ce
+        ON ce.cd_contrato_externo = ae.cd_contrato_externo
+    INNER JOIN pessoa pe ON pe.cd_pessoa = ce.cd_pessoa
+WHERE te.st_turma_escola IN ('O', 'A', 'C', 'E')
+  AND esc.tp_escola IN (11, 12, 32, 33)
+
+ORDER BY CodigoTurma, CodigoTerritorioSaber, CodigoExperienciaPedagogica,
+         RfProfessor, DataAtribuicao, DataDisponibilizacao
+"""
+
+_UPDATE_FIELDS_AGRUP = [
+    "dt_fim_atribuicao",
+    "dt_fim_turma",
+    "codigo_motivo_disponibilizacao",
+    "codigos_componentes_curriculares",
+]
+
+
+def _cod_agrupamento_ts(
+    codigo_turma: Any,
+    codigo_territorio_saber: Any,
+    codigo_experiencia_pedagogica: Any,
+    rf_professor: Any,
+    data_atribuicao: Any,
+    componentes_ordenados: list[int],
+) -> int:
+    """Hash MD5 truncado da chave natural + componentes ordenados."""
+    csv = ",".join(str(c) for c in componentes_ordenados)
+    chave = (
+        f"{codigo_turma}_{codigo_territorio_saber}_"
+        f"{codigo_experiencia_pedagogica}_{rf_professor}_"
+        f"{data_atribuicao}_{csv}"
+    )
+    return int(hashlib.md5(chave.encode()).hexdigest()[:15], 16)  # NOSONAR
+
+
+def _chave_grupo_ts(row: AtribuicaoTerritorioSaberIn) -> tuple:
+    return (
+        str(row.codigo_turma),
+        int(row.codigo_territorio_saber),
+        (
+            int(row.codigo_experiencia_pedagogica)
+            if row.codigo_experiencia_pedagogica is not None
+            else -1
+        ),
+        str(row.rf_professor) if row.rf_professor is not None else "",
+        row.data_atribuicao or datetime.min,
+        row.data_disponibilizacao or datetime.min,
+    )
+
+
+def _agrupar_ts(
+    rows: list[AtribuicaoTerritorioSaberIn],
+) -> list[AgrupamentoAtribuicaoTerritorioSaber]:
+    """Agrega linhas brutas em AgrupamentoAtribuicaoTerritorioSaber.
+
+    Apenas grupos com mais de 1 componente curricular geram registro
+    (definição do agrupamento: professor atribuído a múltiplos componentes
+    de território do saber na mesma turma).
+    """
+    resultado: list[AgrupamentoAtribuicaoTerritorioSaber] = []
+
+    for _, grupo in groupby(
+        sorted(rows, key=_chave_grupo_ts), key=_chave_grupo_ts
+    ):
+        grupo_list = list(grupo)
+        componentes = sorted(
+            {int(r.codigo_componente_curricular) for r in grupo_list}
+        )
+
+        if len(componentes) <= 1:
+            continue
+
+        primeiro = grupo_list[0]
+        cod_agrup = _cod_agrupamento_ts(
+            primeiro.codigo_turma,
+            primeiro.codigo_territorio_saber,
+            primeiro.codigo_experiencia_pedagogica,
+            primeiro.rf_professor,
+            primeiro.data_atribuicao,
+            componentes,
+        )
+
+        dt_inicio = make_aware(primeiro.data_atribuicao)
+        dt_fim = make_aware(primeiro.data_disponibilizacao)
+        dt_fim_turma = make_aware(primeiro.data_fim_turma)
+
+        resultado.append(
+            AgrupamentoAtribuicaoTerritorioSaber(
+                codigo_agrupamento=cod_agrup,
+                codigo_territorio_saber=primeiro.codigo_territorio_saber,
+                codigo_experiencia_pedagogica=(
+                    primeiro.codigo_experiencia_pedagogica
+                ),
+                dt_inicio_atribuicao=(dt_inicio.date() if dt_inicio else None),
+                ano_atribuicao=dt_inicio.year if dt_inicio else None,
+                dt_fim_atribuicao=dt_fim.date() if dt_fim else None,
+                dt_fim_turma=dt_fim_turma.date() if dt_fim_turma else None,
+                rf_professor=primeiro.rf_professor,
+                codigo_turma=int(primeiro.codigo_turma),
+                codigos_componentes_curriculares=",".join(
+                    str(c) for c in componentes
+                ),
+                ano_letivo=primeiro.ano_letivo,
+                codigo_motivo_disponibilizacao=(
+                    primeiro.codigo_motivo_disponibilizacao
+                ),
+                encerramento_atribuicao_agrupamento_atualizado=None,
+            )
+        )
+
+    return resultado
+
+
+# ---------------------------------------------------------------------------
 # Servico principal
 # ---------------------------------------------------------------------------
 
@@ -595,6 +806,7 @@ _ORDEM_TABELAS: tuple[str, ...] = (
     "laudo_medico",
     "atribuicao_aula",
     "atribuicao_externo",
+    "agrupamento_atribuicao_territorio_saber",
 )
 
 
@@ -962,6 +1174,56 @@ class EtlProfessoresService:
         return total
 
     # ------------------------------------------------------------------
+    # Fase 4 — Agrupamentos território do saber
+    # ------------------------------------------------------------------
+
+    def popular_agrupamentos_territorio_saber(self) -> int:
+        """Popula AgrupamentoAtribuicaoTerritorioSaber via SQL Server (EOL).
+
+        Coleta todas as atribuições de território do saber (SME + externos),
+        agrega em Python e persiste via upsert incremental.
+        Apenas grupos com mais de 1 componente curricular geram registro.
+        """
+        rows: list[AtribuicaoTerritorioSaberIn] = []
+        for chunk in self.eol.iter_query(SQL_AGRUPAMENTOS_TERRITORIO_SABER):
+            for r in chunk:
+                rows.append(AtribuicaoTerritorioSaberIn(*r))
+
+        agrupamentos = _agrupar_ts(rows)
+
+        return _upsert_incremental(
+            AgrupamentoAtribuicaoTerritorioSaber,
+            "agrupamento_atribuicao_territorio_saber",
+            [
+                {
+                    "codigo_agrupamento": a.codigo_agrupamento,
+                    "codigo_territorio_saber": a.codigo_territorio_saber,
+                    "codigo_experiencia_pedagogica": (
+                        a.codigo_experiencia_pedagogica
+                    ),
+                    "dt_inicio_atribuicao": a.dt_inicio_atribuicao,
+                    "ano_atribuicao": a.ano_atribuicao,
+                    "dt_fim_atribuicao": a.dt_fim_atribuicao,
+                    "dt_fim_turma": a.dt_fim_turma,
+                    "rf_professor": a.rf_professor,
+                    "codigo_turma": a.codigo_turma,
+                    "codigos_componentes_curriculares": (
+                        a.codigos_componentes_curriculares
+                    ),
+                    "ano_letivo": a.ano_letivo,
+                    "codigo_motivo_disponibilizacao": (
+                        a.codigo_motivo_disponibilizacao
+                    ),
+                    "encerramento_atribuicao_agrupamento_atualizado": (
+                        a.encerramento_atribuicao_agrupamento_atualizado
+                    ),
+                }
+                for a in agrupamentos
+            ],
+            _UPDATE_FIELDS_AGRUP,
+        )
+
+    # ------------------------------------------------------------------
     # Execucao completa na ordem correta
     # ------------------------------------------------------------------
 
@@ -976,11 +1238,12 @@ class EtlProfessoresService:
         """Executa ETL do dominio PROFESSORES_DB a partir de ``fase_inicial``.
 
         Args:
-            fase_inicial: Fase de início (1–3). Use > 1 para retomar após
+            fase_inicial: Fase de início (1–4). Use > 1 para retomar após
                 falha.
                 - 1: Tabelas sem dependências (UEs, turmas, professores)
                 - 2: Vínculos cargo/contrato (dependem da fase 1)
                 - 3: Atribuições e bloqueios (dependem da fase 2)
+                - 4: Agrupamentos território do saber
             pular_ate: Nome da última tabela completamente concluída.
                 Todas as tabelas até ela (inclusive) são puladas.
             lote_inicial: Número de lotes já processados na tabela
@@ -1127,12 +1390,21 @@ class EtlProfessoresService:
             self.ultima_fase_concluida = 3
             log("[ETL PROF] Fase 3 concluída.")
 
-        # Pendente: agrupamento_atribuicao_territorio_saber
-        # Requer ApiEolConnection (PostgreSQL API EOL — não implementado).
+        # ------------------------------------------------------------------
+        # Fase 4 — Agrupamentos território do saber
+        # ------------------------------------------------------------------
+        if fase_inicial <= 4:
+            log("[ETL PROF] === Fase 4: Agrupamentos Território do Saber ===")
+            _executar_tabela(
+                "agrupamento_atribuicao_territorio_saber",
+                self.popular_agrupamentos_territorio_saber,
+            )
+            self.ultima_fase_concluida = 4
+            log("[ETL PROF] Fase 4 concluída.")
 
         total = sum(r.values())
         log(
-            "[ETL PROF] Concluído. Linhas alteradas: %d (fases %d–3).",
+            "[ETL PROF] Concluído. Linhas alteradas: %d (fases %d–4).",
             total,
             fase_inicial,
         )

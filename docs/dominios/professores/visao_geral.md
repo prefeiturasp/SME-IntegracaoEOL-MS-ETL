@@ -18,7 +18,7 @@ Descrições e nomes são resolvidos em tempo de resposta pelo **Transition Gate
 
 `EtlProfessoresService` em `apps/professores/services.py`.
 
-Expõe métodos `popular_*` por tabela e um método `executar(fase_inicial=1)` que orquestra as 3 fases.
+Expõe métodos `popular_*` por tabela e um método `executar(fase_inicial=1)` que orquestra as 4 fases.
 
 ## Total de modelos do app
 
@@ -47,8 +47,8 @@ O código atual define **16 modelos** em `apps/professores/models.py`.
 - `AtribuicaoAula` — atribuição de aulas ao CargoBaseServidor
 - `AtribuicaoExterno` — atribuição de aulas ao ContratoExterno
 
-### Pendente — não carregada pelo ETL atual
-- `AgrupamentoAtribuicaoTerritorioSaber` — fonte: ApiEolConnection
+### Fase 4 — dependem das Fases 1–3
+- `AgrupamentoAtribuicaoTerritorioSaber` — agrega atribuições por (turma, território, experiência, professor, data); apenas grupos com 2+ componentes; inclui SME (RF) e externos (CPF)
 
 ## Fluxo
 
@@ -60,7 +60,8 @@ digraph G {
     F1 [label="Fase 1\nUE / Turma / Professor / Pessoa"];
     F2 [label="Fase 2\nSerie / TEGP / CargoBase / Contrato"];
     F3 [label="Fase 3\nVinculos / Atribuicoes"];
+    F4 [label="Fase 4\nAgrupamentoTerritorioSaber"];
 
-    F1 -> F2 -> F3;
+    F1 -> F2 -> F3 -> F4;
 }
 ```

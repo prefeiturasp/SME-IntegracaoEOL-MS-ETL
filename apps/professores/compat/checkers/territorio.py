@@ -1,28 +1,42 @@
-"""Verificadores de compatibilidade: TurmaGradeTerritorioExperiencia.
+"""Verificadores de compatibilidade para território e agrupamentos.
 
 Cobre:
-    ComponenteCurricularRepository.ObterComponentesCurricularesTerritorioAtribuidos
-    ComponenteCurricularRepository.ObterComponentesCurricularesTerritorioNaoDisponibilizados
+    ComponenteCurricularRepository
+        .ObterComponentesCurricularesTerritorioAtribuidos
+    ComponenteCurricularRepository
+        .ObterComponentesCurricularesTerritorioNaoDisponibilizados
+    AgrupamentoAtribuicaoTerritorioSaber (ETL direto do SQL Server)
 
 Verifica:
-  1. Os registros de TurmaGradeTerritorioExperiencia foram replicados com
-     os campos corretos.
-  2. O JOIN interno TurmaGradeTerritorioExperiencia ↔ SerieTurmaGrade
-     ↔ AtribuicaoAula produz os mesmos pares
+  1. Registros de TurmaGradeTerritorioExperiencia replicados com
+     campos corretos.
+  2. JOIN interno TurmaGradeTerritorioExperiencia ↔ SerieTurmaGrade
+     ↔ AtribuicaoAula produz os mesmos pares:
      (rf, codigo_turma, codigo_componente, codigo_territorio,
-      codigo_experiencia) que a consulta original.
+      codigo_experiencia).
+  3. Agrupamentos gerados pelo ETL (hash determinístico) existem no
+     professores_db com campos imutáveis corretos.
 
-Nota: TurmaGradeTerritorioExperiencia usa full-refresh (PK autogerada),
-portanto a chave de comparação usa os campos naturais:
-(codigo_serie_grade, codigo_componente_curricular,
- codigo_territorio_saber, codigo_experiencia_pedagogica).
+Nota:
+  TurmaGradeTerritorioExperiencia usa full-refresh (PK autogerada).
+  A comparação usa chaves naturais:
+  (codigo_serie_grade, codigo_componente_curricular,
+   codigo_territorio_saber, codigo_experiencia_pedagogica).
 """
 
 from typing import Any
 
 from apps.professores.compat.base import VerificadorBase
-from apps.professores.models import TurmaGradeTerritorioExperiencia
-from apps.professores.services import _PLACEHOLDERS_CARGO, CARGOS_PROFESSOR
+from apps.professores.models import (
+    AgrupamentoAtribuicaoTerritorioSaber,
+    TurmaGradeTerritorioExperiencia,
+)
+from apps.professores.services import (
+    _PLACEHOLDERS_CARGO,
+    CARGOS_PROFESSOR,
+    AtribuicaoTerritorioSaberIn,
+    _agrupar_ts,
+)
 
 # ---------------------------------------------------------------------------
 # Consultas SQL Server (origem)
@@ -259,3 +273,114 @@ class VerificadorTerritorioAtribuicao(VerificadorBase):
             linha["codigo_experiencia"],
             linha["ano_atribuicao"],
         )
+
+
+# ---------------------------------------------------------------------------
+# Verificador 3: AgrupamentoAtribuicaoTerritorioSaber
+# ---------------------------------------------------------------------------
+
+# Branch SME apenas (professores via RF) com TOP para limitar volume.
+# Suficiente para validar o pipeline: mesma lógica de agrupamento aplicada
+# nos dois lados (origem e destino).
+_SQL_AGRUPAMENTOS_SAMPLE = """
+SELECT TOP {limite}
+    cc.cd_componente_curricular       AS CodigoComponenteCurricular,
+    te.cd_turma_escola                AS CodigoTurma,
+    te.an_letivo                      AS AnoLetivo,
+    vsc.cd_registro_funcional         AS RfProfessor,
+    tgt.cd_territorio_saber           AS CodigoTerritorioSaber,
+    tgt.cd_experiencia_pedagogica     AS CodigoExperienciaPedagogica,
+    aa.dt_atribuicao_aula             AS DataAtribuicao,
+    aa.dt_disponibilizacao_aulas      AS DataDisponibilizacao,
+    aa.cd_motivo_disponibilizacao     AS CodigoMotivoDisponibilizacao,
+    te.dt_fim_turma                   AS DataFimTurma
+FROM turma_escola te
+    INNER JOIN escola esc ON te.cd_escola = esc.cd_escola
+    INNER JOIN serie_turma_escola ste
+        ON ste.cd_turma_escola = te.cd_turma_escola
+    INNER JOIN serie_turma_grade stg
+        ON stg.cd_turma_escola = ste.cd_turma_escola
+        AND stg.dt_fim IS NULL
+    INNER JOIN escola_grade eg ON eg.cd_escola_grade = stg.cd_escola_grade
+    INNER JOIN grade g ON g.cd_grade = eg.cd_grade
+    INNER JOIN grade_componente_curricular gcc ON gcc.cd_grade = g.cd_grade
+    INNER JOIN componente_curricular cc
+        ON cc.cd_componente_curricular = gcc.cd_componente_curricular
+        AND cc.dt_cancelamento IS NULL
+    INNER JOIN serie_ensino se ON se.cd_serie_ensino = g.cd_serie_ensino
+    INNER JOIN turma_grade_territorio_experiencia tgt
+        ON tgt.cd_serie_grade = stg.cd_serie_grade
+        AND tgt.cd_componente_curricular = cc.cd_componente_curricular
+    INNER JOIN tipo_experiencia_pedagogica exp
+        ON exp.cd_experiencia_pedagogica = tgt.cd_experiencia_pedagogica
+    INNER JOIN território_saber ter
+        ON ter.cd_territorio_saber = tgt.cd_territorio_saber
+    INNER JOIN atribuicao_aula aa
+        ON gcc.cd_grade = aa.cd_grade
+        AND gcc.cd_componente_curricular = aa.cd_componente_curricular
+        AND aa.cd_serie_grade = stg.cd_serie_grade
+        AND aa.dt_cancelamento IS NULL
+        AND aa.an_atribuicao = te.an_letivo
+        AND (aa.cd_motivo_disponibilizacao <> 26
+             OR aa.cd_motivo_disponibilizacao IS NULL)
+    INNER JOIN v_cargo_base_cotic vcbc
+        ON vcbc.cd_cargo_base_servidor = aa.cd_cargo_base_servidor
+    INNER JOIN v_servidor_cotic vsc ON vsc.cd_servidor = vcbc.cd_servidor
+WHERE te.st_turma_escola IN ('O', 'A', 'C', 'E')
+ORDER BY te.cd_turma_escola, tgt.cd_territorio_saber,
+         vsc.cd_registro_funcional, aa.dt_atribuicao_aula
+"""
+
+
+class VerificadorAgrupamentoTS(VerificadorBase):
+    """Valida AgrupamentoAtribuicaoTerritorioSaber populado pelo ETL.
+
+    Estratégia:
+      - Origem: executa _SQL_AGRUPAMENTOS_SAMPLE no EOL, aplica _agrupar_ts
+        em Python — reproduz o mesmo pipeline do ETL.
+      - Destino: busca os mesmos codigo_agrupamento no professores_db.
+      - Chave: (codigo_agrupamento,) — hash MD5 determinístico.
+        Se o agrupamento existe com o mesmo hash, os campos imutáveis
+        (turma, território, rf, componentes) estão corretos.
+    """
+
+    nome = "AgrupamentoAtribuicaoTerritorioSaber"
+    nome_consulta = "popular_agrupamentos_territorio_saber"
+
+    def buscar_origem(self, eol: Any, limite: int) -> list[dict[str, Any]]:
+        """Busca amostra de atribuições no EOL e agrega em Python."""
+        sql = _SQL_AGRUPAMENTOS_SAMPLE.format(limite=limite)
+        linhas = eol.executar_query(sql, [])
+        rows = [AtribuicaoTerritorioSaberIn(*r) for r in linhas]
+        agrupamentos = _agrupar_ts(rows)
+        return [
+            {
+                "codigo_agrupamento": a.codigo_agrupamento,
+                "codigo_territorio_saber": a.codigo_territorio_saber,
+                "rf_professor": a.rf_professor,
+                "ano_letivo": a.ano_letivo,
+            }
+            for a in agrupamentos
+        ]
+
+    def buscar_destino(
+        self, linhas_origem: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        """Busca agrupamentos no professores_db pelos hashes esperados."""
+        codigos = [r["codigo_agrupamento"] for r in linhas_origem]
+        return list(
+            AgrupamentoAtribuicaoTerritorioSaber.objects.using(
+                "professores_db"
+            )
+            .filter(codigo_agrupamento__in=codigos)
+            .values(
+                "codigo_agrupamento",
+                "codigo_territorio_saber",
+                "rf_professor",
+                "ano_letivo",
+            )
+        )
+
+    def chave_comparacao(self, linha: dict[str, Any]) -> tuple:
+        """Chave: hash do agrupamento (determinístico)."""
+        return (linha["codigo_agrupamento"],)

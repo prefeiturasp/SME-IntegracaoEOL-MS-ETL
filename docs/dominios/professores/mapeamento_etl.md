@@ -32,6 +32,12 @@ Documenta o fluxo real implementado nos métodos `popular_*` do serviço.
 | `popular_atribuicoes_aula` | `atribuicao_aula` | `upsert_incremental` | `atribuicao_aula` |
 | `popular_atribuicoes_externo` | `atribuicao_externo` | `upsert_incremental` | `atribuicao_externo` |
 
+## Fase 4 — dependem das Fases 1–3
+
+| Método | Tabela destino | Estratégia | SQL / Fonte |
+|---|---|---|---|
+| `popular_agrupamentos_territorio_saber` | `agrupamento_atribuicao_territorio_saber` | `upsert_incremental` | `atribuicao_aula` + `atribuicao_externo` (UNION ALL) |
+
 ## Observações
 
 - Domínios externos (DRE, TipoEscola, ComponenteCurricular, Cargo, etc.) **não são carregados**.

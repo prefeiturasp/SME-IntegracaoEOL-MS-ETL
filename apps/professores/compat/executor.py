@@ -33,7 +33,7 @@ Consultas cobertas (ProfessorController.txt):
         ObterComponentesCurriculares(join)  . VerificadorTerritorioAtribuicao
 
     AgrupamentoAtribuicaoTerritorioSaber
-        (não populado — pendente ETL ApiEolConnection)
+        VerificadorAgrupamentoTS ........ popular_agrupamentos_territorio_saber
 """
 
 import logging
@@ -55,6 +55,7 @@ from apps.professores.compat.checkers.cargo_base import (
     VerificadorValidadeProf,
 )
 from apps.professores.compat.checkers.territorio import (
+    VerificadorAgrupamentoTS,
     VerificadorTerritorioAtribuicao,
     VerificadorTerritorioReplicado,
 )
@@ -85,6 +86,8 @@ _TODOS_VERIFICADORES = [
     # Território do Saber (ComponenteCurricular)
     VerificadorTerritorioReplicado,
     VerificadorTerritorioAtribuicao,
+    # AgrupamentoAtribuicaoTerritorioSaber
+    VerificadorAgrupamentoTS,
 ]
 
 

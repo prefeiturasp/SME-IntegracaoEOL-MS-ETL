@@ -46,6 +46,7 @@ _TABELAS_UPSERT = frozenset(
         "contrato_externo",
         "atribuicao_aula",
         "atribuicao_externo",
+        "agrupamento_atribuicao_territorio_saber",
     }
 )
 
@@ -101,9 +102,9 @@ class Command(BaseCommand):
                 raw_indice = str(checkpoint.get("indice_sincronizacao") or "")
                 token_anterior = int(str(checkpoint.get("token_parada") or 0))
 
-                # Se tudo foi concluído (fase 3, sem índice parcial),
+                # Se tudo foi concluído (fase 4, sem índice parcial),
                 # reinicia do zero; caso contrário avança para a próxima.
-                fase_inicial = ultima_fase + 1 if ultima_fase < 3 else 1
+                fase_inicial = ultima_fase + 1 if ultima_fase < 4 else 1
 
                 if raw_indice:
                     if ":" in raw_indice:

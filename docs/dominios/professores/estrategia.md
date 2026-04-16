@@ -15,10 +15,12 @@ Apenas registros novos ou alterados são escritos.
 - `contrato_externo`
 - `atribuicao_aula`
 - `atribuicao_externo`
+- `agrupamento_atribuicao_territorio_saber`
 
-## Full Refresh (`_full_refresh`)
+## Full Refresh (`_full_refresh_por_lote`)
 
-Faz `delete()` seguido de `bulk_create()` em transação no `professores_db`.
+Faz `delete()` em todos os registros uma única vez, seguido de `bulk_create()` a cada lote recebido.
+Não usa transação global — a tabela fica temporariamente vazia durante a carga.
 Usado em tabelas sem chave natural estável para hash por linha.
 
 - `turma_grade_territorio_experiencia`
@@ -31,6 +33,6 @@ Usado em tabelas sem chave natural estável para hash por linha.
 
 - `_upsert_incremental` calcula hash com SHA-256 dos `update_fields`, consulta
   `EtlAuditoriaLinha`, filtra apenas o que mudou e faz `bulk_create(update_conflicts=True)`.
-- `_full_refresh` executa `delete()` + `bulk_create()` em transação no `professores_db`.
+- `_full_refresh_por_lote` executa `delete()` global seguido de `bulk_create()` por lote, sem transação global.
 - O comando registra `modo_escrita` como `"upsert"` ou `"full_refresh"` em
   `EtlExecucaoTabelaEscrita` com base na constante `_TABELAS_UPSERT`.

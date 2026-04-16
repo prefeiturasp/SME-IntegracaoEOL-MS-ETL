@@ -648,7 +648,7 @@ class EtlProfessoresServiceExecutarTest(TestCase):
         """Verifica que executar com fase_inicial=1 completa todas as fases."""
         srv = self._make_service_com_populares_mockados(1)
         resultado = srv.executar(fase_inicial=1)
-        self.assertEqual(srv.ultima_fase_concluida, 3)
+        self.assertEqual(srv.ultima_fase_concluida, 4)
         self.assertIn("unidade_educacional", resultado)
         self.assertIn("atribuicao_aula", resultado)
 
@@ -656,7 +656,7 @@ class EtlProfessoresServiceExecutarTest(TestCase):
         """Verifica que executar com fase_inicial=2 pula os dados da fase 1."""
         srv = self._make_service_com_populares_mockados(1)
         resultado = srv.executar(fase_inicial=2)
-        self.assertEqual(srv.ultima_fase_concluida, 3)
+        self.assertEqual(srv.ultima_fase_concluida, 4)
         self.assertNotIn("unidade_educacional", resultado)
         self.assertIn("serie_turma_grade", resultado)
 
