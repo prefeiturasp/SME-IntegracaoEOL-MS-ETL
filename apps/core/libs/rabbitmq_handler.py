@@ -5,7 +5,7 @@ import logging
 import os
 import time
 import traceback
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class RabbitMQHandler(logging.Handler):
@@ -69,10 +69,12 @@ class RabbitMQHandler(logging.Handler):
         if record.exc_info:
             exc_info_str = "".join(traceback.format_exception(*record.exc_info))
 
+        aplicacao = getattr(record, "aplicacao", os.getenv("NOME_APLICACAO", "SME-IntegracaoEOL-MS-ETL"))
         return json.dumps({
-            "timestamp": datetime.fromtimestamp(record.created).strftime("%Y-%m-%d %H:%M:%S,%f")[:-3],
+            "timestamp": datetime.fromtimestamp(record.created, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S") + f".{int(record.msecs):03d}Z",
             "level": record.levelname,
             "message": record.getMessage(),
+            "service": aplicacao,
             "logger_name": record.name,
             "file_name": record.filename,
             "func_name": record.funcName,
@@ -81,7 +83,7 @@ class RabbitMQHandler(logging.Handler):
             "process": record.process,
             "thread": record.thread,
             "exc_info": exc_info_str,
-            "aplicacao": getattr(record, "aplicacao", os.getenv("NOME_APLICACAO", "SME-IntegracaoEOL-MS-ETL")),
+            "aplicacao": aplicacao,
             "ambiente": os.getenv("LOG_ENVIRONMENT", "local"),
             "execution_id": getattr(record, "execution_id", None),
             "dominio": getattr(record, "dominio", None),
