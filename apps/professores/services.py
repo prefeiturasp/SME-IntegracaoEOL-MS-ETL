@@ -1286,6 +1286,25 @@ class EtlProfessoresService:
     # Execucao completa na ordem correta
     # ------------------------------------------------------------------
 
+    def _iter_lotes(
+        self,
+        sql: str,
+        parametros: list | dict | None,
+        original: Callable,
+        offset: int,
+        nome: str,
+        lote_counter: list[int],
+        on_lote: Callable[[str, int], None] | None,
+    ) -> Iterator[list[tuple[Any, ...]]]:
+        """Itera chunks do EOL aplicando offset e disparando on_lote."""
+        for i, chunk in enumerate(original(sql, parametros)):
+            if i < offset:
+                continue
+            lote_counter[0] += 1
+            yield chunk
+            if on_lote is not None:
+                on_lote(nome, lote_counter[0])
+
     def executar(
         self,
         fase_inicial: int = 1,
@@ -1368,15 +1387,15 @@ class EtlProfessoresService:
                 sql: str,
                 parametros: list | dict | None = None,
             ) -> Iterator[list[tuple[Any, ...]]]:
-                for i, chunk in enumerate(
-                    original_iter_query(sql, parametros)
-                ):
-                    if i < li:
-                        continue
-                    _lote_counter[0] += 1
-                    yield chunk
-                    if on_lote is not None:
-                        on_lote(nome, _lote_counter[0])
+                return self._iter_lotes(
+                    sql,
+                    parametros,
+                    original_iter_query,
+                    li,
+                    nome,
+                    _lote_counter,
+                    on_lote,
+                )
 
             self.eol.iter_query = _iter_rastreavel  # type: ignore[method-assign]
             try:

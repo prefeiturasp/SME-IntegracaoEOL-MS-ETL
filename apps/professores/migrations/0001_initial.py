@@ -3,6 +3,8 @@
 import django.db.models.deletion
 from django.db import migrations, models
 
+HELP_TEXT_UNIDADE_EDUCACIONAL_ID = "ID da UnidadeEducacional neste DB."
+HELP_TEXT_SERIE_TURMA_GRADE_ID = "ID da SerieTurmaGrade neste DB."
 HELP_TEXT_TURMA_ESCOLA_ID = "ID da TurmaEscola neste DB."
 
 
@@ -223,7 +225,7 @@ class Migration(migrations.Migration):
                 (
                     "codigo_unidade_educacao",
                     models.CharField(
-                        help_text="ID da UnidadeEducacional neste DB.",
+                        help_text="HELP_TEXT_UNIDADE_EDUCACIONAL_ID",
                         max_length=20,
                     ),
                 ),
@@ -273,7 +275,7 @@ class Migration(migrations.Migration):
                 (
                     "codigo_escola",
                     models.CharField(
-                        help_text="ID da UnidadeEducacional neste DB.",
+                        help_text="HELP_TEXT_UNIDADE_EDUCACIONAL_ID",
                         max_length=20,
                     ),
                 ),
@@ -312,7 +314,7 @@ class Migration(migrations.Migration):
                 (
                     "codigo_escola",
                     models.CharField(
-                        help_text="ID da UnidadeEducacional neste DB.",
+                        help_text="HELP_TEXT_UNIDADE_EDUCACIONAL_ID",
                         max_length=20,
                     ),
                 ),
@@ -385,7 +387,7 @@ class Migration(migrations.Migration):
                 (
                     "codigo_serie_grade",
                     models.IntegerField(
-                        help_text="ID da SerieTurmaGrade neste DB."
+                        help_text="HELP_TEXT_SERIE_TURMA_GRADE_ID"
                     ),
                 ),
                 (
@@ -473,7 +475,7 @@ class Migration(migrations.Migration):
                 (
                     "codigo_unidade_educacao",
                     models.CharField(
-                        help_text="ID da UnidadeEducacional neste DB.",
+                        help_text="HELP_TEXT_UNIDADE_EDUCACIONAL_ID",
                         max_length=20,
                     ),
                 ),
@@ -508,7 +510,7 @@ class Migration(migrations.Migration):
                 (
                     "codigo_serie_grade",
                     models.IntegerField(
-                        help_text="ID da SerieTurmaGrade neste DB."
+                        help_text="HELP_TEXT_SERIE_TURMA_GRADE_ID"
                     ),
                 ),
                 ("ano_atribuicao", models.IntegerField()),
@@ -602,7 +604,7 @@ class Migration(migrations.Migration):
                 (
                     "codigo_unidade_educacao",
                     models.CharField(
-                        help_text="ID da UnidadeEducacional neste DB.",
+                        help_text="HELP_TEXT_UNIDADE_EDUCACIONAL_ID",
                         max_length=20,
                     ),
                 ),
@@ -621,7 +623,7 @@ class Migration(migrations.Migration):
                 (
                     "codigo_serie_grade",
                     models.IntegerField(
-                        help_text="ID da SerieTurmaGrade neste DB."
+                        help_text="HELP_TEXT_SERIE_TURMA_GRADE_ID"
                     ),
                 ),
                 (
@@ -678,7 +680,7 @@ class Migration(migrations.Migration):
                 (
                     "codigo_unidade_educacao",
                     models.CharField(
-                        help_text="ID da UnidadeEducacional neste DB.",
+                        help_text="HELP_TEXT_UNIDADE_EDUCACIONAL_ID",
                         max_length=20,
                     ),
                 ),
