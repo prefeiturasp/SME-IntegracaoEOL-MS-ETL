@@ -68,6 +68,7 @@ services:
       POSTGRES_HOST: postgres
       URL_KEYDB: redis://keydb:6379/0
       EOL_DB: ${EOL_DB:-}
+      RABBITMQ_VIRTUAL_HOST: ${RABBITMQ_VIRTUAL_HOST:-/}
     volumes:
       - .:/app
     command: >
