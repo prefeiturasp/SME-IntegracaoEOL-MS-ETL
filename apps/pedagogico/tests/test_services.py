@@ -7,11 +7,18 @@ from django.test import TestCase
 from django.utils import timezone
 
 from apps.core.libs.base_etl_service import PhaseConfig, PipelineMetrics
-from apps.pedagogico.dtos.model_in import RegenciaComponenteCurricularIn
+from apps.pedagogico.dtos.model_in import (
+    AtribuicaoTerritorioSaberIn,
+    RegenciaComponenteCurricularIn,
+)
+from apps.pedagogico.queries import SQL_COMPONENTE_CURRICULAR_REGENCIA
 from apps.pedagogico.services import (
+    _AGRUPAMENTO_ID_INICIAL,
     EtlPedagogicoService,
     _agrupar,
     _build_a3_index,
+    _chave_grupo,
+    _cod_agrupamento,
     _planejamento_regencia,
 )
 
@@ -81,7 +88,9 @@ class TestPedagogicoService(TestCase):
         config = self.service._fases[0]
         transform = self.service._criar_transform(config)
 
-        pk, hash_val, obj = transform((100, " Arte "))
+        result = transform((100, " Arte "))
+        assert result is not None
+        pk, hash_val, obj = result
 
         self.assertEqual(pk, "100")
         self.assertEqual(len(hash_val), 64)
@@ -95,9 +104,9 @@ class TestPedagogicoService(TestCase):
         config = self.service._fases[1]
         transform = self.service._criar_transform(config)
 
-        pk, _, obj = transform(
-            (513, " Inglês ", 1, 6, "7", 2025, "T1", "RF1", 0)
-        )
+        result = transform((513, " Inglês ", 1, 6, "7", 2025, "T1", "RF1", 0))
+        assert result is not None
+        pk, _, obj = result
 
         self.assertEqual(pk, "513-T1-RF1")
         self.assertTrue(obj.regencia)
@@ -125,7 +134,7 @@ class TestPedagogicoService(TestCase):
         config = self.service._fases[3]
         transform = self.service._criar_transform(config)
 
-        pk, _, obj = transform(
+        result = transform(
             (
                 200,
                 " Ciências ",
@@ -147,6 +156,8 @@ class TestPedagogicoService(TestCase):
                 34,
             )
         )
+        assert result is not None
+        pk, _, obj = result
 
         self.assertEqual(pk, "200-T2-RF9-2025")
         self.assertTrue(obj.componente_planejamento_regencia)
@@ -161,12 +172,14 @@ class TestPedagogicoService(TestCase):
         self.assertIsNone(transform((None, "Desc", "1", "1 ano", 1, 5, 2025)))
         self.assertIsNone(transform((100, "Desc", "1", "1 ano", 1, 5, None)))
 
-    def test_processar_batch_filtra_nones_antes_do_sync_batch(self) -> None:
+    @patch.object(EtlPedagogicoService, "sync_batch", return_value=(1, 1))
+    def test_processar_batch_filtra_nones_antes_do_sync_batch(
+        self, mock_sync: MagicMock
+    ) -> None:
         config = self.service._fases[1]
         self.service._a2 = {
             513: MagicMock(eh_regencia=1, eh_territorio=0),
         }
-        self.service.sync_batch = MagicMock(return_value=(1, 1))
 
         escritos, ignorados = self.service._processar_batch(
             config=config,
@@ -179,7 +192,7 @@ class TestPedagogicoService(TestCase):
         )
 
         self.assertEqual((escritos, ignorados), (1, 1))
-        processed_data = self.service.sync_batch.call_args.args[0]
+        processed_data = mock_sync.call_args.args[0]
         self.assertEqual(len(processed_data), 1)
         self.assertEqual(processed_data[0][0], "513-T1-RF1")
 
@@ -289,6 +302,78 @@ class TestPedagogicoService(TestCase):
         self.assertEqual(resultado["componente_curricular_agrupamento"], 7)
         self.assertIn("dados_aula_turma", resultado)
         self.assertEqual(mock_fase.call_count, 4)
+
+    # ------------------------------------------------------------------
+    # Testes para os ajustes do commit feat(144838)
+    # ------------------------------------------------------------------
+
+    def test_sql_comp_curricular_regencia_filtra_territorio_nao_utilizado(
+        self,
+    ) -> None:
+        """Ambas as partes da UNION devem excluir cd_territorio_saber = 1."""
+        ocorrencias = SQL_COMPONENTE_CURRICULAR_REGENCIA.count(
+            "cd_territorio_saber <> 1"
+        )
+        self.assertEqual(
+            ocorrencias,
+            2,
+            "Esperado filtro em ambas as partes da UNION (SME + Externos)",
+        )
+
+    def test_cod_agrupamento_sempre_maior_ou_igual_a_800000(self) -> None:
+        """ID de agrupamento não pode colidir com IDs reais de comp EOL."""
+        casos = [
+            ("T1", 10, 20, "RF1", datetime(2025, 2, 1), [100, 200]),
+            ("T2", 5, 3, None, None, [1, 2, 3]),
+            ("T999", 0, 0, "RF99", datetime(2024, 1, 1), [799999]),
+        ]
+        for args in casos:
+            with self.subTest(args=args):
+                resultado = _cod_agrupamento(*args)
+                self.assertGreaterEqual(resultado, _AGRUPAMENTO_ID_INICIAL)
+
+    def test_cod_agrupamento_deterministico(self) -> None:
+        """Mesma chave natural deve gerar sempre o mesmo ID."""
+        args = ("T1", 10, 20, "RF1", datetime(2025, 2, 1), [100, 200])
+        self.assertEqual(_cod_agrupamento(*args), _cod_agrupamento(*args))
+
+    def test_chave_grupo_normaliza_data_disponibilizacao_para_date(
+        self,
+    ) -> None:
+        """Deve ser normalizada para .date() na chave de agr."""
+        row_com_hora = MagicMock(spec=AtribuicaoTerritorioSaberIn)
+        row_com_hora.codigo_turma = "T1"
+        row_com_hora.codigo_territorio_saber = 10
+        row_com_hora.codigo_experiencia_pedagogica = 20
+        row_com_hora.rf_professor = "RF1"
+        row_com_hora.data_atribuicao = datetime(2025, 2, 1)
+        row_com_hora.data_disponibilizacao = datetime(2025, 6, 30, 14, 59, 59)
+
+        row_sem_hora = MagicMock(spec=AtribuicaoTerritorioSaberIn)
+        row_sem_hora.codigo_turma = "T1"
+        row_sem_hora.codigo_territorio_saber = 10
+        row_sem_hora.codigo_experiencia_pedagogica = 20
+        row_sem_hora.rf_professor = "RF1"
+        row_sem_hora.data_atribuicao = datetime(2025, 2, 1)
+        row_sem_hora.data_disponibilizacao = datetime(2025, 6, 30, 0, 0, 0)
+
+        # Horas diferentes no mesmo dia → mesma chave (agrupados juntos)
+        self.assertEqual(
+            _chave_grupo(row_com_hora), _chave_grupo(row_sem_hora)
+        )
+
+    def test_chave_grupo_data_disponibilizacao_none(self) -> None:
+        """Quando data é None, a chave deve conter None sem erro."""
+        row = MagicMock(spec=AtribuicaoTerritorioSaberIn)
+        row.codigo_turma = "T1"
+        row.codigo_territorio_saber = 10
+        row.codigo_experiencia_pedagogica = 20
+        row.rf_professor = "RF1"
+        row.data_atribuicao = datetime(2025, 2, 1)
+        row.data_disponibilizacao = None
+
+        chave = _chave_grupo(row)
+        self.assertIsNone(chave[-1])
 
     @patch("apps.core.libs.base_etl_service.Queue")
     def test_executar_fase_timeout_producer_levanta_runtime_error(

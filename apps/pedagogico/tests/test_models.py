@@ -1,5 +1,3 @@
-"""Testes de string representation dos modelos do domínio pedagógico."""
-
 from django.test import TestCase
 
 from apps.pedagogico.models import (
@@ -41,9 +39,7 @@ class PedagogicoModelsTest(TestCase):
             codigo_agrupamento=999,
             ano_letivo=2025,
         )
-        self.assertEqual(
-            str(obj), "componente=300 turma=T2 agrupamento=999"
-        )
+        self.assertEqual(str(obj), "componente=300 turma=T2 agrupamento=999")
 
     def test_componente_curricular_regencia_str(self) -> None:
         obj = ComponenteCurricularRegencia(

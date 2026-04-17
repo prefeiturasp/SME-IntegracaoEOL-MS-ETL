@@ -1,5 +1,3 @@
-"""Testes dos DTOs de entrada do domínio Pedagógico."""
-
 from datetime import datetime
 
 from django.test import SimpleTestCase
