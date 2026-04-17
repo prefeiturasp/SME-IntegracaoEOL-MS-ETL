@@ -14,8 +14,8 @@ _BASE = "apps.core.libs.base_etl_orquestrador"
 @patch(f"{_BASE}.BaseEtlChunk")
 @patch(f"{_BASE}.group")
 @patch(f"{_BASE}.chord")
-class TestEtlPedagogicoOrquestradorLancamento(TestCase):
-    """Cenários de lançamento do chord via EtlPedagogicoOrquestrador."""
+class TestEtlPedagogicoOrquestrador(TestCase):
+    """Testes de lançamento e estado do EtlPedagogicoOrquestrador."""
 
     def _make_orquestrador(self, **kwargs: Any) -> EtlPedagogicoOrquestrador:
         kwargs.setdefault("id_execucao", uuid4())
@@ -81,25 +81,19 @@ class TestEtlPedagogicoOrquestradorLancamento(TestCase):
         mock_chord.assert_not_called()
         mock_finalizar.apply_async.assert_called_once()
 
-
-class TestEtlPedagogicoOrquestradorEstado(TestCase):
-    """Cenários de estado/metadata do orquestrador (sem chord)."""
-
-    def _make_orquestrador(self, **kwargs: Any) -> EtlPedagogicoOrquestrador:
-        kwargs.setdefault("id_execucao", uuid4())
-        return EtlPedagogicoOrquestrador(
-            db_alias="pedagogico_db",
-            eol=MagicMock(),
-            **kwargs,
-        )
-
-    def test_id_execucao_mantido(self) -> None:
+    def test_id_execucao_mantido(
+        self,
+        *_mocks: MagicMock,
+    ) -> None:
         """Valida que o orquestrador aceita e mantém um id_execucao."""
         id_fixo = uuid4()
         orq = self._make_orquestrador(id_execucao=id_fixo)
         self.assertEqual(orq.id_execucao, id_fixo)
 
-    def test_get_meta_fase_3(self) -> None:
+    def test_get_meta_fase_3(
+        self,
+        *_mocks: MagicMock,
+    ) -> None:
         """Valida metadados da fase 3 (agrupamento_territorio_saber)."""
         orq = self._make_orquestrador()
         meta = orq.service.get_meta(
