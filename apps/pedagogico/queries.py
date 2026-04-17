@@ -6,6 +6,11 @@ _MOTIVO_DISPONIBILIZACAO_ERRO_CADASTRO = 26
 _MOTIVO_DISPONIBILIZACAO_FIM_ANO_LETIVO = 34
 _TIPO_UNIDADE_ADMINISTRATIVA_DRE = 24
 
+# Código sentinela que indica "território não utilizado" — não é um território real.
+# O C# filtra explicitamente != 1 antes de agrupar (CargaDBAgrupamentosTerritorioSaberPorTurmaUseCase.cs:43
+# e ComponenteCurricularService.cs:318). Registros com esse código devem ser ignorados.
+_TERRITORIO_SABER_NAO_UTILIZADO = 1
+
 # Tipos de escola que admitem professor externo:
 # CEI_INDIR=11, CRP_CONV=12, EMEFPFOM=32, EMEIPFOM=33
 _TIPOS_ESCOLA_EXTERNOS = "(11, 12, 32, 33)"
@@ -265,7 +270,7 @@ WHERE t.tp_escola IN {_TIPOS_ESCOLA_EXTERNOS}
 # Parâmetros (?):
 #   1 — ano_letivo (SME)
 #   2 — ano_letivo (Externo)
-SQL_COMPONENTES_TERRITORIO_ATRIBUIDOS = f"""
+SQL_COMPONENTE_CURRICULAR_REGENCIA = f"""
 -- SME — professor via RF
 SELECT
     cc.cd_componente_curricular         AS CodigoComponenteCurricular,
@@ -327,7 +332,7 @@ FROM turma_escola te
     INNER JOIN v_servidor_cotic (NOLOCK) vsc ON vcbc.cd_servidor = vsc.cd_servidor
 WHERE te.st_turma_escola IN ('O', 'A', 'C', 'E')
   AND te.an_letivo = ?  -- param 1: ano_letivo
-  AND te.dt_atualizacao_tabela > '##DATA_CORTE##'
+  AND tgt.cd_territorio_saber <> {_TERRITORIO_SABER_NAO_UTILIZADO}
 GROUP BY
     cc.cd_componente_curricular, cc.dc_componente_curricular,
     serie_ensino.sg_resumida_serie, te.an_letivo, te.cd_turma_escola,
@@ -400,7 +405,7 @@ FROM turma_escola te
     INNER JOIN pessoa pe (NOLOCK) ON pe.cd_pessoa = ce.cd_pessoa
 WHERE te.st_turma_escola IN ('O', 'A', 'C', 'E')
   AND te.an_letivo = ?  -- param 2: ano_letivo
-  AND te.dt_atualizacao_tabela > '##DATA_CORTE##'
+  AND tgt.cd_territorio_saber <> {_TERRITORIO_SABER_NAO_UTILIZADO}
 GROUP BY
     cc.cd_componente_curricular, cc.dc_componente_curricular,
     serie_ensino.sg_resumida_serie, te.an_letivo, te.cd_turma_escola,
@@ -463,7 +468,6 @@ FROM turma_escola (NOLOCK) te
         ON te.cd_tipo_turno = dtt.cd_tipo_turno AND te.cd_duracao = dtt.cd_duracao
 WHERE te.st_turma_escola IN ('O', 'A', 'C', 'E')
   AND te.an_letivo = ?  -- param 1: ano_letivo
-  AND te.dt_atualizacao_tabela > '##DATA_CORTE##'
 """
 
 # Alimenta: componente_curricular_por_ano_letivo
@@ -559,7 +563,7 @@ _IDS_REGENCIA = (
 )
 _PLACEHOLDERS_REGENCIA = ",".join(str(i) for i in _IDS_REGENCIA)
 
-SQL_DISCIPLINAS_EOL = f"""
+SQL_LOOKUP_DISCIPLINAS = f"""
 SELECT DISTINCT
     cc.cd_componente_curricular                          AS IdComponenteCurricular,
     RTRIM(LTRIM(cc.dc_componente_curricular))            AS Descricao,
@@ -580,7 +584,7 @@ WHERE cc.dt_cancelamento IS NULL
 """
 
 # Alimenta: cruzamento para derivar planejamento_regencia
-SQL_REGENCIA_COMPONENTE_CURRICULAR = f"""
+SQL_LOOKUP_PLANEJAMENTO_REGENCIA = f"""
 SELECT DISTINCT
     gcc.cd_componente_curricular   AS IdComponenteCurricular,
     dtt.qt_hora_duracao            AS Turno,

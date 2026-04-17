@@ -57,13 +57,13 @@ from apps.pedagogico.models import (
 from apps.pedagogico.queries import (
     SQL_ANOS_LETIVOS,
     SQL_ATRIBUICOES_TERRITORIO_SABER,
+    SQL_COMPONENTE_CURRICULAR_REGENCIA,
     SQL_COMPONENTES_NAO_CANCELADOS,
     SQL_COMPONENTES_POR_ANO_LETIVO,
     SQL_COMPONENTES_POR_TURMA,
-    SQL_COMPONENTES_TERRITORIO_ATRIBUIDOS,
     SQL_DADOS_AULA_TURMA,
-    SQL_DISCIPLINAS_EOL,
-    SQL_REGENCIA_COMPONENTE_CURRICULAR,
+    SQL_LOOKUP_DISCIPLINAS,
+    SQL_LOOKUP_PLANEJAMENTO_REGENCIA,
 )
 
 logger = logging.getLogger(__name__)
@@ -74,6 +74,9 @@ TransformResult = ProcessedRecord | None
 A3ExactKey = tuple[int, Any, Any]
 A3ExactSet = set[A3ExactKey]
 A3FallbackSet = set[int]
+
+_AGRUPAMENTO_ID_INICIAL = 800_000
+_AGRUPAMENTO_ID_MAX = 2**60
 
 # ---------------------------------------------------------------------------
 # Helpers de agrupamento — território saber
@@ -114,14 +117,27 @@ def _cod_agrupamento(
     data_atribuicao: Any,
     componentes_ordenados: list[int],
 ) -> int:
-    """Hash MD5 truncado da chave natural + componentes ordenados."""
+    """Gera um ID estável para o agrupamento de território do saber.
+
+    O resultado é sempre >= _AGRUPAMENTO_ID_INICIAL (800_000), constante
+    equivalente a COMPONENTE_AGRUPAMENTO_TERRITORIO_SABER_ID_INICIAL do C#.
+    Esse piso existe para evitar colisão com IDs reais de componentes
+    curriculares do EOL, que ficam abaixo desse valor.
+
+    O hash é calculado sobre a chave natural do agrupamento (turma, território,
+    experiência, professor, data de atribuição e lista ordenada de
+    componentes), garantindo determinismo independente da ordem das rows.
+    """
     csv = ",".join(str(c) for c in componentes_ordenados)
     chave = (
         f"{codigo_turma}_{codigo_territorio_saber}_"
         f"{codigo_experiencia_pedagogica}_{rf_professor}_"
         f"{data_atribuicao}_{csv}"
     )
-    return int(hashlib.md5(chave.encode()).hexdigest()[:15], 16)  # NOSONAR
+    raw = int(hashlib.md5(chave.encode()).hexdigest()[:15], 16)  # NOSONAR
+    return _AGRUPAMENTO_ID_INICIAL + (
+        raw % (_AGRUPAMENTO_ID_MAX - _AGRUPAMENTO_ID_INICIAL)
+    )
 
 
 def _chave_grupo(row: AtribuicaoTerritorioSaberIn) -> tuple:
@@ -135,7 +151,11 @@ def _chave_grupo(row: AtribuicaoTerritorioSaberIn) -> tuple:
         ),
         str(row.rf_professor) if row.rf_professor is not None else "",
         row.data_atribuicao or datetime.min,
-        row.data_disponibilizacao or datetime.min,
+        (
+            row.data_disponibilizacao.date()
+            if row.data_disponibilizacao
+            else None
+        ),
     )
 
 
@@ -168,9 +188,25 @@ def _agrupar(
             componentes,
         )
 
-        dt_inicio = make_aware(primeiro.data_atribuicao)
-        dt_fim = make_aware(primeiro.data_disponibilizacao)
-        dt_fim_turma = make_aware(primeiro.data_fim_turma)
+        dt_inicio = (
+            make_aware(primeiro.data_atribuicao)
+            if primeiro.data_atribuicao
+            else None
+        )
+        dt_fim_raw = max(
+            (
+                r.data_disponibilizacao
+                for r in grupo_list
+                if r.data_disponibilizacao
+            ),
+            default=None,
+        )
+        dt_fim = make_aware(dt_fim_raw) if dt_fim_raw else None
+        dt_fim_turma = (
+            make_aware(primeiro.data_fim_turma)
+            if primeiro.data_fim_turma
+            else None
+        )
 
         agrupamentos.append(
             AgrupamentoAtribuicaoTerritorioSaber(
@@ -491,14 +527,14 @@ class EtlPedagogicoService(BaseEtlService):
         de lookup (componente_por_turma e componente_regencia).
         """
         a2: dict[int, DisciplinaEolIn] = {}
-        for chunk in self.eol.iter_query(SQL_DISCIPLINAS_EOL):
+        for chunk in self.eol.iter_query(SQL_LOOKUP_DISCIPLINAS):
             for r in chunk:
                 obj = DisciplinaEolIn(*r)
                 a2[int(obj.id_componente_curricular)] = obj
         self._a2 = a2
 
         rows_a3: list[RegenciaComponenteCurricularIn] = []
-        for chunk in self.eol.iter_query(SQL_REGENCIA_COMPONENTE_CURRICULAR):
+        for chunk in self.eol.iter_query(SQL_LOOKUP_PLANEJAMENTO_REGENCIA):
             for r in chunk:
                 rows_a3.append(RegenciaComponenteCurricularIn(*r))
         self._exact, self._fallback = _build_a3_index(rows_a3)
@@ -662,7 +698,7 @@ class EtlPedagogicoService(BaseEtlService):
             ),
             PhaseConfig(
                 nome="componente_regencia",
-                sql=SQL_COMPONENTES_TERRITORIO_ATRIBUIDOS,
+                sql=SQL_COMPONENTE_CURRICULAR_REGENCIA,
                 table_name="componente_curricular_regencia",
                 source_table="componente_curricular_regencia",
                 model_class=ComponenteCurricularRegencia,
