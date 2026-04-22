@@ -1,0 +1,85 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: sme_sgp_ms_etl_postgres
+    env_file:
+      - .env
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
+    ports:
+      - "5438:5432"
+    volumes:
+      - postgres_etl_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  keydb:
+    image: eqalpha/keydb:latest
+    container_name: sme_sgp_ms_etl_keydb
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "keydb-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  etl_auditoria_worker:
+    platform: linux/amd64
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: sme_sgp_ms_etl_worker
+    env_file:
+      - .env
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings
+      POSTGRES_HOST: postgres
+      URL_KEYDB: redis://keydb:6379/0
+      EOL_DB: ${EOL_DB:-}
+      NIVEL_LOG: ${NIVEL_LOG:-INFO}
+    volumes:
+      - .:/app
+    # concurrency=1: domínios processados sequencialmente, por prioridade da fila
+    # watch_celery.py usa PollingObserver (inotify não funciona no Docker Desktop/macOS)
+    command: python /app/scripts/watch_celery.py
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keydb:
+        condition: service_healthy
+
+  etl_auditoria:
+    platform: linux/amd64
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: sme_sgp_ms_etl_auditoria
+    env_file:
+      - .env
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings
+      POSTGRES_HOST: postgres
+      URL_KEYDB: redis://keydb:6379/0
+      EOL_DB: ${EOL_DB:-}
+      RABBITMQ_VIRTUAL_HOST: ${RABBITMQ_VIRTUAL_HOST:-/}
+    volumes:
+      - .:/app
+    command: >
+      python -Xfrozen_modules=off -m debugpy
+      --listen 0.0.0.0:5668 manage.py runserver 0.0.0.0:8068
+    ports:
+      - "${PORT_WEB:-8068}:${PORT_WEB:-8068}"
+      - "${PORT_DEBUGPY:-5668}:${PORT_DEBUGPY:-5668}"
+    restart: unless-stopped
+
+
+
+volumes:
+  postgres_etl_data:
