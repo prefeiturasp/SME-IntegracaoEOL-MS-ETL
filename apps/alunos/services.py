@@ -42,10 +42,16 @@ SELECT
    , a.cd_nacionalidade_aluno AS nacionalidade
    , a.cd_identificacao_social AS nis
    , a.cd_cpf_aluno AS cpf
+   , a.nm_mae_aluno AS nome_mae
    , trc.dc_raca_cor AS raca_cor
+   , a.dt_atualizacao_tabela  AS data_atualizacao_contato
+   , CASE WHEN nea.tp_necessidade_especial IS NULL
+		THEN 0 ELSE 1
+	END possui_deficiencia
 FROM aluno a
 LEFT JOIN v_aluno_cotic v ON a.cd_aluno = v.cd_aluno
 LEFT JOIN tipo_raca_cor trc ON trc.tp_raca_cor = a.tp_raca_cor
+LEFT JOIN necessidade_especial_aluno nea ON nea.cd_aluno = a.cd_aluno;
 """
 
 SQL_RESPONSAVEL = """
@@ -79,14 +85,14 @@ FROM necessidade_especial_aluno
 
 SQL_MATRICULA = """
 SELECT
-    cd_matricula, cd_aluno, codigo_ue, data_status, ano_letivo,
+    cd_matricula, cd_aluno, codigo_ue, data_situacao_matricula, ano_letivo,
     codigo_situacao_matricula
 FROM (
     SELECT
         cd_matricula
       , cd_aluno
       , cd_escola AS codigo_ue
-      , dt_status_matricula AS data_status
+      , dt_status_matricula AS data_situacao_matricula
       , an_letivo AS ano_letivo
       , st_matricula AS codigo_situacao_matricula
     FROM v_matricula_cotic
@@ -95,12 +101,11 @@ FROM (
         cd_matricula
       , cd_aluno
       , cd_escola AS codigo_ue
-      , dt_status_matricula AS data_status
+      , dt_status_matricula AS data_situacao_matricula
       , an_letivo AS ano_letivo
       , st_matricula AS codigo_situacao_matricula
     FROM v_historico_matricula_cotic
-) AS q
-ORDER BY q.cd_matricula
+) AS mt
 """
 
 SQL_MATRICULA_TURMA = """
@@ -188,7 +193,10 @@ class EtlAlunosService(BaseEtlService):
                     "nacionalidade",
                     "nis",
                     "cpf",
+                    "nome_mae",
                     "raca_cor",
+                    "data_atualizacao_contato",
+                    "possui_deficiencia",
                 ),
                 unique_fields=("codigo_aluno",),
                 suporta_bulk_insert=True,
@@ -244,7 +252,7 @@ class EtlAlunosService(BaseEtlService):
                 update_fields=(
                     "codigo_ue",
                     "ano_letivo",
-                    "data_status",
+                    "data_situacao_matricula",
                     "codigo_situacao_matricula",
                     "situacao_matricula",
                 ),

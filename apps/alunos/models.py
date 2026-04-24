@@ -35,6 +35,8 @@ class Aluno(models.Model):
     nacionalidade = models.CharField(max_length=100, null=True, blank=True)
     nis = models.CharField(max_length=20, null=True, blank=True)
     raca_cor = models.CharField(max_length=50, null=True, blank=True)
+    data_atualizacao_contato = models.DateField(null=True, blank=True)
+    possui_deficiencia = models.BooleanField(default=False)
 
     class Meta:
         app_label = "alunos"
@@ -120,7 +122,7 @@ class Matricula(models.Model):
     )
     codigo_ue = models.CharField(max_length=20)
     ano_letivo = models.SmallIntegerField()
-    data_status = models.DateField(null=True, blank=True)
+    data_situacao_matricula = models.DateField(null=True, blank=True)
     codigo_situacao_matricula = models.SmallIntegerField()
     situacao_matricula = models.CharField(max_length=100)
 
