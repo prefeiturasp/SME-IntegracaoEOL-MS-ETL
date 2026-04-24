@@ -59,6 +59,100 @@ WHERE st_turma_escola IN ('O', 'A', 'C', 'E')
 ORDER BY an_letivo
 """
 
+# Alimenta: componente_turma (L1 com professor)
+# Parâmetros (?):
+#   1 — ano_letivo
+#
+# REGRAS DE NEGÓCIO
+# =================
+#
+# Propósito
+# ---------
+# Retorna todos os pares (turma, componente curricular, professor) ativos para
+# um ano letivo. É a query central do domínio pedagógico — une a estrutura
+# curricular de cada turma com as atribuições docentes do EOL.
+#
+# Duas origens de componente por turma
+# -------------------------------------
+# Uma turma pode ter seus componentes definidos de duas formas no EOL:
+#
+#   Via série (caso normal):
+#     turma_escola → serie_turma_escola → serie_turma_grade → escola_grade
+#     → grade → grade_componente_curricular
+#     Turmas regulares seguem a grade curricular da sua série/ano escolar.
+#     Cada escola pode ter uma grade diferente da rede geral.
+#
+#   Via programa (caso especial):
+#     turma_escola → turma_escola_grade_programa → escola_grade → grade
+#     → grade_componente_curricular
+#     Turmas de programas especiais (aceleração, projetos específicos) não têm
+#     série vinculada — usam uma grade própria do programa.
+#     Identificadas pela AUSÊNCIA de registro em serie_turma_escola.
+#
+#   Override de programa dentro de turmas com série (cte_serie):
+#     Quando uma turma tem série E programa, o componente do programa tem
+#     prioridade sobre o da série. Resolvido via IIF no SELECT:
+#     se pcc (componente do programa) não é null → usa programa, senão → usa série.
+#
+# Dois tipos de professor
+# -----------------------
+#   SME: servidor da rede municipal, identificado por RF (Registro Funcional).
+#        Atribuição em atribuicao_aula, professor em v_servidor_cotic.
+#   Externo: professor de escola parceira/conveniada, identificado por CPF.
+#            Atribuição em atribuicao_externo, professor em pessoa via contrato_externo.
+#            Só aplicável a escolas dos tipos: CEI_INDIR(11), CRP_CONV(12),
+#            EMEFPFOM(32), EMEIPFOM(33).
+#
+# Seis branches (UNION ALL)
+# -------------------------
+# A combinação das duas origens × dois tipos de professor × um caso legado
+# gera 6 branches:
+#
+#   Branch 1: Série × SME     — atribuições ativas de professores SME em turmas regulares
+#   Branch 2: Série × Externo — atribuições ativas de professores externos em turmas regulares
+#   Branch 3: Programa × SME     — mesmo, para turmas de programa
+#   Branch 4: Programa × Externo — mesmo, para turmas de programa
+#   Branch 5: Escola/Grade × SME     — atribuições históricas (já disponibilizadas) de SME
+#   Branch 6: Escola/Grade × Externo — atribuições históricas de externos
+#
+# Filtro de disponibilização — branches 1–4 (atribuições ativas)
+# --------------------------------------------------------------
+# Uma atribuição é considerada ativa se satisfaz UMA das condições:
+#   a) dt_disponibilizacao_aulas >= 5/fev do ano letivo  (encerrou depois do início do ano)
+#   b) dt_disponibilizacao_aulas IS NULL                  (ainda ativa)
+#   c) cd_motivo_disponibilizacao = 34                    (fim de ano letivo — válida historicamente)
+#
+# Atribuições descartadas:
+#   - dt_cancelamento IS NOT NULL         (canceladas)
+#   - cd_motivo_disponibilizacao = 26     (erro de cadastro)
+#
+# A data 5/fev é o início convencional do ano letivo (new DateTime(anoLetivo, 2, 5)
+# no C# legado). Derivada diretamente de an_letivo via DATEFROMPARTS — sem parâmetro extra.
+#
+# Filtro de disponibilização — branches 5–6 (caso legado)
+# --------------------------------------------------------
+# Captura professores que já saíram da turma mas cuja atribuição ainda é
+# historicamente relevante. Usa INNER JOIN (não LEFT) — só retorna se há
+# atribuição. A atribuição é incluída se satisfaz UMA das condições:
+#   a) COALESCE(dt_disponibilizacao, dt_fim_turma) >= dt_fim_turma
+#      (saiu depois ou junto com o encerramento da turma)
+#   b) COALESCE(dt_disponibilizacao, dt_fim_turma) >= 5/fev do ano letivo
+#      (saiu depois do início do ano letivo)
+# O JOIN é por escola (cd_unidade_educacao), não por serie_grade — atribuição
+# no nível da unidade, não da grade específica.
+#
+# Flags calculadas por linha
+# --------------------------
+#   EhRegencia:  1 se cd_componente_curricular está na lista hardcoded _IDS_REGENCIA
+#                (19 IDs fixos — não derivado de tabela dinâmica).
+#   EhTerritorio: 1 se existe entrada em turma_grade_territorio_experiencia para
+#                 o componente (EXISTS correlacionado — componente de território do saber).
+#
+# LEFT JOIN na atribuição (branches 1–4)
+# --------------------------------------
+# O JOIN com atribuicao_aula/atribuicao_externo é LEFT — uma turma+componente
+# pode não ter professor atribuído. Nesses casos, Professor = NULL no resultado.
+# Isso representa componentes sem cobertura docente no período.
 SQL_COMPONENTES_POR_TURMA = f"""
 WITH
 -- Base comum: turmas ativas do ano com turno e tipo de escola
@@ -172,7 +266,8 @@ LEFT JOIN atribuicao_aula (NOLOCK) aa
     AND aa.dt_cancelamento IS NULL
     AND (aa.cd_motivo_disponibilizacao <> {_MOTIVO_DISPONIBILIZACAO_ERRO_CADASTRO}
          OR aa.cd_motivo_disponibilizacao IS NULL)
-    AND (aa.dt_disponibilizacao_aulas IS NULL
+    AND (aa.dt_disponibilizacao_aulas >= DATEFROMPARTS(s.an_letivo, 2, 5)
+         OR aa.dt_disponibilizacao_aulas IS NULL
          OR aa.cd_motivo_disponibilizacao = {_MOTIVO_DISPONIBILIZACAO_FIM_ANO_LETIVO})
 LEFT JOIN v_cargo_base_cotic (NOLOCK) vcbc ON vcbc.cd_cargo_base_servidor = aa.cd_cargo_base_servidor
 LEFT JOIN v_servidor_cotic (NOLOCK) vsc ON vsc.cd_servidor = vcbc.cd_servidor
@@ -205,6 +300,8 @@ LEFT JOIN atribuicao_externo (NOLOCK) ae
     AND ae.dt_cancelamento IS NULL
     AND (ae.cd_motivo_disponibilizacao_externo <> 1
          OR ae.cd_motivo_disponibilizacao_externo IS NULL)
+    AND (ae.dt_disponibilizacao >= DATEFROMPARTS(s.an_letivo, 2, 5)
+         OR ae.dt_disponibilizacao IS NULL)
 LEFT JOIN contrato_externo (NOLOCK) ce ON ce.cd_contrato_externo = ae.cd_contrato_externo
 LEFT JOIN pessoa (NOLOCK) pe ON pe.cd_pessoa = ce.cd_pessoa
 WHERE s.tp_escola IN {_TIPOS_ESCOLA_EXTERNOS}
@@ -237,7 +334,8 @@ LEFT JOIN atribuicao_aula (NOLOCK) aa
     AND aa.dt_cancelamento IS NULL
     AND (aa.cd_motivo_disponibilizacao <> {_MOTIVO_DISPONIBILIZACAO_ERRO_CADASTRO}
          OR aa.cd_motivo_disponibilizacao IS NULL)
-    AND (aa.dt_disponibilizacao_aulas IS NULL
+    AND (aa.dt_disponibilizacao_aulas >= DATEFROMPARTS(p.an_letivo, 2, 5)
+         OR aa.dt_disponibilizacao_aulas IS NULL
          OR aa.cd_motivo_disponibilizacao = {_MOTIVO_DISPONIBILIZACAO_FIM_ANO_LETIVO})
 LEFT JOIN v_cargo_base_cotic (NOLOCK) vcbc ON vcbc.cd_cargo_base_servidor = aa.cd_cargo_base_servidor
 LEFT JOIN v_servidor_cotic (NOLOCK) vsc ON vsc.cd_servidor = vcbc.cd_servidor
@@ -270,6 +368,8 @@ LEFT JOIN atribuicao_externo (NOLOCK) ae
     AND ae.dt_cancelamento IS NULL
     AND (ae.cd_motivo_disponibilizacao_externo <> 1
          OR ae.cd_motivo_disponibilizacao_externo IS NULL)
+    AND (ae.dt_disponibilizacao >= DATEFROMPARTS(p.an_letivo, 2, 5)
+         OR ae.dt_disponibilizacao IS NULL)
 LEFT JOIN contrato_externo (NOLOCK) ce ON ce.cd_contrato_externo = ae.cd_contrato_externo
 LEFT JOIN pessoa (NOLOCK) pe ON pe.cd_pessoa = ce.cd_pessoa
 WHERE p.tp_escola IN {_TIPOS_ESCOLA_EXTERNOS}
@@ -318,7 +418,8 @@ INNER JOIN atribuicao_aula (NOLOCK) aa
     AND aa.cd_motivo_disponibilizacao <> {_MOTIVO_DISPONIBILIZACAO_ERRO_CADASTRO}
     AND (aa.cd_motivo_disponibilizacao = {_MOTIVO_DISPONIBILIZACAO_FIM_ANO_LETIVO}
          OR aa.cd_motivo_disponibilizacao IS NULL)
-    AND COALESCE(aa.dt_disponibilizacao_aulas, t.dt_fim_turma) >= t.dt_fim_turma
+    AND (COALESCE(aa.dt_disponibilizacao_aulas, t.dt_fim_turma) >= t.dt_fim_turma
+         OR COALESCE(aa.dt_disponibilizacao_aulas, t.dt_fim_turma) >= DATEFROMPARTS(t.an_letivo, 2, 5))
 INNER JOIN componente_curricular (NOLOCK) cc
     ON aa.cd_componente_curricular = cc.cd_componente_curricular
 INNER JOIN v_cargo_base_cotic (NOLOCK) cargoServidor
@@ -370,7 +471,8 @@ INNER JOIN atribuicao_externo (NOLOCK) ae
     AND ae.cd_motivo_disponibilizacao_externo <> 1
     AND (ae.cd_motivo_disponibilizacao_externo = 3
          OR ae.cd_motivo_disponibilizacao_externo IS NULL)
-    AND COALESCE(ae.dt_disponibilizacao, t.dt_fim_turma) >= t.dt_fim_turma
+    AND (COALESCE(ae.dt_disponibilizacao, t.dt_fim_turma) >= t.dt_fim_turma
+         OR COALESCE(ae.dt_disponibilizacao, t.dt_fim_turma) >= DATEFROMPARTS(t.an_letivo, 2, 5))
 INNER JOIN componente_curricular (NOLOCK) cc
     ON ae.cd_componente_curricular = cc.cd_componente_curricular
 INNER JOIN contrato_externo (NOLOCK) ce ON ce.cd_contrato_externo = ae.cd_contrato_externo
