@@ -31,6 +31,8 @@ class ComponentePorTurmaInTest(SimpleTestCase):
         dto = ComponentePorTurmaIn(
             codigo=513,
             descricao=" Inglês ",
+            eh_regencia=1,
+            eh_territorio=1,
             tipo_escola=1,
             turno_turma=6,
             ano_turma="7",
@@ -39,12 +41,7 @@ class ComponentePorTurmaInTest(SimpleTestCase):
             professor=456,
             atribuicao_externa=0,
         )
-        data = dto.to_domain(
-            transferido_em="agora",
-            regencia=True,
-            territorio=True,
-            planejamento=False,
-        )
+        data = dto.to_domain(transferido_em="agora", planejamento=False)
 
         self.assertEqual(data["codigo"], 513)
         self.assertEqual(data["descricao"], "Inglês")
@@ -65,6 +62,8 @@ class ComponentePorTurmaInTest(SimpleTestCase):
         dto = ComponentePorTurmaIn(
             codigo=513,
             descricao=" Inglês ",
+            eh_regencia=0,
+            eh_territorio=0,
             tipo_escola=1,
             turno_turma=6,
             ano_turma="7",
@@ -84,6 +83,8 @@ class ComponentePorTurmaInTest(SimpleTestCase):
         dto = ComponentePorTurmaIn(
             codigo=513,
             descricao=" Inglês ",
+            eh_regencia=0,
+            eh_territorio=0,
             tipo_escola=1,
             turno_turma=6,
             ano_turma="7",
@@ -101,6 +102,8 @@ class ComponentePorTurmaInTest(SimpleTestCase):
         dto = ComponentePorTurmaIn(
             codigo=1322,
             descricao=" PAP ",
+            eh_regencia=0,
+            eh_territorio=0,
             tipo_escola=1,
             turno_turma=6,
             ano_turma="7",
@@ -109,12 +112,7 @@ class ComponentePorTurmaInTest(SimpleTestCase):
             professor=None,
             atribuicao_externa=0,
         )
-        data = dto.to_domain(
-            transferido_em="agora",
-            regencia=False,
-            territorio=False,
-            planejamento=True,
-        )
+        data = dto.to_domain(transferido_em="agora", planejamento=True)
         self.assertTrue(data["exibir_componente_eol"])
         self.assertIsNone(data["codigo_componente_territorio_saber"])
         self.assertIsNone(data["codigo_componente_curricular_pai"])

@@ -77,7 +77,8 @@ class ComponenteCurricularPorTurma(ModeloBase):
                          name="idx_ccpt_turma_codigo"),
             models.Index(fields=["codigo"], name="idx_ccpt_codigo"),
             models.Index(fields=["ano_letivo"], name="idx_ccpt_ano_letivo"),
-            models.Index(fields=["professor", "ano_letivo"], name="idx_ccpt_prof_ano"),
+            models.Index(fields=["professor", "ano_letivo"],
+                         name="idx_ccpt_prof_ano"),
         ]
 
     def __str__(self) -> str:

@@ -1,7 +1,5 @@
 # flake8: noqa: E501
 
-"""Queries SQL do domínio pedagógico."""
-
 _MOTIVO_DISPONIBILIZACAO_ERRO_CADASTRO = 26
 _MOTIVO_DISPONIBILIZACAO_FIM_ANO_LETIVO = 34
 _TIPO_UNIDADE_ADMINISTRATIVA_DRE = 24
@@ -14,6 +12,44 @@ _TERRITORIO_SABER_NAO_UTILIZADO = 1
 # Tipos de escola que admitem professor externo:
 # CEI_INDIR=11, CRP_CONV=12, EMEFPFOM=32, EMEIPFOM=33
 _TIPOS_ESCOLA_EXTERNOS = "(11, 12, 32, 33)"
+
+# Mapeamento componente regência (constante hardcoded)
+_IDS_REGENCIA = (
+    508,
+    511,
+    1064,
+    1065,
+    1104,
+    1105,
+    1112,
+    1113,
+    1114,
+    1115,
+    1117,
+    1121,
+    1124,
+    1125,
+    1211,
+    1212,
+    1213,
+    1290,
+    1301,
+)
+
+_PLACEHOLDERS_REGENCIA = ",".join(str(i) for i in _IDS_REGENCIA)
+
+# Mapeamento componente → componente pai (constante hardcoded)
+# Origem: tabela componentecurricularpai (ApiEolConnection) — dados estáticos
+MAPA_COMPONENTE_PAI: dict[int, int] = {
+    # idcomponentecurricular → idcomponentecurricularpai  (vigencia: 2021-12-31)
+    512: 512,  # V40
+    513: 512,
+    534: 512,
+    535: 512,
+    515: 512,  # V56
+    517: 512,
+    518: 512,
+}
 
 # Anos letivos disponíveis no EOL (EolConnection)
 SQL_ANOS_LETIVOS = """
@@ -110,7 +146,20 @@ cte_programa AS (
 )
 
 -- Branch 1: Série × SME
-SELECT s.Codigo, s.Descricao, s.tp_escola AS TipoEscola, s.TurnoTurma,
+SELECT s.Codigo, s.Descricao,
+       CASE
+           WHEN s.Codigo IN ({_PLACEHOLDERS_REGENCIA}) THEN 1
+           ELSE 0
+       END AS EhRegencia,
+       CASE
+           WHEN EXISTS (
+               SELECT 1
+               FROM turma_grade_territorio_experiencia tgt
+               WHERE tgt.cd_componente_curricular = s.Codigo
+           ) THEN 1
+           ELSE 0
+       END AS EhTerritorio,
+       s.tp_escola AS TipoEscola, s.TurnoTurma,
        s.AnoTurma, s.an_letivo AS anoletivo, s.cd_turma_escola AS TurmaCodigo,
        vsc.cd_registro_funcional AS Professor,
        0 AS AtribuicaoExterna
@@ -131,7 +180,20 @@ LEFT JOIN v_servidor_cotic (NOLOCK) vsc ON vsc.cd_servidor = vcbc.cd_servidor
 UNION ALL
 
 -- Branch 2: Série × Externo
-SELECT s.Codigo, s.Descricao, s.tp_escola AS TipoEscola, s.TurnoTurma,
+SELECT s.Codigo, s.Descricao,
+       CASE
+           WHEN s.Codigo IN ({_PLACEHOLDERS_REGENCIA}) THEN 1
+           ELSE 0
+       END AS EhRegencia,
+       CASE
+           WHEN EXISTS (
+               SELECT 1
+               FROM turma_grade_territorio_experiencia tgt
+               WHERE tgt.cd_componente_curricular = s.Codigo
+           ) THEN 1
+           ELSE 0
+       END AS EhTerritorio,
+       s.tp_escola AS TipoEscola, s.TurnoTurma,
        s.AnoTurma, s.an_letivo AS anoletivo, s.cd_turma_escola AS TurmaCodigo,
        pe.cd_cpf_pessoa AS Professor,
        1 AS AtribuicaoExterna
@@ -150,7 +212,20 @@ WHERE s.tp_escola IN {_TIPOS_ESCOLA_EXTERNOS}
 UNION ALL
 
 -- Branch 3: Programa × SME
-SELECT p.Codigo, p.Descricao, p.tp_escola AS TipoEscola, p.TurnoTurma,
+SELECT p.Codigo, p.Descricao,
+       CASE
+           WHEN p.Codigo IN ({_PLACEHOLDERS_REGENCIA}) THEN 1
+           ELSE 0
+       END AS EhRegencia,
+       CASE
+           WHEN EXISTS (
+               SELECT 1
+               FROM turma_grade_territorio_experiencia tgt
+               WHERE tgt.cd_componente_curricular = p.Codigo
+           ) THEN 1
+           ELSE 0
+       END AS EhTerritorio,
+       p.tp_escola AS TipoEscola, p.TurnoTurma,
        p.AnoTurma, p.an_letivo AS anoletivo, p.cd_turma_escola AS TurmaCodigo,
        vsc.cd_registro_funcional AS Professor,
        0 AS AtribuicaoExterna
@@ -170,7 +245,20 @@ LEFT JOIN v_servidor_cotic (NOLOCK) vsc ON vsc.cd_servidor = vcbc.cd_servidor
 UNION ALL
 
 -- Branch 4: Programa × Externo
-SELECT p.Codigo, p.Descricao, p.tp_escola AS TipoEscola, p.TurnoTurma,
+SELECT p.Codigo, p.Descricao,
+       CASE
+           WHEN p.Codigo IN ({_PLACEHOLDERS_REGENCIA}) THEN 1
+           ELSE 0
+       END AS EhRegencia,
+       CASE
+           WHEN EXISTS (
+               SELECT 1
+               FROM turma_grade_territorio_experiencia tgt
+               WHERE tgt.cd_componente_curricular = p.Codigo
+           ) THEN 1
+           ELSE 0
+       END AS EhTerritorio,
+       p.tp_escola AS TipoEscola, p.TurnoTurma,
        p.AnoTurma, p.an_letivo AS anoletivo, p.cd_turma_escola AS TurmaCodigo,
        pe.cd_cpf_pessoa AS Professor,
        1 AS AtribuicaoExterna
@@ -191,6 +279,18 @@ UNION ALL
 -- Branch 5: escola/grade × SME (tmpComponentes original)
 SELECT DISTINCT cc.cd_componente_curricular AS Codigo,
                 cc.dc_componente_curricular AS Descricao,
+                CASE
+                    WHEN cc.cd_componente_curricular IN ({_PLACEHOLDERS_REGENCIA}) THEN 1
+                    ELSE 0
+                END AS EhRegencia,
+                CASE
+                    WHEN EXISTS (
+                        SELECT 1
+                        FROM turma_grade_territorio_experiencia tgt
+                        WHERE tgt.cd_componente_curricular = cc.cd_componente_curricular
+                    ) THEN 1
+                    ELSE 0
+                END AS EhTerritorio,
                 t.tp_escola AS TipoEscola, t.TurnoTurma, t.AnoTurma,
                 t.an_letivo AS anoletivo, t.cd_turma_escola AS TurmaCodigo,
                 servidor.cd_registro_funcional AS Professor,
@@ -231,6 +331,18 @@ UNION ALL
 -- Branch 6: escola/grade × Externo (tmpComponentes original)
 SELECT DISTINCT cc.cd_componente_curricular AS Codigo,
                 cc.dc_componente_curricular AS Descricao,
+                CASE
+                    WHEN cc.cd_componente_curricular IN ({_PLACEHOLDERS_REGENCIA}) THEN 1
+                    ELSE 0
+                END AS EhRegencia,
+                CASE
+                    WHEN EXISTS (
+                        SELECT 1
+                        FROM turma_grade_territorio_experiencia tgt
+                        WHERE tgt.cd_componente_curricular = cc.cd_componente_curricular
+                    ) THEN 1
+                    ELSE 0
+                END AS EhTerritorio,
                 t.tp_escola AS TipoEscola, t.TurnoTurma, t.AnoTurma,
                 t.an_letivo AS anoletivo, t.cd_turma_escola AS TurmaCodigo,
                 pe.cd_cpf_pessoa AS Professor,
@@ -535,54 +647,6 @@ WHERE Modalidade > 0
   AND CodigoSerieEnsino IS NOT NULL
 """
 
-# Alimenta: lookup para enriquecer componente_curricular_por_turma
-# Parâmetros: nenhum (carga total)
-# EhRegencia: lista hardcoded de IDs
-# EhTerritorio: presença na tabela turma_grade_territorio_experiencia
-# CodigoPai: resolvido via MAPA_COMPONENTE_PAI (constante hardcoded)
-_IDS_REGENCIA = (
-    508,
-    511,
-    1064,
-    1065,
-    1104,
-    1105,
-    1112,
-    1113,
-    1114,
-    1115,
-    1117,
-    1121,
-    1124,
-    1125,
-    1211,
-    1212,
-    1213,
-    1290,
-    1301,
-)
-_PLACEHOLDERS_REGENCIA = ",".join(str(i) for i in _IDS_REGENCIA)
-
-SQL_LOOKUP_DISCIPLINAS = f"""
-SELECT DISTINCT
-    cc.cd_componente_curricular                          AS IdComponenteCurricular,
-    RTRIM(LTRIM(cc.dc_componente_curricular))            AS Descricao,
-    CASE
-        WHEN cc.cd_componente_curricular IN ({_PLACEHOLDERS_REGENCIA}) THEN 1
-        ELSE 0
-    END                                                  AS EhRegencia,
-    CASE
-        WHEN EXISTS (
-            SELECT 1
-            FROM turma_grade_territorio_experiencia tgt
-            WHERE tgt.cd_componente_curricular = cc.cd_componente_curricular
-        ) THEN 1
-        ELSE 0
-    END                                                  AS EhTerritorio
-FROM componente_curricular cc
-WHERE cc.dt_cancelamento IS NULL
-"""
-
 # Alimenta: cruzamento para derivar planejamento_regencia
 SQL_LOOKUP_PLANEJAMENTO_REGENCIA = f"""
 SELECT DISTINCT
@@ -612,22 +676,6 @@ WHERE gcc.cd_componente_curricular IN ({_PLACEHOLDERS_REGENCIA})
   AND cc.dt_cancelamento IS NULL
   AND te.st_turma_escola IN ('O', 'A', 'C')
 """
-
-# Mapeamento componente → componente pai (constante hardcoded)
-# Origem: tabela componentecurricularpai (ApiEolConnection) — dados estáticos
-#
-# Alimenta: campo codigo_componente_curricular_pai em ComponenteCurricularPorTurma (T2)
-#   → lookup: MAPA_COMPONENTE_PAI.get(codigo)  → None se não tem pai
-MAPA_COMPONENTE_PAI: dict[int, int] = {
-    # idcomponentecurricular → idcomponentecurricularpai  (vigencia: 2021-12-31)
-    512: 512,  # V40
-    513: 512,
-    534: 512,
-    535: 512,
-    515: 512,  # V56
-    517: 512,
-    518: 512,
-}
 
 
 # Alimenta: agrupamento_atribuicao_territorio_saber

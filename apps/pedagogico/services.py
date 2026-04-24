@@ -42,7 +42,6 @@ from apps.pedagogico.dtos.model_in import (
     ComponentePorTurmaIn,
     ComponenteRegenciaIn,
     DadosAulaTurmaIn,
-    DisciplinaEolIn,
     RegenciaComponenteCurricularIn,
 )
 from apps.pedagogico.models import (
@@ -62,7 +61,6 @@ from apps.pedagogico.queries import (
     SQL_COMPONENTES_POR_ANO_LETIVO,
     SQL_COMPONENTES_POR_TURMA,
     SQL_DADOS_AULA_TURMA,
-    SQL_LOOKUP_DISCIPLINAS,
     SQL_LOOKUP_PLANEJAMENTO_REGENCIA,
 )
 
@@ -318,7 +316,6 @@ class EtlPedagogicoService(BaseEtlService):
         )
         self.eol = eol or EOLService()
         self._agora = timezone.now()
-        self._a2: dict[int, DisciplinaEolIn] = {}
         self._exact: A3ExactSet = set()
         self._fallback: A3FallbackSet = set()
         self._total_itens_agrupamento: int = 0
@@ -390,7 +387,6 @@ class EtlPedagogicoService(BaseEtlService):
         agora: Any,
         hash_fields: list[str],
     ) -> Callable[[tuple[Any, ...]], TransformResult]:
-        a2 = self._a2
         exact = self._exact
         fallback = self._fallback
 
@@ -399,15 +395,10 @@ class EtlPedagogicoService(BaseEtlService):
             if dto.codigo is None or dto.turma_codigo is None:
                 return None
             codigo = int(dto.codigo)
-            disc = a2.get(codigo)
-            regencia = bool(disc.eh_regencia) if disc else False
-            territorio = bool(disc.eh_territorio) if disc else False
             plan = _planejamento_regencia(
                 codigo, dto.turno_turma, dto.ano_turma, exact, fallback
             )
-            obj = model_class(
-                **dto.to_domain(agora, regencia, territorio, plan)
-            )
+            obj = model_class(**dto.to_domain(agora, plan))
             pk = (
                 f"{obj.codigo}"
                 f"-{obj.turma_codigo or ''}"
@@ -521,18 +512,11 @@ class EtlPedagogicoService(BaseEtlService):
         return self._cache_anos
 
     def _carregar_lookups(self) -> None:
-        """Pré-carrega disciplinas e índice de regência.
+        """Pré-carrega índice de planejamento de regência.
 
         Chamado uma vez em ``executar()`` antes das fases que precisam
         de lookup (componente_por_turma e componente_regencia).
         """
-        a2: dict[int, DisciplinaEolIn] = {}
-        for chunk in self.eol.iter_query(SQL_LOOKUP_DISCIPLINAS):
-            for r in chunk:
-                obj = DisciplinaEolIn(*r)
-                a2[int(obj.id_componente_curricular)] = obj
-        self._a2 = a2
-
         rows_a3: list[RegenciaComponenteCurricularIn] = []
         for chunk in self.eol.iter_query(SQL_LOOKUP_PLANEJAMENTO_REGENCIA):
             for r in chunk:
@@ -540,8 +524,7 @@ class EtlPedagogicoService(BaseEtlService):
         self._exact, self._fallback = _build_a3_index(rows_a3)
 
         logger.info(
-            "[ETL PEDAG] Lookups: %d disciplinas, %d exact, %d fallback.",
-            len(self._a2),
+            "[ETL PEDAG] Lookups: %d exact, %d fallback.",
             len(self._exact),
             len(self._fallback),
         )
@@ -777,7 +760,7 @@ class EtlPedagogicoService(BaseEtlService):
 
         Fases:
             1 — componente_curricular
-            2 — componente_por_turma          (por ano letivo, com lookups)
+            2 — componente_por_turma          (por ano letivo)
             3 — agrupamento_territorio_saber  (agregação → 2 tabelas)
             4 — componente_regencia           (por ano letivo, com lookups)
             5 — dados_aula_turma              (por ano letivo)

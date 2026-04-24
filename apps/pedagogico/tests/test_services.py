@@ -96,15 +96,14 @@ class TestPedagogicoService(TestCase):
         self.assertEqual(len(hash_val), 64)
         self.assertEqual(obj.descricao, "Arte")
 
-    def test_criar_transform_componente_por_turma_aplica_lookups(self) -> None:
-        self.service._a2 = {
-            513: MagicMock(eh_regencia=1, eh_territorio=1),
-        }
+    def test_criar_transform_componente_por_turma_aplica_flags_do_sql(self) -> None:
         self.service._exact = {(513, 6, "7")}
         config = self.service._fases[1]
         transform = self.service._criar_transform(config)
 
-        result = transform((513, " Inglês ", 1, 6, "7", 2025, "T1", "RF1", 0))
+        result = transform(
+            (513, " Inglês ", 1, 1, 1, 6, "7", 2025, "T1", "RF1", 0)
+        )
         assert result is not None
         pk, _, obj = result
 
@@ -121,10 +120,10 @@ class TestPedagogicoService(TestCase):
         transform = self.service._criar_transform(config)
 
         self.assertIsNone(
-            transform((None, " Inglês ", 1, 6, "7", 2025, "T1", "RF1", 0))
+            transform((None, " Inglês ", 1, 1, 1, 6, "7", 2025, "T1", "RF1", 0))
         )
         self.assertIsNone(
-            transform((513, " Inglês ", 1, 6, "7", 2025, None, "RF1", 0))
+            transform((513, " Inglês ", 1, 1, 1, 6, "7", 2025, None, "RF1", 0))
         )
 
     def test_criar_transform_componente_regencia_gera_pk_composta(
@@ -177,15 +176,12 @@ class TestPedagogicoService(TestCase):
         self, mock_sync: MagicMock
     ) -> None:
         config = self.service._fases[1]
-        self.service._a2 = {
-            513: MagicMock(eh_regencia=1, eh_territorio=0),
-        }
 
         escritos, ignorados = self.service._processar_batch(
             config=config,
             chunk=[
-                (None, "Inválido", 1, 6, "7", 2025, "T1", "RF1", 0),
-                (513, " Inglês ", 1, 6, "7", 2025, "T1", "RF1", 0),
+                (None, "Inválido", 0, 0, 1, 6, "7", 2025, "T1", "RF1", 0),
+                (513, " Inglês ", 1, 0, 1, 6, "7", 2025, "T1", "RF1", 0),
             ],
             transform=self.service._criar_transform(config),
             batch_num=0,

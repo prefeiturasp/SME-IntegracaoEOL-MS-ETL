@@ -36,6 +36,12 @@ class ComponentePorTurmaIn:
     descricao: Any
     """dc_componente_curricular."""
 
+    eh_regencia: Any
+    """1 se o componente curricular está na lista hardcoded de regência."""
+
+    eh_territorio: Any
+    """1 se o componente existe em turma_grade_territorio_experiencia."""
+
     tipo_escola: Any
     """tp_escola."""
 
@@ -60,11 +66,11 @@ class ComponentePorTurmaIn:
     def to_domain(
         self,
         transferido_em: Any,
-        regencia: bool = False,
-        territorio: bool = False,
         planejamento: bool = False,
     ) -> dict:
         codigo = int(self.codigo)
+        regencia = bool(self.eh_regencia)
+        territorio = bool(self.eh_territorio)
         return {
             "codigo": codigo,
             "descricao": strip_str(self.descricao),
@@ -91,29 +97,6 @@ class ComponentePorTurmaIn:
             "ano_letivo": int(self.ano_letivo),
             "transferido_em": transferido_em,
         }
-
-
-@dataclass
-class DisciplinaEolIn:
-    """Linha bruta da query ObterTodas.
-
-    Usada como lookup para enriquecer os registros do Pipeline A com flags de
-    regência e território.
-    """
-
-    id_componente_curricular: Any
-    """cd_componente_curricular — chave de join com codigo."""
-
-    descricao: Any
-    """dc_componente_curricular."""
-
-    eh_regencia: Any
-    """1 se o codigo está na lista hardcoded de IDs de regência,
-       0 caso contrário."""
-
-    eh_territorio: Any
-    """1 se existe entrada em turma_grade_territorio_experiencia,
-       0 caso contrário."""
 
 
 @dataclass
