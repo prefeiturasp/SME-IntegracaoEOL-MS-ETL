@@ -37,7 +37,10 @@ class AlunoIn:
     nacionalidade: str | None
     nis: str | None
     cpf: str | None
+    nome_mae: str | None
     raca_cor: str | None
+    data_atualizacao_contato: date | None
+    possui_deficiencia: bool
 
     def to_domain(self) -> dict:
         return {
@@ -49,7 +52,12 @@ class AlunoIn:
             "nacionalidade": strip_str(self.nacionalidade) or "0",
             "nis": strip_str(self.nis),
             "cpf": strip_str(self.cpf),
+            "nome_mae": strip_str(self.nome_mae),
             "raca_cor": strip_str(self.raca_cor) or "NÃO INFORMADA",
+            "data_atualizacao_contato": parse_date(
+                self.data_atualizacao_contato
+            ),
+            "possui_deficiencia": bool(self.possui_deficiencia),
         }
 
 
@@ -116,7 +124,7 @@ class MatriculaIn:
     codigo_matricula: int
     codigo_aluno: int
     codigo_ue: str
-    data_status: date | None
+    data_situacao_matricula: date | None
     ano_letivo: int
     codigo_situacao_matricula: int
 
@@ -127,7 +135,9 @@ class MatriculaIn:
             "codigo_matricula": self.codigo_matricula,
             "aluno_id": self.codigo_aluno,
             "codigo_ue": strip_str(self.codigo_ue),
-            "data_status": parse_date(self.data_status),
+            "data_situacao_matricula": parse_date(
+                self.data_situacao_matricula
+            ),
             "ano_letivo": self.ano_letivo,
             "codigo_situacao_matricula": self.codigo_situacao_matricula,
             "situacao_matricula": SituacaoMatricula.get_descricao(

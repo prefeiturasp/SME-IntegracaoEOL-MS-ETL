@@ -54,7 +54,22 @@ class TestProcessarChunkAlunos(TestCase):
         mock_upsert.sincronizar_lote.return_value = (5, 3)
         mock_upsert_class.return_value = mock_upsert
 
-        chunk = [[1, "nome", None, None, None, None, None, None, None]]
+        chunk = [
+            [
+                1,
+                "nome",
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                0,
+            ]
+        ]
         resultado = processar_chunk.run(chunk, _fase_meta_dict())
 
         self.assertEqual(resultado, (5, 3))
@@ -94,7 +109,22 @@ class TestProcessarChunkAlunos(TestCase):
 
         mock_upsert_class.side_effect = RuntimeError("Falha")
 
-        chunk = [[1, "nome", None, None, None, None, None, None, None]]
+        chunk = [
+            [
+                1,
+                "nome",
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                0,
+            ]
+        ]
         with self.assertRaises((Retry, RuntimeError)):
             processar_chunk.run(chunk, _fase_meta_dict())
 

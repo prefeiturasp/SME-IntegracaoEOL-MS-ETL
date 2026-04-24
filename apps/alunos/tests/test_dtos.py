@@ -72,7 +72,10 @@ class AlunoInTest(SimpleTestCase):
             nacionalidade=" Brasileira ",
             nis="123",
             cpf="456",
+            nome_mae=" Maria ",
             raca_cor=" Branca ",
+            data_atualizacao_contato=date(2023, 1, 1),
+            possui_deficiencia=False,
         )
         data = dto.to_domain()
         self.assertEqual(data["nome"], "João")
@@ -91,6 +94,9 @@ class AlunoInTest(SimpleTestCase):
             nis="",
             cpf="",
             raca_cor="",
+            nome_mae="",
+            data_atualizacao_contato=None,
+            possui_deficiencia=False,
         )
         data = dto.to_domain()
         self.assertEqual(data["nome"], "NÃO INFORMADO")
@@ -110,6 +116,9 @@ class AlunoInTest(SimpleTestCase):
             nis=None,
             cpf=None,
             raca_cor=None,
+            nome_mae=None,
+            data_atualizacao_contato=None,
+            possui_deficiencia=False,
         )
         data = dto.to_domain()
         self.assertEqual(data["data_nascimento"], date(2007, 7, 4))
@@ -165,7 +174,7 @@ class MatriculaInTest(SimpleTestCase):
             codigo_matricula=1000,
             codigo_aluno=1,
             codigo_ue="UE123",
-            data_status=date(2023, 2, 2),
+            data_situacao_matricula=date(2023, 2, 2),
             ano_letivo=2023,
             codigo_situacao_matricula=1,
         )
@@ -179,7 +188,7 @@ class MatriculaInTest(SimpleTestCase):
             codigo_matricula=1001,
             codigo_aluno=2,
             codigo_ue="UE123",
-            data_status=None,
+            data_situacao_matricula=None,
             ano_letivo=2023,
             codigo_situacao_matricula=99,
         )
