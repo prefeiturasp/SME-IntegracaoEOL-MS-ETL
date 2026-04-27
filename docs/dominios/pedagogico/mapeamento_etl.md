@@ -20,18 +20,20 @@ Resumo de origem e destino por fase. Para o mapeamento campo a campo e decisões
 
 **Query:** `SQL_COMPONENTES_POR_TURMA` (parâmetro `?` por ano letivo)
 
+`regencia` e `territorio_saber` são calculados via `CASE` inline na query (`EhRegencia`, `EhTerritorio`) — não há lookup A2 separado.
+
 | Campo Origem | Campo Destino | Transformação |
 | :--- | :--- | :--- |
 | `Codigo` (EOL) | `codigo` | `int()` |
 | `Descricao` (EOL) | `descricao` | `strip_str()` |
-| lookup A2 (`SQL_DISCIPLINAS_EOL`) | `regencia` | `bool(disciplina.eh_regencia)` |
-| lookup A2 | `territorio_saber` | `bool(disciplina.eh_territorio)` |
-| lookup A3 (`SQL_REGENCIA_COMPONENTE_CURRICULAR`) | `planejamento_regencia` | exact → fallback |
+| `EhRegencia` (CASE inline) | `regencia` | `bool()` |
+| `EhTerritorio` (CASE inline) | `territorio_saber` | `bool()` |
+| lookup A3 (`SQL_LOOKUP_PLANEJAMENTO_REGENCIA`) | `planejamento_regencia` | exact → fallback |
 | `codigo` se `territorio_saber` | `codigo_componente_territorio_saber` | `codigo` ou `None` |
 | `MAPA_COMPONENTE_PAI` | `codigo_componente_curricular_pai` | `.get(codigo)` |
 | `cd_turma_escola` | `turma_codigo` | `str()` ou `None` |
-| RF ou CPF (por `atribuicao_externa`) | `professor` | `str()` ou `None` |
-| `an_letivo` | `ano_letivo` | `int()` |
+| RF ou CPF (por `AtribuicaoExterna`) | `professor` | `str()` ou `None` |
+| `anoletivo` | `ano_letivo` | `int()` |
 | `MAPA_COMPONENTE_PAI` + `ano_letivo` | `exibir_componente_eol` | `not (ano <= 2021 and cod in mapa)` |
 | — | `transferido_em` | `timezone.now()` |
 
@@ -66,32 +68,9 @@ O agrupamento ocorre em Python via `_agrupar()`. Somente grupos com 2+ component
 
 ---
 
-## Fase 4 — ComponenteCurricularRegencia
+## Fase 4 — ComponenteInicioTurma
 
-**Query:** `SQL_COMPONENTES_TERRITORIO_ATRIBUIDOS` (parâmetro `?` por ano letivo)
-
-| Campo EOL | Campo Destino | Transformação |
-| :--- | :--- | :--- |
-| `CodigoComponenteCurricular` | `codigo` | `int()` |
-| `CodigoTerritorioSaber` | `codigo_componente_territorio_saber` | `int()` ou `None` |
-| `DescricaoComponenteCurricular` | `descricao` | `strip_str()` |
-| `CodigoTerritorioSaber IS NOT NULL` | `territorio_saber` | `bool` |
-| `TipoEscola` | `tipo_escola` | `str()` ou `None` |
-| `TurnoTurma` | `turno_turma` | `int()` ou `None` |
-| lookup A3 | `componente_planejamento_regencia` | exact → fallback |
-| `TurmaCodigo` | `turma_codigo` | `str()` ou `None` |
-| `rfProfessor` | `professor` | `str()` ou `None` |
-| `AnoTurma` | `ano_turma` | `str()` |
-| `anoletivo` | `ano_letivo` | `int()` |
-| `dataAtribuicao` | `inicio_atribuicao` | `make_aware()` |
-| `dataDisponibilizacao` | `fim_atribuicao` | `make_aware()` |
-| — | `transferido_em` | `timezone.now()` |
-
----
-
-## Fase 5 — DadosAulaTurma
-
-**Query:** `SQL_DADOS_AULA_TURMA` (parâmetro `?` por ano letivo)
+**Query:** `SQL_COMPONENTE_INICIO_TURMA` (parâmetro `?` por ano letivo)
 
 | Campo EOL | Campo Destino | Transformação |
 | :--- | :--- | :--- |
@@ -106,9 +85,9 @@ O agrupamento ocorre em Python via `_agrupar()`. Somente grupos com 2+ component
 
 ---
 
-## Fase 6 — ComponenteCurricularPorAnoLetivo
+## Fase 5 — GradeCurricularSerie
 
-**Query:** `SQL_COMPONENTES_POR_ANO_LETIVO` (parâmetro `?` por ano letivo)
+**Query:** `SQL_GRADE_CURRICULAR_SERIE` (parâmetro `?` por ano letivo)
 
 | Campo EOL | Campo Destino | Transformação |
 | :--- | :--- | :--- |

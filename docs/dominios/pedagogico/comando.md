@@ -26,7 +26,26 @@ Herdados de `BaseEtlCommand`:
 
 ## Modo de escrita
 
-Todas as 7 tabelas do domínio estão em `_TABELAS_UPSERT` — `get_modo_escrita` retorna `"upsert"` para todas.
+Documentação alvo do domínio:
+
+- Fases do pipeline: `5`
+- Tabelas persistidas pelo ETL:
+  - `componente_curricular`
+  - `componente_curricular_por_turma`
+  - `agrupamento_atribuicao_territorio_saber`
+  - `componente_curricular_agrupamento`
+  - `componente_inicio_turma`
+  - `grade_curricular_serie`
+
+Estado atual do código em `etl_pedagogico.py`:
+
+- `_TABELAS_UPSERT` ainda lista nomes antigos:
+  - `componente_curricular_regencia`
+  - `dados_aula_turma`
+  - `componente_curricular_por_ano_letivo`
+- `fase_final` ainda está em `6`
+
+Essa é uma divergência conhecida do código em relação ao pipeline atual documentado aqui.
 
 ## Exemplos
 

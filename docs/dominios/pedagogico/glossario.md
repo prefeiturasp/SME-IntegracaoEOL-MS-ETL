@@ -55,14 +55,13 @@ Nem todo componente de regência se aplica a todas as séries e turnos. Por exem
    - Se `codigo in fallback` → `True`
    - Caso contrário → `False`
 
-**Aparece em dois modelos com nomes distintos:**
+**No ETL atual aparece em:**
 
 | Campo | Modelo |
 |---|---|
 | `planejamento_regencia` | `ComponenteCurricularPorTurma` |
-| `componente_planejamento_regencia` | `ComponenteCurricularRegencia` |
 
-São o mesmo cálculo, aplicado em contextos diferentes.
+O lookup A3 continua existindo, mas é usado apenas para enriquecer `ComponenteCurricularPorTurma`.
 
 ---
 
@@ -80,8 +79,8 @@ O código `cd_territorio_saber = 1` é um valor especial que significa "territó
 - Cada componente de território pertence a um `cd_territorio_saber` e pode ter um `cd_experiencia_pedagogica` associado.
 
 **No ETL:**
-- A flag `territorio_saber` em `componente_curricular_por_turma` e `componente_curricular_regencia` indica que o componente é de território.
-- Derivada dinamicamente: se o componente existe em `turma_grade_territorio_experiencia`, `territorio_saber = True`.
+- A flag `territorio_saber` em `componente_curricular_por_turma` indica que o componente é de território.
+- Derivada dinamicamente por `CASE` inline em `SQL_COMPONENTES_POR_TURMA`: se o componente existe em `turma_grade_territorio_experiencia`, `territorio_saber = True`.
 - Quando `True`, o campo `codigo_componente_territorio_saber` recebe o próprio código do componente (é a mesma chave, usada para indexação cruzada).
 
 ---
@@ -164,11 +163,41 @@ Existe também a **grade de programa** (`turma_escola_grade_programa`), para tur
 
 ---
 
+### Etapa de Ensino
+
+Subdivisão formal do sistema educacional, definida pelo MEC. Exemplos: Anos Iniciais do EF, Anos Finais do EF, Ensino Médio, EJA Fundamental.
+
+No EOL: tabela `etapa_ensino`, campo `cd_etapa_ensino`. Cada `serie_ensino` pertence a uma etapa.
+
+A etapa não aparece diretamente na turma — o caminho é: `turma_escola → serie_turma_grade → grade → serie_ensino → etapa_ensino`.
+
+---
+
+### Série de Ensino
+
+O ano/série escolar dentro de uma etapa. Ex: 1º ano, 2º ano, 3º ano do EF.
+
+No EOL: tabela `serie_ensino`. Campos relevantes:
+- `sg_resumida_serie`: sigla curta usada como filtro nos endpoints — ex: `"1"`, `"2"`, `"1EM"`, `"EI"`.
+- `sg_serie_ensino`: nome completo da série.
+- `cd_serie_ensino`: chave numérica.
+
+**Hierarquia completa no EOL:**
+
+```
+Modalidade (derivada)
+  └── Etapa de Ensino (etapa_ensino)
+        └── Série (serie_ensino)
+              └── Grade (grade)           ← quais componentes são obrigatórios
+                    └── Componentes (grade_componente_curricular)
+              └── Turma (turma_escola)    ← vínculo via serie_turma_escola → serie_turma_grade
+```
+
+---
+
 ### Modalidade de Ensino
 
-Categoria que agrupa tipos de escola/etapa de ensino para fins de filtragem nos endpoints.
-
-Calculada via CASE na query `SQL_COMPONENTES_POR_ANO_LETIVO`:
+Categoria que agrupa etapas de ensino para fins de filtragem nos endpoints. Não existe como campo direto na turma — é **derivada** da etapa de ensino via `CASE` nas queries.
 
 | Código | Modalidade | Etapas / Tipo de Escola |
 |---|---|---|
@@ -176,7 +205,23 @@ Calculada via CASE na query `SQL_COMPONENTES_POR_ANO_LETIVO`:
 | 3 | EJA | `cd_etapa_ensino IN (2, 3, 7, 11)` |
 | 4 | CIEJA | `tp_escola = 13` |
 | 5 | EF (Ensino Fundamental) | `cd_etapa_ensino IN (4, 5, 12, 13)` |
-| 6 | EM (Ensino Médio) | `cd_etapa_ensino IN (6, 7, 8, 9, 17, 14)` |
+| 6 | EM (Ensino Médio) | `cd_etapa_ensino IN (6, 7, 8, 9, 14, 17)` |
+
+O CIEJA é identificado pelo `tp_escola` da escola (não pela etapa) porque suas turmas podem ter etapas variadas — o que define o CIEJA é o tipo da escola.
+
+---
+
+### PAP (Programa de Apoio e Acompanhamento à Aprendizagem)
+
+Programa de reforço escolar da rede municipal destinado a alunos com dificuldades de aprendizagem. As turmas PAP têm componentes curriculares próprios — distintos dos componentes regulares — que são usados para planejamento e registro de frequência.
+
+**No ETL:**
+- A tabela local `componentecurricularpap` lista os IDs de componentes que pertencem ao PAP.
+- Os IDs atualmente cadastrados são: `1033, 1051, 1052, 1053, 1054, 1322, 1770, 1804, 1805`.
+- Essa lista é usada pelo endpoint `GET /turmas/{codigoTurma}/validar/pap` para verificar se uma turma possui componente PAP.
+- No ETL, serve para identificar e tratar esses componentes de forma diferenciada quando necessário.
+
+**Fonte dos dados:** tabela local Postgres `componentecurricularpap`, populada pelos scripts de migração `V18`, `V193` e `V194`.
 
 ---
 
@@ -385,9 +430,16 @@ Código que explica por que uma atribuição foi encerrada:
 | `etapa_ensino` | Etapas de ensino (EI, EF, EM, EJA...) |
 | `turma_escola_grade_programa` | Grade de programa para turmas especiais |
 
+**Tabelas locais (Postgres da API Pedagógico):**
+
+| Tabela | O que representa |
+|---|---|
+| `regenciacomponentecurricular` | Configuração global de quais componentes entram no planejamento de regência por turno e ano escolar. Triplas `(id_componente, turno, ano)` — quando `turno` e `ano` são `null`, o componente é genérico (fallback para qualquer turma). |
+| `componentecurricularpap` | Lista de IDs de componentes curriculares pertencentes ao PAP. Usada para identificar turmas e componentes do programa. |
+
 ---
 
-## Relação entre os Modelos do ETL
+## Relação entre os Modelos do ETL e Tabelas Locais
 
 ```
 ComponenteCurricular          ← catálogo base (fase 1)
@@ -395,15 +447,16 @@ ComponenteCurricular          ← catálogo base (fase 1)
         ├── ComponenteCurricularPorTurma         ← atribuição real por turma/professor (fase 2)
         │       flags: regencia, planejamento_regencia, territorio_saber
         │
-        ├── ComponenteCurricularRegencia          ← recorte de território para endpoint de regência (fase 4)
-        │       flag: componente_planejamento_regencia
-        │
         ├── ComponenteCurricularAgrupamento       ← detalhe do agrupamento, 1 linha por componente (fase 3)
         │       └── referencia AgrupamentoAtribuicaoTerritorioSaber
         │
         ├── AgrupamentoAtribuicaoTerritorioSaber  ← agrupamento de território como unidade (fase 3)
         │
-        ├── DadosAulaTurma                        ← data de início de aula por componente/turma (fase 5)
+        ├── ComponenteInicioTurma                 ← data de início de aula por componente/turma (fase 4)
         │
-        └── ComponenteCurricularPorAnoLetivo      ← oferta de componentes por ano/modalidade (fase 6)
+        └── GradeCurricularSerie                  ← oferta de componentes por ano/modalidade (fase 5)
+
+Tabelas locais de apoio (fora do pipeline principal):
+        ├── RegenciaComponenteCurricular          ← referência histórica de configuração de regência
+        └── ComponenteCurricularPAP               ← lista local de componentes PAP
 ```
