@@ -39,8 +39,20 @@ def _row_turma(
     desc_turno="Manhã",
     situacao="O",
     tipo_prog=649,
+    categoria="PAP",
 ):
-    return (codigo, nome, ue, dre, ano, turno, desc_turno, situacao, tipo_prog)
+    return (
+        codigo,
+        nome,
+        ue,
+        dre,
+        ano,
+        turno,
+        desc_turno,
+        situacao,
+        tipo_prog,
+        categoria,
+    )
 
 
 def _row_comp_turma(codigo_turma=12345, codigo_comp=1322, nome="PAP Rec"):
@@ -58,7 +70,6 @@ def _row_matricula(
     ano=2025,
     ue="000001",
     dre="108900",
-    tipo_prog=649,
 ):
     return (
         aluno,
@@ -71,7 +82,6 @@ def _row_matricula(
         ano,
         ue,
         dre,
-        tipo_prog,
     )
 
 
@@ -174,7 +184,7 @@ class TestTurmaProgramaIn(TestCase):
         self.assertEqual(d["codigo_tipo_programa"], 649)
 
     def test_turma_paee(self) -> None:
-        d = TurmaProgramaIn(*_row_turma(tipo_prog=656)).to_domain()
+        d = TurmaProgramaIn(*_row_turma(categoria="PAEE")).to_domain()
         self.assertEqual(d["categoria"], CategoriaPrograma.PAEE)
 
     def test_turno_nullable(self) -> None:
@@ -188,6 +198,10 @@ class TestTurmaProgramaIn(TestCase):
     def test_strip_em_nome_turma(self) -> None:
         d = TurmaProgramaIn(*_row_turma(nome="  TURMA  ")).to_domain()
         self.assertEqual(d["nome_turma"], "TURMA")
+
+    def test_codigo_tipo_programa_nullable(self) -> None:
+        d = TurmaProgramaIn(*_row_turma(tipo_prog=None)).to_domain()
+        self.assertIsNone(d["codigo_tipo_programa"])
 
 
 class TestTurmaProgramaComponenteCurricularIn(TestCase):
@@ -229,11 +243,17 @@ class TestMatriculaTurmaProgramaIn(TestCase):
             SituacaoMatricula.get_descricao(5),
         )
 
-    def test_categoria_paee(self) -> None:
+    def test_categoria_paee_pelo_componente_1030(self) -> None:
         d = MatriculaTurmaProgramaIn(
-            *_row_matricula(tipo_prog=656)
+            *_row_matricula(comp=1030, nome_comp="SRM")
         ).to_domain()
         self.assertEqual(d["categoria"], CategoriaPrograma.PAEE)
+
+    def test_categoria_pap_pelo_componente(self) -> None:
+        d = MatriculaTurmaProgramaIn(
+            *_row_matricula(comp=1322)
+        ).to_domain()
+        self.assertEqual(d["categoria"], CategoriaPrograma.PAP)
 
     def test_codigos_ue_dre_preservados(self) -> None:
         d = MatriculaTurmaProgramaIn(
