@@ -637,6 +637,10 @@ SELECT
     0                                 AS AtribuicaoExterna
 FROM turma_escola te
     INNER JOIN escola esc ON te.cd_escola = esc.cd_escola
+    INNER JOIN v_cadastro_unidade_educacao ue ON ue.cd_unidade_educacao = esc.cd_escola
+    INNER JOIN unidade_administrativa dre
+        ON dre.tp_unidade_administrativa = {_TIPO_UNIDADE_ADMINISTRATIVA_DRE}
+        AND ue.cd_unidade_administrativa_referencia = dre.cd_unidade_administrativa
     INNER JOIN serie_turma_escola ste ON ste.cd_turma_escola = te.cd_turma_escola
     INNER JOIN serie_turma_grade stg
         ON stg.cd_turma_escola = ste.cd_turma_escola
@@ -661,6 +665,8 @@ FROM turma_escola te
         AND aa.cd_serie_grade = stg.cd_serie_grade
         AND aa.dt_cancelamento IS NULL
         AND aa.an_atribuicao = te.an_letivo
+        AND aa.dt_atribuicao_aula <= GETDATE()
+        AND COALESCE(aa.dt_disponibilizacao_aulas, GETDATE()) >= '2020-02-05'
         AND (aa.cd_motivo_disponibilizacao <> {_MOTIVO_DISPONIBILIZACAO_ERRO_CADASTRO}
              OR aa.cd_motivo_disponibilizacao IS NULL)
     INNER JOIN v_cargo_base_cotic vcbc
@@ -687,6 +693,10 @@ SELECT
     1                                 AS AtribuicaoExterna
 FROM turma_escola te
     INNER JOIN escola esc ON te.cd_escola = esc.cd_escola
+    INNER JOIN v_cadastro_unidade_educacao ue ON ue.cd_unidade_educacao = esc.cd_escola
+    INNER JOIN unidade_administrativa dre
+        ON dre.tp_unidade_administrativa = {_TIPO_UNIDADE_ADMINISTRATIVA_DRE}
+        AND ue.cd_unidade_administrativa_referencia = dre.cd_unidade_administrativa
     INNER JOIN serie_turma_escola ste ON ste.cd_turma_escola = te.cd_turma_escola
     INNER JOIN serie_turma_grade stg
         ON stg.cd_turma_escola = ste.cd_turma_escola
@@ -709,6 +719,8 @@ FROM turma_escola te
         AND gcc.cd_componente_curricular = ae.cd_componente_curricular
         AND ae.dt_cancelamento IS NULL
         AND ae.an_atribuicao = te.an_letivo
+        AND ae.dt_atribuicao <= GETDATE()
+        AND COALESCE(ae.dt_disponibilizacao, GETDATE()) >= '2020-02-05'
         AND (ae.cd_motivo_disponibilizacao_externo <> 1
              OR ae.cd_motivo_disponibilizacao_externo IS NULL)
     INNER JOIN contrato_externo ce ON ce.cd_contrato_externo = ae.cd_contrato_externo

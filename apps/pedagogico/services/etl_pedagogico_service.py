@@ -15,11 +15,8 @@ Estratégia de escrita: upsert incremental com hash SHA-256 via BaseEtlService.
                                                 ano_letivo, modalidade)
 """
 
-import hashlib
 import logging
 from collections.abc import Callable, Iterator
-from datetime import datetime
-from itertools import groupby
 from typing import Any, cast
 from uuid import UUID
 
@@ -30,7 +27,6 @@ from apps.core.libs.base_etl_service import (
     PhaseConfig,
     PipelineMetrics,
 )
-from apps.core.libs.helpers import make_aware
 from apps.core.libs.thread_processor import calcular_hash
 from apps.eol_connection.libs.servico_eol import EOLService
 from apps.pedagogico.dtos.model_in import (
@@ -58,6 +54,10 @@ from apps.pedagogico.queries import (
     SQL_GRADE_CURRICULAR_SERIE,
     SQL_LOOKUP_PLANEJAMENTO_REGENCIA,
 )
+from apps.pedagogico.services.agrupamentos import (
+    agrupar_atribuicoes_territorio_saber,
+    montar_indices_agrupamentos_existentes,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -68,11 +68,8 @@ A3ExactKey = tuple[int, Any, Any]
 A3ExactSet = set[A3ExactKey]
 A3FallbackSet = set[int]
 
-_AGRUPAMENTO_ID_INICIAL = 800_000
-_AGRUPAMENTO_ID_MAX = 2**60
-
 # ---------------------------------------------------------------------------
-# Helpers de agrupamento — território saber
+# Helpers de planejamento de regência
 # ---------------------------------------------------------------------------
 
 
@@ -100,157 +97,6 @@ def _planejamento_regencia(
     if (codigo, turno_turma, ano_turma) in exact:
         return True
     return codigo in fallback
-
-
-def _cod_agrupamento(
-    codigo_turma: Any,
-    codigo_territorio_saber: Any,
-    codigo_experiencia_pedagogica: Any,
-    rf_professor: Any,
-    data_atribuicao: Any,
-    componentes_ordenados: list[int],
-) -> int:
-    """Gera um ID estável para o agrupamento de território do saber.
-
-    O resultado é sempre >= _AGRUPAMENTO_ID_INICIAL (800_000), constante
-    equivalente a COMPONENTE_AGRUPAMENTO_TERRITORIO_SABER_ID_INICIAL do C#.
-    Esse piso existe para evitar colisão com IDs reais de componentes
-    curriculares do EOL, que ficam abaixo desse valor.
-
-    O hash é calculado sobre a chave natural do agrupamento (turma, território,
-    experiência, professor, data de atribuição e lista ordenada de
-    componentes), garantindo determinismo independente da ordem das rows.
-    """
-    csv = ",".join(str(c) for c in componentes_ordenados)
-    chave = (
-        f"{codigo_turma}_{codigo_territorio_saber}_"
-        f"{codigo_experiencia_pedagogica}_{rf_professor}_"
-        f"{data_atribuicao}_{csv}"
-    )
-    raw = int(hashlib.md5(chave.encode()).hexdigest()[:15], 16)  # NOSONAR
-    return _AGRUPAMENTO_ID_INICIAL + (
-        raw % (_AGRUPAMENTO_ID_MAX - _AGRUPAMENTO_ID_INICIAL)
-    )
-
-
-def _chave_grupo(row: AtribuicaoTerritorioSaberIn) -> tuple:
-    return (
-        str(row.codigo_turma),
-        int(row.codigo_territorio_saber),
-        (
-            int(row.codigo_experiencia_pedagogica)
-            if row.codigo_experiencia_pedagogica is not None
-            else -1
-        ),
-        str(row.rf_professor) if row.rf_professor is not None else "",
-        row.data_atribuicao or datetime.min,
-        (
-            row.data_disponibilizacao.date()
-            if row.data_disponibilizacao
-            else None
-        ),
-    )
-
-
-def _agrupar(
-    rows: list[AtribuicaoTerritorioSaberIn],
-    transferido_em: Any,
-) -> tuple[
-    list[AgrupamentoAtribuicaoTerritorioSaber],
-    list[ComponenteCurricularAgrupamento],
-]:
-    agrupamentos: list[AgrupamentoAtribuicaoTerritorioSaber] = []
-    itens: list[ComponenteCurricularAgrupamento] = []
-
-    for _, grupo in groupby(sorted(rows, key=_chave_grupo), key=_chave_grupo):
-        grupo_list = list(grupo)
-        componentes = sorted(
-            {int(r.codigo_componente_curricular) for r in grupo_list}
-        )
-
-        if len(componentes) <= 1:
-            continue
-
-        primeiro = grupo_list[0]
-        cod_agrup = _cod_agrupamento(
-            primeiro.codigo_turma,
-            primeiro.codigo_territorio_saber,
-            primeiro.codigo_experiencia_pedagogica,
-            primeiro.rf_professor,
-            primeiro.data_atribuicao,
-            componentes,
-        )
-
-        dt_inicio = (
-            make_aware(primeiro.data_atribuicao)
-            if primeiro.data_atribuicao
-            else None
-        )
-        dt_fim_raw = max(
-            (
-                r.data_disponibilizacao
-                for r in grupo_list
-                if r.data_disponibilizacao
-            ),
-            default=None,
-        )
-        dt_fim = make_aware(dt_fim_raw) if dt_fim_raw else None
-        dt_fim_turma = (
-            make_aware(primeiro.data_fim_turma)
-            if primeiro.data_fim_turma
-            else None
-        )
-
-        agrupamentos.append(
-            AgrupamentoAtribuicaoTerritorioSaber(
-                cod_agrupamento=cod_agrup,
-                cod_territorio_saber=primeiro.codigo_territorio_saber,
-                cod_experiencia_pedagogica=(
-                    primeiro.codigo_experiencia_pedagogica
-                ),
-                dt_inicio_atribuicao=dt_inicio,
-                ano_atribuicao=dt_inicio.year if dt_inicio else None,
-                dt_fim_atribuicao=dt_fim,
-                dt_fim_turma=dt_fim_turma,
-                rf_professor=primeiro.rf_professor,
-                cod_turma=str(primeiro.codigo_turma),
-                cod_componentes_curriculares=",".join(
-                    str(c) for c in componentes
-                ),
-                ano_letivo=primeiro.ano_letivo,
-                cod_motivo_disponibilizacao=(
-                    primeiro.codigo_motivo_disponibilizacao
-                ),
-                desc_territorio_saber=primeiro.descricao_territorio_saber,
-                desc_experiencia_pedagogica=(
-                    primeiro.descricao_experiencia_pedagogica
-                ),
-                encerramento_atribuicao_agrupamento_atualizado=None,
-                transferido_em=transferido_em,
-            )
-        )
-
-        for cod in componentes:
-            itens.append(
-                ComponenteCurricularAgrupamento(
-                    componente_codigo=cod,
-                    turma_codigo=str(primeiro.codigo_turma),
-                    codigo_agrupamento=cod_agrup,
-                    rf_professor=primeiro.rf_professor,
-                    ano_letivo=primeiro.ano_letivo,
-                    transferido_em=transferido_em,
-                )
-            )
-
-    agrupamentos = list({a.cod_agrupamento: a for a in agrupamentos}.values())
-    itens = list(
-        {
-            (i.componente_codigo, i.turma_codigo, i.codigo_agrupamento): i
-            for i in itens
-        }.values()
-    )
-
-    return agrupamentos, itens
 
 
 # ---------------------------------------------------------------------------
@@ -302,6 +148,7 @@ class EtlPedagogicoService(BaseEtlService):
         repositorio_auditoria: Any | None = None,
         primeiro_run: bool = False,
         eol: EOLService | None = None,
+        ano_letivo: int | None = None,
     ) -> None:
         super().__init__(
             db_alias=db_alias,
@@ -315,6 +162,7 @@ class EtlPedagogicoService(BaseEtlService):
         self._fallback: A3FallbackSet = set()
         self._total_itens_agrupamento: int = 0
         self._cache_anos: list[int] | None = None
+        self._ano_letivo: int | None = ano_letivo
         self._fases = self._init_fases()
 
     # ------------------------------------------------------------------
@@ -469,11 +317,14 @@ class EtlPedagogicoService(BaseEtlService):
     def _anos_letivos(self) -> list[int]:
         """Retorna anos letivos do EOL, com cache por instância."""
         if self._cache_anos is None:
-            self._cache_anos = [
+            anos = [
                 int(r[0])
                 for chunk in self.eol.iter_query(SQL_ANOS_LETIVOS)
                 for r in chunk
             ]
+            if self._ano_letivo is not None:
+                anos = [a for a in anos if a >= self._ano_letivo]
+            self._cache_anos = anos
         return self._cache_anos
 
     def _carregar_lookups(self) -> None:
@@ -517,7 +368,18 @@ class EtlPedagogicoService(BaseEtlService):
             for r in chunk:
                 rows.append(AtribuicaoTerritorioSaberIn(*r))
 
-        agrupamentos, itens = _agrupar(rows, agora)
+        (
+            agrupamentos_exatos,
+            agrupamentos_historicos,
+            ultimo_id_gerado,
+        ) = montar_indices_agrupamentos_existentes(self.db_alias)
+        agrupamentos, itens = agrupar_atribuicoes_territorio_saber(
+            rows,
+            agora,
+            agrupamentos_exatos=agrupamentos_exatos,
+            agrupamentos_historicos=agrupamentos_historicos,
+            ultimo_id_gerado=ultimo_id_gerado,
+        )
 
         hash_agrup = sorted(_UPDATE_AGRUP)
         hash_item = sorted(_UPDATE_ITEM)
