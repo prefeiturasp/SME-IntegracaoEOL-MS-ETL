@@ -24,6 +24,7 @@ def executar_dominio_task(
     volume: int = 100,
     offset: int = 0,
     continuar: bool = False,
+    ano_letivo: int | None = None,
 ) -> str:
     """Executa domínio ETL via fila Celery com retomada por checkpoint."""
     repositorio = RepositorioAuditoriaPostgres()
@@ -48,6 +49,8 @@ def executar_dominio_task(
 
             if continuar_execucao:
                 argumentos.append("--continuar")
+            if ano_letivo is not None:
+                argumentos += ["--ano-letivo", str(ano_letivo)]
 
             call_command("executar_dominio", *argumentos)
 
@@ -77,6 +80,7 @@ def executar_dominio_task(
             "volume": volume,
             "offset": offset,
             "continuar": True,
+            "ano_letivo": ano_letivo,
         }
 
         raise self.retry(

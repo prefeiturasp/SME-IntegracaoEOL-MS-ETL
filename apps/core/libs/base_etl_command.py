@@ -60,7 +60,10 @@ class BaseEtlCommand(BaseCommand):
             "--fase",
             type=int,
             default=0,
-            help="Forçar início a partir desta fase (ignora checkpoint se > 0).",
+            help=(
+                "Forçar início a partir desta fase "
+                "(ignora checkpoint se > 0)."
+            ),
         )
         parser.add_argument(
             "--carga-inicial",
@@ -82,10 +85,13 @@ class BaseEtlCommand(BaseCommand):
 
         O job_name é derivado do módulo da subclasse concreta, não da base.
         O execution_id só fica disponível após iniciar_execucao, por isso o
-        contexto do logger é atualizado via update_context logo após o registro.
+        contexto do logger é atualizado via update_context logo após o
+        registro.
         """
         repositorio = RepositorioAuditoriaPostgres()
-        fase_inicial, token_ant = self._obter_ponto_partida(repositorio, **options)
+        fase_inicial, token_ant = self._obter_ponto_partida(
+            repositorio, **options
+        )
 
         job_name = type(self).__module__.split(".")[-1]
         self._etl_logger = ContextualLogger.get_etl_logger(
@@ -114,7 +120,9 @@ class BaseEtlCommand(BaseCommand):
         """Lança execução assíncrona via Orquestrador."""
         from apps.core.libs.base_etl_orquestrador import GenericEtlOrquestrador
 
-        orquestrador_class = getattr(self, "orquestrador_class", GenericEtlOrquestrador)
+        orquestrador_class = getattr(
+            self, "orquestrador_class", GenericEtlOrquestrador
+        )
         orquestrador = orquestrador_class(
             dominio=self.dominio,
             service_class=self.service_class,
@@ -128,6 +136,10 @@ class BaseEtlCommand(BaseCommand):
             fase_inicial,
             extra={"etapa": "celery", "status": "RUNNING"},
         )
+
+    def _extra_service_kwargs(self, **options: Any) -> dict[str, Any]:
+        """Kwargs extras para o service. Sobrescrever nas subclasses."""
+        return {}
 
     def _handle_sync(
         self,
@@ -143,6 +155,7 @@ class BaseEtlCommand(BaseCommand):
             id_execucao=id_execucao,
             repositorio_auditoria=repositorio,
             primeiro_run=options.get("carga_inicial", False),
+            **self._extra_service_kwargs(**options),
         )
 
         try:
@@ -232,7 +245,11 @@ class BaseEtlCommand(BaseCommand):
         total = sum(resultado.values())
         self._etl_logger.info(
             "ETL concluído com sucesso.",
-            extra={"etapa": "conclusao", "status": "SUCCESS", "records_written": total},
+            extra={
+                "etapa": "conclusao",
+                "status": "SUCCESS",
+                "records_written": total,
+            },
         )
 
     def _finalizar_com_erro(

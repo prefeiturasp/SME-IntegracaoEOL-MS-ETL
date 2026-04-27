@@ -1,5 +1,7 @@
 """Views DRF para controle e auditoria de execuções ETL."""
 
+from typing import Any
+
 from django.db import connections
 from django.db.models import OuterRef, QuerySet, Subquery
 from django.http import HttpRequest, HttpResponse
@@ -90,7 +92,8 @@ class ExecucoesView(APIView):
     @extend_schema(
         summary="Lista execuções recentes",
         description=(
-            "Retorna as 50 execuções ETL mais recentes ordenadas por data de início."
+            "Retorna as 50 execuções ETL mais recentes "
+            "ordenadas por data de início."
         ),
         responses={200: EtlExecucaoSerializer(many=True)},
     )
@@ -168,9 +171,9 @@ class ExecucoesTabelaEscritaView(APIView):
     )
     def get(self, request: Request) -> Response:
         """Retorna registros de tabelas escritas nas execuções."""
-        queryset = EtlExecucaoTabelaEscrita.objects.all().order_by("-escrito_em")[
-            :_LIMITE_EXECUCOES_RECENTES
-        ]
+        queryset = EtlExecucaoTabelaEscrita.objects.all().order_by(
+            "-escrito_em"
+        )[:_LIMITE_EXECUCOES_RECENTES]
         serializer = EtlExecucaoTabelaEscritaSerializer(queryset, many=True)
         return Response(serializer.data)
 
@@ -182,10 +185,54 @@ class ExecutarDominioView(APIView):
     @extend_schema(
         summary="Disparar execução de domínio",
         description=(
-            "Agenda ou executa imediatamente a sincronização de um domínio ETL. "
-            "Se `executar_em` for informado, a task é agendada para aquela "
-            "data/hora (ISO 8601). Caso contrário, executa imediatamente via Celery."
+            "Agenda ou executa imediatamente a sincronização de um "
+            "domínio ETL. Se `executar_em` for informado, a task é "
+            "agendada para aquela data/hora (ISO 8601). Caso contrário, "
+            "executa imediatamente via Celery."
         ),
+        request={
+            "application/json": {
+                "type": "object",
+                "properties": {
+                    "volume": {
+                        "type": "integer",
+                        "default": 100,
+                    },
+                    "offset": {
+                        "type": "integer",
+                        "default": 0,
+                    },
+                    "continuar": {
+                        "type": "boolean",
+                        "default": False,
+                    },
+                    "prioridade": {
+                        "type": "integer",
+                        "default": 5,
+                        "description": "0 = mais urgente, 9 = menos urgente.",
+                    },
+                    "executar_em": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": (
+                            "Agenda a execução para esta "
+                            "data/hora (ISO 8601)."
+                        ),
+                    },
+                    "ano_letivo": {
+                        "type": "integer",
+                        "nullable": True,
+                        "x-nullable": True,
+                        "description": (
+                            "Opcional. Quando informado, processa apenas "
+                            "anos letivos a partir deste valor (inclusive)."
+                            " Aplicável ao domínio pedagógico."
+                        ),
+                        "example": None,
+                    },
+                },
+            }
+        },
         responses={
             202: {
                 "type": "object",
@@ -201,13 +248,16 @@ class ExecutarDominioView(APIView):
         executar_em = request.data.get("executar_em")
         # Prioridade: 0 = mais urgente, 9 = menos urgente (padrão: 5)
         prioridade = int(request.data.get("prioridade", 5))
+        ano_letivo = request.data.get("ano_letivo")
 
-        kwargs_task = {
+        kwargs_task: dict[str, Any] = {
             "dominio": dominio,
             "volume": volume,
             "offset": offset,
             "continuar": continuar,
         }
+        if ano_letivo is not None:
+            kwargs_task["ano_letivo"] = int(ano_letivo)
 
         if executar_em:
             eta = parse_datetime(executar_em)
@@ -228,7 +278,9 @@ class ExecutarDominioView(APIView):
                 priority=prioridade,
             )
 
-        return Response({"task_id": resultado.id}, status=status.HTTP_202_ACCEPTED)
+        return Response(
+            {"task_id": resultado.id}, status=status.HTTP_202_ACCEPTED
+        )
 
 
 @extend_schema(tags=["Monitoramento"])
@@ -245,7 +297,9 @@ class MonitoramentoExecucoesView(APIView):
             "Suporta filtro por domínio, data de início/fim e situação."
         ),
         parameters=[
-            OpenApiParameter("dominio", str, description="Filtra pelo domínio ETL"),
+            OpenApiParameter(
+                "dominio", str, description="Filtra pelo domínio ETL"
+            ),
             OpenApiParameter(
                 "data_inicio",
                 str,
@@ -259,7 +313,10 @@ class MonitoramentoExecucoesView(APIView):
             OpenApiParameter(
                 "situacao",
                 str,
-                description="Situação da execução (ex: concluido, erro, em_andamento)",
+                description=(
+                    "Situação da execução "
+                    "(ex: concluido, erro, em_andamento)"
+                ),
             ),
         ],
         responses={200: EtlExecucaoSerializer(many=True)},
@@ -289,14 +346,17 @@ class MonitoramentoResumoView(APIView):
     @extend_schema(
         summary="Última execução por domínio",
         description=(
-            "Endpoint público. Retorna a execução mais recente de cada domínio ETL, "
-            "útil para visualizar rapidamente o estado atual de cada pipeline."
+            "Endpoint público. Retorna a execução mais recente de cada "
+            "domínio ETL, útil para visualizar rapidamente o estado "
+            "atual de cada pipeline."
         ),
         responses={200: EtlExecucaoSerializer(many=True)},
     )
     def get(self, request: Request) -> Response:
         """Retorna a última execução de cada domínio."""
-        serializer = EtlExecucaoSerializer(_qs_ultima_execucao_por_dominio(), many=True)
+        serializer = EtlExecucaoSerializer(
+            _qs_ultima_execucao_por_dominio(), many=True
+        )
         return Response(serializer.data)
 
 
@@ -304,7 +364,7 @@ class DashboardView(View):
     """Dashboard público de monitoramento das execuções ETL."""
 
     def get(self, request: HttpRequest) -> HttpResponse:
-        """Renderiza o dashboard com resumo por domínio e execuções recentes."""
+        """Renderiza o dashboard com resumo por domínio."""
         dominio = request.GET.get("dominio", "")
         data_inicio = request.GET.get("data_inicio", "")
         data_fim = request.GET.get("data_fim", "")
@@ -376,7 +436,7 @@ class KanbanView(View):
     """Kanban de processamento ETL por domínio."""
 
     def get(self, request: HttpRequest) -> HttpResponse:
-        """Renderiza kanban com estágios de leitura, hash, escrita e checkpoint."""
+        """Renderiza kanban com estágios de leitura, hash e escrita."""
         dominio_filtro = request.GET.get("dominio", "")
 
         ultima_por_dominio = list(_qs_ultima_execucao_por_dominio())
@@ -385,7 +445,9 @@ class KanbanView(View):
                 e for e in ultima_por_dominio if e.dominio == dominio_filtro
             ]
 
-        checkpoints = {c.dominio: c for c in EtlCheckpointDominio.objects.all()}
+        checkpoints = {
+            c.dominio: c for c in EtlCheckpointDominio.objects.all()
+        }
 
         ids_execucao = [e.id_execucao for e in ultima_por_dominio]
 
@@ -403,7 +465,9 @@ class KanbanView(View):
 
         # Contagem de hashes por prefixo de tabela (tabela:id)
         tabelas_unicas = {
-            te.tabela_destino for lista in escritas_map.values() for te in lista
+            te.tabela_destino
+            for lista in escritas_map.values()
+            for te in lista
         }
         hash_por_tabela: dict[str, int] = {
             tabela: EtlAuditoriaLinha.objects.filter(
@@ -426,9 +490,13 @@ class KanbanView(View):
                     "tabelas_lidas": tabelas_lidas,
                     "tabelas_escritas": tabelas_escritas,
                     "total_lido": sum(t.linhas_lidas for t in tabelas_lidas),
-                    "total_escrito": sum(t.linhas_escritas for t in tabelas_escritas),
+                    "total_escrito": sum(
+                        t.linhas_escritas for t in tabelas_escritas
+                    ),
                     "hash_por_tabela": {
-                        te.tabela_destino: hash_por_tabela.get(te.tabela_destino, 0)
+                        te.tabela_destino: hash_por_tabela.get(
+                            te.tabela_destino, 0
+                        )
                         for te in tabelas_escritas
                     },
                     "total_hashes": sum(
