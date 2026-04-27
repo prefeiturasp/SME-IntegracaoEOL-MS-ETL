@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from queue import Empty
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
@@ -11,6 +11,7 @@ from apps.pedagogico.dtos.model_in import (
     AtribuicaoTerritorioSaberIn,
     RegenciaComponenteCurricularIn,
 )
+from apps.pedagogico.models import AgrupamentoAtribuicaoTerritorioSaber
 from apps.pedagogico.services import (
     _AGRUPAMENTO_ID_INICIAL,
     EtlPedagogicoService,
@@ -18,12 +19,15 @@ from apps.pedagogico.services import (
     _build_a3_index,
     _chave_grupo,
     _cod_agrupamento,
+    _montar_indices_agr_existentes,
     _planejamento_regencia,
 )
 
 
 class TestPedagogicoService(TestCase):
     """Testes para ``EtlPedagogicoService`` e helpers do domínio."""
+
+    databases = {"default", "pedagogico_db"}
 
     def setUp(self) -> None:
         self.mock_eol = MagicMock()
@@ -192,9 +196,14 @@ class TestPedagogicoService(TestCase):
         self.assertEqual(anos_2, [2024, 2025])
         self.mock_eol.iter_query.assert_called_once()
 
+    @patch(
+        "apps.pedagogico.services.etl_pedagogico_service"
+        ".montar_indices_agrupamentos_existentes",
+        return_value=({}, {}, _AGRUPAMENTO_ID_INICIAL),
+    )
     @patch.object(EtlPedagogicoService, "sync_batch")
     def test_executar_agrupamentos_escreve_duas_tabelas(
-        self, mock_sync: MagicMock
+        self, mock_sync: MagicMock, _mock_indices: MagicMock
     ) -> None:
         config = self.service._fases[2]
         self.mock_eol.iter_query.return_value = [
@@ -289,22 +298,134 @@ class TestPedagogicoService(TestCase):
         self.assertIn("componente_inicio_turma", resultado)
         self.assertEqual(mock_fase.call_count, 3)
 
-    def test_cod_agrupamento_sempre_maior_ou_igual_a_800000(self) -> None:
-        """ID de agrupamento não pode colidir com IDs reais de comp EOL."""
-        casos = [
-            ("T1", 10, 20, "RF1", datetime(2025, 2, 1), [100, 200]),
-            ("T2", 5, 3, None, None, [1, 2, 3]),
-            ("T999", 0, 0, "RF99", datetime(2024, 1, 1), [799999]),
-        ]
-        for args in casos:
-            with self.subTest(args=args):
-                resultado = _cod_agrupamento(*args)
-                self.assertGreaterEqual(resultado, _AGRUPAMENTO_ID_INICIAL)
+    def test_cod_agrupamento_gera_proximo_sequencial_quando_novo(self) -> None:
+        """Novo agrupamento deve receber o próximo ID acima do piso."""
+        resultado, ultimo = _cod_agrupamento(
+            "T1",
+            10,
+            20,
+            "RF1",
+            datetime(2025, 2, 1),
+            [100, 200],
+            {},
+            {},
+            _AGRUPAMENTO_ID_INICIAL,
+        )
+        self.assertEqual(resultado, _AGRUPAMENTO_ID_INICIAL + 1)
+        self.assertEqual(ultimo, _AGRUPAMENTO_ID_INICIAL + 1)
 
-    def test_cod_agrupamento_deterministico(self) -> None:
-        """Mesma chave natural deve gerar sempre o mesmo ID."""
-        args = ("T1", 10, 20, "RF1", datetime(2025, 2, 1), [100, 200])
-        self.assertEqual(_cod_agrupamento(*args), _cod_agrupamento(*args))
+    def test_cod_agrupamento_reutiliza_id_exato_existente(self) -> None:
+        """Agrupamento idêntico deve manter o mesmo ID já persistido."""
+        exatos = {
+            (
+                "T1",
+                10,
+                20,
+                "RF1",
+                datetime(2025, 2, 1).date(),
+                "100,200",
+            ): 900123
+        }
+        resultado, ultimo = _cod_agrupamento(
+            "T1",
+            10,
+            20,
+            "RF1",
+            datetime(2025, 2, 1),
+            [100, 200],
+            exatos,
+            {},
+            900123,
+        )
+        self.assertEqual(resultado, 900123)
+        self.assertEqual(ultimo, 900123)
+
+    def test_cod_agrupamento_reutiliza_id_historico_mesmos_componentes(
+        self,
+    ) -> None:
+        """Mudando RF/data, o ETL deve reaproveitar o ID histórico do grupo."""
+        historicos = {("T1", 10, 20, "100,200"): 900555}
+        resultado, ultimo = _cod_agrupamento(
+            "T1",
+            10,
+            20,
+            "RF2",
+            datetime(2025, 3, 1),
+            [100, 200],
+            {},
+            historicos,
+            900555,
+        )
+        self.assertEqual(resultado, 900555)
+        self.assertEqual(ultimo, 900555)
+
+    def test_agrupar_reutiliza_cod_agrupamento_existente_do_banco(
+        self,
+    ) -> None:
+        """A fase 3 deve manter compatibilidade com IDs já persistidos."""
+        db = "pedagogico_db"
+        AgrupamentoAtribuicaoTerritorioSaber.objects.using(db).create(
+            cod_agrupamento=800777,
+            cod_territorio_saber=10,
+            cod_experiencia_pedagogica=20,
+            dt_inicio_atribuicao=timezone.make_aware(datetime(2025, 2, 1)),
+            ano_atribuicao=2025,
+            dt_fim_atribuicao=None,
+            dt_fim_turma=timezone.make_aware(datetime(2025, 12, 20)),
+            rf_professor="RF_ANTIGO",
+            cod_turma="T1",
+            cod_componentes_curriculares="100,200",
+            ano_letivo=2025,
+            cod_motivo_disponibilizacao=None,
+            desc_territorio_saber="TS",
+            desc_experiencia_pedagogica="EP",
+            encerramento_atribuicao_agrupamento_atualizado=None,
+            transferido_em=timezone.now(),
+        )
+        rows = [
+            AtribuicaoTerritorioSaberIn(
+                100,
+                "T1",
+                2025,
+                "RF_NOVO",
+                10,
+                20,
+                "TS",
+                "EP",
+                datetime(2025, 3, 1),
+                None,
+                None,
+                datetime(2025, 12, 20),
+                0,
+            ),
+            AtribuicaoTerritorioSaberIn(
+                200,
+                "T1",
+                2025,
+                "RF_NOVO",
+                10,
+                20,
+                "TS",
+                "EP",
+                datetime(2025, 3, 1),
+                None,
+                None,
+                datetime(2025, 12, 20),
+                0,
+            ),
+        ]
+
+        exatos, historicos, ultimo = _montar_indices_agr_existentes(db)
+        agrupamentos, _ = _agrupar(
+            rows,
+            timezone.now(),
+            agrupamentos_exatos=exatos,
+            agrupamentos_historicos=historicos,
+            ultimo_id_gerado=ultimo,
+        )
+
+        self.assertEqual(len(agrupamentos), 1)
+        self.assertEqual(agrupamentos[0].cod_agrupamento, 800777)
 
     def test_chave_grupo_normaliza_data_disponibilizacao_para_date(
         self,
@@ -332,7 +453,7 @@ class TestPedagogicoService(TestCase):
         )
 
     def test_chave_grupo_data_disponibilizacao_none(self) -> None:
-        """Quando data é None, a chave deve conter None sem erro."""
+        """Quando data é None, a chave deve conter sentinela comparável."""
         row = MagicMock(spec=AtribuicaoTerritorioSaberIn)
         row.codigo_turma = "T1"
         row.codigo_territorio_saber = 10
@@ -342,7 +463,7 @@ class TestPedagogicoService(TestCase):
         row.data_disponibilizacao = None
 
         chave = _chave_grupo(row)
-        self.assertIsNone(chave[-1])
+        self.assertEqual(chave[-1], date.min)
 
     @patch("apps.core.libs.base_etl_service.Queue")
     def test_executar_fase_timeout_producer_levanta_runtime_error(
