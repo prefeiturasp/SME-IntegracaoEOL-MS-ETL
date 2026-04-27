@@ -4,11 +4,6 @@ _MOTIVO_DISPONIBILIZACAO_ERRO_CADASTRO = 26
 _MOTIVO_DISPONIBILIZACAO_FIM_ANO_LETIVO = 34
 _TIPO_UNIDADE_ADMINISTRATIVA_DRE = 24
 
-# Código sentinela que indica "território não utilizado" — não é um território real.
-# O C# filtra explicitamente != 1 antes de agrupar (CargaDBAgrupamentosTerritorioSaberPorTurmaUseCase.cs:43
-# e ComponenteCurricularService.cs:318). Registros com esse código devem ser ignorados.
-_TERRITORIO_SABER_NAO_UTILIZADO = 1
-
 # Tipos de escola que admitem professor externo:
 # CEI_INDIR=11, CRP_CONV=12, EMEFPFOM=32, EMEIPFOM=33
 _TIPOS_ESCOLA_EXTERNOS = "(11, 12, 32, 33)"
@@ -480,156 +475,6 @@ INNER JOIN pessoa (NOLOCK) pe ON pe.cd_pessoa = ce.cd_pessoa
 WHERE t.tp_escola IN {_TIPOS_ESCOLA_EXTERNOS}
 """
 
-# Alimenta: componente_curricular_regencia
-# Parâmetros (?):
-#   1 — ano_letivo (SME)
-#   2 — ano_letivo (Externo)
-SQL_COMPONENTE_CURRICULAR_REGENCIA = f"""
--- SME — professor via RF
-SELECT
-    cc.cd_componente_curricular         AS CodigoComponenteCurricular,
-    cc.dc_componente_curricular         AS DescricaoComponenteCurricular,
-    serie_ensino.sg_resumida_serie      AS AnoTurma,
-    te.an_letivo                        AS anoletivo,
-    te.cd_turma_escola                  AS TurmaCodigo,
-    esc.tp_escola                       AS TipoEscola,
-    dtt.qt_hora_duracao                 AS TurnoTurma,
-    vsc.cd_registro_funcional           AS rfProfessor,
-    tgt.cd_experiencia_pedagogica       AS CodigoExperienciaPedagogica,
-    tgt.cd_territorio_saber             AS CodigoTerritorioSaber,
-    ter.dc_territorio_saber             AS DescricaoTerritorioSaber,
-    exp.dc_experiencia_pedagogica       AS DescricaoExperienciaPedagogica,
-    aa.dt_atribuicao_aula               AS dataAtribuicao,
-    aa.an_atribuicao                    AS AnoAtribuicao,
-    te.dt_fim_turma                     AS DataFimTurma,
-    0                                   AS AtribuicaoExterna,
-    MAX(aa.dt_disponibilizacao_aulas)   AS dataDisponibilizacao,
-    MAX(aa.cd_motivo_disponibilizacao)  AS CodigoMotivoDisponibilizacao
-FROM turma_escola te
-    INNER JOIN escola esc ON te.cd_escola = esc.cd_escola
-    INNER JOIN v_cadastro_unidade_educacao ue ON ue.cd_unidade_educacao = esc.cd_escola
-    INNER JOIN unidade_administrativa dre
-        ON dre.tp_unidade_administrativa = {_TIPO_UNIDADE_ADMINISTRATIVA_DRE}
-        AND ue.cd_unidade_administrativa_referencia = dre.cd_unidade_administrativa
-    -- Serie Ensino
-    INNER JOIN serie_turma_escola ON serie_turma_escola.cd_turma_escola = te.cd_turma_escola
-    INNER JOIN serie_turma_grade
-        ON serie_turma_grade.cd_turma_escola = serie_turma_escola.cd_turma_escola
-        AND serie_turma_grade.dt_fim IS NULL
-    INNER JOIN escola_grade ON serie_turma_grade.cd_escola_grade = escola_grade.cd_escola_grade
-    INNER JOIN grade ON escola_grade.cd_grade = grade.cd_grade
-    INNER JOIN grade_componente_curricular gcc ON gcc.cd_grade = grade.cd_grade
-    INNER JOIN componente_curricular cc
-        ON cc.cd_componente_curricular = gcc.cd_componente_curricular
-        AND cc.dt_cancelamento IS NULL
-    INNER JOIN serie_ensino ON grade.cd_serie_ensino = serie_ensino.cd_serie_ensino
-    INNER JOIN turma_grade_territorio_experiencia tgt
-        ON tgt.cd_serie_grade = serie_turma_grade.cd_serie_grade
-        AND tgt.cd_componente_curricular = cc.cd_componente_curricular
-    INNER JOIN tipo_experiencia_pedagogica exp
-        ON exp.cd_experiencia_pedagogica = tgt.cd_experiencia_pedagogica
-    INNER JOIN território_saber ter ON ter.cd_territorio_saber = tgt.cd_territorio_saber
-    INNER JOIN duracao_tipo_turno dtt
-        ON te.cd_tipo_turno = dtt.cd_tipo_turno AND te.cd_duracao = dtt.cd_duracao
-    -- Atribuição SME
-    INNER JOIN atribuicao_aula (NOLOCK) aa
-        ON gcc.cd_grade = aa.cd_grade
-        AND gcc.cd_componente_curricular = aa.cd_componente_curricular
-        AND aa.cd_serie_grade = serie_turma_grade.cd_serie_grade
-        AND aa.dt_cancelamento IS NULL
-        AND aa.an_atribuicao = te.an_letivo
-        AND COALESCE(aa.dt_disponibilizacao_aulas, GETDATE()) >= '2020-02-05'
-        AND (aa.cd_motivo_disponibilizacao <> {_MOTIVO_DISPONIBILIZACAO_ERRO_CADASTRO}
-             OR aa.cd_motivo_disponibilizacao IS NULL)
-        AND aa.dt_atribuicao_aula <= GETDATE()
-    INNER JOIN v_cargo_base_cotic (NOLOCK) vcbc ON aa.cd_cargo_base_servidor = vcbc.cd_cargo_base_servidor
-    INNER JOIN v_servidor_cotic (NOLOCK) vsc ON vcbc.cd_servidor = vsc.cd_servidor
-WHERE te.st_turma_escola IN ('O', 'A', 'C', 'E')
-  AND te.an_letivo = ?  -- param 1: ano_letivo
-  AND tgt.cd_territorio_saber <> {_TERRITORIO_SABER_NAO_UTILIZADO}
-GROUP BY
-    cc.cd_componente_curricular, cc.dc_componente_curricular,
-    serie_ensino.sg_resumida_serie, te.an_letivo, te.cd_turma_escola,
-    esc.tp_escola, dtt.qt_hora_duracao,
-    vsc.cd_registro_funcional, tgt.cd_experiencia_pedagogica,
-    tgt.cd_territorio_saber, ter.dc_territorio_saber,
-    exp.dc_experiencia_pedagogica, aa.dt_atribuicao_aula,
-    CAST(aa.dt_disponibilizacao_aulas AS DATE), te.dt_fim_turma, aa.an_atribuicao
-
-UNION ALL
-
--- Externo — professor via CPF
-SELECT
-    cc.cd_componente_curricular              AS CodigoComponenteCurricular,
-    cc.dc_componente_curricular              AS DescricaoComponenteCurricular,
-    serie_ensino.sg_resumida_serie           AS AnoTurma,
-    te.an_letivo                             AS anoletivo,
-    te.cd_turma_escola                       AS TurmaCodigo,
-    esc.tp_escola                            AS TipoEscola,
-    dtt.qt_hora_duracao                      AS TurnoTurma,
-    pe.cd_cpf_pessoa                         AS rfProfessor,
-    tgt.cd_experiencia_pedagogica            AS CodigoExperienciaPedagogica,
-    tgt.cd_territorio_saber                  AS CodigoTerritorioSaber,
-    ter.dc_territorio_saber                  AS DescricaoTerritorioSaber,
-    exp.dc_experiencia_pedagogica            AS DescricaoExperienciaPedagogica,
-    aa_ext.dt_atribuicao                     AS dataAtribuicao,
-    aa_ext.an_atribuicao                     AS AnoAtribuicao,
-    te.dt_fim_turma                          AS DataFimTurma,
-    1                                        AS AtribuicaoExterna,
-    MAX(aa_ext.dt_disponibilizacao)          AS dataDisponibilizacao,
-    MAX(aa_ext.cd_motivo_disponibilizacao_externo) AS CodigoMotivoDisponibilizacao
-FROM turma_escola te
-    INNER JOIN escola esc ON te.cd_escola = esc.cd_escola
-    INNER JOIN v_cadastro_unidade_educacao ue ON ue.cd_unidade_educacao = esc.cd_escola
-    INNER JOIN unidade_administrativa dre
-        ON dre.tp_unidade_administrativa = 24
-        AND ue.cd_unidade_administrativa_referencia = dre.cd_unidade_administrativa
-    -- Serie Ensino
-    INNER JOIN serie_turma_escola ON serie_turma_escola.cd_turma_escola = te.cd_turma_escola
-    INNER JOIN serie_turma_grade
-        ON serie_turma_grade.cd_turma_escola = serie_turma_escola.cd_turma_escola
-        AND serie_turma_grade.dt_fim IS NULL
-    INNER JOIN escola_grade ON serie_turma_grade.cd_escola_grade = escola_grade.cd_escola_grade
-    INNER JOIN grade ON escola_grade.cd_grade = grade.cd_grade
-    INNER JOIN grade_componente_curricular gcc ON gcc.cd_grade = grade.cd_grade
-    INNER JOIN componente_curricular cc
-        ON cc.cd_componente_curricular = gcc.cd_componente_curricular
-        AND cc.dt_cancelamento IS NULL
-    INNER JOIN serie_ensino ON grade.cd_serie_ensino = serie_ensino.cd_serie_ensino
-    INNER JOIN turma_grade_territorio_experiencia tgt
-        ON tgt.cd_serie_grade = serie_turma_grade.cd_serie_grade
-        AND tgt.cd_componente_curricular = cc.cd_componente_curricular
-    INNER JOIN tipo_experiencia_pedagogica exp
-        ON exp.cd_experiencia_pedagogica = tgt.cd_experiencia_pedagogica
-    INNER JOIN território_saber ter ON ter.cd_territorio_saber = tgt.cd_territorio_saber
-    INNER JOIN duracao_tipo_turno dtt
-        ON te.cd_tipo_turno = dtt.cd_tipo_turno AND te.cd_duracao = dtt.cd_duracao
-    -- Atribuição Externo
-    INNER JOIN atribuicao_externo (NOLOCK) aa_ext
-        ON gcc.cd_grade = aa_ext.cd_grade
-        AND gcc.cd_componente_curricular = aa_ext.cd_componente_curricular
-        AND aa_ext.cd_serie_grade = serie_turma_grade.cd_serie_grade
-        AND aa_ext.dt_cancelamento IS NULL
-        AND aa_ext.an_atribuicao = te.an_letivo
-        AND COALESCE(aa_ext.dt_disponibilizacao, GETDATE()) >= '2020-02-05'
-        AND (aa_ext.cd_motivo_disponibilizacao_externo <> {_MOTIVO_DISPONIBILIZACAO_ERRO_CADASTRO}
-             OR aa_ext.cd_motivo_disponibilizacao_externo IS NULL)
-        AND aa_ext.dt_atribuicao <= GETDATE()
-    INNER JOIN contrato_externo ce (NOLOCK) ON ce.cd_contrato_externo = aa_ext.cd_contrato_externo
-    INNER JOIN pessoa pe (NOLOCK) ON pe.cd_pessoa = ce.cd_pessoa
-WHERE te.st_turma_escola IN ('O', 'A', 'C', 'E')
-  AND te.an_letivo = ?  -- param 2: ano_letivo
-  AND tgt.cd_territorio_saber <> {_TERRITORIO_SABER_NAO_UTILIZADO}
-GROUP BY
-    cc.cd_componente_curricular, cc.dc_componente_curricular,
-    serie_ensino.sg_resumida_serie, te.an_letivo, te.cd_turma_escola,
-    esc.tp_escola, dtt.qt_hora_duracao,
-    pe.cd_cpf_pessoa, tgt.cd_experiencia_pedagogica,
-    tgt.cd_territorio_saber, ter.dc_territorio_saber,
-    exp.dc_experiencia_pedagogica, aa_ext.dt_atribuicao,
-    CAST(aa_ext.dt_disponibilizacao AS DATE), te.dt_fim_turma, aa_ext.an_atribuicao
-"""
-
 SQL_COMPONENTES_NAO_CANCELADOS = """
 SELECT
     cd_componente_curricular              AS Codigo,
@@ -638,13 +483,13 @@ FROM componente_curricular
 WHERE dt_cancelamento IS NULL
 """
 
-# Alimenta: dados_aula_turma
+# Alimenta: componente_inicio_turma
 # Parâmetros (?):
 #   1 — ano_letivo
 #
-# Obs: ue_codigo e ano_letivo vêm no SELECT (não são filtros do ETL).
-#      O microsserviço filtra por ue_codigo e componentes no PEDAGOGICO_DB.
-SQL_DADOS_AULA_TURMA = """
+# Obs: ue_codigo, ano_letivo e tipo_periodicidade vêm no SELECT (não são filtros do ETL).
+#      O microsserviço filtra por ue_codigo, componentes e semestre no PEDAGOGICO_DB.
+SQL_COMPONENTE_INICIO_TURMA = """
 SELECT DISTINCT
     cc.cd_componente_curricular AS ComponenteCurricularCodigo,
     cc.dc_componente_curricular AS ComponenteCurricularDescricao,
@@ -684,10 +529,10 @@ WHERE te.st_turma_escola IN ('O', 'A', 'C', 'E')
   AND te.an_letivo = ?  -- param 1: ano_letivo
 """
 
-# Alimenta: componente_curricular_por_ano_letivo
+# Alimenta: grade_curricular_serie
 # Parâmetros (?):
 #   1 — ano_letivo
-SQL_COMPONENTES_POR_ANO_LETIVO = """
+SQL_GRADE_CURRICULAR_SERIE = f"""
 ;WITH componentesAnoTurmas AS (
     SELECT DISTINCT
         iif(pcc.cd_componente_curricular IS NOT NULL, pcc.cd_componente_curricular,
@@ -698,18 +543,18 @@ SQL_COMPONENTES_POR_ANO_LETIVO = """
         LTRIM(RTRIM(serie_ensino.sg_serie_ensino))                       AS DescricaoSerieEnsino,
         serie_ensino.cd_serie_ensino                                     AS CodigoSerieEnsino,
         CASE
-            WHEN eten.cd_etapa_ensino IN (1, 10)          THEN 1  -- EI
-            WHEN eten.cd_etapa_ensino IN (2, 3, 7, 11)    THEN 3  -- EJA
-            WHEN esc.tp_escola = 13                        THEN 4  -- CIEJA
-            WHEN eten.cd_etapa_ensino IN (4, 5, 12, 13)   THEN 5  -- EF
-            WHEN eten.cd_etapa_ensino IN (6, 7, 8, 9, 17, 14) THEN 6  -- EM
+            WHEN eten.cd_etapa_ensino IN (1, 10)              THEN 1  -- EI
+            WHEN eten.cd_etapa_ensino IN (2, 3, 7, 11)        THEN 3  -- EJA
+            WHEN esc.tp_escola = 13                            THEN 4  -- CIEJA
+            WHEN eten.cd_etapa_ensino IN (4, 5, 12, 13)       THEN 5  -- EF
+            WHEN eten.cd_etapa_ensino IN (6, 7, 8, 9, 14, 17) THEN 6  -- EM
         END                                                              AS Modalidade,
         te.an_letivo                                                     AS AnoLetivo
     FROM turma_escola te
         INNER JOIN escola esc ON te.cd_escola = esc.cd_escola
         INNER JOIN v_cadastro_unidade_educacao ue ON ue.cd_unidade_educacao = esc.cd_escola
         INNER JOIN unidade_administrativa dre
-            ON dre.tp_unidade_administrativa = 24
+            ON dre.tp_unidade_administrativa = {_TIPO_UNIDADE_ADMINISTRATIVA_DRE}
             AND ue.cd_unidade_administrativa_referencia = dre.cd_unidade_administrativa
         -- Serie Ensino
         LEFT JOIN serie_turma_escola ON serie_turma_escola.cd_turma_escola = te.cd_turma_escola
@@ -723,33 +568,25 @@ SQL_COMPONENTES_POR_ANO_LETIVO = """
             ON cc.cd_componente_curricular = gcc.cd_componente_curricular
             AND cc.dt_cancelamento IS NULL
         LEFT JOIN serie_ensino ON grade.cd_serie_ensino = serie_ensino.cd_serie_ensino
+        LEFT JOIN etapa_ensino eten ON serie_ensino.cd_etapa_ensino = eten.cd_etapa_ensino
         -- Programa
-        LEFT JOIN tipo_programa tp ON te.cd_tipo_programa = tp.cd_tipo_programa
         LEFT JOIN turma_escola_grade_programa tegp ON tegp.cd_turma_escola = te.cd_turma_escola
         LEFT JOIN escola_grade teg ON teg.cd_escola_grade = tegp.cd_escola_grade
-        LEFT JOIN grade pg ON pg.cd_grade = teg.cd_grade
         LEFT JOIN grade_componente_curricular pgcc ON pgcc.cd_grade = teg.cd_grade
         LEFT JOIN componente_curricular pcc
             ON pgcc.cd_componente_curricular = pcc.cd_componente_curricular
             AND pcc.dt_cancelamento IS NULL
-        -- Turno
-        INNER JOIN duracao_tipo_turno dtt
-            ON te.cd_tipo_turno = dtt.cd_tipo_turno AND te.cd_duracao = dtt.cd_duracao
-        -- Etapa ensino
-        LEFT JOIN etapa_ensino (NOLOCK) eten ON serie_ensino.cd_etapa_ensino = eten.cd_etapa_ensino
-    WHERE te.st_turma_escola IN ('O', 'A', 'C')
-      AND te.an_letivo = ?  -- param 1: ano_letivo
+    WHERE te.st_turma_escola IN ('O', 'A', 'C', 'E')
+      AND te.an_letivo = ?  -- param: ano_letivo
       AND serie_ensino.sg_resumida_serie IS NOT NULL
       AND serie_ensino.cd_serie_ensino IS NOT NULL
 )
 SELECT *
 FROM componentesAnoTurmas
 WHERE Modalidade > 0
-  AND CodigoAnoTurma IS NOT NULL
-  AND CodigoSerieEnsino IS NOT NULL
 """
 
-# Alimenta: cruzamento para derivar planejamento_regencia
+# Alimenta: cruzamento para derivar planejamento_33
 SQL_LOOKUP_PLANEJAMENTO_REGENCIA = f"""
 SELECT DISTINCT
     gcc.cd_componente_curricular   AS IdComponenteCurricular,

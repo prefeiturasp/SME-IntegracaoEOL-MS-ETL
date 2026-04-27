@@ -11,7 +11,6 @@ from apps.pedagogico.dtos.model_in import (
     AtribuicaoTerritorioSaberIn,
     RegenciaComponenteCurricularIn,
 )
-from apps.pedagogico.queries import SQL_COMPONENTE_CURRICULAR_REGENCIA
 from apps.pedagogico.services import (
     _AGRUPAMENTO_ID_INICIAL,
     EtlPedagogicoService,
@@ -49,17 +48,16 @@ class TestPedagogicoService(TestCase):
         with self.assertRaises(AttributeError):
             config.nome = "mudar"  # type: ignore[misc]
 
-    def test_fases_contem_6_configs_esperados(self) -> None:
-        self.assertEqual(len(self.service._fases), 6)
+    def test_fases_contem_5_configs_esperados(self) -> None:
+        self.assertEqual(len(self.service._fases), 5)
         self.assertEqual(
             [fase.nome for fase in self.service._fases],
             [
                 "componente_curricular",
                 "componente_por_turma",
                 "agrupamento_territorio_saber",
-                "componente_regencia",
-                "dados_aula_turma",
-                "componente_por_ano_letivo",
+                "componente_inicio_turma",
+                "grade_curricular_serie",
             ],
         )
 
@@ -96,7 +94,9 @@ class TestPedagogicoService(TestCase):
         self.assertEqual(len(hash_val), 64)
         self.assertEqual(obj.descricao, "Arte")
 
-    def test_criar_transform_componente_por_turma_aplica_flags_do_sql(self) -> None:
+    def test_criar_transform_componente_por_turma_aplica_flags_do_sql(
+        self,
+    ) -> None:
         self.service._exact = {(513, 6, "7")}
         config = self.service._fases[1]
         transform = self.service._criar_transform(config)
@@ -120,52 +120,42 @@ class TestPedagogicoService(TestCase):
         transform = self.service._criar_transform(config)
 
         self.assertIsNone(
-            transform((None, " Inglês ", 1, 1, 1, 6, "7", 2025, "T1", "RF1", 0))
+            transform(
+                (None, " Inglês ", 1, 1, 1, 6, "7", 2025, "T1", "RF1", 0)
+            )
         )
         self.assertIsNone(
             transform((513, " Inglês ", 1, 1, 1, 6, "7", 2025, None, "RF1", 0))
         )
 
-    def test_criar_transform_componente_regencia_gera_pk_composta(
+    def test_criar_transform_componente_inicio_turma_gera_pk_composta(
         self,
     ) -> None:
-        self.service._fallback = {200}
         config = self.service._fases[3]
         transform = self.service._criar_transform(config)
 
         result = transform(
             (
-                200,
-                " Ciências ",
-                "5",
+                "100",
+                " Arte ",
+                "200",
+                "2025-03-10T08:00:00",
+                "300",
                 2025,
-                "T2",
-                2,
-                5,
-                "RF9",
-                10,
-                20,
-                "Território",
-                "Experiência",
-                "2025-02-01T10:00:00",
-                2025,
-                None,
-                0,
-                "2025-12-01T10:00:00",
-                34,
+                1,
             )
         )
         assert result is not None
         pk, _, obj = result
 
-        self.assertEqual(pk, "200-T2-RF9-2025")
-        self.assertTrue(obj.componente_planejamento_regencia)
-        self.assertTrue(timezone.is_aware(obj.inicio_atribuicao))
+        self.assertEqual(pk, "100-200")
+        self.assertEqual(obj.componente_codigo, "100")
+        self.assertTrue(timezone.is_aware(obj.data_inicio_turma))
 
     def test_criar_transform_comp_por_ano_letivo_ignora_registro_sem_chave(
         self,
     ) -> None:
-        config = self.service._fases[5]
+        config = self.service._fases[4]
         transform = self.service._criar_transform(config)
 
         self.assertIsNone(transform((None, "Desc", "1", "1 ano", 1, 5, 2025)))
@@ -291,30 +281,13 @@ class TestPedagogicoService(TestCase):
 
             resultado = self.service.executar(fase_inicial=3)
 
-        self.assertTrue(mock_lookups.called)
+        self.assertFalse(mock_lookups.called)
         self.assertEqual(
             resultado["agrupamento_atribuicao_territorio_saber"], 10
         )
         self.assertEqual(resultado["componente_curricular_agrupamento"], 7)
-        self.assertIn("dados_aula_turma", resultado)
-        self.assertEqual(mock_fase.call_count, 4)
-
-    # ------------------------------------------------------------------
-    # Testes para os ajustes do commit feat(144838)
-    # ------------------------------------------------------------------
-
-    def test_sql_comp_curricular_regencia_filtra_territorio_nao_utilizado(
-        self,
-    ) -> None:
-        """Ambas as partes da UNION devem excluir cd_territorio_saber = 1."""
-        ocorrencias = SQL_COMPONENTE_CURRICULAR_REGENCIA.count(
-            "cd_territorio_saber <> 1"
-        )
-        self.assertEqual(
-            ocorrencias,
-            2,
-            "Esperado filtro em ambas as partes da UNION (SME + Externos)",
-        )
+        self.assertIn("componente_inicio_turma", resultado)
+        self.assertEqual(mock_fase.call_count, 3)
 
     def test_cod_agrupamento_sempre_maior_ou_igual_a_800000(self) -> None:
         """ID de agrupamento não pode colidir com IDs reais de comp EOL."""

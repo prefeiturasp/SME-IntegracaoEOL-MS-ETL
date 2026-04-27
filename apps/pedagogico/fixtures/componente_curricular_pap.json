@@ -1,0 +1,11 @@
+[
+  {"model": "pedagogico.componentecurricularpap", "pk": 1, "fields": {"id_componente_curricular": 1322}},
+  {"model": "pedagogico.componentecurricularpap", "pk": 2, "fields": {"id_componente_curricular": 1033}},
+  {"model": "pedagogico.componentecurricularpap", "pk": 3, "fields": {"id_componente_curricular": 1051}},
+  {"model": "pedagogico.componentecurricularpap", "pk": 4, "fields": {"id_componente_curricular": 1052}},
+  {"model": "pedagogico.componentecurricularpap", "pk": 5, "fields": {"id_componente_curricular": 1053}},
+  {"model": "pedagogico.componentecurricularpap", "pk": 6, "fields": {"id_componente_curricular": 1054}},
+  {"model": "pedagogico.componentecurricularpap", "pk": 7, "fields": {"id_componente_curricular": 1804}},
+  {"model": "pedagogico.componentecurricularpap", "pk": 8, "fields": {"id_componente_curricular": 1805}},
+  {"model": "pedagogico.componentecurricularpap", "pk": 9, "fields": {"id_componente_curricular": 1770}}
+]

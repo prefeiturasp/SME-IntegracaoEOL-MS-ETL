@@ -5,10 +5,10 @@ from django.utils import timezone
 
 from apps.pedagogico.dtos.model_in import (
     ComponenteCurricularSimplesIn,
-    ComponentePorAnoLetivoIn,
+    ComponenteInicioTurmaIn,
     ComponentePorTurmaIn,
     ComponenteRegenciaIn,
-    DadosAulaTurmaIn,
+    GradeCurricularSerieIn,
 )
 
 
@@ -158,11 +158,11 @@ class ComponenteRegenciaInTest(SimpleTestCase):
         self.assertTrue(timezone.is_aware(data["fim_atribuicao"]))
 
 
-class DadosAulaTurmaInTest(SimpleTestCase):
-    """Testes de ``DadosAulaTurmaIn.to_domain()``."""
+class ComponenteInicioTurmaInTest(SimpleTestCase):
+    """Testes de ``ComponenteInicioTurmaIn.to_domain()``."""
 
     def test_mapeamento_completo(self) -> None:
-        dto = DadosAulaTurmaIn(
+        dto = ComponenteInicioTurmaIn(
             componente_codigo=100,
             componente_descricao=" Arte ",
             turma_codigo=200,
@@ -182,7 +182,7 @@ class DadosAulaTurmaInTest(SimpleTestCase):
         self.assertEqual(data["tipo_periodicidade"], 1)
 
     def test_campos_opcionais_nulos(self) -> None:
-        dto = DadosAulaTurmaIn(
+        dto = ComponenteInicioTurmaIn(
             componente_codigo=100,
             componente_descricao=" Arte ",
             turma_codigo=200,
@@ -199,11 +199,11 @@ class DadosAulaTurmaInTest(SimpleTestCase):
         self.assertIsNone(data["tipo_periodicidade"])
 
 
-class ComponentePorAnoLetivoInTest(SimpleTestCase):
-    """Testes de ``ComponentePorAnoLetivoIn.to_domain()``."""
+class GradeCurricularSerieInTest(SimpleTestCase):
+    """Testes de ``GradeCurricularSerieIn.to_domain()``."""
 
     def test_mapeamento_basico(self) -> None:
-        dto = ComponentePorAnoLetivoIn(
+        dto = GradeCurricularSerieIn(
             codigo_componente_curricular=700,
             descricao_componente_curricular=" Geografia ",
             codigo_ano_turma=8,
@@ -223,7 +223,7 @@ class ComponentePorAnoLetivoInTest(SimpleTestCase):
         self.assertEqual(data["ano_letivo"], 2025)
 
     def test_campos_opcionais_nulos(self) -> None:
-        dto = ComponentePorAnoLetivoIn(
+        dto = GradeCurricularSerieIn(
             codigo_componente_curricular=700,
             descricao_componente_curricular=" Geografia ",
             codigo_ano_turma=None,

@@ -173,7 +173,7 @@ class ComponenteRegenciaIn:
 
 
 @dataclass
-class DadosAulaTurmaIn:
+class ComponenteInicioTurmaIn:
     """ObterDadosComponentesCurricularesRegenciaPorUeEAnoLetivoAsync."""
 
     componente_codigo: Any
@@ -206,7 +206,7 @@ class DadosAulaTurmaIn:
 
 
 @dataclass
-class ComponentePorAnoLetivoIn:
+class GradeCurricularSerieIn:
     """ObterComponentesCurricularesEAnosTurmaApiEolPorAnoLetivo."""
 
     codigo_componente_curricular: Any

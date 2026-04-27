@@ -4,16 +4,14 @@ from .models import (
     AgrupamentoAtribuicaoTerritorioSaber,
     ComponenteCurricular,
     ComponenteCurricularAgrupamento,
-    ComponenteCurricularPorAnoLetivo,
     ComponenteCurricularPorTurma,
-    ComponenteCurricularRegencia,
-    DadosAulaTurma,
+    ComponenteInicioTurma,
+    GradeCurricularSerie,
 )
 
 admin.site.register(ComponenteCurricular)
 admin.site.register(ComponenteCurricularPorTurma)
 admin.site.register(ComponenteCurricularAgrupamento)
-admin.site.register(ComponenteCurricularRegencia)
-admin.site.register(DadosAulaTurma)
-admin.site.register(ComponenteCurricularPorAnoLetivo)
+admin.site.register(ComponenteInicioTurma)
+admin.site.register(GradeCurricularSerie)
 admin.site.register(AgrupamentoAtribuicaoTerritorioSaber)
