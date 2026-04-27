@@ -169,6 +169,20 @@ class TurmaPrograma(models.Model):
         default="",
         help_text="EOL tipo_turno.dc_exibicao_portal — desnormalizado para evitar JOIN.",
     )
+    descricao_grade = models.CharField(
+        max_length=200,
+        null=True,
+        blank=True,
+        help_text=(
+            "EOL grade.dc_grade da grade vinculada à turma "
+            "(turma_escola_grade_programa → escola_grade → grade). "
+            "Usado para compor o turmaNome legado no formato "
+            "'<dc_turma_escola> - <dc_grade>' "
+            "(ex: 'PAP COLABORATIVO 3 / 4 E 5 ANO'). "
+            "Quando a turma tem mais de uma grade ativa, é trazida "
+            "uma (TOP 1 / OUTER APPLY) — fiel ao comportamento legado."
+        ),
+    )
     situacao = models.CharField(
         max_length=1,
         help_text="O=Organizada, A=Não Organizada, C=Concluída, E=Extinta.",

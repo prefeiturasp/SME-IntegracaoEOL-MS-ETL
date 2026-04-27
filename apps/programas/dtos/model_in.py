@@ -85,8 +85,10 @@ class TurmaProgramaIn:
     situacao: Any
     codigo_tipo_programa: Any
     categoria: Any
+    descricao_grade: Any = None
 
     def to_domain(self) -> dict:
+        descricao_grade = _strip(self.descricao_grade)
         return {
             "codigo_turma": int(self.codigo_turma),
             "nome_turma": _strip(self.nome_turma),
@@ -98,6 +100,7 @@ class TurmaProgramaIn:
             "situacao": _strip(self.situacao),
             "codigo_tipo_programa": _int_opt(self.codigo_tipo_programa),
             "categoria": CategoriaPrograma(_strip(self.categoria)),
+            "descricao_grade": descricao_grade or None,
         }
 
 

@@ -95,11 +95,22 @@ SELECT
         ) THEN 'PAEE'
         ELSE 'PAP'
     END AS categoria
+  , g_one.descricao_grade
 FROM turma_escola te
 INNER JOIN v_cadastro_unidade_educacao vcue
     ON vcue.cd_unidade_educacao = te.cd_escola
 LEFT JOIN tipo_turno tt
     ON tt.cd_tipo_turno = te.cd_tipo_turno
+OUTER APPLY (
+    SELECT TOP 1 LTRIM(RTRIM(g.dc_grade)) AS descricao_grade
+    FROM turma_escola_grade_programa tegp_g
+    INNER JOIN escola_grade eg_g
+        ON eg_g.cd_escola_grade = tegp_g.cd_escola_grade
+    INNER JOIN grade g
+        ON g.cd_grade = eg_g.cd_grade
+    WHERE tegp_g.cd_turma_escola = te.cd_turma_escola
+      AND tegp_g.dt_fim IS NULL
+) AS g_one
 WHERE te.cd_tipo_turma = 3
   AND te.st_turma_escola IN ('O', 'A', 'C', 'E')
   AND EXISTS (
@@ -248,6 +259,7 @@ class EtlProgramasService(BaseEtlService):
                     "ano_letivo",
                     "tipo_turno",
                     "descricao_turno",
+                    "descricao_grade",
                     "situacao",
                     "codigo_tipo_programa",
                     "categoria",
