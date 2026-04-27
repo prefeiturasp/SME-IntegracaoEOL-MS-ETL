@@ -6,7 +6,7 @@ A retomada é baseada em `EtlCheckpointDominio` e em `ultima_fase_concluida` do 
 
 Se `--continuar`:
 - Lê checkpoint do domínio `pedagogico`
-- Se `ultima_situacao == "erro"` e `0 < ultima_pagina < 6`, define `fase_inicial = ultima_pagina + 1`
+- Se `ultima_situacao == "erro"` e `0 < ultima_pagina < 5`, define `fase_inicial = ultima_pagina + 1`
 - Caso contrário, reinicia em fase 1
 
 ## Em caso de erro
@@ -15,7 +15,7 @@ Se `--continuar`:
 - `ultima_situacao` vira `"erro"`
 
 ## Em caso de sucesso
-- `ultima_pagina` recebe `6` (última fase)
+- `ultima_pagina` recebe `5` (última fase)
 - `token_parada` é atualizado com `token_anterior + total_alterado`
 - `ultima_situacao` vira `"concluido"`
 
@@ -31,7 +31,7 @@ digraph G {
     node [shape=box, style="rounded"];
 
     CP [label="Ler checkpoint"];
-    DEC [label="Definir fase inicial\n(1–6)"];
+    DEC [label="Definir fase inicial\n(1–5)"];
     RUN [label="Executar ETL"];
     OK [label="Checkpoint concluído"];
     ER [label="Checkpoint erro\n(salva ultima_fase_concluida)"];

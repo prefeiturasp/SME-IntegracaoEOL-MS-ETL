@@ -5,10 +5,10 @@ from django.utils import timezone
 
 from apps.pedagogico.dtos.model_in import (
     ComponenteCurricularSimplesIn,
-    ComponentePorAnoLetivoIn,
+    ComponenteInicioTurmaIn,
     ComponentePorTurmaIn,
     ComponenteRegenciaIn,
-    DadosAulaTurmaIn,
+    GradeCurricularSerieIn,
 )
 
 
@@ -31,6 +31,8 @@ class ComponentePorTurmaInTest(SimpleTestCase):
         dto = ComponentePorTurmaIn(
             codigo=513,
             descricao=" Inglês ",
+            eh_regencia=1,
+            eh_territorio=1,
             tipo_escola=1,
             turno_turma=6,
             ano_turma="7",
@@ -39,12 +41,7 @@ class ComponentePorTurmaInTest(SimpleTestCase):
             professor=456,
             atribuicao_externa=0,
         )
-        data = dto.to_domain(
-            transferido_em="agora",
-            regencia=True,
-            territorio=True,
-            planejamento=False,
-        )
+        data = dto.to_domain(transferido_em="agora", planejamento=False)
 
         self.assertEqual(data["codigo"], 513)
         self.assertEqual(data["descricao"], "Inglês")
@@ -65,6 +62,8 @@ class ComponentePorTurmaInTest(SimpleTestCase):
         dto = ComponentePorTurmaIn(
             codigo=513,
             descricao=" Inglês ",
+            eh_regencia=0,
+            eh_territorio=0,
             tipo_escola=1,
             turno_turma=6,
             ano_turma="7",
@@ -84,6 +83,8 @@ class ComponentePorTurmaInTest(SimpleTestCase):
         dto = ComponentePorTurmaIn(
             codigo=513,
             descricao=" Inglês ",
+            eh_regencia=0,
+            eh_territorio=0,
             tipo_escola=1,
             turno_turma=6,
             ano_turma="7",
@@ -101,6 +102,8 @@ class ComponentePorTurmaInTest(SimpleTestCase):
         dto = ComponentePorTurmaIn(
             codigo=1322,
             descricao=" PAP ",
+            eh_regencia=0,
+            eh_territorio=0,
             tipo_escola=1,
             turno_turma=6,
             ano_turma="7",
@@ -109,12 +112,7 @@ class ComponentePorTurmaInTest(SimpleTestCase):
             professor=None,
             atribuicao_externa=0,
         )
-        data = dto.to_domain(
-            transferido_em="agora",
-            regencia=False,
-            territorio=False,
-            planejamento=True,
-        )
+        data = dto.to_domain(transferido_em="agora", planejamento=True)
         self.assertTrue(data["exibir_componente_eol"])
         self.assertIsNone(data["codigo_componente_territorio_saber"])
         self.assertIsNone(data["codigo_componente_curricular_pai"])
@@ -160,11 +158,11 @@ class ComponenteRegenciaInTest(SimpleTestCase):
         self.assertTrue(timezone.is_aware(data["fim_atribuicao"]))
 
 
-class DadosAulaTurmaInTest(SimpleTestCase):
-    """Testes de ``DadosAulaTurmaIn.to_domain()``."""
+class ComponenteInicioTurmaInTest(SimpleTestCase):
+    """Testes de ``ComponenteInicioTurmaIn.to_domain()``."""
 
     def test_mapeamento_completo(self) -> None:
-        dto = DadosAulaTurmaIn(
+        dto = ComponenteInicioTurmaIn(
             componente_codigo=100,
             componente_descricao=" Arte ",
             turma_codigo=200,
@@ -184,7 +182,7 @@ class DadosAulaTurmaInTest(SimpleTestCase):
         self.assertEqual(data["tipo_periodicidade"], 1)
 
     def test_campos_opcionais_nulos(self) -> None:
-        dto = DadosAulaTurmaIn(
+        dto = ComponenteInicioTurmaIn(
             componente_codigo=100,
             componente_descricao=" Arte ",
             turma_codigo=200,
@@ -201,11 +199,11 @@ class DadosAulaTurmaInTest(SimpleTestCase):
         self.assertIsNone(data["tipo_periodicidade"])
 
 
-class ComponentePorAnoLetivoInTest(SimpleTestCase):
-    """Testes de ``ComponentePorAnoLetivoIn.to_domain()``."""
+class GradeCurricularSerieInTest(SimpleTestCase):
+    """Testes de ``GradeCurricularSerieIn.to_domain()``."""
 
     def test_mapeamento_basico(self) -> None:
-        dto = ComponentePorAnoLetivoIn(
+        dto = GradeCurricularSerieIn(
             codigo_componente_curricular=700,
             descricao_componente_curricular=" Geografia ",
             codigo_ano_turma=8,
@@ -225,7 +223,7 @@ class ComponentePorAnoLetivoInTest(SimpleTestCase):
         self.assertEqual(data["ano_letivo"], 2025)
 
     def test_campos_opcionais_nulos(self) -> None:
-        dto = ComponentePorAnoLetivoIn(
+        dto = GradeCurricularSerieIn(
             codigo_componente_curricular=700,
             descricao_componente_curricular=" Geografia ",
             codigo_ano_turma=None,

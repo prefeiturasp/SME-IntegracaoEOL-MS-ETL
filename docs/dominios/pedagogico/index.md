@@ -17,6 +17,7 @@ modelos
 comando
 orquestracao
 retomada
+glossario
 otimizacao_query_componentes_por_turma_v1
 remocao_dependencia_apieolconnection(postgres)
 ```
