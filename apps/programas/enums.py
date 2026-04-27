@@ -32,7 +32,17 @@ class CategoriaPrograma(models.TextChoices):
 
 
 class TipoProgramaEOL(IntEnum):
-    """cd_tipo_programa do EOL para turmas com cd_tipo_turma=3."""
+    """Subset histórico de cd_tipo_programa do EOL.
+
+    Mantido por retrocompatibilidade — não é mais usado como filtro de extração.
+    A descoberta no EOL (2026-04) revelou ~20 códigos distintos de cd_tipo_programa
+    associados a turmas PAP/PAEE (ex: 94/95/96/97 SRM Complementar, 426 PAP,
+    603 PAP Colaborativo, etc.). Filtrar por uma lista hardcoded é frágil.
+
+    A nova estratégia: identificar PAP/PAEE pelo componente curricular (estável)
+    e derivar a categoria pela sigla/descrição vinda da própria tabela tipo_programa
+    do EOL via :meth:`categoria_por_sigla`.
+    """
 
     PAP_RECUPERACAO = 649
     PAP_COLABORATIVO = 650
@@ -41,33 +51,25 @@ class TipoProgramaEOL(IntEnum):
     PAEE_ITINERANTE = 658
 
     @classmethod
-    def categoria(cls, codigo: int | str | None) -> CategoriaPrograma:
-        """Retorna a categoria (PAP/PAEE) a partir do cd_tipo_programa.
+    def categoria_por_sigla(
+        cls, sigla: str | None, descricao: str | None = None
+    ) -> CategoriaPrograma:
+        """Deriva PAP/PAEE pela sigla/descrição do tipo_programa do EOL.
 
-        Default: PAP (mantém comportamento atual do model_out para códigos desconhecidos).
+        PAEE quando a sigla ou descrição contém "PAEE" ou "SRM"; PAP caso contrário.
+        Substitui a tabela hardcoded de códigos como fonte de verdade.
         """
-        try:
-            cod = int(codigo) if codigo is not None else None
-        except (ValueError, TypeError):
-            return CategoriaPrograma.PAP
-
-        if cod in _TIPO_PROGRAMA_PAEE:
+        textos = " ".join(
+            t.upper() for t in (sigla, descricao) if t
+        )
+        if "PAEE" in textos or "SRM" in textos:
             return CategoriaPrograma.PAEE
         return CategoriaPrograma.PAP
 
     @classmethod
     def codigos(cls) -> tuple[int, ...]:
-        """Retorna todos os códigos como tupla — útil para filtros SQL IN (...)."""
+        """Retorna os códigos canônicos históricos (uso restrito a testes)."""
         return tuple(m.value for m in cls)
-
-
-_TIPO_PROGRAMA_PAEE: frozenset[int] = frozenset(
-    {
-        TipoProgramaEOL.PAEE_SRM,
-        TipoProgramaEOL.PAEE_COLABORATIVO,
-        TipoProgramaEOL.PAEE_ITINERANTE,
-    }
-)
 
 
 class ComponenteCurricularEOL(IntEnum):

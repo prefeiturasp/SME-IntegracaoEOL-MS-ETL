@@ -11,6 +11,7 @@ from datetime import date
 from typing import Any
 
 from apps.programas.enums import (
+    CategoriaPrograma,
     ComponenteCurricularEOL,
     SituacaoMatricula,
     TipoProgramaEOL,
@@ -36,11 +37,12 @@ class TipoProgramaIn:
     descricao: Any
 
     def to_domain(self) -> dict:
-        codigo = int(self.codigo_tipo_programa)
         return {
-            "codigo_tipo_programa": codigo,
+            "codigo_tipo_programa": int(self.codigo_tipo_programa),
             "nome": _strip(self.descricao) or _strip(self.sigla),
-            "categoria": TipoProgramaEOL.categoria(codigo),
+            "categoria": TipoProgramaEOL.categoria_por_sigla(
+                _strip(self.sigla), _strip(self.descricao)
+            ),
             "ativo": True,
         }
 
@@ -66,7 +68,12 @@ class ComponenteCurricularProgramaIn:
 
 @dataclass(slots=True)
 class TurmaProgramaIn:
-    """Linha bruta da query de turma_escola onde cd_tipo_turma = 3."""
+    """Linha bruta da query de turma_escola onde cd_tipo_turma = 3.
+
+    A categoria (PAP/PAEE) é derivada na própria SQL via CASE WHEN EXISTS
+    contra o componente 1030 (SRM). cd_tipo_programa pode ser NULL — não
+    é mais usado como filtro nem como fonte da categoria.
+    """
 
     codigo_turma: Any
     nome_turma: Any
@@ -77,9 +84,9 @@ class TurmaProgramaIn:
     descricao_turno: Any
     situacao: Any
     codigo_tipo_programa: Any
+    categoria: Any
 
     def to_domain(self) -> dict:
-        codigo_tipo = int(self.codigo_tipo_programa)
         return {
             "codigo_turma": int(self.codigo_turma),
             "nome_turma": _strip(self.nome_turma),
@@ -89,8 +96,8 @@ class TurmaProgramaIn:
             "tipo_turno": _int_opt(self.tipo_turno),
             "descricao_turno": _strip(self.descricao_turno),
             "situacao": _strip(self.situacao),
-            "codigo_tipo_programa": codigo_tipo,
-            "categoria": TipoProgramaEOL.categoria(codigo_tipo),
+            "codigo_tipo_programa": _int_opt(self.codigo_tipo_programa),
+            "categoria": CategoriaPrograma(_strip(self.categoria)),
         }
 
 
@@ -116,7 +123,12 @@ class TurmaProgramaComponenteCurricularIn:
 
 @dataclass(slots=True)
 class MatriculaTurmaProgramaIn:
-    """Linha bruta da query de matrículas em turmas de programa."""
+    """Linha bruta da query de matrículas em turmas de programa.
+
+    A categoria (PAP/PAEE) é derivada do componente curricular — fonte
+    estável: 1030 → PAEE, demais componentes PAP/PAEE conhecidos → PAP.
+    cd_tipo_programa não é mais lido nem usado.
+    """
 
     codigo_aluno: Any
     codigo_turma: Any
@@ -128,16 +140,13 @@ class MatriculaTurmaProgramaIn:
     ano_letivo: Any
     codigo_ue: Any
     codigo_dre: Any
-    codigo_tipo_programa: Any
 
     def to_domain(self) -> dict:
-        codigo_tipo = int(self.codigo_tipo_programa)
+        codigo_componente = int(self.codigo_componente_curricular)
         return {
             "codigo_aluno": int(self.codigo_aluno),
             "codigo_turma": int(self.codigo_turma),
-            "codigo_componente_curricular": int(
-                self.codigo_componente_curricular
-            ),
+            "codigo_componente_curricular": codigo_componente,
             "nome_componente_curricular": _strip(
                 self.nome_componente_curricular
             ),
@@ -150,5 +159,5 @@ class MatriculaTurmaProgramaIn:
             "ano_letivo": int(self.ano_letivo),
             "codigo_ue": str(self.codigo_ue),
             "codigo_dre": str(self.codigo_dre),
-            "categoria": TipoProgramaEOL.categoria(codigo_tipo),
+            "categoria": ComponenteCurricularEOL.categoria(codigo_componente),
         }

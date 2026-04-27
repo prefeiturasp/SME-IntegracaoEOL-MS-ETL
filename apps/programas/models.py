@@ -174,7 +174,13 @@ class TurmaPrograma(models.Model):
         help_text="O=Organizada, A=Não Organizada, C=Concluída, E=Extinta.",
     )
     codigo_tipo_programa = models.IntegerField(
-        help_text="EOL cd_tipo_programa — FK lógica para tipo_programa.",
+        null=True,
+        blank=True,
+        help_text=(
+            "EOL cd_tipo_programa — FK lógica para tipo_programa. "
+            "Pode ser NULL: a categoria PAP/PAEE é determinada pelo componente "
+            "curricular da turma, não pelo tipo de programa."
+        ),
     )
     categoria = models.CharField(
         max_length=10,

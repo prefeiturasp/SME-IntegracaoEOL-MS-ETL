@@ -100,7 +100,6 @@ class TestProgramasService(TestCase):
             2025,  # ano_letivo
             "000001",  # codigo_ue
             "108900",  # codigo_dre
-            649,  # codigo_tipo_programa
         )
         pk, _, _ = transform(row)
         
