@@ -40,6 +40,7 @@ def _row_turma(
     situacao="O",
     tipo_prog=649,
     categoria="PAP",
+    desc_grade=None,
 ):
     return (
         codigo,
@@ -52,6 +53,7 @@ def _row_turma(
         situacao,
         tipo_prog,
         categoria,
+        desc_grade,
     )
 
 
@@ -202,6 +204,28 @@ class TestTurmaProgramaIn(TestCase):
     def test_codigo_tipo_programa_nullable(self) -> None:
         d = TurmaProgramaIn(*_row_turma(tipo_prog=None)).to_domain()
         self.assertIsNone(d["codigo_tipo_programa"])
+
+    def test_descricao_grade_default_none(self) -> None:
+        d = TurmaProgramaIn(*_row_turma()).to_domain()
+        self.assertIsNone(d["descricao_grade"])
+
+    def test_descricao_grade_preenchida(self) -> None:
+        d = TurmaProgramaIn(
+            *_row_turma(desc_grade="PAP COLABORATIVO 3 / 4 E 5 ANO")
+        ).to_domain()
+        self.assertEqual(
+            d["descricao_grade"], "PAP COLABORATIVO 3 / 4 E 5 ANO"
+        )
+
+    def test_descricao_grade_strip(self) -> None:
+        d = TurmaProgramaIn(
+            *_row_turma(desc_grade="  PAP COLABORATIVO  ")
+        ).to_domain()
+        self.assertEqual(d["descricao_grade"], "PAP COLABORATIVO")
+
+    def test_descricao_grade_string_vazia_vira_none(self) -> None:
+        d = TurmaProgramaIn(*_row_turma(desc_grade="")).to_domain()
+        self.assertIsNone(d["descricao_grade"])
 
 
 class TestTurmaProgramaComponenteCurricularIn(TestCase):
