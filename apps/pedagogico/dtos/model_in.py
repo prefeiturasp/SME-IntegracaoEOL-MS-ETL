@@ -249,6 +249,83 @@ class GradeCurricularSerieIn:
 
 
 @dataclass
+class TurmaIn:
+    """Linha bruta da query SQL_TURMAS."""
+
+    codigo: Any
+    ano_letivo: Any
+    ano: Any
+    tipo_turma: Any
+    nome_turma: Any
+    duracao_turno: Any
+    tipo_turno: Any
+    data_inicio_turma: Any
+    data_fim: Any
+    extinta: Any
+    situacao: Any
+    ue_codigo: Any
+    data_atualizacao: Any
+    data_status_turma_escola: Any
+    serie_ensino: Any
+    modalidade: Any
+    codigo_modalidade: Any
+    semestre: Any
+    ensino_especial: Any
+
+    def to_domain(self, transferido_em: Any) -> dict:
+        return {
+            "codigo": int(self.codigo),
+            "ano_letivo": int(self.ano_letivo),
+            "ano": str(self.ano) if self.ano is not None else None,
+            "tipo_turma": int(self.tipo_turma),
+            "nome_turma": strip_str(self.nome_turma),
+            "duracao_turno": (
+                int(self.duracao_turno)
+                if self.duracao_turno is not None
+                else None
+            ),
+            "tipo_turno": (
+                int(self.tipo_turno) if self.tipo_turno is not None else None
+            ),
+            "data_inicio_turma": (
+                make_aware(self.data_inicio_turma)
+                if self.data_inicio_turma
+                else None
+            ),
+            "data_fim": (make_aware(self.data_fim) if self.data_fim else None),
+            "extinta": bool(self.extinta),
+            "situacao": str(self.situacao) if self.situacao else None,
+            "ue_codigo": str(self.ue_codigo) if self.ue_codigo else None,
+            "data_atualizacao": (
+                make_aware(self.data_atualizacao)
+                if self.data_atualizacao
+                else None
+            ),
+            "data_status_turma_escola": (
+                make_aware(self.data_status_turma_escola)
+                if self.data_status_turma_escola
+                else None
+            ),
+            "serie_ensino": (
+                strip_str(self.serie_ensino) if self.serie_ensino else None
+            ),
+            "modalidade": (
+                strip_str(self.modalidade) if self.modalidade else None
+            ),
+            "codigo_modalidade": (
+                int(self.codigo_modalidade)
+                if self.codigo_modalidade is not None
+                else None
+            ),
+            "semestre": (
+                int(self.semestre) if self.semestre is not None else 0
+            ),
+            "ensino_especial": bool(self.ensino_especial),
+            "transferido_em": transferido_em,
+        }
+
+
+@dataclass
 class AtribuicaoTerritorioSaberIn:
     """Linha bruta da query SQL_ATRIBUICOES_TERRITORIO_SABER.
 

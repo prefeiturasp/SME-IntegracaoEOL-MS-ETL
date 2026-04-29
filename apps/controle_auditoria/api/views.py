@@ -230,6 +230,17 @@ class ExecutarDominioView(APIView):
                         ),
                         "example": None,
                     },
+                    "fases": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "nullable": True,
+                        "x-nullable": True,
+                        "description": (
+                            "Opcional. Lista de nomes de fases a executar. "
+                            "Quando omitido, todas as fases são executadas."
+                        ),
+                        "example": ["turma", "componente_curricular"],
+                    },
                 },
             }
         },
@@ -249,6 +260,7 @@ class ExecutarDominioView(APIView):
         # Prioridade: 0 = mais urgente, 9 = menos urgente (padrão: 5)
         prioridade = int(request.data.get("prioridade", 5))
         ano_letivo = request.data.get("ano_letivo")
+        fases = request.data.get("fases")
 
         kwargs_task: dict[str, Any] = {
             "dominio": dominio,
@@ -258,6 +270,8 @@ class ExecutarDominioView(APIView):
         }
         if ano_letivo is not None:
             kwargs_task["ano_letivo"] = int(ano_letivo)
+        if fases is not None:
+            kwargs_task["fases"] = list(fases)
 
         if executar_em:
             eta = parse_datetime(executar_em)

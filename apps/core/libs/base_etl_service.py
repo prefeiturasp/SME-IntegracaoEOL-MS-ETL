@@ -1,6 +1,6 @@
-from __future__ import annotations
-
 """Motor de processamento e auditoria para serviços de ETL."""
+
+from __future__ import annotations
 
 import io
 import logging
@@ -10,7 +10,7 @@ from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from queue import Empty, Queue
 from threading import Thread
-from typing import TYPE_CHECKING, Any, TypeVar, cast, Callable
+from typing import TYPE_CHECKING, Any, TypeVar, cast
 
 if TYPE_CHECKING:
     from apps.core.libs.base_etl_fase import BaseEtlFase
@@ -23,6 +23,7 @@ from psycopg import sql
 from apps.core.libs.thread_processor import calcular_hash
 
 logger = logging.getLogger(__name__)
+
 
 _SENTINEL = object()
 
@@ -115,7 +116,7 @@ class PhaseConfig:
         numero_fase: int,
         total_fases: int,
         options: dict[str, Any],
-    ) -> "BaseEtlFase":
+    ) -> BaseEtlFase:
         """Gera metadados de fase do Celery."""
         from apps.core.libs.base_etl_fase import BaseEtlFase
 
@@ -374,6 +375,7 @@ class BaseEtlService:
         id_execucao: UUID | None = None,
         repositorio_auditoria: Any | None = None,
         primeiro_run: bool = False,
+        fases: list[str] | None = None,
     ) -> None:
         self.db_alias = db_alias
         self.id_execucao = id_execucao
@@ -387,6 +389,9 @@ class BaseEtlService:
         self._lote_objetos: list[Any] = []
         self._lote_hashes: list[tuple[str, str]] = []
         self._ultimo_audit_count = 0
+        self._fases_selecionadas: frozenset[str] | None = (
+            frozenset(fases) if fases else None
+        )
 
     def get_meta(
         self,
@@ -532,7 +537,9 @@ class BaseEtlService:
         )
         return metrics
 
-    def _iniciar_producer(self, config: PhaseConfig, queue: Queue, erros: list[Exception]) -> Thread:
+    def _iniciar_producer(
+        self, config: PhaseConfig, queue: Queue, erros: list[Exception]
+    ) -> Thread:
         def producer() -> None:
             try:
                 for chunk in self._iter_chunks(config.sql):
@@ -683,6 +690,17 @@ class BaseEtlService:
         total = len(self._fases)
         for i, config in enumerate(self._fases, 1):
             if i < fase_inicial:
+                continue
+            if (
+                self._fases_selecionadas is not None
+                and config.nome not in self._fases_selecionadas
+            ):
+                logger.info(
+                    "Fase %d/%d ignorada (não selecionada): %s",
+                    i,
+                    total,
+                    config.nome,
+                )
                 continue
             logger.info("Executando fase %d/%d: %s", i, total, config.nome)
             m = self._executar_fase(config, numero_fase=i)

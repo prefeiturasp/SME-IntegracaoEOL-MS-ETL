@@ -79,6 +79,16 @@ class BaseEtlCommand(BaseCommand):
             action="store_true",
             help="Lança a execução via Celery (Assíncrono).",
         )
+        parser.add_argument(
+            "--fases",
+            nargs="+",
+            default=None,
+            metavar="FASE",
+            help=(
+                "Executa apenas as fases informadas (pelo nome). "
+                "Ex: --fases turma componente_curricular"
+            ),
+        )
 
     def handle(self, *args: Any, **options: Any) -> None:
         """Execução padronizada do fluxo de ETL (Sync ou Async).
@@ -150,11 +160,13 @@ class BaseEtlCommand(BaseCommand):
         **options: Any,
     ) -> None:
         """Execução síncrona local."""
+        fases = options.get("fases")
         servico = self.service_class(
             db_alias=f"{self.dominio}_db",
             id_execucao=id_execucao,
             repositorio_auditoria=repositorio,
             primeiro_run=options.get("carga_inicial", False),
+            **({"fases": fases} if fases else {}),
             **self._extra_service_kwargs(**options),
         )
 
