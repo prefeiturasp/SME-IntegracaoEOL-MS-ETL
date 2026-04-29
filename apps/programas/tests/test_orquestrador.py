@@ -61,14 +61,14 @@ class TestEtlProgramasOrquestradorLancamento(TestCase):
         _mock_proc: MagicMock,
         mock_finalizar: MagicMock,
     ) -> None:
-        """Valida que todas as 5 fases são passadas ao callback do chord."""
+        """Valida que todas as 6 fases são passadas ao callback do chord."""
         self._configurar_leitor(mock_leitor_cls, ["task1"])
 
         self._make_orquestrador().lancar()
 
         self.assertTrue(mock_finalizar.s.called)
         meta_dict = mock_finalizar.s.call_args.args[0]
-        self.assertEqual(meta_dict["total_fases"], 5)
+        self.assertEqual(meta_dict["total_fases"], 6)
 
     def test_sem_chunks_nao_lanca_chord(
         self,

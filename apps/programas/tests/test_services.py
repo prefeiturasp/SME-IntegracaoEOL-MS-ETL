@@ -38,9 +38,9 @@ class TestProgramasService(TestCase):
         with self.assertRaises(AttributeError):
             config.nome = "mudar"  # type: ignore[misc]
 
-    def test_fases_contem_5_configs(self) -> None:
-        """Valida que o service define as 5 fases esperadas."""
-        self.assertEqual(len(self.service._fases), 5)
+    def test_fases_contem_6_configs(self) -> None:
+        """Valida que o service define as 6 fases esperadas."""
+        self.assertEqual(len(self.service._fases), 6)
         nomes = [f.nome for f in self.service._fases]
         self.assertEqual(
             nomes,
@@ -50,6 +50,7 @@ class TestProgramasService(TestCase):
                 "turma_programa",
                 "turma_programa_componente_curricular",
                 "matricula_turma_programa",
+                "matricula_turma_programa_historico",
             ],
         )
 
@@ -136,22 +137,22 @@ class TestProgramasService(TestCase):
         with patch.object(EtlProgramasService, "_executar_fase") as mock_fase:
             mock_fase.return_value = PipelineMetrics(total_escritos=1)
 
-            res = self.service.executar(fase_inicial=5)
+            res = self.service.executar(fase_inicial=6)
 
             self.assertEqual(len(res), 1)
-            self.assertIn("matricula_turma_programa", res)
+            self.assertIn("matricula_turma_programa_historico", res)
             self.assertEqual(mock_fase.call_count, 1)
 
     def test_executar_completo_acumula_resultados(self) -> None:
-        """Valida execução completa das 5 fases."""
+        """Valida execução completa das 6 fases."""
         with patch.object(EtlProgramasService, "_executar_fase") as mock_fase:
             mock_fase.return_value = PipelineMetrics(total_escritos=10)
 
             res = self.service.executar(fase_inicial=1)
 
-            self.assertEqual(len(res), 5)
+            self.assertEqual(len(res), 6)
             self.assertEqual(res["tipo_programa"], 10)
-            self.assertEqual(mock_fase.call_count, 5)
+            self.assertEqual(mock_fase.call_count, 6)
 
     @patch.object(EtlProgramasService, "sync_batch")
     def test_sync_batch_argumentos_corretos(
