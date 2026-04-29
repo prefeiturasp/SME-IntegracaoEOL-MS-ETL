@@ -215,7 +215,6 @@ INTERVALO_EXECUCAO_ETL_SEGUNDOS = int(
 API_KEY = os.getenv("API_KEY", "dev-key-default")
 API_KEY_HEADER = os.getenv("API_KEY_HEADER", "X-API-Key")
 CELERY_BROKER_URL = URL_KEYDB
-CELERY_RESULT_BACKEND = URL_KEYDB
 # Execução síncrona automática em testes/CI
 CELERY_TASK_ALWAYS_EAGER = os.getenv("CELERY_TASK_ALWAYS_EAGER", "1") == "1"
 
