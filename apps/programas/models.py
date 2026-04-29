@@ -26,6 +26,7 @@ Ordem de carga ETL:
     3. TurmaPrograma                         (ETL incremental)
     4. TurmaProgramaComponenteCurricular     (depende de: TurmaPrograma)
     5. MatriculaTurmaPrograma                (depende de: TurmaPrograma)
+    6. MatriculaTurmaProgramaHistorico       (lê v_historico_matricula_cotic)
 """
 
 from django.db import models
@@ -377,4 +378,101 @@ class MatriculaTurmaPrograma(models.Model):
             f"Aluno {self.codigo_aluno}"
             f" — turma {self.codigo_turma}"
             f" / CC {self.codigo_componente_curricular}"
+        )
+
+
+class MatriculaTurmaProgramaHistorico(models.Model):
+    """Matrículas históricas de alunos em turmas de programa, por componente curricular.
+
+    Espelha MatriculaTurmaPrograma, mas é carregada a partir de
+    ``v_historico_matricula_cotic`` (arquivo histórico) em vez de
+    ``v_matricula_cotic`` (live). Isso permite que o EP-05
+    (pap/ano-letivo/{anoLetivo}) retorne dados coerentes com o legado,
+    que também lia do histórico.
+
+    A principal diferença é que ``data_matricula`` é nullable — a view
+    histórica pode não registrar essa data em todos os casos.
+    """
+
+    codigo_aluno = models.BigIntegerField(
+        help_text="EOL cd_aluno — FK lógica para aluno (PEDAGOGICO_DB — banco diferente).",
+    )
+    codigo_turma = models.BigIntegerField(
+        help_text="FK lógica → turma_programa.codigo_turma.",
+    )
+    codigo_componente_curricular = models.BigIntegerField(
+        help_text="FK lógica → componente_curricular_programa.codigo_componente_curricular.",
+    )
+    nome_componente_curricular = models.CharField(
+        max_length=200,
+        help_text="EOL dc_componente_curricular — desnormalizado para evitar JOIN.",
+    )
+    codigo_situacao_matricula = models.SmallIntegerField(
+        help_text="EOL st_matricula.",
+    )
+    descricao_situacao_matricula = models.CharField(
+        max_length=50,
+        help_text="Ex: 'Ativo', 'Concluído' — desnormalizado para evitar mapeamento em código.",
+    )
+    data_matricula = models.DateField(
+        null=True,
+        blank=True,
+        help_text="EOL dt_status_matricula — nullable no histórico.",
+    )
+    data_situacao = models.DateField(
+        null=True,
+        blank=True,
+        help_text="EOL dt_situacao_aluno.",
+    )
+    ano_letivo = models.SmallIntegerField(
+        help_text="Desnormalizado da turma — necessário para filtros diretos por ano.",
+    )
+    codigo_ue = models.CharField(
+        max_length=20,
+        help_text="Desnormalizado da turma — exigido por AlunoTurmaPapDto.",
+    )
+    codigo_dre = models.CharField(
+        max_length=20,
+        help_text="Desnormalizado da turma — exigido por AlunoTurmaPapDto.",
+    )
+    categoria = models.CharField(
+        max_length=10,
+        choices=CategoriaPrograma.choices,
+        help_text="'PAP' ou 'PAEE' — desnormalizado da turma para filtros diretos.",
+    )
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Última atualização pelo ETL — usado no incremental.",
+    )
+
+    class Meta:
+        app_label = "programas"
+        db_table = "matricula_turma_programa_historico"
+        verbose_name = "matrícula histórica em turma de programa"
+        verbose_name_plural = "matrículas históricas em turmas de programa"
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "codigo_turma",
+                    "codigo_aluno",
+                    "codigo_componente_curricular",
+                ],
+                name="uq_hist_matricula_turma_aluno_componente",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["codigo_aluno"], name="idx_hist_matricula_aluno"),
+            models.Index(fields=["ano_letivo"], name="idx_hist_matricula_ano"),
+            models.Index(fields=["codigo_ue"], name="idx_hist_matricula_ue"),
+            models.Index(fields=["categoria"], name="idx_hist_matricula_categoria"),
+        ]
+
+    def __str__(self) -> str:
+        return (
+            f"Aluno {self.codigo_aluno}"
+            f" — turma {self.codigo_turma}"
+            f" / CC {self.codigo_componente_curricular}"
+            f" (histórico)"
         )

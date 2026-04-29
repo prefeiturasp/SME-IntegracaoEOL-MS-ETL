@@ -24,6 +24,7 @@ from apps.programas.enums import ComponenteCurricularEOL
 from apps.programas.models import (
     ComponenteCurricularPrograma,
     MatriculaTurmaPrograma,
+    MatriculaTurmaProgramaHistorico,
     TipoPrograma,
     TurmaPrograma,
     TurmaProgramaComponenteCurricular,
@@ -186,6 +187,43 @@ SELECT
 """
 
 
+SQL_MATRICULA_TURMA_PROGRAMA_HISTORICO = f"""
+SELECT DISTINCT
+      vm.cd_aluno
+    , m.cd_turma_escola
+    , gcc.cd_componente_curricular
+    , LTRIM(RTRIM(cc.dc_componente_curricular)) AS nome_componente_curricular
+    , CAST(vm.st_matricula AS SMALLINT) AS cd_situacao_aluno
+    , vm.dt_status_matricula AS dt_matricula
+    , NULL AS dt_situacao
+    , te.an_letivo
+    , CAST(te.cd_escola AS VARCHAR(20)) AS codigo_ue
+    , CAST(vcue.cd_unidade_administrativa_referencia AS VARCHAR(20)) AS codigo_dre
+  FROM v_historico_matricula_cotic vm WITH (NOLOCK)
+  INNER JOIN historico_matricula_turma_escola m WITH (NOLOCK)
+      ON vm.cd_matricula = m.cd_matricula
+  INNER JOIN turma_escola te WITH (NOLOCK)
+      ON te.cd_turma_escola = m.cd_turma_escola
+  INNER JOIN v_cadastro_unidade_educacao vcue WITH (NOLOCK)
+      ON vcue.cd_unidade_educacao = te.cd_escola
+  INNER JOIN turma_escola_grade_programa tegp WITH (NOLOCK)
+      ON tegp.cd_turma_escola = te.cd_turma_escola
+  INNER JOIN escola_grade eg WITH (NOLOCK)
+      ON eg.cd_escola_grade = tegp.cd_escola_grade
+  INNER JOIN grade_componente_curricular gcc WITH (NOLOCK)
+      ON gcc.cd_grade = eg.cd_grade
+  INNER JOIN componente_curricular cc WITH (NOLOCK)
+      ON cc.cd_componente_curricular = gcc.cd_componente_curricular
+  WHERE te.cd_tipo_turma = 3
+    AND gcc.cd_componente_curricular IN ({_COMPONENTES_IN})
+    AND te.st_turma_escola IN ('O', 'A', 'C')
+    AND vm.st_matricula IN ('1', '5')
+    AND tegp.dt_fim IS NULL
+    AND cc.dt_cancelamento IS NULL
+  ORDER BY vm.cd_aluno, m.cd_turma_escola
+"""
+
+
 class EtlProgramasService(BaseEtlService):
     """Pipeline ETL de Programas (PAP/PAEE)."""
 
@@ -294,6 +332,32 @@ class EtlProgramasService(BaseEtlService):
                     "codigo_aluno",
                     "codigo_componente_curricular",
                 ],
+                update_fields=(
+                    "nome_componente_curricular",
+                    "codigo_situacao_matricula",
+                    "descricao_situacao_matricula",
+                    "data_matricula",
+                    "data_situacao",
+                    "ano_letivo",
+                    "codigo_ue",
+                    "codigo_dre",
+                    "categoria",
+                ),
+                unique_fields=(
+                    "codigo_turma",
+                    "codigo_aluno",
+                    "codigo_componente_curricular",
+                ),
+                modo_escrita="upsert",
+            ),
+            PhaseConfig(
+                nome="matricula_turma_programa_historico",
+                sql=SQL_MATRICULA_TURMA_PROGRAMA_HISTORICO,
+                table_name="matricula_turma_programa_historico",
+                source_table="v_historico_matricula_cotic",
+                model_class=MatriculaTurmaProgramaHistorico,
+                dto_in=MatriculaTurmaProgramaIn,
+                pk_field=["codigo_turma", "codigo_aluno", "codigo_componente_curricular"],
                 update_fields=(
                     "nome_componente_curricular",
                     "codigo_situacao_matricula",
