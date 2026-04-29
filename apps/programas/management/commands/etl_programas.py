@@ -11,6 +11,7 @@ _TABELAS_UPSERT = frozenset(
         "turma_programa",
         "turma_programa_componente_curricular",
         "matricula_turma_programa",
+        "matricula_turma_programa_historico",
     }
 )
 
@@ -20,7 +21,7 @@ class Command(BaseEtlCommand):
 
     help = "Executa pipeline ETL do domínio PROGRAMAS_DB (Sync ou Celery)"
     dominio = "programas"
-    fase_final = 5
+    fase_final = 6
     service_class = EtlProgramasService
     orquestrador_class = EtlProgramasOrquestrador
 
