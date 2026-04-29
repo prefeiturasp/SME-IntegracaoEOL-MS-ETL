@@ -57,7 +57,25 @@ Catálogo de componentes previstos na grade por série e modalidade. Representa 
 - **`modalidade`:** calculado via CASE na query — `1=EI | 3=EJA | 4=CIEJA | 5=EF | 6=EM`
 - **Alimenta:** `ues/{ueId}/modalidades/{mod}/anos/{ano}`, `ues/{ueId}/modalidades/{mod}/anos/{ano}/turmas-programa`
 
-## 7. RegenciaComponenteCurricular
+## 7. Turma
+
+Dados cadastrais de turmas extraídos do EOL. Sincronizado por ano letivo a partir de `turma_escola`.
+
+- **Tabela:** `turma`
+- **Unique:** `codigo` (BigIntegerField)
+- **Índices:** `(ue_codigo, ano_letivo)`, `tipo_turma`, `ano_letivo`
+- **Alimenta:** endpoints de turmas e planejamento pedagógico
+- **Nota:** `Extinta` é derivado via `CASE` na query (`st_turma_escola = 'E'`). `Modalidade` e `CodigoModalidade` são calculados via `CASE` sobre `cd_etapa_ensino`. `Semestre` é calculado para turmas EJA pelo mês de início.
+
+## 8. TurmaItinerarioEnsinoMedio
+
+Tabela local de apoio com os itinerários disponíveis para o Ensino Médio. Não requer query ao SQL Server — populada via fixture Django.
+
+- **Tabela:** `turmaitinerarioensinomedio`
+- **Origem:** `apps/pedagogico/fixtures/turma_itinerario_ensino_medio.json`
+- **Alimenta:** `GET /api/v1/itinerario/ensino-medio`
+
+## 9. RegenciaComponenteCurricular
 
 Tabela local de apoio. Armazena triplas `(id_componente, turno, ano)` que representam a configuração histórica de planejamento de regência por combinação de turno e série.
 
@@ -65,7 +83,7 @@ Tabela local de apoio. Armazena triplas `(id_componente, turno, ano)` que repres
 - **Origem:** fixtures/migração local
 - **Uso atual:** referência histórica do domínio. O ETL principal calcula o lookup A3 diretamente do EOL via `SQL_LOOKUP_PLANEJAMENTO_REGENCIA`.
 
-## 8. ComponenteCurricularPAP
+## 10. ComponenteCurricularPAP
 
 Tabela local de apoio com os IDs de componentes PAP (Programa de Apoio e Acompanhamento à Aprendizagem).
 
