@@ -4,7 +4,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("programas", "0002_turmaprograma_codigo_tipo_programa_nullable"),
+        ("programas", "0003_turmaprograma_descricao_grade"),
     ]
 
     operations = [
