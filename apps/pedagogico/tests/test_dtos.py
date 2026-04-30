@@ -9,6 +9,7 @@ from apps.pedagogico.dtos.model_in import (
     ComponentePorTurmaIn,
     ComponenteRegenciaIn,
     GradeCurricularSerieIn,
+    TurmaIn,
 )
 
 
@@ -238,3 +239,118 @@ class GradeCurricularSerieInTest(SimpleTestCase):
         self.assertIsNone(data["descricao_serie_ensino"])
         self.assertIsNone(data["codigo_serie_ensino"])
         self.assertIsNone(data["modalidade"])
+
+
+def _turma_in_completa(**overrides: object) -> TurmaIn:
+    defaults: dict[str, object] = {
+        "codigo": 123456,
+        "ano_letivo": 2025,
+        "ano": "5",
+        "tipo_turma": 1,
+        "nome_turma": " 5A Manhã ",
+        "duracao_turno": 5,
+        "tipo_turno": 2,
+        "data_inicio_turma": datetime(2025, 2, 5, 8, 0, 0),
+        "data_fim": None,
+        "extinta": 0,
+        "situacao": "O",
+        "ue_codigo": "001234",
+        "data_atualizacao": datetime(2025, 1, 10, 0, 0, 0),
+        "data_status_turma_escola": None,
+        "serie_ensino": " 5o ano ",
+        "modalidade": " Fundamental ",
+        "codigo_modalidade": 5,
+        "semestre": 0,
+        "ensino_especial": 0,
+    }
+    defaults.update(overrides)
+    return TurmaIn(**defaults)
+
+
+class TurmaInTest(SimpleTestCase):
+    """Testes de ``TurmaIn.to_domain()``."""
+
+    def test_mapeamento_tipos_basicos(self) -> None:
+        data = _turma_in_completa().to_domain("agora")
+
+        self.assertEqual(data["codigo"], 123456)
+        self.assertEqual(data["ano_letivo"], 2025)
+        self.assertEqual(data["ano"], "5")
+        self.assertEqual(data["tipo_turma"], 1)
+        self.assertEqual(data["nome_turma"], "5A Manhã")
+        self.assertEqual(data["duracao_turno"], 5)
+        self.assertEqual(data["tipo_turno"], 2)
+        self.assertFalse(data["extinta"])
+        self.assertEqual(data["situacao"], "O")
+        self.assertEqual(data["ue_codigo"], "001234")
+        self.assertEqual(data["serie_ensino"], "5o ano")
+        self.assertEqual(data["modalidade"], "Fundamental")
+        self.assertEqual(data["codigo_modalidade"], 5)
+        self.assertEqual(data["semestre"], 0)
+        self.assertFalse(data["ensino_especial"])
+        self.assertEqual(data["transferido_em"], "agora")
+
+    def test_data_inicio_turma_aware(self) -> None:
+        data = _turma_in_completa().to_domain("agora")
+        self.assertIsNotNone(data["data_inicio_turma"])
+        self.assertTrue(timezone.is_aware(data["data_inicio_turma"]))
+
+    def test_data_atualizacao_aware(self) -> None:
+        data = _turma_in_completa().to_domain("agora")
+        self.assertIsNotNone(data["data_atualizacao"])
+        self.assertTrue(timezone.is_aware(data["data_atualizacao"]))
+
+    def test_extinta_true_quando_valor_truthy(self) -> None:
+        data = _turma_in_completa(extinta=1).to_domain("agora")
+        self.assertTrue(data["extinta"])
+
+    def test_ensino_especial_true_quando_valor_truthy(self) -> None:
+        data = _turma_in_completa(ensino_especial=1).to_domain("agora")
+        self.assertTrue(data["ensino_especial"])
+
+    def test_semestre_none_vira_zero(self) -> None:
+        data = _turma_in_completa(semestre=None).to_domain("agora")
+        self.assertEqual(data["semestre"], 0)
+
+    def test_semestre_dois(self) -> None:
+        data = _turma_in_completa(semestre=2).to_domain("agora")
+        self.assertEqual(data["semestre"], 2)
+
+    def test_campos_opcionais_nulos(self) -> None:
+        data = _turma_in_completa(
+            data_inicio_turma=None,
+            data_fim=None,
+            duracao_turno=None,
+            tipo_turno=None,
+            situacao=None,
+            ue_codigo=None,
+            data_atualizacao=None,
+            data_status_turma_escola=None,
+            serie_ensino=None,
+            modalidade=None,
+            codigo_modalidade=None,
+        ).to_domain("agora")
+
+        self.assertIsNone(data["data_inicio_turma"])
+        self.assertIsNone(data["data_fim"])
+        self.assertIsNone(data["duracao_turno"])
+        self.assertIsNone(data["tipo_turno"])
+        self.assertIsNone(data["situacao"])
+        self.assertIsNone(data["ue_codigo"])
+        self.assertIsNone(data["data_atualizacao"])
+        self.assertIsNone(data["data_status_turma_escola"])
+        self.assertIsNone(data["serie_ensino"])
+        self.assertIsNone(data["modalidade"])
+        self.assertIsNone(data["codigo_modalidade"])
+
+    def test_data_status_turma_escola_aware(self) -> None:
+        data = _turma_in_completa(
+            data_status_turma_escola=datetime(2025, 6, 30, 12, 0, 0)
+        ).to_domain("agora")
+        self.assertTrue(timezone.is_aware(data["data_status_turma_escola"]))
+
+    def test_data_fim_aware(self) -> None:
+        data = _turma_in_completa(
+            data_fim=datetime(2025, 12, 20, 0, 0, 0)
+        ).to_domain("agora")
+        self.assertTrue(timezone.is_aware(data["data_fim"]))

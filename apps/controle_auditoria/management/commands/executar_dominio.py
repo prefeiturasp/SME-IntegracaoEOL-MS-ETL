@@ -40,6 +40,13 @@ class Command(BaseCommand):
                 "a partir deste valor."
             ),
         )
+        parser.add_argument(
+            "--fases",
+            nargs="+",
+            default=None,
+            metavar="FASE",
+            help="Executa apenas as fases informadas (pelo nome).",
+        )
 
     def handle(self, *args: Any, **options: Any) -> None:
         """Executa o ETL do dominio especificado."""
@@ -48,6 +55,7 @@ class Command(BaseCommand):
         offset = options["offset"]
         continuar = options["continuar"]
         ano_letivo = options.get("ano_letivo")
+        fases = options.get("fases")
 
         if dominio == "sinc_rec_db":
             exibir_validacao_sinc_rec_db()
@@ -64,4 +72,6 @@ class Command(BaseCommand):
             argumentos.append("--continuar")
         if ano_letivo is not None and dominio == "pedagogico":
             argumentos += ["--ano-letivo", str(ano_letivo)]
+        if fases:
+            argumentos += ["--fases", *fases]
         call_command(comando_etl, *argumentos)

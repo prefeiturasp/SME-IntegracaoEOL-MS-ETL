@@ -35,7 +35,7 @@ Herda de `BaseEtlService` (pipeline Producer-Consumer com ThreadPool, auditoria 
 
 ## Modelos do app
 
-O código define **8 modelos** em `apps/pedagogico/models.py`:
+O código define **10 modelos** em `apps/pedagogico/models.py`:
 
 1. `ComponenteCurricular`
 2. `ComponenteCurricularPorTurma`
@@ -43,8 +43,10 @@ O código define **8 modelos** em `apps/pedagogico/models.py`:
 4. `ComponenteInicioTurma`
 5. `GradeCurricularSerie`
 6. `AgrupamentoAtribuicaoTerritorioSaber`
-7. `RegenciaComponenteCurricular` (tabela local de apoio; não é fase do ETL)
-8. `ComponenteCurricularPAP` (tabela local de apoio; não é fase do ETL)
+7. `Turma`
+8. `TurmaItinerarioEnsinoMedio` (fixture estática; não é fase do ETL)
+9. `RegenciaComponenteCurricular` (tabela local de apoio; não é fase do ETL)
+10. `ComponenteCurricularPAP` (tabela local de apoio; não é fase do ETL)
 
 ## Fases implementadas
 
@@ -70,6 +72,11 @@ O código define **8 modelos** em `apps/pedagogico/models.py`:
 - Catálogo de oferta de componentes por série, ano letivo e modalidade.
 - **Query:** `SQL_GRADE_CURRICULAR_SERIE` com `?` por ano letivo.
 
+### Fase 6 — Turma
+- Dados cadastrais de turmas do EOL (situação, modalidade, série, UE).
+- **Query:** `SQL_TURMAS` com `?` por ano letivo. Filtra `cd_tipo_turma <> 4` e `st_turma_escola IN ('O', 'A', 'E', 'C')`.
+- `Modalidade`, `CodigoModalidade`, `Semestre` e `Extinta` são calculados via `CASE` inline na query.
+
 ## Fluxo
 
 ```{graphviz}
@@ -82,7 +89,8 @@ digraph G {
     F3 [label="Fase 3\nAgrupamentos TS\n(2 tabelas)"];
     F4 [label="Fase 4\nComponenteInicioTurma"];
     F5 [label="Fase 5\nGradeCurricularSerie"];
+    F6 [label="Fase 6\nTurma"];
 
-    F1 -> F2 -> F3 -> F4 -> F5;
+    F1 -> F2 -> F3 -> F4 -> F5 -> F6;
 }
 ```

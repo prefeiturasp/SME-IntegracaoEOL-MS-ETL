@@ -36,6 +36,7 @@ from apps.pedagogico.dtos.model_in import (
     ComponentePorTurmaIn,
     GradeCurricularSerieIn,
     RegenciaComponenteCurricularIn,
+    TurmaIn,
 )
 from apps.pedagogico.models import (
     AgrupamentoAtribuicaoTerritorioSaber,
@@ -44,6 +45,7 @@ from apps.pedagogico.models import (
     ComponenteCurricularPorTurma,
     ComponenteInicioTurma,
     GradeCurricularSerie,
+    Turma,
 )
 from apps.pedagogico.queries import (
     SQL_ANOS_LETIVOS,
@@ -53,6 +55,7 @@ from apps.pedagogico.queries import (
     SQL_COMPONENTES_POR_TURMA,
     SQL_GRADE_CURRICULAR_SERIE,
     SQL_LOOKUP_PLANEJAMENTO_REGENCIA,
+    SQL_TURMAS,
 )
 from apps.pedagogico.services.agrupamentos import (
     agrupar_atribuicoes_territorio_saber,
@@ -149,12 +152,14 @@ class EtlPedagogicoService(BaseEtlService):
         primeiro_run: bool = False,
         eol: EOLService | None = None,
         ano_letivo: int | None = None,
+        fases: list[str] | None = None,
     ) -> None:
         super().__init__(
             db_alias=db_alias,
             id_execucao=id_execucao,
             repositorio_auditoria=repositorio_auditoria,
             primeiro_run=primeiro_run,
+            fases=fases,
         )
         self.eol = eol or EOLService()
         self._agora = timezone.now()
@@ -199,7 +204,8 @@ class EtlPedagogicoService(BaseEtlService):
             "componente_curricular": self._transform_componente_curricular,
             "componente_por_turma": self._transform_componente_por_turma,
             "componente_inicio_turma": self._transform_componente_inicio_turma,
-            "grade_curricular_serie": (self._transform_grade_curricular_serie),
+            "grade_curricular_serie": self._transform_grade_curricular_serie,
+            "turma": self._transform_componente_curricular,
         }
         factory = transform_factories.get(config.nome)
         if factory is None:
@@ -549,6 +555,37 @@ class EtlPedagogicoService(BaseEtlService):
                     "modalidade",
                 ),
             ),
+            PhaseConfig(
+                nome="turma",
+                sql=SQL_TURMAS,
+                table_name="turma",
+                source_table="turma_escola",
+                model_class=Turma,
+                dto_in=TurmaIn,
+                pk_field="codigo",
+                update_fields=(
+                    "ano_letivo",
+                    "ano",
+                    "tipo_turma",
+                    "nome_turma",
+                    "duracao_turno",
+                    "tipo_turno",
+                    "data_inicio_turma",
+                    "data_fim",
+                    "extinta",
+                    "situacao",
+                    "ue_codigo",
+                    "data_atualizacao",
+                    "data_status_turma_escola",
+                    "serie_ensino",
+                    "modalidade",
+                    "codigo_modalidade",
+                    "semestre",
+                    "ensino_especial",
+                    "transferido_em",
+                ),
+                unique_fields=("codigo",),
+            ),
         ]
 
     # ------------------------------------------------------------------
@@ -564,12 +601,17 @@ class EtlPedagogicoService(BaseEtlService):
             3 — agrupamento_territorio_saber  (agregação → 2 tabelas)
             4 — componente_inicio_turma       (por ano letivo)
             5 — grade_curricular_serie        (por ano letivo)
+            6 — turma                         (por ano letivo)
         """
         self._agora = timezone.now()
         self._cache_anos = None  # reseta cache de anos para o run
 
-        # Lookups necessários na fase 2
-        if fase_inicial <= 2:
+        # Lookups necessários na fase 2 (componente_por_turma)
+        fase2_selecionada = (
+            self._fases_selecionadas is None
+            or "componente_por_turma" in self._fases_selecionadas
+        )
+        if fase_inicial <= 2 and fase2_selecionada:
             self._carregar_lookups()
 
         resultados: dict[str, int] = {}
@@ -579,6 +621,16 @@ class EtlPedagogicoService(BaseEtlService):
 
         for i, config in enumerate(self._fases, 1):
             if i < fase_inicial:
+                continue
+            if (
+                self._fases_selecionadas is not None
+                and config.nome not in self._fases_selecionadas
+            ):
+                logger.info(
+                    "[ETL PEDAG] Fase %d ignorada (não selecionada): %s",
+                    i,
+                    config.nome,
+                )
                 continue
 
             logger.info("[ETL PEDAG] === Fase %d: %s ===", i, config.nome)

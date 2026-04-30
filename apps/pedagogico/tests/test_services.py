@@ -52,8 +52,8 @@ class TestPedagogicoService(TestCase):
         with self.assertRaises(AttributeError):
             config.nome = "mudar"  # type: ignore[misc]
 
-    def test_fases_contem_5_configs_esperados(self) -> None:
-        self.assertEqual(len(self.service._fases), 5)
+    def test_fases_contem_6_configs_esperados(self) -> None:
+        self.assertEqual(len(self.service._fases), 6)
         self.assertEqual(
             [fase.nome for fase in self.service._fases],
             [
@@ -62,6 +62,7 @@ class TestPedagogicoService(TestCase):
                 "agrupamento_territorio_saber",
                 "componente_inicio_turma",
                 "grade_curricular_serie",
+                "turma",
             ],
         )
 
@@ -131,6 +132,46 @@ class TestPedagogicoService(TestCase):
         self.assertIsNone(
             transform((513, " Inglês ", 1, 1, 1, 6, "7", 2025, None, "RF1", 0))
         )
+
+    def test_criar_transform_turma_retorna_tripla_com_pk_codigo(
+        self,
+    ) -> None:
+        config = self.service._fases[5]  # fase 6 = turma
+        transform = self.service._criar_transform(config)
+
+        row = (
+            123456,  # codigo
+            2025,  # ano_letivo
+            "5",  # ano
+            1,  # tipo_turma
+            " 5A Manhã ",  # nome_turma
+            5,  # duracao_turno
+            2,  # tipo_turno
+            "2025-02-05T08:00:00",  # data_inicio_turma
+            None,  # data_fim
+            0,  # extinta
+            "O",  # situacao
+            "001234",  # ue_codigo
+            None,  # data_atualizacao
+            None,  # data_status_turma_escola
+            " 5o ano ",  # serie_ensino
+            " Fundamental ",  # modalidade
+            5,  # codigo_modalidade
+            0,  # semestre
+            0,  # ensino_especial
+        )
+        result = transform(row)
+        assert result is not None
+        pk, hash_val, obj = result
+
+        self.assertEqual(pk, "123456")
+        self.assertEqual(len(hash_val), 64)
+        self.assertEqual(obj.codigo, 123456)
+        self.assertEqual(obj.nome_turma, "5A Manhã")
+        self.assertEqual(obj.serie_ensino, "5o ano")
+        self.assertEqual(obj.modalidade, "Fundamental")
+        self.assertFalse(obj.extinta)
+        self.assertEqual(obj.semestre, 0)
 
     def test_criar_transform_componente_inicio_turma_gera_pk_composta(
         self,
@@ -296,7 +337,8 @@ class TestPedagogicoService(TestCase):
         )
         self.assertEqual(resultado["componente_curricular_agrupamento"], 7)
         self.assertIn("componente_inicio_turma", resultado)
-        self.assertEqual(mock_fase.call_count, 3)
+        self.assertIn("turma", resultado)
+        self.assertEqual(mock_fase.call_count, 4)
 
     def test_cod_agrupamento_gera_proximo_sequencial_quando_novo(self) -> None:
         """Novo agrupamento deve receber o próximo ID acima do piso."""

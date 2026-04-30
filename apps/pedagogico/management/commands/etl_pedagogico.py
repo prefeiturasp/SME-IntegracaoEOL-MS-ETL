@@ -15,6 +15,7 @@ _TABELAS_UPSERT = frozenset(
         "dados_aula_turma",
         "componente_curricular_por_ano_letivo",
         "agrupamento_atribuicao_territorio_saber",
+        "turma",
     }
 )
 

@@ -99,3 +99,34 @@ O agrupamento ocorre em Python via `_agrupar()`. Somente grupos com 2+ component
 | CASE na query EOL | `modalidade` | `int()` ou `None` |
 | `AnoLetivo` | `ano_letivo` | `int()` |
 | — | `transferido_em` | `timezone.now()` |
+
+---
+
+## Fase 6 — Turma
+
+**Query:** `SQL_TURMAS` (parâmetro `?` por ano letivo)
+
+Origem: `turma_escola` (NOLOCK) com joins em `escola`, `serie_turma_escola`, `serie_ensino` e `etapa_ensino`. Filtra `cd_tipo_turma <> 4` e `st_turma_escola IN ('O', 'A', 'E', 'C')`.
+
+| Campo EOL | Campo Destino | Transformação |
+| :--- | :--- | :--- |
+| `cd_turma_escola` | `codigo` | `int()` |
+| `an_letivo` | `ano_letivo` | `int()` |
+| CASE sobre `dc_turma_escola` (1º char numérico) | `ano` | `str()` ou `None` |
+| `cd_tipo_turma` | `tipo_turma` | `int()` |
+| `dc_turma_escola` | `nome_turma` | `strip_str()` |
+| `cd_duracao` | `duracao_turno` | `int()` ou `None` |
+| `cd_tipo_turno` | `tipo_turno` | `int()` ou `None` |
+| `dt_inicio_turma` | `data_inicio_turma` | `make_aware()` ou `None` |
+| `dt_fim` | `data_fim` | `make_aware()` ou `None` |
+| CASE `st_turma_escola = 'E'` | `extinta` | `bool()` |
+| `st_turma_escola` | `situacao` | `str()` ou `None` |
+| `cd_escola` | `ue_codigo` | `str()` ou `None` |
+| `dt_atualizacao_tabela` | `data_atualizacao` | `make_aware()` ou `None` |
+| `dt_status_turma_escola` | `data_status_turma_escola` | `make_aware()` ou `None` |
+| `dc_serie_ensino` | `serie_ensino` | `strip_str()` ou `None` |
+| CASE sobre `cd_etapa_ensino` | `modalidade` | `str()` (`'EJA'`, `'Fundamental'`, `'Médio'`, `'Infantil'`) ou `None` |
+| CASE sobre `cd_etapa_ensino` + `tp_escola` | `codigo_modalidade` | `int()` (1=EI, 3=EJA, 4=CIEJA, 5=EF, 6=EM) |
+| CASE EJA pelo mês de `dt_inicio_turma` | `semestre` | `int()` (1 ou 2 para EJA; 0 demais) |
+| `cd_etapa_ensino = 13` e `cd_modalidade_ensino = 2` | `ensino_especial` | `bool()` |
+| — | `transferido_em` | `timezone.now()` |

@@ -475,6 +475,78 @@ INNER JOIN pessoa (NOLOCK) pe ON pe.cd_pessoa = ce.cd_pessoa
 WHERE t.tp_escola IN {_TIPOS_ESCOLA_EXTERNOS}
 """
 
+# Alimenta: turma
+# Parâmetros (?):
+#   1 — an_letivo
+#
+# Campos computados na query (não em Python):
+#   Ano            — primeiro char de dc_turma_escola se numérico, senão '0'
+#   Extinta        — st_turma_escola = 'E'
+#   Modalidade     — descrição textual via cd_etapa_ensino
+#   CodigoModalidade — inteiro por etapa/tipo escola
+#   Semestre       — EJA: 1 ou 2 conforme mês de dt_inicio_turma; demais: 0
+#   EnsinoEspecial — cd_etapa_ensino=13 AND cd_modalidade_ensino=2
+SQL_TURMAS = """
+SELECT DISTINCT
+    tur.cd_turma_escola                                                        AS Codigo,
+    tur.an_letivo                                                              AS AnoLetivo,
+    CASE
+        WHEN SUBSTRING(tur.dc_turma_escola, 1, 1) LIKE '%[0-9]%'
+            THEN SUBSTRING(tur.dc_turma_escola, 1, 1)
+        ELSE '0'
+    END                                                                        AS Ano,
+    tur.cd_tipo_turma                                                          AS TipoTurma,
+    tur.dc_turma_escola                                                        AS NomeTurma,
+    tur.cd_duracao                                                             AS DuracaoTurno,
+    tur.cd_tipo_turno                                                          AS TipoTurno,
+    tur.dt_inicio_turma                                                        AS DataInicioTurma,
+    tur.dt_fim                                                                 AS DataFim,
+    CASE WHEN tur.st_turma_escola = 'E' THEN 1 ELSE 0 END                     AS Extinta,
+    tur.st_turma_escola                                                        AS Situacao,
+    tur.cd_escola                                                              AS UeCodigo,
+    tur.dt_atualizacao_tabela                                                  AS DataAtualizacao,
+    tur.dt_status_turma_escola                                                 AS DataStatusTurmaEscola,
+    se.dc_serie_ensino                                                         AS SerieEnsino,
+    CASE
+        WHEN ee.cd_etapa_ensino IN (2, 3, 7, 11)     THEN 'EJA'
+        WHEN ee.cd_etapa_ensino IN (4, 5, 12, 13)    THEN 'Fundamental'
+        WHEN ee.cd_etapa_ensino IN (6, 7, 8, 14, 17) THEN 'Médio'
+        WHEN ee.cd_etapa_ensino IN (1, 10)            THEN 'Infantil'
+        ELSE NULL
+    END                                                                        AS Modalidade,
+    CASE
+        WHEN ee.cd_etapa_ensino IN (1, 10)
+            OR (tur.cd_tipo_turma <> 1 AND esc.tp_escola IN (10,11,12,14,15,18,26))
+            OR (tur.cd_tipo_turma <> 1 AND esc.tp_escola IN (2,17,28,30,31))  THEN 1
+        WHEN ee.cd_etapa_ensino IN (2, 3, 7, 11)                              THEN 3
+        WHEN ee.cd_etapa_ensino IN (4, 5, 12, 13)                             THEN 5
+        WHEN ee.cd_etapa_ensino IN (6, 7, 8, 14, 17)                         THEN 6
+        WHEN tur.cd_tipo_turma = 7                                            THEN 6
+        WHEN esc.tp_escola = 13                                               THEN 4
+        ELSE 0
+    END                                                                        AS CodigoModalidade,
+    CASE
+        WHEN ee.cd_etapa_ensino IN (2, 3, 7, 11)
+            THEN IIF(DATEPART(MONTH, tur.dt_inicio_turma) > 6, 2, 1)
+        ELSE 0
+    END                                                                        AS Semestre,
+    IIF((se.cd_etapa_ensino = 13) AND (se.cd_modalidade_ensino = 2), 1, 0)    AS EnsinoEspecial
+
+FROM turma_escola (NOLOCK) tur
+INNER JOIN escola (NOLOCK) esc
+    ON esc.cd_escola = tur.cd_escola
+LEFT JOIN serie_turma_escola (NOLOCK) ste
+    ON ste.cd_turma_escola = tur.cd_turma_escola AND ste.dt_fim IS NULL
+LEFT JOIN serie_ensino (NOLOCK) se
+    ON se.cd_serie_ensino = ste.cd_serie_ensino
+LEFT JOIN etapa_ensino (NOLOCK) ee
+    ON ee.cd_etapa_ensino = se.cd_etapa_ensino
+
+WHERE tur.an_letivo = ?
+  AND tur.cd_tipo_turma <> 4
+  AND tur.st_turma_escola IN ('O', 'A', 'E', 'C')
+"""
+
 SQL_COMPONENTES_NAO_CANCELADOS = """
 SELECT
     cd_componente_curricular              AS Codigo,

@@ -17,9 +17,12 @@ A ordem abaixo é exatamente a que o método `executar` aplica em `EtlPedagogico
 ## Fase 5 — sem dependências internas
 5. `grade_curricular_serie`
 
+## Fase 6 — sem dependências internas
+6. `turma`
+
 ---
 
-> **Nota:** as fases 2 a 5 são independentes entre si no banco de destino. A ordem é mantida por conveniência operacional e para garantir que o lookup A3 (carregado uma vez antes da fase 2) esteja disponível sem recarga.
+> **Nota:** as fases 2 a 6 são independentes entre si no banco de destino. A ordem é mantida por conveniência operacional e para garantir que o lookup A3 (carregado uma vez antes da fase 2) esteja disponível sem recarga.
 
 ## Diagrama
 
@@ -33,7 +36,8 @@ digraph G {
     F3 [label="Fase 3\nagrupamentos TS\n(2 tabelas)"];
     F4 [label="Fase 4\ncomponente_inicio_turma"];
     F5 [label="Fase 5\ngrade_curricular_serie"];
+    F6 [label="Fase 6\nturma"];
 
-    F1 -> F2 -> F3 -> F4 -> F5;
+    F1 -> F2 -> F3 -> F4 -> F5 -> F6;
 }
 ```
