@@ -23,6 +23,9 @@ python manage.py migrate --database=alunos_db
 echo "==> migrate pedagogico_db"
 python manage.py migrate --database=pedagogico_db
 
+echo "==> loaddata pedagogico_db"
+python manage.py loaddata componente_curricular_pap regencia_componente_curricular turma_itinerario_ensino_medio --database=pedagogico_db
+
 echo "==> migrate programas_db"
 python manage.py migrate --database=programas_db
 

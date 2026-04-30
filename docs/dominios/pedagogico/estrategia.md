@@ -12,13 +12,12 @@ O controle incremental é feito por hash SHA-256 dos `update_fields` de cada lin
 | `componente_curricular_por_turma` | `(codigo, turma_codigo, professor)` |
 | `agrupamento_atribuicao_territorio_saber` | `cod_agrupamento` |
 | `componente_curricular_agrupamento` | `(componente_codigo, turma_codigo, codigo_agrupamento)` |
-| `componente_curricular_regencia` | `(codigo, turma_codigo, professor, ano_letivo)` |
-| `dados_aula_turma` | `(componente_codigo, turma_codigo)` |
-| `componente_curricular_por_ano_letivo` | `(codigo_componente_curricular, ano_letivo, modalidade)` |
+| `componente_inicio_turma` | `(componente_codigo, turma_codigo)` |
+| `grade_curricular_serie` | `(codigo_componente_curricular, ano_letivo, modalidade)` |
 
 ## Tratamento de `None` no transform
 
-Fases 2, 4 e 6 podem emitir `None` do transform quando a linha está incompleta (ex: `codigo` ou `turma_codigo` nulos). O método `_sync_batch` é sobrescrito em `EtlPedagogicoService` para filtrar esses `None` antes de passar ao batch.
+Fases 2 e 5 podem emitir `None` do transform quando a linha está incompleta (ex: `codigo` ou `turma_codigo` nulos). O método `_processar_batch` é sobrescrito em `EtlPedagogicoService` para filtrar esses `None` antes de passar ao batch.
 
 ## Fase 3 — escrita em duas tabelas
 

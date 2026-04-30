@@ -4,10 +4,11 @@ from apps.pedagogico.models import (
     AgrupamentoAtribuicaoTerritorioSaber,
     ComponenteCurricular,
     ComponenteCurricularAgrupamento,
-    ComponenteCurricularPorAnoLetivo,
     ComponenteCurricularPorTurma,
-    ComponenteCurricularRegencia,
-    DadosAulaTurma,
+    ComponenteInicioTurma,
+    GradeCurricularSerie,
+    Turma,
+    TurmaItinerarioEnsinoMedio,
 )
 
 
@@ -41,19 +42,8 @@ class PedagogicoModelsTest(TestCase):
         )
         self.assertEqual(str(obj), "componente=300 turma=T2 agrupamento=999")
 
-    def test_componente_curricular_regencia_str(self) -> None:
-        obj = ComponenteCurricularRegencia(
-            codigo=400,
-            descricao="Ciências",
-            territorio_saber=True,
-            componente_planejamento_regencia=False,
-            ano_turma="5",
-            ano_letivo=2025,
-        )
-        self.assertEqual(str(obj), "400 ano_turma=5 ano_letivo=2025")
-
     def test_dados_aula_turma_str(self) -> None:
-        obj = DadosAulaTurma(
+        obj = ComponenteInicioTurma(
             componente_codigo="500",
             componente_descricao="História",
             turma_codigo="T3",
@@ -61,7 +51,7 @@ class PedagogicoModelsTest(TestCase):
         self.assertEqual(str(obj), "500 turma=T3")
 
     def test_componente_curricular_por_ano_letivo_str(self) -> None:
-        obj = ComponenteCurricularPorAnoLetivo(
+        obj = GradeCurricularSerie(
             codigo_componente_curricular=600,
             descricao_componente_curricular="Geografia",
             ano_letivo=2025,
@@ -80,3 +70,17 @@ class PedagogicoModelsTest(TestCase):
         self.assertEqual(
             str(obj), "agrupamento=777 territorio=88 ano_letivo=2025"
         )
+
+    def test_turma_str(self) -> None:
+        obj = Turma(
+            codigo=123456,
+            nome_turma="5A Manhã",
+            tipo_turma=1,
+            ano_letivo=2025,
+            ue_codigo="001234",
+        )
+        self.assertEqual(str(obj), "123456 - 5A Manhã")
+
+    def test_turma_itinerario_ensino_medio_str(self) -> None:
+        obj = TurmaItinerarioEnsinoMedio(nome="Itinerário A", serie="3")
+        self.assertEqual(str(obj), "Itinerário A")

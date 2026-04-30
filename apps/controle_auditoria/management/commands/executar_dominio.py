@@ -31,6 +31,22 @@ class Command(BaseCommand):
         parser.add_argument("--volume", type=int, default=100)
         parser.add_argument("--offset", type=int, default=0)
         parser.add_argument("--continuar", action="store_true")
+        parser.add_argument(
+            "--ano-letivo",
+            type=int,
+            default=None,
+            help=(
+                "(pedagogico) Processa apenas anos letivos "
+                "a partir deste valor."
+            ),
+        )
+        parser.add_argument(
+            "--fases",
+            nargs="+",
+            default=None,
+            metavar="FASE",
+            help="Executa apenas as fases informadas (pelo nome).",
+        )
 
     def handle(self, *args: Any, **options: Any) -> None:
         """Executa o ETL do dominio especificado."""
@@ -38,6 +54,8 @@ class Command(BaseCommand):
         volume = options["volume"]
         offset = options["offset"]
         continuar = options["continuar"]
+        ano_letivo = options.get("ano_letivo")
+        fases = options.get("fases")
 
         if dominio == "sinc_rec_db":
             exibir_validacao_sinc_rec_db()
@@ -52,4 +70,8 @@ class Command(BaseCommand):
         argumentos = ["--volume", str(volume), "--offset", str(offset)]
         if continuar:
             argumentos.append("--continuar")
+        if ano_letivo is not None and dominio == "pedagogico":
+            argumentos += ["--ano-letivo", str(ano_letivo)]
+        if fases:
+            argumentos += ["--fases", *fases]
         call_command(comando_etl, *argumentos)

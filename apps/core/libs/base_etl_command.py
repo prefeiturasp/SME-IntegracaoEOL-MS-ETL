@@ -60,7 +60,10 @@ class BaseEtlCommand(BaseCommand):
             "--fase",
             type=int,
             default=0,
-            help="Forçar início a partir desta fase (ignora checkpoint se > 0).",
+            help=(
+                "Forçar início a partir desta fase "
+                "(ignora checkpoint se > 0)."
+            ),
         )
         parser.add_argument(
             "--carga-inicial",
@@ -76,16 +79,29 @@ class BaseEtlCommand(BaseCommand):
             action="store_true",
             help="Lança a execução via Celery (Assíncrono).",
         )
+        parser.add_argument(
+            "--fases",
+            nargs="+",
+            default=None,
+            metavar="FASE",
+            help=(
+                "Executa apenas as fases informadas (pelo nome). "
+                "Ex: --fases turma componente_curricular"
+            ),
+        )
 
     def handle(self, *args: Any, **options: Any) -> None:
         """Execução padronizada do fluxo de ETL (Sync ou Async).
 
         O job_name é derivado do módulo da subclasse concreta, não da base.
         O execution_id só fica disponível após iniciar_execucao, por isso o
-        contexto do logger é atualizado via update_context logo após o registro.
+        contexto do logger é atualizado via update_context logo após o
+        registro.
         """
         repositorio = RepositorioAuditoriaPostgres()
-        fase_inicial, token_ant = self._obter_ponto_partida(repositorio, **options)
+        fase_inicial, token_ant = self._obter_ponto_partida(
+            repositorio, **options
+        )
 
         job_name = type(self).__module__.split(".")[-1]
         self._etl_logger = ContextualLogger.get_etl_logger(
@@ -114,7 +130,9 @@ class BaseEtlCommand(BaseCommand):
         """Lança execução assíncrona via Orquestrador."""
         from apps.core.libs.base_etl_orquestrador import GenericEtlOrquestrador
 
-        orquestrador_class = getattr(self, "orquestrador_class", GenericEtlOrquestrador)
+        orquestrador_class = getattr(
+            self, "orquestrador_class", GenericEtlOrquestrador
+        )
         orquestrador = orquestrador_class(
             dominio=self.dominio,
             service_class=self.service_class,
@@ -129,6 +147,10 @@ class BaseEtlCommand(BaseCommand):
             extra={"etapa": "celery", "status": "RUNNING"},
         )
 
+    def _extra_service_kwargs(self, **options: Any) -> dict[str, Any]:
+        """Kwargs extras para o service. Sobrescrever nas subclasses."""
+        return {}
+
     def _handle_sync(
         self,
         fase_inicial: int,
@@ -138,11 +160,14 @@ class BaseEtlCommand(BaseCommand):
         **options: Any,
     ) -> None:
         """Execução síncrona local."""
+        fases = options.get("fases")
         servico = self.service_class(
             db_alias=f"{self.dominio}_db",
             id_execucao=id_execucao,
             repositorio_auditoria=repositorio,
             primeiro_run=options.get("carga_inicial", False),
+            **({"fases": fases} if fases else {}),
+            **self._extra_service_kwargs(**options),
         )
 
         try:
@@ -232,7 +257,11 @@ class BaseEtlCommand(BaseCommand):
         total = sum(resultado.values())
         self._etl_logger.info(
             "ETL concluído com sucesso.",
-            extra={"etapa": "conclusao", "status": "SUCCESS", "records_written": total},
+            extra={
+                "etapa": "conclusao",
+                "status": "SUCCESS",
+                "records_written": total,
+            },
         )
 
     def _finalizar_com_erro(

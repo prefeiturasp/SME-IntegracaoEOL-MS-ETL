@@ -10,18 +10,13 @@ Estratégia de escrita: upsert incremental com hash SHA-256 via BaseEtlService.
     ComponenteCurricularAgrupamento — unique: (componente_codigo,
                                               turma_codigo, codigo_agrupamento)
     ComponenteCurricularPorTurma   — unique: (codigo, turma_codigo, professor)
-    ComponenteCurricularRegencia   — unique: (codigo, turma_codigo,
-                                             professor, ano_letivo)
-    DadosAulaTurma                 — unique: (componente_codigo, turma_codigo)
-    ComponenteCurricularPorAnoLetivo — unique: (codigo_componente_curricular,
+    ComponenteInicioTurma          — unique: (componente_codigo, turma_codigo)
+    GradeCurricularSerie — unique: (codigo_componente_curricular,
                                                 ano_letivo, modalidade)
 """
 
-import hashlib
 import logging
 from collections.abc import Callable, Iterator
-from datetime import datetime
-from itertools import groupby
 from typing import Any, cast
 from uuid import UUID
 
@@ -32,38 +27,39 @@ from apps.core.libs.base_etl_service import (
     PhaseConfig,
     PipelineMetrics,
 )
-from apps.core.libs.helpers import make_aware
 from apps.core.libs.thread_processor import calcular_hash
 from apps.eol_connection.libs.servico_eol import EOLService
 from apps.pedagogico.dtos.model_in import (
     AtribuicaoTerritorioSaberIn,
     ComponenteCurricularSimplesIn,
-    ComponentePorAnoLetivoIn,
+    ComponenteInicioTurmaIn,
     ComponentePorTurmaIn,
-    ComponenteRegenciaIn,
-    DadosAulaTurmaIn,
-    DisciplinaEolIn,
+    GradeCurricularSerieIn,
     RegenciaComponenteCurricularIn,
+    TurmaIn,
 )
 from apps.pedagogico.models import (
     AgrupamentoAtribuicaoTerritorioSaber,
     ComponenteCurricular,
     ComponenteCurricularAgrupamento,
-    ComponenteCurricularPorAnoLetivo,
     ComponenteCurricularPorTurma,
-    ComponenteCurricularRegencia,
-    DadosAulaTurma,
+    ComponenteInicioTurma,
+    GradeCurricularSerie,
+    Turma,
 )
 from apps.pedagogico.queries import (
     SQL_ANOS_LETIVOS,
     SQL_ATRIBUICOES_TERRITORIO_SABER,
-    SQL_COMPONENTE_CURRICULAR_REGENCIA,
+    SQL_COMPONENTE_INICIO_TURMA,
     SQL_COMPONENTES_NAO_CANCELADOS,
-    SQL_COMPONENTES_POR_ANO_LETIVO,
     SQL_COMPONENTES_POR_TURMA,
-    SQL_DADOS_AULA_TURMA,
-    SQL_LOOKUP_DISCIPLINAS,
+    SQL_GRADE_CURRICULAR_SERIE,
     SQL_LOOKUP_PLANEJAMENTO_REGENCIA,
+    SQL_TURMAS,
+)
+from apps.pedagogico.services.agrupamentos import (
+    agrupar_atribuicoes_territorio_saber,
+    montar_indices_agrupamentos_existentes,
 )
 
 logger = logging.getLogger(__name__)
@@ -75,11 +71,8 @@ A3ExactKey = tuple[int, Any, Any]
 A3ExactSet = set[A3ExactKey]
 A3FallbackSet = set[int]
 
-_AGRUPAMENTO_ID_INICIAL = 800_000
-_AGRUPAMENTO_ID_MAX = 2**60
-
 # ---------------------------------------------------------------------------
-# Helpers de agrupamento — território saber
+# Helpers de planejamento de regência
 # ---------------------------------------------------------------------------
 
 
@@ -107,157 +100,6 @@ def _planejamento_regencia(
     if (codigo, turno_turma, ano_turma) in exact:
         return True
     return codigo in fallback
-
-
-def _cod_agrupamento(
-    codigo_turma: Any,
-    codigo_territorio_saber: Any,
-    codigo_experiencia_pedagogica: Any,
-    rf_professor: Any,
-    data_atribuicao: Any,
-    componentes_ordenados: list[int],
-) -> int:
-    """Gera um ID estável para o agrupamento de território do saber.
-
-    O resultado é sempre >= _AGRUPAMENTO_ID_INICIAL (800_000), constante
-    equivalente a COMPONENTE_AGRUPAMENTO_TERRITORIO_SABER_ID_INICIAL do C#.
-    Esse piso existe para evitar colisão com IDs reais de componentes
-    curriculares do EOL, que ficam abaixo desse valor.
-
-    O hash é calculado sobre a chave natural do agrupamento (turma, território,
-    experiência, professor, data de atribuição e lista ordenada de
-    componentes), garantindo determinismo independente da ordem das rows.
-    """
-    csv = ",".join(str(c) for c in componentes_ordenados)
-    chave = (
-        f"{codigo_turma}_{codigo_territorio_saber}_"
-        f"{codigo_experiencia_pedagogica}_{rf_professor}_"
-        f"{data_atribuicao}_{csv}"
-    )
-    raw = int(hashlib.md5(chave.encode()).hexdigest()[:15], 16)  # NOSONAR
-    return _AGRUPAMENTO_ID_INICIAL + (
-        raw % (_AGRUPAMENTO_ID_MAX - _AGRUPAMENTO_ID_INICIAL)
-    )
-
-
-def _chave_grupo(row: AtribuicaoTerritorioSaberIn) -> tuple:
-    return (
-        str(row.codigo_turma),
-        int(row.codigo_territorio_saber),
-        (
-            int(row.codigo_experiencia_pedagogica)
-            if row.codigo_experiencia_pedagogica is not None
-            else -1
-        ),
-        str(row.rf_professor) if row.rf_professor is not None else "",
-        row.data_atribuicao or datetime.min,
-        (
-            row.data_disponibilizacao.date()
-            if row.data_disponibilizacao
-            else None
-        ),
-    )
-
-
-def _agrupar(
-    rows: list[AtribuicaoTerritorioSaberIn],
-    transferido_em: Any,
-) -> tuple[
-    list[AgrupamentoAtribuicaoTerritorioSaber],
-    list[ComponenteCurricularAgrupamento],
-]:
-    agrupamentos: list[AgrupamentoAtribuicaoTerritorioSaber] = []
-    itens: list[ComponenteCurricularAgrupamento] = []
-
-    for _, grupo in groupby(sorted(rows, key=_chave_grupo), key=_chave_grupo):
-        grupo_list = list(grupo)
-        componentes = sorted(
-            {int(r.codigo_componente_curricular) for r in grupo_list}
-        )
-
-        if len(componentes) <= 1:
-            continue
-
-        primeiro = grupo_list[0]
-        cod_agrup = _cod_agrupamento(
-            primeiro.codigo_turma,
-            primeiro.codigo_territorio_saber,
-            primeiro.codigo_experiencia_pedagogica,
-            primeiro.rf_professor,
-            primeiro.data_atribuicao,
-            componentes,
-        )
-
-        dt_inicio = (
-            make_aware(primeiro.data_atribuicao)
-            if primeiro.data_atribuicao
-            else None
-        )
-        dt_fim_raw = max(
-            (
-                r.data_disponibilizacao
-                for r in grupo_list
-                if r.data_disponibilizacao
-            ),
-            default=None,
-        )
-        dt_fim = make_aware(dt_fim_raw) if dt_fim_raw else None
-        dt_fim_turma = (
-            make_aware(primeiro.data_fim_turma)
-            if primeiro.data_fim_turma
-            else None
-        )
-
-        agrupamentos.append(
-            AgrupamentoAtribuicaoTerritorioSaber(
-                cod_agrupamento=cod_agrup,
-                cod_territorio_saber=primeiro.codigo_territorio_saber,
-                cod_experiencia_pedagogica=(
-                    primeiro.codigo_experiencia_pedagogica
-                ),
-                dt_inicio_atribuicao=dt_inicio,
-                ano_atribuicao=dt_inicio.year if dt_inicio else None,
-                dt_fim_atribuicao=dt_fim,
-                dt_fim_turma=dt_fim_turma,
-                rf_professor=primeiro.rf_professor,
-                cod_turma=str(primeiro.codigo_turma),
-                cod_componentes_curriculares=",".join(
-                    str(c) for c in componentes
-                ),
-                ano_letivo=primeiro.ano_letivo,
-                cod_motivo_disponibilizacao=(
-                    primeiro.codigo_motivo_disponibilizacao
-                ),
-                desc_territorio_saber=primeiro.descricao_territorio_saber,
-                desc_experiencia_pedagogica=(
-                    primeiro.descricao_experiencia_pedagogica
-                ),
-                encerramento_atribuicao_agrupamento_atualizado=None,
-                transferido_em=transferido_em,
-            )
-        )
-
-        for cod in componentes:
-            itens.append(
-                ComponenteCurricularAgrupamento(
-                    componente_codigo=cod,
-                    turma_codigo=str(primeiro.codigo_turma),
-                    codigo_agrupamento=cod_agrup,
-                    rf_professor=primeiro.rf_professor,
-                    ano_letivo=primeiro.ano_letivo,
-                    transferido_em=transferido_em,
-                )
-            )
-
-    agrupamentos = list({a.cod_agrupamento: a for a in agrupamentos}.values())
-    itens = list(
-        {
-            (i.componente_codigo, i.turma_codigo, i.codigo_agrupamento): i
-            for i in itens
-        }.values()
-    )
-
-    return agrupamentos, itens
 
 
 # ---------------------------------------------------------------------------
@@ -309,20 +151,23 @@ class EtlPedagogicoService(BaseEtlService):
         repositorio_auditoria: Any | None = None,
         primeiro_run: bool = False,
         eol: EOLService | None = None,
+        ano_letivo: int | None = None,
+        fases: list[str] | None = None,
     ) -> None:
         super().__init__(
             db_alias=db_alias,
             id_execucao=id_execucao,
             repositorio_auditoria=repositorio_auditoria,
             primeiro_run=primeiro_run,
+            fases=fases,
         )
         self.eol = eol or EOLService()
         self._agora = timezone.now()
-        self._a2: dict[int, DisciplinaEolIn] = {}
         self._exact: A3ExactSet = set()
         self._fallback: A3FallbackSet = set()
         self._total_itens_agrupamento: int = 0
         self._cache_anos: list[int] | None = None
+        self._ano_letivo: int | None = ano_letivo
         self._fases = self._init_fases()
 
     # ------------------------------------------------------------------
@@ -358,11 +203,9 @@ class EtlPedagogicoService(BaseEtlService):
         transform_factories = {
             "componente_curricular": self._transform_componente_curricular,
             "componente_por_turma": self._transform_componente_por_turma,
-            "componente_regencia": self._transform_componente_regencia,
-            "dados_aula_turma": self._transform_dados_aula_turma,
-            "componente_por_ano_letivo": (
-                self._transform_componente_por_ano_letivo
-            ),
+            "componente_inicio_turma": self._transform_componente_inicio_turma,
+            "grade_curricular_serie": self._transform_grade_curricular_serie,
+            "turma": self._transform_componente_curricular,
         }
         factory = transform_factories.get(config.nome)
         if factory is None:
@@ -390,7 +233,6 @@ class EtlPedagogicoService(BaseEtlService):
         agora: Any,
         hash_fields: list[str],
     ) -> Callable[[tuple[Any, ...]], TransformResult]:
-        a2 = self._a2
         exact = self._exact
         fallback = self._fallback
 
@@ -399,37 +241,6 @@ class EtlPedagogicoService(BaseEtlService):
             if dto.codigo is None or dto.turma_codigo is None:
                 return None
             codigo = int(dto.codigo)
-            disc = a2.get(codigo)
-            regencia = bool(disc.eh_regencia) if disc else False
-            territorio = bool(disc.eh_territorio) if disc else False
-            plan = _planejamento_regencia(
-                codigo, dto.turno_turma, dto.ano_turma, exact, fallback
-            )
-            obj = model_class(
-                **dto.to_domain(agora, regencia, territorio, plan)
-            )
-            pk = (
-                f"{obj.codigo}"
-                f"-{obj.turma_codigo or ''}"
-                f"-{obj.professor or ''}"
-            )
-            return pk, calcular_hash(obj, hash_fields), obj
-
-        return transform
-
-    def _transform_componente_regencia(
-        self,
-        dto_in: Any,
-        model_class: Any,
-        agora: Any,
-        hash_fields: list[str],
-    ) -> Callable[[tuple[Any, ...]], TransformResult]:
-        exact = self._exact
-        fallback = self._fallback
-
-        def transform(row: tuple[Any, ...]) -> TransformResult:
-            dto = dto_in(*row)
-            codigo = int(dto.codigo_componente_curricular)
             plan = _planejamento_regencia(
                 codigo, dto.turno_turma, dto.ano_turma, exact, fallback
             )
@@ -438,13 +249,12 @@ class EtlPedagogicoService(BaseEtlService):
                 f"{obj.codigo}"
                 f"-{obj.turma_codigo or ''}"
                 f"-{obj.professor or ''}"
-                f"-{obj.ano_letivo}"
             )
             return pk, calcular_hash(obj, hash_fields), obj
 
         return transform
 
-    def _transform_dados_aula_turma(
+    def _transform_componente_inicio_turma(
         self,
         dto_in: Any,
         model_class: Any,
@@ -459,7 +269,7 @@ class EtlPedagogicoService(BaseEtlService):
 
         return transform
 
-    def _transform_componente_por_ano_letivo(
+    def _transform_grade_curricular_serie(
         self,
         dto_in: Any,
         model_class: Any,
@@ -513,26 +323,22 @@ class EtlPedagogicoService(BaseEtlService):
     def _anos_letivos(self) -> list[int]:
         """Retorna anos letivos do EOL, com cache por instância."""
         if self._cache_anos is None:
-            self._cache_anos = [
+            anos = [
                 int(r[0])
                 for chunk in self.eol.iter_query(SQL_ANOS_LETIVOS)
                 for r in chunk
             ]
+            if self._ano_letivo is not None:
+                anos = [a for a in anos if a >= self._ano_letivo]
+            self._cache_anos = anos
         return self._cache_anos
 
     def _carregar_lookups(self) -> None:
-        """Pré-carrega disciplinas e índice de regência.
+        """Pré-carrega índice de planejamento de regência.
 
         Chamado uma vez em ``executar()`` antes das fases que precisam
         de lookup (componente_por_turma e componente_regencia).
         """
-        a2: dict[int, DisciplinaEolIn] = {}
-        for chunk in self.eol.iter_query(SQL_LOOKUP_DISCIPLINAS):
-            for r in chunk:
-                obj = DisciplinaEolIn(*r)
-                a2[int(obj.id_componente_curricular)] = obj
-        self._a2 = a2
-
         rows_a3: list[RegenciaComponenteCurricularIn] = []
         for chunk in self.eol.iter_query(SQL_LOOKUP_PLANEJAMENTO_REGENCIA):
             for r in chunk:
@@ -540,8 +346,7 @@ class EtlPedagogicoService(BaseEtlService):
         self._exact, self._fallback = _build_a3_index(rows_a3)
 
         logger.info(
-            "[ETL PEDAG] Lookups: %d disciplinas, %d exact, %d fallback.",
-            len(self._a2),
+            "[ETL PEDAG] Lookups: %d exact, %d fallback.",
             len(self._exact),
             len(self._fallback),
         )
@@ -569,7 +374,18 @@ class EtlPedagogicoService(BaseEtlService):
             for r in chunk:
                 rows.append(AtribuicaoTerritorioSaberIn(*r))
 
-        agrupamentos, itens = _agrupar(rows, agora)
+        (
+            agrupamentos_exatos,
+            agrupamentos_historicos,
+            ultimo_id_gerado,
+        ) = montar_indices_agrupamentos_existentes(self.db_alias)
+        agrupamentos, itens = agrupar_atribuicoes_territorio_saber(
+            rows,
+            agora,
+            agrupamentos_exatos=agrupamentos_exatos,
+            agrupamentos_historicos=agrupamentos_historicos,
+            ultimo_id_gerado=ultimo_id_gerado,
+        )
 
         hash_agrup = sorted(_UPDATE_AGRUP)
         hash_item = sorted(_UPDATE_ITEM)
@@ -697,39 +513,12 @@ class EtlPedagogicoService(BaseEtlService):
                 unique_fields=("cod_agrupamento",),
             ),
             PhaseConfig(
-                nome="componente_regencia",
-                sql=SQL_COMPONENTE_CURRICULAR_REGENCIA,
-                table_name="componente_curricular_regencia",
-                source_table="componente_curricular_regencia",
-                model_class=ComponenteCurricularRegencia,
-                dto_in=ComponenteRegenciaIn,
-                pk_field=["codigo", "turma_codigo", "professor", "ano_letivo"],
-                update_fields=(
-                    "codigo_componente_territorio_saber",
-                    "descricao",
-                    "territorio_saber",
-                    "tipo_escola",
-                    "turno_turma",
-                    "componente_planejamento_regencia",
-                    "ano_turma",
-                    "inicio_atribuicao",
-                    "fim_atribuicao",
-                    "transferido_em",
-                ),
-                unique_fields=(
-                    "codigo",
-                    "turma_codigo",
-                    "professor",
-                    "ano_letivo",
-                ),
-            ),
-            PhaseConfig(
-                nome="dados_aula_turma",
-                sql=SQL_DADOS_AULA_TURMA,
-                table_name="dados_aula_turma",
-                source_table="dados_aula_turma",
-                model_class=DadosAulaTurma,
-                dto_in=DadosAulaTurmaIn,
+                nome="componente_inicio_turma",
+                sql=SQL_COMPONENTE_INICIO_TURMA,
+                table_name="componente_inicio_turma",
+                source_table="componente_inicio_turma",
+                model_class=ComponenteInicioTurma,
+                dto_in=ComponenteInicioTurmaIn,
                 pk_field=["componente_codigo", "turma_codigo"],
                 update_fields=(
                     "componente_descricao",
@@ -742,12 +531,12 @@ class EtlPedagogicoService(BaseEtlService):
                 unique_fields=("componente_codigo", "turma_codigo"),
             ),
             PhaseConfig(
-                nome="componente_por_ano_letivo",
-                sql=SQL_COMPONENTES_POR_ANO_LETIVO,
-                table_name="componente_curricular_por_ano_letivo",
-                source_table="componente_curricular_por_ano_letivo",
-                model_class=ComponenteCurricularPorAnoLetivo,
-                dto_in=ComponentePorAnoLetivoIn,
+                nome="grade_curricular_serie",
+                sql=SQL_GRADE_CURRICULAR_SERIE,
+                table_name="grade_curricular_serie",
+                source_table="grade_curricular_serie",
+                model_class=GradeCurricularSerie,
+                dto_in=GradeCurricularSerieIn,
                 pk_field=[
                     "codigo_componente_curricular",
                     "ano_letivo",
@@ -766,6 +555,37 @@ class EtlPedagogicoService(BaseEtlService):
                     "modalidade",
                 ),
             ),
+            PhaseConfig(
+                nome="turma",
+                sql=SQL_TURMAS,
+                table_name="turma",
+                source_table="turma_escola",
+                model_class=Turma,
+                dto_in=TurmaIn,
+                pk_field="codigo",
+                update_fields=(
+                    "ano_letivo",
+                    "ano",
+                    "tipo_turma",
+                    "nome_turma",
+                    "duracao_turno",
+                    "tipo_turno",
+                    "data_inicio_turma",
+                    "data_fim",
+                    "extinta",
+                    "situacao",
+                    "ue_codigo",
+                    "data_atualizacao",
+                    "data_status_turma_escola",
+                    "serie_ensino",
+                    "modalidade",
+                    "codigo_modalidade",
+                    "semestre",
+                    "ensino_especial",
+                    "transferido_em",
+                ),
+                unique_fields=("codigo",),
+            ),
         ]
 
     # ------------------------------------------------------------------
@@ -777,17 +597,21 @@ class EtlPedagogicoService(BaseEtlService):
 
         Fases:
             1 — componente_curricular
-            2 — componente_por_turma          (por ano letivo, com lookups)
+            2 — componente_por_turma          (por ano letivo)
             3 — agrupamento_territorio_saber  (agregação → 2 tabelas)
-            4 — componente_regencia           (por ano letivo, com lookups)
-            5 — dados_aula_turma              (por ano letivo)
-            6 — componente_por_ano_letivo     (por ano letivo)
+            4 — componente_inicio_turma       (por ano letivo)
+            5 — grade_curricular_serie        (por ano letivo)
+            6 — turma                         (por ano letivo)
         """
         self._agora = timezone.now()
         self._cache_anos = None  # reseta cache de anos para o run
 
-        # Lookups necessários nas fases 2 e 4
-        if fase_inicial <= 4:
+        # Lookups necessários na fase 2 (componente_por_turma)
+        fase2_selecionada = (
+            self._fases_selecionadas is None
+            or "componente_por_turma" in self._fases_selecionadas
+        )
+        if fase_inicial <= 2 and fase2_selecionada:
             self._carregar_lookups()
 
         resultados: dict[str, int] = {}
@@ -797,6 +621,16 @@ class EtlPedagogicoService(BaseEtlService):
 
         for i, config in enumerate(self._fases, 1):
             if i < fase_inicial:
+                continue
+            if (
+                self._fases_selecionadas is not None
+                and config.nome not in self._fases_selecionadas
+            ):
+                logger.info(
+                    "[ETL PEDAG] Fase %d ignorada (não selecionada): %s",
+                    i,
+                    config.nome,
+                )
                 continue
 
             logger.info("[ETL PEDAG] === Fase %d: %s ===", i, config.nome)

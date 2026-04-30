@@ -36,6 +36,12 @@ class ComponentePorTurmaIn:
     descricao: Any
     """dc_componente_curricular."""
 
+    eh_regencia: Any
+    """1 se o componente curricular está na lista hardcoded de regência."""
+
+    eh_territorio: Any
+    """1 se o componente existe em turma_grade_territorio_experiencia."""
+
     tipo_escola: Any
     """tp_escola."""
 
@@ -60,11 +66,11 @@ class ComponentePorTurmaIn:
     def to_domain(
         self,
         transferido_em: Any,
-        regencia: bool = False,
-        territorio: bool = False,
         planejamento: bool = False,
     ) -> dict:
         codigo = int(self.codigo)
+        regencia = bool(self.eh_regencia)
+        territorio = bool(self.eh_territorio)
         return {
             "codigo": codigo,
             "descricao": strip_str(self.descricao),
@@ -91,29 +97,6 @@ class ComponentePorTurmaIn:
             "ano_letivo": int(self.ano_letivo),
             "transferido_em": transferido_em,
         }
-
-
-@dataclass
-class DisciplinaEolIn:
-    """Linha bruta da query ObterTodas.
-
-    Usada como lookup para enriquecer os registros do Pipeline A com flags de
-    regência e território.
-    """
-
-    id_componente_curricular: Any
-    """cd_componente_curricular — chave de join com codigo."""
-
-    descricao: Any
-    """dc_componente_curricular."""
-
-    eh_regencia: Any
-    """1 se o codigo está na lista hardcoded de IDs de regência,
-       0 caso contrário."""
-
-    eh_territorio: Any
-    """1 se existe entrada em turma_grade_territorio_experiencia,
-       0 caso contrário."""
 
 
 @dataclass
@@ -190,7 +173,7 @@ class ComponenteRegenciaIn:
 
 
 @dataclass
-class DadosAulaTurmaIn:
+class ComponenteInicioTurmaIn:
     """ObterDadosComponentesCurricularesRegenciaPorUeEAnoLetivoAsync."""
 
     componente_codigo: Any
@@ -223,7 +206,7 @@ class DadosAulaTurmaIn:
 
 
 @dataclass
-class ComponentePorAnoLetivoIn:
+class GradeCurricularSerieIn:
     """ObterComponentesCurricularesEAnosTurmaApiEolPorAnoLetivo."""
 
     codigo_componente_curricular: Any
@@ -261,6 +244,83 @@ class ComponentePorAnoLetivoIn:
                 int(self.modalidade) if self.modalidade is not None else None
             ),
             "ano_letivo": int(self.ano_letivo),
+            "transferido_em": transferido_em,
+        }
+
+
+@dataclass
+class TurmaIn:
+    """Linha bruta da query SQL_TURMAS."""
+
+    codigo: Any
+    ano_letivo: Any
+    ano: Any
+    tipo_turma: Any
+    nome_turma: Any
+    duracao_turno: Any
+    tipo_turno: Any
+    data_inicio_turma: Any
+    data_fim: Any
+    extinta: Any
+    situacao: Any
+    ue_codigo: Any
+    data_atualizacao: Any
+    data_status_turma_escola: Any
+    serie_ensino: Any
+    modalidade: Any
+    codigo_modalidade: Any
+    semestre: Any
+    ensino_especial: Any
+
+    def to_domain(self, transferido_em: Any) -> dict:
+        return {
+            "codigo": int(self.codigo),
+            "ano_letivo": int(self.ano_letivo),
+            "ano": str(self.ano) if self.ano is not None else None,
+            "tipo_turma": int(self.tipo_turma),
+            "nome_turma": strip_str(self.nome_turma),
+            "duracao_turno": (
+                int(self.duracao_turno)
+                if self.duracao_turno is not None
+                else None
+            ),
+            "tipo_turno": (
+                int(self.tipo_turno) if self.tipo_turno is not None else None
+            ),
+            "data_inicio_turma": (
+                make_aware(self.data_inicio_turma)
+                if self.data_inicio_turma
+                else None
+            ),
+            "data_fim": (make_aware(self.data_fim) if self.data_fim else None),
+            "extinta": bool(self.extinta),
+            "situacao": str(self.situacao) if self.situacao else None,
+            "ue_codigo": str(self.ue_codigo) if self.ue_codigo else None,
+            "data_atualizacao": (
+                make_aware(self.data_atualizacao)
+                if self.data_atualizacao
+                else None
+            ),
+            "data_status_turma_escola": (
+                make_aware(self.data_status_turma_escola)
+                if self.data_status_turma_escola
+                else None
+            ),
+            "serie_ensino": (
+                strip_str(self.serie_ensino) if self.serie_ensino else None
+            ),
+            "modalidade": (
+                strip_str(self.modalidade) if self.modalidade else None
+            ),
+            "codigo_modalidade": (
+                int(self.codigo_modalidade)
+                if self.codigo_modalidade is not None
+                else None
+            ),
+            "semestre": (
+                int(self.semestre) if self.semestre is not None else 0
+            ),
+            "ensino_especial": bool(self.ensino_especial),
             "transferido_em": transferido_em,
         }
 
