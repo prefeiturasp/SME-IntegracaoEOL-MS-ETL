@@ -28,6 +28,7 @@ class TipoEscola(models.Model):
     codigo_tipo_escola = models.IntegerField(primary_key=True)
     sigla = models.CharField(max_length=20, null=True, blank=True)  # NOSONAR
     descricao = models.CharField(max_length=200)
+    data_atualizacao = models.DateTimeField(null=True, blank=True)
 
     class Meta:
 
@@ -114,6 +115,8 @@ class UnidadeEducacional(models.Model):
     ano_construcao = models.IntegerField(null=True, blank=True)
     propriedade = models.CharField(max_length=200, null=True, blank=True)  # NOSONAR  # noqa: E501  # fmt: skip
     organizacao_parceira = models.BooleanField(default=False)
+    eh_ceu = models.BooleanField(default=False)
+    data_atualizacao = models.DateTimeField(null=True, blank=True)
     vagas_matutino = models.IntegerField(default=0)
     vagas_vespertino = models.IntegerField(default=0)
     vagas_noturno = models.IntegerField(default=0)
