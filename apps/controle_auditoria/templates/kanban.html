@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+{% load formatadores %}
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
@@ -205,7 +206,7 @@
       <div class="kcard">
         <div class="kcard-header read"><i class="bi bi-database-down"></i> Leitura EOL</div>
         <div class="kcard-body">
-          <div class="kcard-total" style="color:var(--col-read)">{{ item.total_lido }}</div>
+          <div class="kcard-total" style="color:var(--col-read)">{{ item.total_lido|numero_br }}</div>
           <div class="kcard-label">registros lidos</div>
           {% if item.tabelas_lidas %}
           <table class="ktable">
@@ -219,7 +220,7 @@
               {% for tl in item.tabelas_lidas %}
               <tr>
                 <td class="td-name">{{ tl.tabela_origem }}</td>
-                <td class="td-val read-color">{{ tl.linhas_lidas }}</td>
+                <td class="td-val read-color">{{ tl.linhas_lidas|numero_br }}</td>
               </tr>
               {% endfor %}
             </tbody>
@@ -234,7 +235,7 @@
       <div class="kcard">
         <div class="kcard-header hash"><i class="bi bi-shield-check"></i> Hash Control</div>
         <div class="kcard-body">
-          <div class="kcard-total" style="color:var(--col-hash)">{{ item.total_hashes }}</div>
+          <div class="kcard-total" style="color:var(--col-hash)">{{ item.total_hashes|numero_br }}</div>
           <div class="kcard-label">hashes rastreados</div>
           {% if item.hash_por_tabela %}
           <table class="ktable">
@@ -248,7 +249,7 @@
               {% for tabela, qtd in item.hash_por_tabela.items %}
               <tr>
                 <td class="td-name">{{ tabela }}</td>
-                <td class="td-val hash-color">{{ qtd }}</td>
+                <td class="td-val hash-color">{{ qtd|numero_br }}</td>
               </tr>
               {% endfor %}
             </tbody>
@@ -263,7 +264,7 @@
       <div class="kcard">
         <div class="kcard-header write"><i class="bi bi-database-up"></i> Escrita (Upsert)</div>
         <div class="kcard-body">
-          <div class="kcard-total" style="color:var(--col-write)">{{ item.total_escrito }}</div>
+          <div class="kcard-total" style="color:var(--col-write)">{{ item.total_escrito|numero_br }}</div>
           <div class="kcard-label">registros escritos</div>
           {% if item.tabelas_escritas %}
           <table class="ktable">
@@ -280,7 +281,7 @@
                   {{ te.tabela_destino }}
                   <span style="font-size:.65rem;color:#475569">({{ te.modo_escrita }})</span>
                 </td>
-                <td class="td-val write-color">{{ te.linhas_escritas }}</td>
+                <td class="td-val write-color">{{ te.linhas_escritas|numero_br }}</td>
               </tr>
               {% endfor %}
             </tbody>
@@ -296,7 +297,7 @@
         <div class="kcard-header check"><i class="bi bi-bookmark-check"></i> Checkpoint</div>
         <div class="kcard-body">
           {% if item.checkpoint %}
-          <div class="kcard-total" style="color:var(--col-check)">{{ item.checkpoint.token_parada|default:"0" }}</div>
+          <div class="kcard-total" style="color:var(--col-check)">{{ item.checkpoint.token_parada|default:"0"|numero_br }}</div>
           <div class="kcard-label">token acumulado</div>
           <div class="cp-row"><span class="cp-key">situação</span><span class="cp-val">{{ item.checkpoint.ultima_situacao }}</span></div>
           <div class="cp-row"><span class="cp-key">fase</span><span class="cp-val">{{ item.checkpoint.ultima_pagina }}</span></div>
