@@ -33,6 +33,7 @@ SELECT
     tp_escola AS codigo_tipo_escola
   , LTRIM(RTRIM(sg_tp_escola)) AS sigla
   , LTRIM(RTRIM(dc_tipo_escola)) AS descricao
+  , CAST(NULL AS DATETIME) AS data_atualizacao
 FROM tipo_escola
 """
 
@@ -138,6 +139,9 @@ SELECT
   , vuedg.dc_tipo_forma_ocupacao_predio AS propriedade
   , CASE WHEN vuedg.tp_escola IN (11, 12) THEN CAST(1 AS BIT)
          ELSE CAST(0 AS BIT) END AS organizacao_parceira
+  , CASE WHEN COALESCE(vuedg.tp_escola, escola.tp_escola) = 5
+         THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT) END AS eh_ceu
+  , CAST(NULL AS DATETIME) AS data_atualizacao
   , ISNULL((SELECT quantidadeVagaTurno FROM capacidadeVaga
             WHERE cd_escola = vuedg.cd_unidade_educacao
               AND cd_tipo_turno = 1), 0) AS vagas_matutino
@@ -161,7 +165,7 @@ SELECT
   , vcue.cd_cie_unidade_educacao AS codigo_inep
   , vuedg.sg_tipo_situacao_unidade AS status
   , vcue.cd_unidade_administrativa_referencia AS codigo_dre
-  , vuedg.tp_escola AS codigo_tipo_escola
+  , COALESCE(vuedg.tp_escola, escola.tp_escola) AS codigo_tipo_escola
   , vcue.cd_sub_prefeitura AS codigo_sub_prefeitura
 FROM v_cadastro_unidade_educacao vcue
 INNER JOIN unidade_administrativa dre
@@ -243,7 +247,7 @@ class EtlInstitucionalService(BaseEtlService):
                 model_class=TipoEscola,
                 dto_in=TipoEscolaIn,
                 pk_field="codigo_tipo_escola",
-                update_fields=("sigla", "descricao"),
+                update_fields=("sigla", "descricao", "data_atualizacao"),
                 unique_fields=("codigo_tipo_escola",),
                 modo_escrita="upsert",
             ),
@@ -284,6 +288,8 @@ class EtlInstitucionalService(BaseEtlService):
                     "ano_construcao",
                     "propriedade",
                     "organizacao_parceira",
+                    "eh_ceu",
+                    "data_atualizacao",
                     "vagas_matutino",
                     "vagas_vespertino",
                     "vagas_noturno",

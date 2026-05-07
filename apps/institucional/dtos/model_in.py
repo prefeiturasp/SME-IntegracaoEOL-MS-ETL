@@ -1,7 +1,9 @@
 """DTOs de entrada para o domínio Institucional mapeados a partir do EOL."""
 
-from typing import Any
 from dataclasses import dataclass
+from datetime import datetime
+from typing import Any
+
 from apps.core.libs.helpers import strip_str
 
 
@@ -12,13 +14,14 @@ class TipoEscolaIn:
     codigo_tipo_escola: int
     sigla: str | None
     descricao: str
+    data_atualizacao: datetime | None = None
 
     def to_domain(self) -> dict:
-        """Converte para dicionário de persistência no Model TipoEscola."""
         return {
             "codigo_tipo_escola": int(self.codigo_tipo_escola),
             "sigla": strip_str(self.sigla),
             "descricao": strip_str(self.descricao),
+            "data_atualizacao": self.data_atualizacao,
         }
 
 
@@ -31,7 +34,6 @@ class SubprefeituraIn:
     nome: str
 
     def to_domain(self) -> dict:
-        """Converte para dicionário de persistência no Model SubPrefeitura."""
         return {
             "codigo_sub_prefeitura": int(self.codigo_sub_prefeitura),
             "sigla": strip_str(self.sigla),
@@ -50,7 +52,6 @@ class DREIn:
     descricao_unidade_adm: str | None
 
     def to_domain(self) -> dict:
-        """Converte para dicionário de persistência no Model DRE."""
         return {
             "codigo_dre": str(self.codigo_dre),
             "nome": strip_str(self.nome),
@@ -85,6 +86,8 @@ class UnidadeEducacionalIn:
     ano_construcao: int | None
     propriedade: str | None
     organizacao_parceira: bool | int
+    eh_ceu: bool | int
+    data_atualizacao: datetime | None
     vagas_matutino: int | None
     vagas_vespertino: int | None
     vagas_noturno: int | None
@@ -100,8 +103,6 @@ class UnidadeEducacionalIn:
     codigo_ue_integracao: str | None = None
 
     def to_domain(self) -> dict:
-        """Converte para dicionário de persistência no Model UnidadeEducacional."""
-
         def _int(val: Any, default: int | None = None) -> int | None:
             return int(val) if val is not None else default
 
@@ -123,15 +124,15 @@ class UnidadeEducacionalIn:
             "ano_construcao": _int(self.ano_construcao),
             "propriedade": strip_str(self.propriedade),
             "organizacao_parceira": bool(self.organizacao_parceira),
+            "eh_ceu": bool(self.eh_ceu),
+            "data_atualizacao": self.data_atualizacao,
             "vagas_matutino": _int(self.vagas_matutino, 0),
             "vagas_vespertino": _int(self.vagas_vespertino, 0),
             "vagas_noturno": _int(self.vagas_noturno, 0),
             "vagas_intermediario": _int(self.vagas_intermediario, 0),
             "vagas_integral": _int(self.vagas_integral, 0),
             "vagas_total": _int(self.vagas_total, 0),
-            "quantidade_funcionarios": _int(
-                self.quantidade_funcionarios, 0
-            ),
+            "quantidade_funcionarios": _int(self.quantidade_funcionarios, 0),
             "codigo_inep": _int(self.codigo_inep),
             "status": strip_str(self.status),
             "dre_id": str(self.codigo_dre) if self.codigo_dre else None,

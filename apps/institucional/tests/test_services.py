@@ -37,6 +37,8 @@ _ROW_UE = (
     2020,
     "P",
     False,
+    False,
+    None,
     10,
     10,
     0,
@@ -155,7 +157,6 @@ class EtlInstitucionalServiceTestCase(TestCase):
 
         self.mock_cache.get_hash.assert_called_once()
 
-
     @patch.object(EtlInstitucionalService, "sync_batch")
     def test_executar_fase_tipo_escola_chama_sync_batch(
         self, mock_sync: MagicMock
@@ -222,14 +223,14 @@ class EtlInstitucionalServiceTestCase(TestCase):
         with self.assertRaises(RuntimeError):
             self.service._executar_fase(config)
 
-
     def test_executar_chama_cache_antes_da_fase1(self) -> None:
         """executar() pré-carrega cache SSO quando fase_inicial=1."""
-        with patch.object(
-            self.service, "_popular_cache_integracao_ue"
-        ) as mock_pop, patch.object(
-            self.service, "_executar_fase"
-        ) as mock_fase:
+        with (
+            patch.object(
+                self.service, "_popular_cache_integracao_ue"
+            ) as mock_pop,
+            patch.object(self.service, "_executar_fase") as mock_fase,
+        ):
             mock_fase.return_value = PipelineMetrics(total_escritos=0)
             self.service.executar(fase_inicial=1)
 
@@ -237,11 +238,12 @@ class EtlInstitucionalServiceTestCase(TestCase):
 
     def test_executar_nao_chama_cache_se_fase_apos_1(self) -> None:
         """executar() pula pré-carga do cache quando fase_inicial > 1."""
-        with patch.object(
-            self.service, "_popular_cache_integracao_ue"
-        ) as mock_pop, patch.object(
-            self.service, "_executar_fase"
-        ) as mock_fase:
+        with (
+            patch.object(
+                self.service, "_popular_cache_integracao_ue"
+            ) as mock_pop,
+            patch.object(self.service, "_executar_fase") as mock_fase,
+        ):
             mock_fase.return_value = PipelineMetrics(total_escritos=0)
             self.service.executar(fase_inicial=2)
 
@@ -263,10 +265,11 @@ class EtlInstitucionalServiceTestCase(TestCase):
 
     def test_executar_completo_retorna_4_chaves(self) -> None:
         """Execução completa retorna resultado para cada fase."""
-        with patch.object(
-            EtlInstitucionalService, "_executar_fase"
-        ) as mock_fase, patch.object(
-            self.service, "_popular_cache_integracao_ue"
+        with (
+            patch.object(
+                EtlInstitucionalService, "_executar_fase"
+            ) as mock_fase,
+            patch.object(self.service, "_popular_cache_integracao_ue"),
         ):
             mock_fase.return_value = PipelineMetrics(total_escritos=10)
             res = self.service.executar(fase_inicial=1)
@@ -274,7 +277,6 @@ class EtlInstitucionalServiceTestCase(TestCase):
         self.assertEqual(len(res), 4)
         self.assertEqual(mock_fase.call_count, 4)
         self.assertEqual(res["tipo_escola"], 10)
-
 
     def test_popular_cache_popula_mapeamentos(self) -> None:
         """Método pré-carrega cache com mapeamentos SSO para a DRE."""
