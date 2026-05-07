@@ -3,8 +3,20 @@
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from apps.core.libs.helpers import strip_str
+
+_SP = ZoneInfo("America/Sao_Paulo")
+
+
+def _make_aware(dt: datetime | None) -> datetime | None:
+    """Aplica America/Sao_Paulo em datetimes naive vindos do SQL Server."""
+    if dt is None:
+        return None
+    if dt.tzinfo is not None:
+        return dt
+    return dt.replace(tzinfo=_SP)
 
 
 @dataclass(slots=True)
@@ -21,7 +33,7 @@ class TipoEscolaIn:
             "codigo_tipo_escola": int(self.codigo_tipo_escola),
             "sigla": strip_str(self.sigla),
             "descricao": strip_str(self.descricao),
-            "data_atualizacao": self.data_atualizacao,
+            "data_atualizacao": _make_aware(self.data_atualizacao),
         }
 
 
@@ -125,7 +137,7 @@ class UnidadeEducacionalIn:
             "propriedade": strip_str(self.propriedade),
             "organizacao_parceira": bool(self.organizacao_parceira),
             "eh_ceu": bool(self.eh_ceu),
-            "data_atualizacao": self.data_atualizacao,
+            "data_atualizacao": _make_aware(self.data_atualizacao),
             "vagas_matutino": _int(self.vagas_matutino, 0),
             "vagas_vespertino": _int(self.vagas_vespertino, 0),
             "vagas_noturno": _int(self.vagas_noturno, 0),
