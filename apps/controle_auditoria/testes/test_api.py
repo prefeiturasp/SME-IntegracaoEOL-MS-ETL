@@ -1,5 +1,6 @@
 """Testes dos endpoints e autenticacao da API de controle_auditoria."""
 
+from datetime import timedelta
 from typing import Any
 from unittest.mock import patch
 from uuid import uuid4
@@ -365,6 +366,109 @@ class DashboardViewTestCase(TestCase):
         EtlExecucao.objects.all().delete()
         resposta = self.client.get("/dashboard/")
         self.assertEqual(resposta.status_code, 200)
+
+
+class KanbanViewTestCase(TestCase):
+    """Valida o kanban público."""
+
+    def setUp(self) -> None:
+        """Cria execuções para o kanban."""
+        self.client = Client()
+        agora = timezone.now()
+        self.exec_institucional_antiga = EtlExecucao.objects.create(
+            id_execucao=uuid4(),
+            dominio="institucional",
+            situacao="erro",
+            iniciado_em=agora - timedelta(hours=2),
+        )
+        self.exec_institucional_atual = EtlExecucao.objects.create(
+            id_execucao=uuid4(),
+            dominio="institucional",
+            situacao="concluido",
+            iniciado_em=agora - timedelta(hours=1),
+        )
+        self.exec_pedagogico = EtlExecucao.objects.create(
+            id_execucao=uuid4(),
+            dominio="pedagogico",
+            situacao="concluido",
+            iniciado_em=agora,
+        )
+        EtlExecucaoTabelaLida.objects.create(
+            id_execucao=self.exec_institucional_antiga.id_execucao,
+            tabela_origem="tabela_antiga",
+            numero_pagina=1,
+            linhas_lidas=10,
+        )
+
+    def test_kanban_sem_filtro_mantem_ultima_execucao_por_dominio(
+        self,
+    ) -> None:
+        """Sem filtros, kanban exibe a última execução de cada domínio."""
+        resposta = self.client.get("/dashboard/kanban/")
+        self.assertEqual(resposta.status_code, 200)
+
+        ids = {
+            item["exec"].id_execucao
+            for item in resposta.context["dominios_kanban"]
+        }
+
+        self.assertIn(self.exec_institucional_atual.id_execucao, ids)
+        self.assertIn(self.exec_pedagogico.id_execucao, ids)
+        self.assertNotIn(self.exec_institucional_antiga.id_execucao, ids)
+
+    def test_kanban_com_id_execucao_renderiza_execucao_especifica(
+        self,
+    ) -> None:
+        """Filtro por id_execucao exibe a execução selecionada."""
+        resposta = self.client.get(
+            f"/dashboard/kanban/?id_execucao="
+            f"{self.exec_institucional_antiga.id_execucao}"
+        )
+        self.assertEqual(resposta.status_code, 200)
+
+        dominios_kanban = resposta.context["dominios_kanban"]
+        self.assertEqual(len(dominios_kanban), 1)
+        self.assertEqual(
+            dominios_kanban[0]["exec"].id_execucao,
+            self.exec_institucional_antiga.id_execucao,
+        )
+        self.assertEqual(dominios_kanban[0]["total_lido"], 10)
+
+    def test_kanban_select_execucoes_respeita_dominio_filtrado(
+        self,
+    ) -> None:
+        """Lista de execuções deve respeitar o domínio filtrado."""
+        resposta = self.client.get("/dashboard/kanban/?dominio=pedagogico")
+        self.assertEqual(resposta.status_code, 200)
+
+        execucoes = resposta.context["execucoes_disponiveis"]
+        self.assertTrue(execucoes)
+        self.assertTrue(all(e.dominio == "pedagogico" for e in execucoes))
+
+    def test_kanban_combinacao_dominio_execucao_invalida_exibe_vazio(
+        self,
+    ) -> None:
+        """Execução fora do domínio filtrado não deve ser exibida."""
+        resposta = self.client.get(
+            f"/dashboard/kanban/?dominio=pedagogico&id_execucao="
+            f"{self.exec_institucional_antiga.id_execucao}"
+        )
+        self.assertEqual(resposta.status_code, 200)
+        self.assertEqual(resposta.context["dominios_kanban"], [])
+        self.assertContains(
+            resposta,
+            "Execução não encontrada para os filtros aplicados.",
+        )
+
+    def test_kanban_com_id_execucao_invalido_exibe_vazio(self) -> None:
+        """UUID inválido deve retornar página vazia com mensagem clara."""
+        resposta = self.client.get("/dashboard/kanban/?id_execucao=invalido")
+        self.assertEqual(resposta.status_code, 200)
+        self.assertEqual(resposta.context["dominios_kanban"], [])
+        self.assertContains(
+            resposta,
+            "Execução não encontrada para os filtros aplicados.",
+        )
 
 
 class HealthSincRecViewTestCase(TestCase):

@@ -60,6 +60,9 @@
     .filter-bar .form-select { background: #1e293b; border: 1px solid #334155; color: #e2e8f0; font-size: .82rem; border-radius: 8px; padding: .35rem .75rem; }
     .filter-bar .form-select:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,.2); background: #1e293b; color: #f1f5f9; }
     .filter-bar option { background: #1e293b; }
+    .filter-form { display: flex; gap: .5rem; align-items: flex-end; flex-wrap: wrap; }
+    .filter-field { display: flex; flex-direction: column; gap: .25rem; }
+    .filter-label { font-size: .65rem; color: #64748b; text-transform: uppercase; letter-spacing: 1px; font-weight: 700; }
 
     /* ── Domain block ── */
     .domain-block { margin-bottom: 2.5rem; }
@@ -159,14 +162,28 @@
 
   <!-- Filter -->
   <div class="filter-bar">
-    <form method="get" style="display:flex;gap:.5rem;align-items:center">
-      <select name="dominio" class="form-select" style="width:auto" onchange="this.form.submit()">
-        <option value="">Todos os domínios</option>
-        {% for d in todos_dominios %}
-        <option value="{{ d }}" {% if dominio_filtro == d %}selected{% endif %}>{{ d }}</option>
-        {% endfor %}
-      </select>
-      {% if dominio_filtro %}
+    <form method="get" class="filter-form">
+      <div class="filter-field">
+        <label class="filter-label" for="dominio_select">Domínio</label>
+        <select id="dominio_select" name="dominio" class="form-select" style="width:auto" onchange="document.getElementById('id_execucao_select').value=''; this.form.submit()">
+          <option value="">Todos os domínios</option>
+          {% for d in todos_dominios %}
+          <option value="{{ d }}" {% if dominio_filtro == d %}selected{% endif %}>{{ d }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="filter-field">
+        <label class="filter-label" for="id_execucao_select">Execução</label>
+        <select id="id_execucao_select" name="id_execucao" class="form-select" style="min-width:360px;max-width:100%" onchange="this.form.submit()">
+          <option value="">Última execução por domínio</option>
+          {% for exec in execucoes_disponiveis %}
+          <option value="{{ exec.id_execucao }}" {% if id_execucao_filtro == exec.id_execucao|stringformat:"s" %}selected{% endif %}>
+            {{ exec.dominio }} · {{ exec.iniciado_em|date:"d/m/Y H:i" }} · {{ exec.situacao }} · {{ exec.id_execucao|stringformat:"s"|slice:":8" }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      {% if dominio_filtro or id_execucao_filtro %}
       <a href="/dashboard/kanban/" class="btn btn-sm" style="background:#334155;color:#cbd5e1;border:none;border-radius:8px;font-size:.8rem">
         <i class="bi bi-x-lg me-1"></i>Limpar
       </a>
@@ -350,7 +367,7 @@
   {% else %}
   <div class="empty-state">
     <i class="bi bi-inbox"></i>
-    Nenhuma execução encontrada.
+    {{ mensagem_kanban_vazio|default:"Nenhuma execução encontrada." }}
   </div>
   {% endif %}
 

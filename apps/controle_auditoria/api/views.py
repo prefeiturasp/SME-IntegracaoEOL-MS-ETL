@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from django.core.exceptions import ValidationError
 from django.db import connections
 from django.db.models import OuterRef, QuerySet, Subquery
 from django.http import HttpRequest, HttpResponse
@@ -34,6 +35,7 @@ from apps.controle_auditoria.models import (
 
 _LIMITE_EXECUCOES_RECENTES = 50
 _LIMITE_MONITORAMENTO = 100
+_LIMITE_EXECUCOES_KANBAN = 100
 
 
 def _qs_ultima_execucao_por_dominio() -> QuerySet:
@@ -452,12 +454,53 @@ class KanbanView(View):
     def get(self, request: HttpRequest) -> HttpResponse:
         """Renderiza kanban com estágios de leitura, hash e escrita."""
         dominio_filtro = request.GET.get("dominio", "")
+        id_execucao_filtro = request.GET.get("id_execucao", "").strip()
 
-        ultima_por_dominio = list(_qs_ultima_execucao_por_dominio())
+        qs_execucoes_select = EtlExecucao.objects.all()
         if dominio_filtro:
-            ultima_por_dominio = [
-                e for e in ultima_por_dominio if e.dominio == dominio_filtro
+            qs_execucoes_select = qs_execucoes_select.filter(
+                dominio=dominio_filtro
+            )
+
+        execucoes_disponiveis = list(
+            qs_execucoes_select.order_by("-iniciado_em")[
+                :_LIMITE_EXECUCOES_KANBAN
             ]
+        )
+
+        mensagem_kanban_vazio = "Nenhuma execução encontrada."
+        if id_execucao_filtro:
+            try:
+                execucao_selecionada = qs_execucoes_select.get(
+                    id_execucao=id_execucao_filtro
+                )
+            except (
+                EtlExecucao.DoesNotExist,
+                ValidationError,
+                ValueError,
+            ):
+                execucao_selecionada = None
+
+            if execucao_selecionada is None:
+                ultima_por_dominio = []
+                mensagem_kanban_vazio = (
+                    "Execução não encontrada para os filtros aplicados."
+                )
+            else:
+                ultima_por_dominio = [execucao_selecionada]
+                if not any(
+                    e.id_execucao == execucao_selecionada.id_execucao
+                    for e in execucoes_disponiveis
+                ):
+                    execucoes_disponiveis.insert(0, execucao_selecionada)
+        else:
+            ultima_por_dominio = list(_qs_ultima_execucao_por_dominio())
+            if dominio_filtro:
+                ultima_por_dominio = [
+                    e
+                    for e in ultima_por_dominio
+                    if e.dominio == dominio_filtro
+                ]
 
         checkpoints = {
             c.dominio: c for c in EtlCheckpointDominio.objects.all()
@@ -532,7 +575,10 @@ class KanbanView(View):
             {
                 "dominios_kanban": dominios_kanban,
                 "dominio_filtro": dominio_filtro,
+                "id_execucao_filtro": id_execucao_filtro,
+                "execucoes_disponiveis": execucoes_disponiveis,
                 "todos_dominios": todos_dominios,
+                "mensagem_kanban_vazio": mensagem_kanban_vazio,
             },
         )
 
