@@ -33,7 +33,7 @@ SELECT
     tp_escola AS codigo_tipo_escola
   , LTRIM(RTRIM(sg_tp_escola)) AS sigla
   , LTRIM(RTRIM(dc_tipo_escola)) AS descricao
-  , CAST(NULL AS DATETIME) AS data_atualizacao
+  , dt_atualizacao_tabela AS data_atualizacao
 FROM tipo_escola
 """
 
@@ -141,7 +141,7 @@ SELECT
          ELSE CAST(0 AS BIT) END AS organizacao_parceira
   , CASE WHEN COALESCE(vuedg.tp_escola, escola.tp_escola) = 5
          THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT) END AS eh_ceu
-  , CAST(NULL AS DATETIME) AS data_atualizacao
+  , vcue.dt_atualizacao_endereco AS data_atualizacao
   , ISNULL((SELECT quantidadeVagaTurno FROM capacidadeVaga
             WHERE cd_escola = vuedg.cd_unidade_educacao
               AND cd_tipo_turno = 1), 0) AS vagas_matutino
@@ -165,7 +165,7 @@ SELECT
   , vcue.cd_cie_unidade_educacao AS codigo_inep
   , vuedg.sg_tipo_situacao_unidade AS status
   , vcue.cd_unidade_administrativa_referencia AS codigo_dre
-  , COALESCE(vuedg.tp_escola, escola.tp_escola) AS codigo_tipo_escola
+  , te.tp_escola AS codigo_tipo_escola
   , vcue.cd_sub_prefeitura AS codigo_sub_prefeitura
 FROM v_cadastro_unidade_educacao vcue
 INNER JOIN unidade_administrativa dre
@@ -175,6 +175,8 @@ LEFT JOIN v_unidade_educacao_dados_gerais vuedg
     ON vuedg.cd_unidade_educacao = vcue.cd_unidade_educacao
 LEFT JOIN escola
     ON escola.cd_escola = vcue.cd_unidade_educacao
+LEFT JOIN tipo_escola te
+    ON te.tp_escola = COALESCE(vuedg.tp_escola, escola.tp_escola)
 LEFT JOIN tipo_unidade_educacao tpue
     ON tpue.tp_unidade_educacao = vcue.tp_unidade_educacao
 LEFT JOIN tipo_logradouro tpl
