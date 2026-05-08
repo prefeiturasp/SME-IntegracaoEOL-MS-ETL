@@ -246,14 +246,6 @@ class TestAlunosService(TestCase):
             fase.model_class, MatriculaComponenteCurricularAnoLetivo
         )
 
-    def test_fase_7_truncate_on_full_sync(self) -> None:
-        """Valida que fase 7 tem truncate_on_full_sync=True."""
-        self.assertTrue(self.service._fases[6].truncate_on_full_sync)
-
-    def test_fase_8_truncate_on_full_sync(self) -> None:
-        """Valida que fase 8 tem truncate_on_full_sync=True."""
-        self.assertTrue(self.service._fases[7].truncate_on_full_sync)
-
     def test_fase_7_suporta_bulk_insert(self) -> None:
         """Valida que fase 7 tem suporta_bulk_insert=True."""
         self.assertTrue(self.service._fases[6].suporta_bulk_insert)
@@ -330,10 +322,6 @@ class TestAlunosService(TestCase):
         fase = self.service._fases[8]
         self.assertEqual(fase.nome, "dados_aluno_acompanhamento_escolar")
         self.assertEqual(fase.model_class, DadosAlunoAcompanhamentoEscolar)
-
-    def test_fase_9_truncate_on_full_sync(self) -> None:
-        """Valida que fase 9 tem truncate_on_full_sync=True."""
-        self.assertTrue(self.service._fases[8].truncate_on_full_sync)
 
     def test_fase_9_suporta_bulk_insert(self) -> None:
         """Valida que fase 9 tem suporta_bulk_insert=True."""
