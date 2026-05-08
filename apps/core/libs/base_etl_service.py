@@ -4,23 +4,24 @@ from __future__ import annotations
 
 import io
 import logging
+import os
 import random
 import time
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from queue import Empty, Queue
 from threading import Thread
-from typing import TYPE_CHECKING, Any, TypeVar, cast
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from apps.core.libs.base_etl_fase import BaseEtlFase
 from uuid import UUID
 
 from django.conf import settings
-from django.db import connections, transaction
+from django.db import DatabaseError, connections, transaction
 from psycopg import sql
 
-from apps.core.libs.thread_processor import calcular_hash
+from apps.core.libs.thread_processor import ThreadPoolProcessor, calcular_hash
 
 logger = logging.getLogger(__name__)
 
@@ -28,11 +29,51 @@ logger = logging.getLogger(__name__)
 _SENTINEL = object()
 
 
+def _chunked(lst: list[str], n: int) -> Iterator[list[str]]:
+    """Divide uma lista em fatias de tamanho n."""
+    for i in range(0, len(lst), n):
+        yield lst[i : i + n]
+
+
 def _fmt_num(n: int) -> str:
     """Formata números para exibição amigável em logs."""
     if n >= 1_000_000:
         return f"{n / 1_000_000:.1f}M"
     return f"{n / 1_000:.0f}k" if n >= 1_000 else str(n)
+
+
+def _get_attr(obj: Any, key: str, default: Any = None) -> Any:
+    """Acessa atributo de dict ou objeto arbitrário."""
+    if isinstance(obj, dict):
+        return obj.get(key, default)
+    return getattr(obj, key, default)
+
+
+def _resolve_model(fase_meta: Any) -> Any:
+    """Resolve classe do Model a partir de meta de fase."""
+    if hasattr(fase_meta, "resolver_model"):
+        return fase_meta.resolver_model()
+    return _get_attr(fase_meta, "model_class")
+
+
+def _resolver_batch_size() -> int:
+    """Lê ETL_BULK_BATCH_SIZE do ambiente."""
+    try:
+        return int(os.getenv("ETL_BULK_BATCH_SIZE", "5000"))
+    except ValueError:
+        return 5000
+
+
+def _resolver_chunk_size() -> int:
+    """Lê CHUNKED_HASHES do ambiente com fallback para 10000."""
+    try:
+        return int(os.getenv("CHUNKED_HASHES", "10_000"))
+    except ValueError:
+        return 10_000
+
+
+_BATCH_SIZE = _resolver_batch_size()
+_CHUNK_SIZE = _resolver_chunk_size()
 
 
 class StageTimer:
@@ -48,22 +89,21 @@ class StageTimer:
         return self.end
 
 
-T = TypeVar("T", bound=Callable[..., Any])
-
-
 def retry_deadlock(
     max_retries: int = 3, backoff: float = 0.5
-) -> Callable[[T], T]:
+) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """Executa retry em caso de deadlock ou timeout de banco."""
 
-    def decorator(func: T) -> T:
+    def decorator(
+        func: Callable[..., Any],
+    ) -> Callable[..., Any]:
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             last_err: Exception = RuntimeError("retry_deadlock")
 
             for i in range(max_retries):
                 try:
                     return func(*args, **kwargs)
-                except Exception as exc:
+                except DatabaseError as exc:
                     msg = str(exc).lower()
 
                     if "deadlock" not in msg and "lock timeout" not in msg:
@@ -84,7 +124,7 @@ def retry_deadlock(
 
             raise last_err
 
-        return cast(T, wrapper)
+        return wrapper
 
     return decorator
 
@@ -101,10 +141,8 @@ class PhaseConfig:
     unique_fields: tuple[str, ...]
     model_class: Any
     dto_in: Any
-    dto_out: Any | None = None
     source_table: str = ""
     truncate_on_full_sync: bool = False
-    audit_flush_size: int = 0
     suporta_bulk_insert: bool = False
     modo_escrita: str = "upsert"
 
@@ -185,6 +223,7 @@ class PostgresUpsertEngine:
             transaction.atomic(using="default"),
             connections["default"].cursor() as cursor,
         ):
+            cursor.execute("SET LOCAL synchronous_commit = off")
             tmp = f"temp_audit_{str(batch_id).replace('-', '_')}"
             cursor.execute(
                 sql.SQL(
@@ -194,19 +233,12 @@ class PostgresUpsertEngine:
             )
 
             raw = cursor.cursor
-            if hasattr(raw, "copy"):
-                with raw.copy(
-                    sql.SQL(
-                        "COPY {} (id_destino, hash_controle) FROM STDIN"
-                    ).format(sql.Identifier(tmp))
-                ) as cp:
-                    cp.write(buf.getvalue())
-            else:
-                raw.copy_from(
-                    io.StringIO(buf.getvalue()),
-                    tmp,
-                    columns=("id_destino", "hash_controle"),
-                )
+            with raw.copy(
+                sql.SQL(
+                    "COPY {} (id_destino, hash_controle) FROM STDIN"
+                ).format(sql.Identifier(tmp))
+            ) as cp:
+                cp.write(buf.getvalue())
 
             cursor.execute(
                 sql.SQL(
@@ -224,45 +256,26 @@ class PostgresUpsertEngine:
             )
             return int(cursor.rowcount or 0)
 
-    def buscar_hashes(self, ids: list[str], bid: str) -> dict[str, str]:
-        """Busca hashes existentes no Postgres via COPY + JOIN temporário."""
+    def buscar_hashes(self, ids: list[str]) -> dict[str, str]:
+        """Busca hashes em sub-lotes conforme _CHUNK_SIZE."""
         if not ids:
             return {}
-        buf = io.StringIO()
-        for i in ids:
-            buf.write(f"{i}\n")
+        resultado: dict[str, str] = {}
+        for sub_ids in _chunked(ids, _CHUNK_SIZE):
+            resultado.update(self._buscar_sub_lote(sub_ids))
+        return resultado
 
-        tmp = f"temp_lookup_{(bid or 'manual').replace('-', '_')}"
+    def _buscar_sub_lote(self, ids: list[str]) -> dict[str, str]:
+        """Busca hashes de um sub-lote."""
         with (
             transaction.atomic(using="default"),
             connections["default"].cursor() as cursor,
         ):
             cursor.execute(
-                sql.SQL(
-                    "CREATE TEMP TABLE IF NOT EXISTS {}"
-                    " (id_destino text) ON COMMIT DROP"
-                ).format(sql.Identifier(tmp))
-            )
-
-            raw = cursor.cursor
-            if hasattr(raw, "copy"):
-                with raw.copy(
-                    sql.SQL("COPY {} (id_destino) FROM STDIN").format(
-                        sql.Identifier(tmp)
-                    )
-                ) as cp:
-                    cp.write(buf.getvalue())
-            else:
-                raw.copy_from(
-                    io.StringIO(buf.getvalue()), tmp, columns=("id_destino",)
-                )
-
-            cursor.execute(
-                sql.SQL(
-                    "SELECT al.id_destino, al.hash_controle "
-                    "FROM etl_auditoria_linha al "
-                    "INNER JOIN {tmp} tl ON al.id_destino = tl.id_destino"
-                ).format(tmp=sql.Identifier(tmp))
+                "SELECT id_destino, hash_controle "
+                "FROM etl_auditoria_linha "
+                "WHERE id_destino = ANY(%s)",
+                [ids],
             )
             return dict(cursor.fetchall())
 
@@ -280,32 +293,24 @@ class PostgresUpsertEngine:
         dedup = {pk: (h, obj) for pk, h, obj in processed}
         del processed
 
-        def _get(obj: Any, key: str, default: Any = None) -> Any:
-            if isinstance(obj, dict):
-                return obj.get(key, default)
-            return getattr(obj, key, default)
-
-        tn = _get(fase_meta, "table_name", "")
-        db = _get(fase_meta, "db_alias", "default")
-        primeiro_run = _get(fase_meta, "primeiro_run", False)
-        modo = _get(fase_meta, "modo_escrita", "upsert")
+        tn = _get_attr(fase_meta, "table_name", "")
+        db = _get_attr(fase_meta, "db_alias", "default")
+        primeiro_run = _get_attr(fase_meta, "primeiro_run", False)
+        modo = _get_attr(fase_meta, "modo_escrita", "upsert")
 
         if modo == "full_refresh":
             objs = [item[1] for item in dedup.values()]
-            model_class = (
-                fase_meta.resolver_model()
-                if hasattr(fase_meta, "resolver_model")
-                else _get(fase_meta, "model_class")
+            self._persistir(
+                objs, _resolve_model(fase_meta), [], [], db, fast=True
             )
-            self._persistir(objs, model_class, [], [], db, fast=True)
             return len(objs), total - len(objs)
 
-        # Upsert incremental
-        if primeiro_run:
+        truncate_sync = _get_attr(fase_meta, "truncate_on_full_sync", False)
+        if primeiro_run or truncate_sync:
             pendentes = [(pk, h, obj) for pk, (h, obj) in dedup.items()]
         else:
             full_ids = [f"{tn}:{pk}" for pk in dedup]
-            existentes = self.buscar_hashes(full_ids, f"{tn}-{batch_num}")
+            existentes = self.buscar_hashes(full_ids)
             pendentes = [
                 (pk, h, obj)
                 for pk, (h, obj) in dedup.items()
@@ -315,19 +320,14 @@ class PostgresUpsertEngine:
         if not pendentes:
             return 0, total
 
-        model_class = (
-            fase_meta.resolver_model()
-            if hasattr(fase_meta, "resolver_model")
-            else _get(fase_meta, "model_class")
-        )
         objs = [p[2] for p in pendentes]
         hashes = [(f"{tn}:{p[0]}", p[1]) for p in pendentes]
         del pendentes
 
-        uf = list(_get(fase_meta, "update_fields") or [])
-        unique = list(_get(fase_meta, "unique_fields") or [])
+        uf = list(_get_attr(fase_meta, "update_fields") or [])
+        unique = list(_get_attr(fase_meta, "unique_fields") or [])
 
-        self._persistir(objs, model_class, uf, unique, db)
+        self._persistir(objs, _resolve_model(fase_meta), uf, unique, db)
         del objs
 
         escritos = len(hashes)
@@ -352,15 +352,17 @@ class PostgresUpsertEngine:
             return
         mgr = model_class.objects.using(db_alias)
         with transaction.atomic(using=db_alias):
+            with connections[db_alias].cursor() as cur:
+                cur.execute("SET LOCAL synchronous_commit = off")
             if fast:
-                mgr.bulk_create(objs, batch_size=500)
+                mgr.bulk_create(objs, batch_size=_BATCH_SIZE)
             else:
                 mgr.bulk_create(
                     objs,
                     update_conflicts=True,
                     unique_fields=unique_fields,
                     update_fields=update_fields,
-                    batch_size=500,
+                    batch_size=_BATCH_SIZE,
                 )
 
 
@@ -385,13 +387,10 @@ class BaseEtlService:
         self._max_workers = getattr(settings, "THREAD_POOL_MAX_WORKERS", 4)
         self.ultima_fase_concluida = 0
         self._fases: list[PhaseConfig] = []
+        self._fases_selecionadas: list[str] | None = fases
+        self._thread_processor: ThreadPoolProcessor | None = None
         self.ultimo_token: str | None = None
-        self._lote_objetos: list[Any] = []
-        self._lote_hashes: list[tuple[str, str]] = []
         self._ultimo_audit_count = 0
-        self._fases_selecionadas: frozenset[str] | None = (
-            frozenset(fases) if fases else None
-        )
 
     def get_meta(
         self,
@@ -436,32 +435,17 @@ class BaseEtlService:
             processed_data, fase_meta, batch_num
         )
 
-    def _persistir_objs(
-        self,
-        objs: list,
-        model_class: Any,
-        update_fields: list[str],
-        unique_fields: list[str],
-    ) -> None:
-        """Executa gravação física no banco de destino."""
-        if not objs:
-            return
-        mgr = model_class.objects.using(self.db_alias)
-        with transaction.atomic(using=self.db_alias):
-            mgr.bulk_create(
-                objs,
-                update_conflicts=True,
-                unique_fields=unique_fields,
-                update_fields=update_fields,
-                batch_size=500,
-            )
-
     def _processar_batch(
         self, config: PhaseConfig, chunk: list, **kwargs: Any
     ) -> tuple[int, int]:
         """Transforma e sincroniza um lote de dados."""
         transform = kwargs.get("transform") or (lambda x: x)
-        lote_transformado = [transform(r) for r in chunk]
+        tp = self._thread_processor
+        lote_transformado = (
+            tp.processar(chunk, transform)
+            if tp is not None
+            else [transform(r) for r in chunk]
+        )
         meta = self._get_batch_meta(config)
         return self.sync_batch(
             lote_transformado, meta, batch_num=kwargs.get("batch_num", 0)
@@ -486,14 +470,11 @@ class BaseEtlService:
             or kwargs.get("model_class"),
             "modo_escrita": (cfg.modo_escrita if cfg else None)
             or kwargs.get("modo_escrita", "upsert"),
+            "truncate_on_full_sync": (
+                cfg.truncate_on_full_sync if cfg else False
+            )
+            or kwargs.get("truncate_on_full_sync", False),
         }
-
-    def _get_meta_attr(self, meta: Any, attr: str, default: Any = None) -> Any:
-        return (
-            meta.get(attr, default)
-            if isinstance(meta, dict)
-            else getattr(meta, attr, default)
-        )
 
     def _executar_fase(
         self, config: PhaseConfig, numero_fase: int = 0
@@ -514,18 +495,28 @@ class BaseEtlService:
         trans = self._criar_transform(config)
         bn, start = 0, time.perf_counter()
 
-        while True:
-            chunk = self._get_next_chunk(queue)
-            if chunk is None:
-                break
+        with ThreadPoolProcessor(
+            max_workers=self._max_workers, prefixo_log=self._dominio
+        ) as tp:
+            self._thread_processor = tp
+            try:
+                while True:
+                    chunk = self._get_next_chunk(queue)
+                    if chunk is None:
+                        break
 
-            esc, ign = self._processar_batch(
-                batch_num=bn, chunk=chunk, transform=trans, config=config
-            )
-            self._atualizar_metricas(metrics, len(chunk), esc, ign)
-            bn += 1
-            self._log_progresso(bn, metrics, start, config)
-            queue.task_done()
+                    esc, ign = self._processar_batch(
+                        batch_num=bn,
+                        chunk=chunk,
+                        transform=trans,
+                        config=config,
+                    )
+                    self._atualizar_metricas(metrics, len(chunk), esc, ign)
+                    bn += 1
+                    self._log_progresso(bn, metrics, start, config)
+                    queue.task_done()
+            finally:
+                self._thread_processor = None
 
         self._finalizar_threads(thread, erros)
         self._registrar_auditoria_fase(
@@ -669,7 +660,7 @@ class BaseEtlService:
     def _criar_transform(self, config: PhaseConfig) -> Callable:
         """Cria função de transformação de linha MSSQL para objeto Model."""
         hf, pkf = sorted(config.update_fields), config.pk_field
-        din, mc, dout = config.dto_in, config.model_class, config.dto_out
+        din, mc = config.dto_in, config.model_class
 
         def _pk(d: Any) -> str:
             if isinstance(pkf, list):
@@ -678,8 +669,7 @@ class BaseEtlService:
 
         def transform(row: tuple) -> tuple[str, str, Any]:
             d = din(*row)
-            data = dout.to_dict(d) if dout else d.to_domain()
-            obj = mc(**data)
+            obj = mc(**d.to_domain())
             return _pk(d), calcular_hash(obj, hf), obj
 
         return transform
@@ -708,8 +698,6 @@ class BaseEtlService:
             self.ultima_fase_concluida = i
         return res
 
-    def _buscar_hashes_por_copy(
-        self, ids: list[str], tn: str
-    ) -> dict[str, str]:
+    def _buscar_hashes_por_copy(self, ids: list[str]) -> dict[str, str]:
         """Busca hashes via PostgresUpsertEngine."""
-        return self.pg_engine.buscar_hashes(ids, tn)
+        return self.pg_engine.buscar_hashes(ids)

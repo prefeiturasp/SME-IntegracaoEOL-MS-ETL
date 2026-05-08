@@ -60,7 +60,7 @@ class TestEtlAlunosOrquestrador(TestCase):
         mock_proc: MagicMock,
         mock_finalizar: MagicMock,
     ) -> None:
-        """Valida que todas as 6 fases são passadas ao callback do chord."""
+        """Valida que todas as 9 fases são passadas ao callback do chord."""
         mock_leitor = MagicMock()
         mock_leitor.criar_grupo.return_value = ["task1"]
         mock_leitor_cls.return_value = mock_leitor
@@ -71,7 +71,7 @@ class TestEtlAlunosOrquestrador(TestCase):
         self.assertTrue(mock_finalizar.s.called)
         args, _ = mock_finalizar.s.call_args
         meta_dict = args[0]
-        self.assertEqual(meta_dict["total_fases"], 6)
+        self.assertEqual(meta_dict["total_fases"], 9)
 
     @patch("apps.core.libs.base_etl_orquestrador.finalizar_fase")
     @patch("apps.core.libs.base_etl_orquestrador.processar_chunk")
@@ -106,8 +106,13 @@ class TestEtlAlunosOrquestrador(TestCase):
     def test_get_meta_fase_3(self) -> None:
         """Valida que get_meta resolve corretamente metadados da fase 3."""
         orq = self._make_orquestrador()
-        meta = orq.service.get_meta(orq.service._fases[2], 3, 6, orq.id_execucao)
-        
+        meta = orq.service.get_meta(
+            orq.service._fases[2], 3, 6, orq.id_execucao
+        )
+
         self.assertEqual(meta.numero_fase, 3)
         self.assertEqual(meta.nome, "responsavel_aluno")
-        self.assertIn("apps.core.tasks.processar_chunk", meta.task_processamento_path)
+        self.assertIn(
+            "apps.core.tasks.processar_chunk",
+            meta.task_processamento_path,
+        )

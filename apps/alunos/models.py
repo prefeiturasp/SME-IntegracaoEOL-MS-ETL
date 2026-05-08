@@ -167,3 +167,109 @@ class MatriculaTurma(models.Model):
 
     def __str__(self) -> str:
         return f"M: {self.codigo_matricula} - T: {self.codigo_turma}"
+
+
+class MatriculaAnoLetivo(models.Model):
+    """Contagem agregada de matrículas por turma e ano letivo."""
+
+    id = models.BigAutoField(primary_key=True)
+    codigo_dre = models.CharField(max_length=20)
+    codigo_ue = models.CharField(max_length=20)
+    tipo_escola = models.SmallIntegerField()
+    ano_letivo = models.SmallIntegerField()
+    codigo_modalidade = models.SmallIntegerField(null=True, blank=True)
+    modalidade = models.CharField(max_length=3, null=True, blank=True)
+    ordem = models.SmallIntegerField(null=True, blank=True)
+    ano = models.CharField(max_length=20, null=True, blank=True)
+    turma = models.CharField(max_length=100, null=True, blank=True)
+    quantidade = models.IntegerField()
+
+    class Meta:
+        app_label = "alunos"
+        db_table = "matricula_ano_letivo"
+        unique_together = [
+            (
+                "codigo_dre",
+                "codigo_ue",
+                "tipo_escola",
+                "ano_letivo",
+                "modalidade",
+                "ano",
+                "turma",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.codigo_dre}/{self.codigo_ue} ({self.ano_letivo})"
+
+
+class MatriculaComponenteCurricularAnoLetivo(models.Model):
+    """Contagem agregada por componente curricular e ano letivo."""
+
+    id = models.BigAutoField(primary_key=True)
+    codigo_ue = models.CharField(max_length=20)
+    codigo_dre = models.CharField(max_length=20)
+    ano_letivo = models.SmallIntegerField()
+    modalidade = models.CharField(max_length=3, null=True, blank=True)
+    ordem = models.SmallIntegerField(null=True, blank=True)
+    componente_curricular_id = models.IntegerField()
+    ano = models.CharField(max_length=20, null=True, blank=True)
+    turma = models.CharField(max_length=100, null=True, blank=True)
+    quantidade = models.IntegerField()
+
+    class Meta:
+        app_label = "alunos"
+        db_table = "matricula_componente_curricular_ano_letivo"
+        unique_together = [
+            (
+                "codigo_ue",
+                "codigo_dre",
+                "ano_letivo",
+                "modalidade",
+                "componente_curricular_id",
+                "ano",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return (
+            f"{self.codigo_ue}/CC:{self.componente_curricular_id}"
+            f" ({self.ano_letivo})"
+        )
+
+
+class DadosAlunoAcompanhamentoEscolar(models.Model):
+    """Dados denormalizados de aluno para acompanhamento escolar."""
+
+    id = models.BigAutoField(primary_key=True)
+    codigo_aluno = models.BigIntegerField()
+    nome = models.CharField(max_length=200)
+    nome_social = models.CharField(max_length=200, null=True, blank=True)
+    nome_responsavel = models.CharField(max_length=200, null=True, blank=True)
+    cpf_responsavel = models.CharField(max_length=11, null=True, blank=True)
+    data_nascimento = models.DateField(null=True, blank=True)
+    descricao_tipo_escola = models.CharField(max_length=50)
+    tipo_responsavel = models.SmallIntegerField(null=True, blank=True)
+    codigo_dre = models.CharField(max_length=20)
+    sigla_dre = models.CharField(max_length=100, null=True, blank=True)
+    codigo_ue = models.CharField(max_length=20)
+    unidade_educacional = models.CharField(max_length=300)
+    codigo_turma = models.BigIntegerField()
+    turma = models.CharField(max_length=100)
+    codigo_tipo_escola = models.SmallIntegerField()
+    situacao_matricula = models.CharField(max_length=100)
+    data_situacao_matricula = models.DateField(null=True, blank=True)
+    codigo_etapa_ensino = models.SmallIntegerField(null=True, blank=True)
+    codigo_ciclo_ensino = models.SmallIntegerField(null=True, blank=True)
+    serie_resumida = models.CharField(max_length=20, null=True, blank=True)
+    codigo_modalidade_turma = models.SmallIntegerField(null=True, blank=True)
+
+    class Meta:
+        app_label = "alunos"
+        db_table = "dados_aluno_acompanhamento_escolar"
+        unique_together = [
+            ("codigo_aluno", "codigo_turma", "tipo_responsavel")
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.codigo_aluno} - {self.nome} ({self.codigo_ue})"

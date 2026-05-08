@@ -44,7 +44,6 @@ class TestPedagogicoService(TestCase):
             table_name="tb",
             model_class=None,
             dto_in=None,
-            dto_out=None,
             pk_field="id",
             update_fields=("f1",),
             unique_fields=("id",),

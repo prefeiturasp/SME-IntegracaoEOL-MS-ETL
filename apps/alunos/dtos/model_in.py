@@ -162,3 +162,124 @@ class MatriculaTurmaIn:
             "numero_chamada": strip_str(self.numero_chamada),
             "data_situacao_aluno": parse_date(self.data_situacao),
         }
+
+
+@dataclass(slots=True)
+class MatriculaAnoLetivoIn:
+    """Dados agregados de matrículas por turma e ano letivo."""
+
+    codigo_dre: str
+    codigo_ue: str
+    tipo_escola: int
+    ano_letivo: int
+    codigo_modalidade: int | None
+    modalidade: str | None
+    ordem: int | None
+    ano: str | None
+    turma: str | None
+    quantidade: int
+
+    def to_domain(self) -> dict:
+        return {
+            "codigo_dre": strip_str(self.codigo_dre),
+            "codigo_ue": strip_str(self.codigo_ue),
+            "tipo_escola": self.tipo_escola,
+            "ano_letivo": self.ano_letivo,
+            "codigo_modalidade": self.codigo_modalidade,
+            "modalidade": self.modalidade,
+            "ordem": self.ordem,
+            "ano": strip_str(self.ano),
+            "turma": strip_str(self.turma),
+            "quantidade": self.quantidade,
+        }
+
+
+@dataclass(slots=True)
+class MatriculaComponenteCurricularAnoLetivoIn:
+    """Dados agregados de matrículas por componente e ano letivo."""
+
+    codigo_ue: str
+    codigo_dre: str
+    ano_letivo: int
+    modalidade: str | None
+    ordem: int | None
+    componente_curricular_id: int
+    ano: str | None
+    turma: str | None
+    quantidade: int
+
+    def to_domain(self) -> dict:
+        return {
+            "codigo_ue": strip_str(self.codigo_ue),
+            "codigo_dre": strip_str(self.codigo_dre),
+            "ano_letivo": self.ano_letivo,
+            "modalidade": self.modalidade,
+            "ordem": self.ordem,
+            "componente_curricular_id": self.componente_curricular_id,
+            "ano": strip_str(self.ano),
+            "turma": strip_str(self.turma),
+            "quantidade": self.quantidade,
+        }
+
+
+@dataclass(slots=True)
+class DadosAlunoAcompanhamentoEscolarIn:
+    """Dados brutos de aluno para acompanhamento escolar."""
+
+    codigo_aluno: int
+    nome: str
+    nome_social: str | None
+    nome_responsavel: str | None
+    cpf_responsavel: str | None
+    data_nascimento: date | None
+    descricao_tipo_escola: str
+    tipo_responsavel: int | None
+    codigo_dre: str
+    sigla_dre: str | None
+    codigo_ue: str
+    unidade_educacional: str
+    codigo_turma: int
+    turma: str
+    codigo_tipo_escola: int
+    situacao_matricula: str
+    data_situacao_matricula: date | None
+    codigo_etapa_ensino: int | None
+    codigo_ciclo_ensino: int | None
+    serie_resumida: str | None
+    codigo_modalidade_turma: int | None
+
+    def to_domain(self) -> dict:
+        _texto_nao_informado = "NÃO INFORMADO"
+
+        return {
+            "codigo_aluno": self.codigo_aluno,
+            "nome": strip_str(self.nome) or _texto_nao_informado,
+            "nome_social": strip_str(self.nome_social),
+            "nome_responsavel": strip_str(self.nome_responsavel),
+            "cpf_responsavel": strip_str(self.cpf_responsavel),
+            "data_nascimento": parse_date(self.data_nascimento),
+            "descricao_tipo_escola": (
+                strip_str(self.descricao_tipo_escola)
+                or _texto_nao_informado
+            ),
+            "tipo_responsavel": self.tipo_responsavel,
+            "codigo_dre": strip_str(self.codigo_dre),
+            "sigla_dre": strip_str(self.sigla_dre),
+            "codigo_ue": strip_str(self.codigo_ue),
+            "unidade_educacional": (
+                strip_str(self.unidade_educacional) or _texto_nao_informado
+            ),
+            "codigo_turma": self.codigo_turma,
+            "turma": strip_str(self.turma) or _texto_nao_informado,
+            "codigo_tipo_escola": self.codigo_tipo_escola,
+            "situacao_matricula": (
+                strip_str(self.situacao_matricula) or _texto_nao_informado
+            ),
+            "data_situacao_matricula": parse_date(
+                self.data_situacao_matricula
+            ),
+            "codigo_etapa_ensino": self.codigo_etapa_ensino,
+            "codigo_ciclo_ensino": self.codigo_ciclo_ensino,
+            "serie_resumida": strip_str(self.serie_resumida),
+            "codigo_modalidade_turma": self.codigo_modalidade_turma,
+        }
