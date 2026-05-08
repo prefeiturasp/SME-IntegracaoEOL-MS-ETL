@@ -209,8 +209,7 @@ class EtlAlunosService(BaseEtlService):
                     "ano",
                     "turma",
                 ),
-                suporta_bulk_insert=True,
-                truncate_on_full_sync=True,
+                suporta_bulk_insert=True
             ),
             PhaseConfig(
                 nome="matricula_componente_curricular_ano_letivo",
@@ -236,8 +235,7 @@ class EtlAlunosService(BaseEtlService):
                     "componente_curricular_id",
                     "ano",
                 ),
-                suporta_bulk_insert=True,
-                truncate_on_full_sync=True,
+                suporta_bulk_insert=True
             ),
             PhaseConfig(
                 nome="dados_aluno_acompanhamento_escolar",
@@ -276,7 +274,6 @@ class EtlAlunosService(BaseEtlService):
                     "codigo_turma",
                     "tipo_responsavel",
                 ),
-                suporta_bulk_insert=True,
-                truncate_on_full_sync=True,
+                suporta_bulk_insert=True
             ),
         ]
