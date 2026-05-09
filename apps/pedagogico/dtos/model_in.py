@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from typing import Any
 
 from apps.core.libs.helpers import make_aware, strip_str
-from apps.pedagogico.queries import MAPA_COMPONENTE_PAI
 
 
 @dataclass
@@ -26,74 +25,71 @@ class ComponenteCurricularSimplesIn:
 
 
 @dataclass
-class ComponentePorTurmaIn:
-    """Linha bruta da query ObterComponentesPorTurmasAsync."""
+class ComponenteTurmaIn:
+    """Linha de SQL_COMPONENTE_TURMA — estrutura turma × componente sem professor.
 
-    codigo: Any
-    """cd_componente_curricular (com COALESCE para componente pai quando
-       aplicável)."""
-
-    descricao: Any
-    """dc_componente_curricular."""
-
-    eh_regencia: Any
-    """1 se o componente curricular está na lista hardcoded de regência."""
-
-    eh_territorio: Any
-    """1 se o componente existe em turma_grade_territorio_experiencia."""
-
-    tipo_escola: Any
-    """tp_escola."""
-
-    turno_turma: Any
-    """qt_hora_duracao — horas de duração do turno."""
-
-    ano_turma: Any
-    """sg_resumida_serie — ex: "1", "2", "EI"."""
-
-    ano_letivo: Any
-    """an_letivo."""
+    Ordem das colunas deve corresponder exatamente ao SELECT de SQL_COMPONENTE_TURMA.
+    planejamento_regencia não vem do SQL — é calculado no transform via índice A3.
+    """
 
     turma_codigo: Any
-    """cd_turma_escola."""
+    componente_codigo: Any
+    descricao: Any
+    regencia: Any
+    territorio_saber: Any
+    codigo_componente_territorio_saber: Any
+    codigo_componente_curricular_pai: Any
+    tipo_escola: Any
+    turno_turma: Any
+    ano_turma: Any
+    codigo_serie_ensino: Any
+    ano_letivo: Any
 
-    professor: Any
-    """cd_registro_funcional (SME) ou cd_cpf_pessoa (externo)."""
-
-    atribuicao_externa: Any
-    """0 = professor SME (usar RF) | 1 = professor externo (usar CPF)."""
-
-    def to_domain(
-        self,
-        transferido_em: Any,
-        planejamento: bool = False,
-    ) -> dict:
-        codigo = int(self.codigo)
-        regencia = bool(self.eh_regencia)
-        territorio = bool(self.eh_territorio)
+    def to_domain(self, transferido_em: Any, planejamento_regencia: bool = False) -> dict:
         return {
-            "codigo": codigo,
+            "turma_codigo": str(self.turma_codigo) if self.turma_codigo is not None else None,
+            "componente_codigo": int(self.componente_codigo),
             "descricao": strip_str(self.descricao),
-            "regencia": regencia,
-            "planejamento_regencia": planejamento,
-            "territorio_saber": territorio,
+            "regencia": bool(self.regencia),
+            "planejamento_regencia": planejamento_regencia,
+            "territorio_saber": bool(self.territorio_saber),
             "codigo_componente_territorio_saber": (
-                codigo if territorio else None
+                int(self.codigo_componente_territorio_saber)
+                if self.codigo_componente_territorio_saber is not None else None
             ),
-            "codigo_componente_curricular_pai": MAPA_COMPONENTE_PAI.get(
-                codigo
+            "codigo_componente_curricular_pai": (
+                int(self.codigo_componente_curricular_pai)
+                if self.codigo_componente_curricular_pai is not None else None
             ),
-            "turma_codigo": (
-                str(self.turma_codigo)
-                if self.turma_codigo is not None
+            "tipo_escola": str(self.tipo_escola) if self.tipo_escola is not None else None,
+            "turno_turma": int(self.turno_turma) if self.turno_turma is not None else None,
+            "ano_turma": str(self.ano_turma) if self.ano_turma is not None else None,
+            "codigo_serie_ensino": (
+                int(self.codigo_serie_ensino)
+                if self.codigo_serie_ensino is not None
                 else None
             ),
-            "exibir_componente_eol": not (
-                int(self.ano_letivo) <= 2021 and codigo in MAPA_COMPONENTE_PAI
-            ),
-            "professor": (
-                str(self.professor) if self.professor is not None else None
-            ),
+            "ano_letivo": int(self.ano_letivo),
+            "transferido_em": transferido_em,
+        }
+
+
+@dataclass
+class AtribuicaoComponenteIn:
+    """Linha para AtribuicaoComponente (L2) — professor × turma × componente."""
+
+    turma_codigo: Any
+    componente_codigo: Any
+    professor: Any
+    atribuicao_externa: bool
+    ano_letivo: Any
+
+    def to_domain(self, transferido_em: Any) -> dict:
+        return {
+            "turma_codigo": str(self.turma_codigo) if self.turma_codigo is not None else None,
+            "componente_codigo": int(self.componente_codigo),
+            "professor": str(self.professor) if self.professor is not None else None,
+            "atribuicao_externa": self.atribuicao_externa,
             "ano_letivo": int(self.ano_letivo),
             "transferido_em": transferido_em,
         }
@@ -173,40 +169,7 @@ class ComponenteRegenciaIn:
 
 
 @dataclass
-class ComponenteInicioTurmaIn:
-    """ObterDadosComponentesCurricularesRegenciaPorUeEAnoLetivoAsync."""
-
-    componente_codigo: Any
-    componente_descricao: Any
-    turma_codigo: Any
-    data_inicio_turma: Any
-    ue_codigo: Any
-    ano_letivo: Any
-    tipo_periodicidade: Any
-
-    def to_domain(self, transferido_em: Any) -> dict:
-        return {
-            "componente_codigo": str(self.componente_codigo),
-            "componente_descricao": strip_str(self.componente_descricao),
-            "turma_codigo": str(self.turma_codigo),
-            "data_inicio_turma": make_aware(self.data_inicio_turma),
-            "ue_codigo": (
-                str(self.ue_codigo) if self.ue_codigo is not None else None
-            ),
-            "ano_letivo": (
-                int(self.ano_letivo) if self.ano_letivo is not None else None
-            ),
-            "tipo_periodicidade": (
-                int(self.tipo_periodicidade)
-                if self.tipo_periodicidade is not None
-                else None
-            ),
-            "transferido_em": transferido_em,
-        }
-
-
-@dataclass
-class GradeCurricularSerieIn:
+class GradeComponenteCurricularIn:
     """ObterComponentesCurricularesEAnosTurmaApiEolPorAnoLetivo."""
 
     codigo_componente_curricular: Any
@@ -269,6 +232,8 @@ class TurmaIn:
     serie_ensino: Any
     modalidade: Any
     codigo_modalidade: Any
+    codigo_tipo_programa: Any
+    codigo_modalidade_etapa: Any
     semestre: Any
     ensino_especial: Any
 
@@ -315,6 +280,16 @@ class TurmaIn:
             "codigo_modalidade": (
                 int(self.codigo_modalidade)
                 if self.codigo_modalidade is not None
+                else None
+            ),
+            "codigo_tipo_programa": (
+                int(self.codigo_tipo_programa)
+                if self.codigo_tipo_programa is not None
+                else None
+            ),
+            "codigo_modalidade_etapa": (
+                int(self.codigo_modalidade_etapa)
+                if self.codigo_modalidade_etapa is not None
                 else None
             ),
             "semestre": (

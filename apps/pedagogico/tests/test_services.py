@@ -61,7 +61,7 @@ class TestPedagogicoService(TestCase):
                 "componente_por_turma",
                 "agrupamento_territorio_saber",
                 "componente_inicio_turma",
-                "grade_curricular_serie",
+                "grade_componente_curricular",
                 "turma",
             ],
         )
@@ -157,6 +157,7 @@ class TestPedagogicoService(TestCase):
             " 5o ano ",  # serie_ensino
             " Fundamental ",  # modalidade
             5,  # codigo_modalidade
+            3,  # codigo_tipo_programa
             0,  # semestre
             0,  # ensino_especial
         )
@@ -170,6 +171,7 @@ class TestPedagogicoService(TestCase):
         self.assertEqual(obj.nome_turma, "5A Manhã")
         self.assertEqual(obj.serie_ensino, "5o ano")
         self.assertEqual(obj.modalidade, "Fundamental")
+        self.assertEqual(obj.codigo_tipo_programa, 3)
         self.assertFalse(obj.extinta)
         self.assertEqual(obj.semestre, 0)
 

@@ -5,10 +5,10 @@ from django.utils import timezone
 
 from apps.pedagogico.dtos.model_in import (
     ComponenteCurricularSimplesIn,
+    ComponenteTurmaIn,
     ComponenteInicioTurmaIn,
-    ComponentePorTurmaIn,
     ComponenteRegenciaIn,
-    GradeCurricularSerieIn,
+    GradeComponenteCurricularIn,
     TurmaIn,
 )
 
@@ -25,101 +25,28 @@ class ComponenteCurricularSimplesInTest(SimpleTestCase):
         self.assertEqual(data["transferido_em"], "agora")
 
 
-class ComponentePorTurmaInTest(SimpleTestCase):
-    """Testes de ``ComponentePorTurmaIn.to_domain()``."""
+class ComponenteTurmaInTest(SimpleTestCase):
+    """Testes de ``ComponenteTurmaIn.to_domain()``."""
 
-    def test_mapeia_flags_e_componente_pai(self) -> None:
-        dto = ComponentePorTurmaIn(
-            codigo=513,
-            descricao=" Inglês ",
-            eh_regencia=1,
-            eh_territorio=1,
-            tipo_escola=1,
-            turno_turma=6,
-            ano_turma="7",
-            ano_letivo=2025,
+    def test_mapeia_codigo_serie_ensino(self) -> None:
+        dto = ComponenteTurmaIn(
             turma_codigo=123,
-            professor=456,
-            atribuicao_externa=0,
-        )
-        data = dto.to_domain(transferido_em="agora", planejamento=False)
-
-        self.assertEqual(data["codigo"], 513)
-        self.assertEqual(data["descricao"], "Inglês")
-        self.assertTrue(data["regencia"])
-        self.assertTrue(data["territorio_saber"])
-        self.assertFalse(data["planejamento_regencia"])
-        self.assertEqual(data["codigo_componente_territorio_saber"], 513)
-        self.assertEqual(data["codigo_componente_curricular_pai"], 512)
-        self.assertEqual(data["turma_codigo"], "123")
-        self.assertEqual(data["professor"], "456")
-        self.assertTrue(data["exibir_componente_eol"])
-
-    def test_componente_com_pai_vigente_ate_2021_nao_exibe_em_ano_historico(
-        self,
-    ) -> None:
-        # codigo=513 está em MAPA_COMPONENTE_PAI (vigência 2021-12-31)
-        # Para ano_letivo <= 2021 a vigência ainda é ativa → exibir = False
-        dto = ComponentePorTurmaIn(
-            codigo=513,
-            descricao=" Inglês ",
-            eh_regencia=0,
-            eh_territorio=0,
+            componente_codigo=220,
+            descricao=" Leitura ",
+            regencia=0,
+            territorio_saber=0,
+            codigo_componente_territorio_saber=None,
+            codigo_componente_curricular_pai=None,
             tipo_escola=1,
-            turno_turma=6,
-            ano_turma="7",
-            ano_letivo=2021,
-            turma_codigo=None,
-            professor=None,
-            atribuicao_externa=0,
+            turno_turma=5,
+            ano_turma="1",
+            codigo_serie_ensino=23,
+            ano_letivo=2026,
         )
-        data = dto.to_domain(transferido_em="agora")
-        self.assertFalse(data["exibir_componente_eol"])
 
-    def test_componente_com_pai_vigente_ate_2021_exibe_em_ano_posterior(
-        self,
-    ) -> None:
-        # mesmo codigo=513, mas ano_letivo >= 2022 →
-        # vigência expirou → exibir = True
-        dto = ComponentePorTurmaIn(
-            codigo=513,
-            descricao=" Inglês ",
-            eh_regencia=0,
-            eh_territorio=0,
-            tipo_escola=1,
-            turno_turma=6,
-            ano_turma="7",
-            ano_letivo=2022,
-            turma_codigo=None,
-            professor=None,
-            atribuicao_externa=0,
-        )
-        data = dto.to_domain(transferido_em="agora")
-        self.assertTrue(data["exibir_componente_eol"])
+        data = dto.to_domain("agora")
 
-    def test_componente_sem_pai_sempre_exibe(self) -> None:
-        # codigo sem entrada em MAPA_COMPONENTE_PAI →
-        # exibir = True em qualquer ano
-        dto = ComponentePorTurmaIn(
-            codigo=1322,
-            descricao=" PAP ",
-            eh_regencia=0,
-            eh_territorio=0,
-            tipo_escola=1,
-            turno_turma=6,
-            ano_turma="7",
-            ano_letivo=2019,
-            turma_codigo=None,
-            professor=None,
-            atribuicao_externa=0,
-        )
-        data = dto.to_domain(transferido_em="agora", planejamento=True)
-        self.assertTrue(data["exibir_componente_eol"])
-        self.assertIsNone(data["codigo_componente_territorio_saber"])
-        self.assertIsNone(data["codigo_componente_curricular_pai"])
-        self.assertIsNone(data["turma_codigo"])
-        self.assertIsNone(data["professor"])
-        self.assertTrue(data["planejamento_regencia"])
+        self.assertEqual(data["codigo_serie_ensino"], 23)
 
 
 class ComponenteRegenciaInTest(SimpleTestCase):
@@ -200,11 +127,11 @@ class ComponenteInicioTurmaInTest(SimpleTestCase):
         self.assertIsNone(data["tipo_periodicidade"])
 
 
-class GradeCurricularSerieInTest(SimpleTestCase):
-    """Testes de ``GradeCurricularSerieIn.to_domain()``."""
+class GradeComponenteCurricularInTest(SimpleTestCase):
+    """Testes de ``GradeComponenteCurricularIn.to_domain()``."""
 
     def test_mapeamento_basico(self) -> None:
-        dto = GradeCurricularSerieIn(
+        dto = GradeComponenteCurricularIn(
             codigo_componente_curricular=700,
             descricao_componente_curricular=" Geografia ",
             codigo_ano_turma=8,
@@ -224,7 +151,7 @@ class GradeCurricularSerieInTest(SimpleTestCase):
         self.assertEqual(data["ano_letivo"], 2025)
 
     def test_campos_opcionais_nulos(self) -> None:
-        dto = GradeCurricularSerieIn(
+        dto = GradeComponenteCurricularIn(
             codigo_componente_curricular=700,
             descricao_componente_curricular=" Geografia ",
             codigo_ano_turma=None,
@@ -260,6 +187,8 @@ def _turma_in_completa(**overrides: object) -> TurmaIn:
         "serie_ensino": " 5o ano ",
         "modalidade": " Fundamental ",
         "codigo_modalidade": 5,
+        "codigo_tipo_programa": 3,
+        "codigo_modalidade_etapa": 5,
         "semestre": 0,
         "ensino_especial": 0,
     }
@@ -286,6 +215,7 @@ class TurmaInTest(SimpleTestCase):
         self.assertEqual(data["serie_ensino"], "5o ano")
         self.assertEqual(data["modalidade"], "Fundamental")
         self.assertEqual(data["codigo_modalidade"], 5)
+        self.assertEqual(data["codigo_tipo_programa"], 3)
         self.assertEqual(data["semestre"], 0)
         self.assertFalse(data["ensino_especial"])
         self.assertEqual(data["transferido_em"], "agora")
@@ -329,6 +259,7 @@ class TurmaInTest(SimpleTestCase):
             serie_ensino=None,
             modalidade=None,
             codigo_modalidade=None,
+            codigo_tipo_programa=None,
         ).to_domain("agora")
 
         self.assertIsNone(data["data_inicio_turma"])

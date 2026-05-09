@@ -127,6 +127,7 @@ Origem: `turma_escola` (NOLOCK) com joins em `escola`, `serie_turma_escola`, `se
 | `dc_serie_ensino` | `serie_ensino` | `strip_str()` ou `None` |
 | CASE sobre `cd_etapa_ensino` | `modalidade` | `str()` (`'EJA'`, `'Fundamental'`, `'Médio'`, `'Infantil'`) ou `None` |
 | CASE sobre `cd_etapa_ensino` + `tp_escola` | `codigo_modalidade` | `int()` (1=EI, 3=EJA, 4=CIEJA, 5=EF, 6=EM) |
+| `cd_tipo_programa` | `codigo_tipo_programa` | `int()` ou `None` |
 | CASE EJA pelo mês de `dt_inicio_turma` | `semestre` | `int()` (1 ou 2 para EJA; 0 demais) |
 | `cd_etapa_ensino = 13` e `cd_modalidade_ensino = 2` | `ensino_especial` | `bool()` |
 | — | `transferido_em` | `timezone.now()` |
