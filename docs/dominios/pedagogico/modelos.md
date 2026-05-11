@@ -53,7 +53,7 @@ Itens de um agrupamento de território do saber — uma linha por componente. De
 Catálogo de componentes previstos na grade por série e modalidade. Representa a oferta curricular possível — independente de haver atribuição real de professor ou turma.
 
 - **Tabela:** `grade_componente_curricular`
-- **Unique:** `(codigo_componente_curricular, ano_letivo, modalidade, codigo_ano_turma)` com `nulls_distinct=False`
+- **Unique:** `(codigo_componente_curricular, ano_letivo, modalidade, codigo_ano_turma, codigo_serie_ensino)` com `nulls_distinct=False`
 - **Índices:** `(ano_letivo, modalidade)`, `codigo_ano_turma`
 - **`modalidade`:** calculado via CASE na query — `1=EI | 3=EJA | 4=CIEJA | 5=EF | 6=EM`
 - **Alimenta:** `ues/{ueId}/modalidades/{mod}/anos/{ano}`, `ues/{ueId}/modalidades/{mod}/anos/{ano}/turmas-programa`

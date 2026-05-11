@@ -10,7 +10,8 @@ Estratégia de escrita: upsert incremental com hash SHA-256 via BaseEtlService.
     AtribuicaoComponente            — unique: turma, componente e professor
     AgrupamentoAtribuicaoTS         — unique: cod_agrupamento
     ComponenteCurricularAgrupamento — unique: componente, turma e agrupamento
-    GradeComponenteCurricular       — unique: componente, ano e modalidade
+    GradeComponenteCurricular       — unique: componente, ano, modalidade,
+                                      ano turma e série ensino
 """
 
 import logging
@@ -242,6 +243,7 @@ class EtlPedagogicoService(BaseEtlService):
                 f"-{obj.ano_letivo}"
                 f"-{obj.modalidade or ''}"
                 f"-{obj.codigo_ano_turma or ''}"
+                f"-{obj.codigo_serie_ensino or ''}"
             )
             return pk, calcular_hash(obj, hash_fields), obj
 
@@ -472,6 +474,7 @@ class EtlPedagogicoService(BaseEtlService):
                     "ano_letivo",
                     "modalidade",
                     "codigo_ano_turma",
+                    "codigo_serie_ensino",
                 ],
                 update_fields=(
                     "descricao_componente_curricular",
@@ -484,6 +487,7 @@ class EtlPedagogicoService(BaseEtlService):
                     "ano_letivo",
                     "modalidade",
                     "codigo_ano_turma",
+                    "codigo_serie_ensino",
                 ),
             ),
             PhaseConfig(

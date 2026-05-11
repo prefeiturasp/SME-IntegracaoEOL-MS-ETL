@@ -156,6 +156,39 @@ class TestPedagogicoService(TestCase):
         self.assertIsNone(transform((None, "Desc", "1", "1 ano", 1, 5, 2025)))
         self.assertIsNone(transform((100, "Desc", "1", "1 ano", 1, 5, None)))
 
+    def test_criar_transform_grade_usa_serie_na_chave(self) -> None:
+        """Grade curricular deve preservar série na chave de upsert."""
+        config = self.service._fases[4]
+        transform = self.service._criar_transform(config)
+
+        result = transform((100, " Arte ", "1", "1 ano", 88, 5, 2024))
+        assert result is not None
+        pk, _, obj = result
+
+        self.assertEqual(pk, "100-2024-5-1-88")
+        self.assertEqual(obj.codigo_ano_turma, "1")
+        self.assertEqual(obj.codigo_serie_ensino, 88)
+        self.assertEqual(
+            config.pk_field,
+            [
+                "codigo_componente_curricular",
+                "ano_letivo",
+                "modalidade",
+                "codigo_ano_turma",
+                "codigo_serie_ensino",
+            ],
+        )
+        self.assertEqual(
+            config.unique_fields,
+            (
+                "codigo_componente_curricular",
+                "ano_letivo",
+                "modalidade",
+                "codigo_ano_turma",
+                "codigo_serie_ensino",
+            ),
+        )
+
     @patch.object(EtlPedagogicoService, "sync_batch", return_value=(1, 1))
     def test_processar_batch_filtra_nones_antes_do_sync_batch(
         self, mock_sync: MagicMock

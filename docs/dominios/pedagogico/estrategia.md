@@ -13,7 +13,7 @@ O controle incremental é feito por hash SHA-256 dos `update_fields` de cada lin
 | `atribuicao_componente` | `(turma_codigo, componente_codigo, professor)` |
 | `agrupamento_atribuicao_territorio_saber` | `cod_agrupamento` |
 | `componente_curricular_agrupamento` | `(componente_codigo, turma_codigo, codigo_agrupamento)` |
-| `grade_componente_curricular` | `(codigo_componente_curricular, ano_letivo, modalidade, codigo_ano_turma)` |
+| `grade_componente_curricular` | `(codigo_componente_curricular, ano_letivo, modalidade, codigo_ano_turma, codigo_serie_ensino)` |
 | `turma` | `codigo` |
 
 ## Tratamento de `None` no transform

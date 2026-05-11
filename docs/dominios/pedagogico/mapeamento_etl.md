@@ -84,6 +84,8 @@ O agrupamento ocorre em Python via `_agrupar()`. Somente grupos com 2+ component
 
 **Query:** `SQL_GRADE_COMPONENTE_CURRICULAR` (parâmetro `?` por ano letivo)
 
+**Chave de upsert:** `(codigo_componente_curricular, ano_letivo, modalidade, codigo_ano_turma, codigo_serie_ensino)`.
+
 | Campo EOL | Campo Destino | Transformação |
 | :--- | :--- | :--- |
 | `CodigoComponenteCurricular` | `codigo_componente_curricular` | `int()` |

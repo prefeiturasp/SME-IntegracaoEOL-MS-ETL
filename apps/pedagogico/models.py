@@ -210,6 +210,7 @@ class GradeComponenteCurricular(ModeloBase):
                     "ano_letivo",
                     "modalidade",
                     "codigo_ano_turma",
+                    "codigo_serie_ensino",
                 ],
                 name="uq_grade_componente_curricular",
                 nulls_distinct=False,
