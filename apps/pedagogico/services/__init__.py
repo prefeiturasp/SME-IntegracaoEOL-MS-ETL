@@ -15,17 +15,13 @@ from apps.pedagogico.services.agrupamentos import (
 )
 from apps.pedagogico.services.etl_pedagogico_service import (
     EtlPedagogicoService,
-    _build_a3_index,
-    _planejamento_regencia,
 )
 
 __all__ = [
     "EtlPedagogicoService",
     "_AGRUPAMENTO_ID_INICIAL",
     "_agrupar",
-    "_build_a3_index",
     "_chave_grupo",
     "_cod_agrupamento",
     "_montar_indices_agr_existentes",
-    "_planejamento_regencia",
 ]

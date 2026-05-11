@@ -2,7 +2,7 @@
 
 ## Objetivo
 
-Popular `pedagogico_db` com os dados de componentes curriculares do EOL — catálogo, atribuições por turma e professor, agrupamentos de território do saber, regência e oferta por ano letivo — servindo de base para os endpoints de planejamento pedagógico do SGP.
+Popular `pedagogico_db` com os dados de componentes curriculares do EOL — catálogo, vínculo turma × componente, atribuições de professor, agrupamentos de território do saber, turmas e oferta por ano letivo — servindo de base para os endpoints de planejamento pedagógico do SGP.
 
 ## Origem dos Dados
 
@@ -21,56 +21,58 @@ Herda de `BaseEtlService` (pipeline Producer-Consumer com ThreadPool, auditoria 
 | Customização | Descrição |
 | :--- | :--- |
 | `_iter_chunks` | Quando o SQL contém `?`, itera para cada ano letivo substituindo o placeholder. |
-| `_criar_transform` | Injeta `_agora` e lookup de regência via closure por fase, sem overhead por linha. |
-| `_executar_fase` | Fase 3 (agrupamentos) é tratada à parte: coleta tudo em memória, agrega em Python e escreve em duas tabelas. |
-| `executar` | Pré-carrega lookup antes da fase 2 e registra resultado duplo da fase 3. |
+| `_criar_transform` | Injeta `_agora` via closure por fase, sem overhead por linha. |
+| `_executar_fase` | Fase 4 (agrupamentos) é tratada à parte: coleta tudo em memória, agrega em Python e escreve em duas tabelas. |
+| `executar` | Registra o resultado duplo da fase de agrupamentos. |
 
-## Lookup pré-carregado
+## Regras mantidas fora do ETL
 
-`_carregar_lookups` é chamado uma vez antes da fase 2:
+O ETL não calcula mais `planejamento_regencia`, nem grava relação pai de componente em `ComponenteTurma`. Essas regras pertencem ao microsserviço de consumo e às tabelas locais de apoio:
 
-- **A3** — `SQL_LOOKUP_PLANEJAMENTO_REGENCIA` → dois sets: `exact: set[(codigo, turno, ano)]` e `fallback: set[int]`. Fonte de `planejamento_regencia`.
+- `componente_curricular_planejamento_regencia`
+- `componente_curricular_hierarquia`
 
-`regencia` e `territorio_saber` **não** dependem de lookup separado — os flags `EhRegencia` e `EhTerritorio` são calculados diretamente nas cláusulas `CASE` de `SQL_COMPONENTES_POR_TURMA`.
+No ETL, `regencia` fica no catálogo `ComponenteCurricular` e é calculada por `CASE` sobre `_IDS_REGENCIA` em `SQL_COMPONENTES_NAO_CANCELADOS`.
 
 ## Modelos do app
 
-O código define **10 modelos** em `apps/pedagogico/models.py`:
+O código define **11 modelos** em `apps/pedagogico/models.py`:
 
 1. `ComponenteCurricular`
-2. `ComponenteCurricularPorTurma`
+2. `ComponenteTurma`
 3. `ComponenteCurricularAgrupamento`
-4. `ComponenteInicioTurma`
-5. `GradeCurricularSerie`
+4. `AtribuicaoComponente`
+5. `GradeComponenteCurricular`
 6. `AgrupamentoAtribuicaoTerritorioSaber`
 7. `Turma`
 8. `TurmaItinerarioEnsinoMedio` (fixture estática; não é fase do ETL)
-9. `RegenciaComponenteCurricular` (tabela local de apoio; não é fase do ETL)
-10. `ComponenteCurricularPAP` (tabela local de apoio; não é fase do ETL)
+9. `ComponenteCurricularPlanejamentoRegencia` (tabela local de apoio; não é fase do ETL)
+10. `ComponenteCurricularHierarquia` (tabela local de apoio; não é fase do ETL)
+11. `ComponenteCurricularPAP` (tabela local de apoio; não é fase do ETL)
 
 ## Fases implementadas
 
 ### Fase 1 — ComponenteCurricular
 - Catálogo de componentes ativos (sem cancelamento).
 - **Query:** `SQL_COMPONENTES_NAO_CANCELADOS` — sem parâmetro de ano.
+- Também grava a flag `regencia`.
 
-### Fase 2 — ComponenteCurricularPorTurma
-- Atribuições reais de componente por turma e professor.
-- **Query:** `SQL_COMPONENTES_POR_TURMA` com `?` por ano letivo.
-- **Lookup:** A3 (planejamento de regência). `regencia` e `territorio_saber` vêm inline da query.
+### Fase 2 — ComponenteTurma
+- Estrutura turma × componente, sem professor.
+- **Query:** `SQL_COMPONENTE_TURMA` com `?` por ano letivo.
 
-### Fase 3 — Agrupamentos de Território do Saber
+### Fase 3 — AtribuicaoComponente
+- Relação professor × turma × componente.
+- **Query:** `SQL_ATRIBUICAO_COMPONENTE` com `?` por ano letivo.
+
+### Fase 4 — Agrupamentos de Território do Saber
 - Escreve em **duas** tabelas: `AgrupamentoAtribuicaoTerritorioSaber` e `ComponenteCurricularAgrupamento`.
 - **Query:** `SQL_ATRIBUICOES_TERRITORIO_SABER` (UNION ALL SME RF + Externo CPF, todos os anos).
 - Agrupamento ocorre em Python via `_agrupar()`. `cod_agrupamento` é hash MD5 determinístico.
 
-### Fase 4 — ComponenteInicioTurma
-- Data de início e periodicidade de cada componente por turma.
-- **Query:** `SQL_COMPONENTE_INICIO_TURMA` com `?` por ano letivo.
-
-### Fase 5 — GradeCurricularSerie
+### Fase 5 — GradeComponenteCurricular
 - Catálogo de oferta de componentes por série, ano letivo e modalidade.
-- **Query:** `SQL_GRADE_CURRICULAR_SERIE` com `?` por ano letivo.
+- **Query:** `SQL_GRADE_COMPONENTE_CURRICULAR` com `?` por ano letivo.
 
 ### Fase 6 — Turma
 - Dados cadastrais de turmas do EOL (situação, modalidade, série, UE).
@@ -85,10 +87,10 @@ digraph G {
     node [shape=box, style="rounded"];
 
     F1 [label="Fase 1\nComponenteCurricular"];
-    F2 [label="Fase 2\nComponentePorTurma\n(lookup A3)"];
-    F3 [label="Fase 3\nAgrupamentos TS\n(2 tabelas)"];
-    F4 [label="Fase 4\nComponenteInicioTurma"];
-    F5 [label="Fase 5\nGradeCurricularSerie"];
+    F2 [label="Fase 2\nComponenteTurma"];
+    F3 [label="Fase 3\nAtribuicaoComponente"];
+    F4 [label="Fase 4\nAgrupamentos TS\n(2 tabelas)"];
+    F5 [label="Fase 5\nGradeComponenteCurricular"];
     F6 [label="Fase 6\nTurma"];
 
     F1 -> F2 -> F3 -> F4 -> F5 -> F6;

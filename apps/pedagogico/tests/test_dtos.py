@@ -6,8 +6,6 @@ from django.utils import timezone
 from apps.pedagogico.dtos.model_in import (
     ComponenteCurricularSimplesIn,
     ComponenteTurmaIn,
-    ComponenteInicioTurmaIn,
-    ComponenteRegenciaIn,
     GradeComponenteCurricularIn,
     TurmaIn,
 )
@@ -17,114 +15,33 @@ class ComponenteCurricularSimplesInTest(SimpleTestCase):
     """Testes de ``ComponenteCurricularSimplesIn.to_domain()``."""
 
     def test_mapeamento_basico(self) -> None:
-        dto = ComponenteCurricularSimplesIn(codigo="100", descricao=" Arte ")
+        dto = ComponenteCurricularSimplesIn(
+            codigo="100", descricao=" Arte ", regencia=1
+        )
         data = dto.to_domain("agora")
 
         self.assertEqual(data["codigo"], 100)
         self.assertEqual(data["descricao"], "Arte")
+        self.assertTrue(data["regencia"])
         self.assertEqual(data["transferido_em"], "agora")
 
 
 class ComponenteTurmaInTest(SimpleTestCase):
     """Testes de ``ComponenteTurmaIn.to_domain()``."""
 
-    def test_mapeia_codigo_serie_ensino(self) -> None:
+    def test_mapeamento_minimo(self) -> None:
         dto = ComponenteTurmaIn(
             turma_codigo=123,
             componente_codigo=220,
-            descricao=" Leitura ",
-            regencia=0,
-            territorio_saber=0,
             codigo_componente_territorio_saber=None,
-            codigo_componente_curricular_pai=None,
-            tipo_escola=1,
-            turno_turma=5,
-            ano_turma="1",
-            codigo_serie_ensino=23,
-            ano_letivo=2026,
         )
 
         data = dto.to_domain("agora")
 
-        self.assertEqual(data["codigo_serie_ensino"], 23)
-
-
-class ComponenteRegenciaInTest(SimpleTestCase):
-    """Testes de ``ComponenteRegenciaIn.to_domain()``."""
-
-    def test_mapeamento_com_datetimes_aware(self) -> None:
-        dto = ComponenteRegenciaIn(
-            codigo_componente_curricular=200,
-            descricao_componente_curricular=" Ciências ",
-            ano_turma="5",
-            ano_letivo=2025,
-            turma_codigo=321,
-            tipo_escola=2,
-            turno_turma=5,
-            rf_professor=999,
-            codigo_experiencia_pedagogica=10,
-            codigo_territorio_saber=20,
-            descricao_territorio_saber="Território",
-            descricao_experiencia_pedagogica="Experiência",
-            data_atribuicao="2025-02-01T10:00:00",
-            ano_atribuicao=2025,
-            data_fim_turma=None,
-            atribuicao_externa=0,
-            data_disponibilizacao="2025-12-01T10:00:00",
-            codigo_motivo_disponibilizacao=34,
-        )
-        data = dto.to_domain(transferido_em="agora", planejamento=True)
-
-        self.assertEqual(data["codigo"], 200)
-        self.assertEqual(data["descricao"], "Ciências")
-        self.assertTrue(data["territorio_saber"])
-        self.assertEqual(data["codigo_componente_territorio_saber"], 20)
-        self.assertEqual(data["professor"], "999")
-        self.assertEqual(data["ano_turma"], "5")
-        self.assertTrue(data["componente_planejamento_regencia"])
-        self.assertTrue(timezone.is_aware(data["inicio_atribuicao"]))
-        self.assertTrue(timezone.is_aware(data["fim_atribuicao"]))
-
-
-class ComponenteInicioTurmaInTest(SimpleTestCase):
-    """Testes de ``ComponenteInicioTurmaIn.to_domain()``."""
-
-    def test_mapeamento_completo(self) -> None:
-        dto = ComponenteInicioTurmaIn(
-            componente_codigo=100,
-            componente_descricao=" Arte ",
-            turma_codigo=200,
-            data_inicio_turma=datetime(2025, 3, 10, 8, 0, 0),
-            ue_codigo=300,
-            ano_letivo=2025,
-            tipo_periodicidade=1,
-        )
-        data = dto.to_domain("agora")
-
-        self.assertEqual(data["componente_codigo"], "100")
-        self.assertEqual(data["componente_descricao"], "Arte")
-        self.assertEqual(data["turma_codigo"], "200")
-        self.assertTrue(timezone.is_aware(data["data_inicio_turma"]))
-        self.assertEqual(data["ue_codigo"], "300")
-        self.assertEqual(data["ano_letivo"], 2025)
-        self.assertEqual(data["tipo_periodicidade"], 1)
-
-    def test_campos_opcionais_nulos(self) -> None:
-        dto = ComponenteInicioTurmaIn(
-            componente_codigo=100,
-            componente_descricao=" Arte ",
-            turma_codigo=200,
-            data_inicio_turma=None,
-            ue_codigo=None,
-            ano_letivo=None,
-            tipo_periodicidade=None,
-        )
-        data = dto.to_domain("agora")
-
-        self.assertIsNone(data["data_inicio_turma"])
-        self.assertIsNone(data["ue_codigo"])
-        self.assertIsNone(data["ano_letivo"])
-        self.assertIsNone(data["tipo_periodicidade"])
+        self.assertEqual(data["turma_codigo"], "123")
+        self.assertEqual(data["componente_codigo"], 220)
+        self.assertIsNone(data["codigo_componente_territorio_saber"])
+        self.assertEqual(data["transferido_em"], "agora")
 
 
 class GradeComponenteCurricularInTest(SimpleTestCase):
@@ -185,6 +102,7 @@ def _turma_in_completa(**overrides: object) -> TurmaIn:
         "data_atualizacao": datetime(2025, 1, 10, 0, 0, 0),
         "data_status_turma_escola": None,
         "serie_ensino": " 5o ano ",
+        "codigo_serie_ensino": 50,
         "modalidade": " Fundamental ",
         "codigo_modalidade": 5,
         "codigo_tipo_programa": 3,
@@ -213,6 +131,7 @@ class TurmaInTest(SimpleTestCase):
         self.assertEqual(data["situacao"], "O")
         self.assertEqual(data["ue_codigo"], "001234")
         self.assertEqual(data["serie_ensino"], "5o ano")
+        self.assertEqual(data["codigo_serie_ensino"], 50)
         self.assertEqual(data["modalidade"], "Fundamental")
         self.assertEqual(data["codigo_modalidade"], 5)
         self.assertEqual(data["codigo_tipo_programa"], 3)
@@ -257,6 +176,7 @@ class TurmaInTest(SimpleTestCase):
             data_atualizacao=None,
             data_status_turma_escola=None,
             serie_ensino=None,
+            codigo_serie_ensino=None,
             modalidade=None,
             codigo_modalidade=None,
             codigo_tipo_programa=None,
@@ -271,6 +191,7 @@ class TurmaInTest(SimpleTestCase):
         self.assertIsNone(data["data_atualizacao"])
         self.assertIsNone(data["data_status_turma_escola"])
         self.assertIsNone(data["serie_ensino"])
+        self.assertIsNone(data["codigo_serie_ensino"])
         self.assertIsNone(data["modalidade"])
         self.assertIsNone(data["codigo_modalidade"])
 

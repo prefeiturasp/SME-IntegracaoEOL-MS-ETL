@@ -33,21 +33,6 @@ _IDS_REGENCIA = (
 
 _PLACEHOLDERS_REGENCIA = ",".join(str(i) for i in _IDS_REGENCIA)
 
-# Mapeamento componente → componente pai (constante hardcoded)
-# Origem: tabela componentecurricularpai (ApiEolConnection) — dados estáticos
-MAPA_COMPONENTE_PAI: dict[int, int] = {
-    # idcomponentecurricular → idcomponentecurricularpai  (vigencia: 2021-12-31)
-    512: 512,  # V40
-    513: 512,
-    534: 512,
-    535: 512,
-    515: 512,  # V56
-    517: 512,
-    518: 512,
-}
-
-_MAPA_PAI_KEYS = ",".join(str(k) for k in sorted(MAPA_COMPONENTE_PAI))
-
 # Anos letivos disponíveis no EOL (EolConnection)
 SQL_ANOS_LETIVOS = """
 SELECT DISTINCT an_letivo
@@ -58,15 +43,13 @@ ORDER BY an_letivo
 
 # Fase 2 — Estrutura turma × componente (sem professor).
 # Uma linha por (turma_codigo, componente_codigo).
-# Flags (regencia, territorio_saber, exibir_componente_eol, etc.) embutidas no SQL.
-# planejamento_regencia é calculado no transform a partir do índice A3.
-#
+# Mantém apenas o vínculo e o código de território do saber, quando existir.
 # Dois branches (UNION ALL — mutuamente exclusivos):
 #   Branch 1: turmas com série (via serie_turma_escola)
 #   Branch 2: turmas de programa (via turma_escola_grade_programa)
 #
-# territorio_saber resolvido via CTE lida uma vez (evita EXISTS correlacionado por linha).
-SQL_COMPONENTE_TURMA = f"""
+# codigo_componente_territorio_saber resolvido via CTE lida uma vez.
+SQL_COMPONENTE_TURMA = """
 WITH cte_territorio AS (
     SELECT DISTINCT cd_componente_curricular
     FROM turma_grade_territorio_experiencia (NOLOCK)
@@ -74,20 +57,8 @@ WITH cte_territorio AS (
 SELECT DISTINCT
     te.cd_turma_escola                                                                  AS turma_codigo,
     cc.cd_componente_curricular                                                         AS componente_codigo,
-    LTRIM(RTRIM(cc.dc_componente_curricular))                                           AS descricao,
-    CASE WHEN cc.cd_componente_curricular IN ({_PLACEHOLDERS_REGENCIA}) THEN 1 ELSE 0 END AS regencia,
-    CASE WHEN tgt.cd_componente_curricular IS NOT NULL THEN 1 ELSE 0 END               AS territorio_saber,
-    tgt.cd_componente_curricular                                                        AS codigo_componente_territorio_saber,
-    CASE WHEN cc.cd_componente_curricular IN ({_MAPA_PAI_KEYS}) THEN 512 ELSE NULL END AS codigo_componente_curricular_pai,
-    esc.tp_escola,
-    dtt.qt_hora_duracao                                                                 AS turno_turma,
-    se.sg_resumida_serie                                                                AS ano_turma,
-    se.cd_serie_ensino                                                                  AS codigo_serie_ensino,
-    te.an_letivo
+    tgt.cd_componente_curricular                                                        AS codigo_componente_territorio_saber
 FROM turma_escola (NOLOCK) te
-INNER JOIN escola (NOLOCK) esc          ON esc.cd_escola = te.cd_escola
-INNER JOIN duracao_tipo_turno (NOLOCK) dtt
-    ON dtt.cd_tipo_turno = te.cd_tipo_turno AND dtt.cd_duracao = te.cd_duracao
 INNER JOIN serie_turma_escola (NOLOCK) ste ON ste.cd_turma_escola = te.cd_turma_escola
 INNER JOIN serie_turma_grade (NOLOCK) stg
     ON stg.cd_turma_escola = ste.cd_turma_escola AND stg.dt_fim IS NULL
@@ -96,7 +67,6 @@ INNER JOIN grade (NOLOCK) g             ON g.cd_grade = eg.cd_grade
 INNER JOIN grade_componente_curricular (NOLOCK) gcc ON gcc.cd_grade = g.cd_grade
 INNER JOIN componente_curricular (NOLOCK) cc
     ON cc.cd_componente_curricular = gcc.cd_componente_curricular AND cc.dt_cancelamento IS NULL
-LEFT JOIN serie_ensino (NOLOCK) se      ON se.cd_serie_ensino = g.cd_serie_ensino
 LEFT JOIN cte_territorio tgt            ON tgt.cd_componente_curricular = cc.cd_componente_curricular
 WHERE te.an_letivo = ?
   AND te.st_turma_escola IN ('O', 'A', 'C', 'E')
@@ -105,27 +75,14 @@ UNION ALL
 SELECT DISTINCT
     te.cd_turma_escola,
     cc.cd_componente_curricular,
-    LTRIM(RTRIM(cc.dc_componente_curricular)),
-    CASE WHEN cc.cd_componente_curricular IN ({_PLACEHOLDERS_REGENCIA}) THEN 1 ELSE 0 END,
-    CASE WHEN tgt.cd_componente_curricular IS NOT NULL THEN 1 ELSE 0 END,
-    tgt.cd_componente_curricular,
-    CASE WHEN cc.cd_componente_curricular IN ({_MAPA_PAI_KEYS}) THEN 512 ELSE NULL END,
-    esc.tp_escola,
-    dtt.qt_hora_duracao,
-    se.sg_resumida_serie,
-    se.cd_serie_ensino,
-    te.an_letivo
+    tgt.cd_componente_curricular
 FROM turma_escola (NOLOCK) te
-INNER JOIN escola (NOLOCK) esc          ON esc.cd_escola = te.cd_escola
-INNER JOIN duracao_tipo_turno (NOLOCK) dtt
-    ON dtt.cd_tipo_turno = te.cd_tipo_turno AND dtt.cd_duracao = te.cd_duracao
 INNER JOIN turma_escola_grade_programa (NOLOCK) tegp ON tegp.cd_turma_escola = te.cd_turma_escola
 INNER JOIN escola_grade (NOLOCK) teg    ON teg.cd_escola_grade = tegp.cd_escola_grade
 INNER JOIN grade (NOLOCK) pg            ON pg.cd_grade = teg.cd_grade
 INNER JOIN grade_componente_curricular (NOLOCK) pgcc ON pgcc.cd_grade = teg.cd_grade
 INNER JOIN componente_curricular (NOLOCK) cc
     ON pgcc.cd_componente_curricular = cc.cd_componente_curricular AND cc.dt_cancelamento IS NULL
-LEFT JOIN serie_ensino (NOLOCK) se      ON se.cd_serie_ensino = pg.cd_serie_ensino
 LEFT JOIN cte_territorio tgt            ON tgt.cd_componente_curricular = cc.cd_componente_curricular
 WHERE te.an_letivo = ?
   AND te.st_turma_escola IN ('O', 'A', 'C', 'E')
@@ -288,6 +245,7 @@ SELECT DISTINCT
     tur.dt_atualizacao_tabela                                                  AS DataAtualizacao,
     tur.dt_status_turma_escola                                                 AS DataStatusTurmaEscola,
     se.dc_serie_ensino                                                         AS SerieEnsino,
+    se.cd_serie_ensino                                                         AS CodigoSerieEnsino,
     CASE
         WHEN ee.cd_etapa_ensino IN (2, 3, 7, 11)     THEN 'EJA'
         WHEN ee.cd_etapa_ensino IN (4, 5, 12, 13)    THEN 'Fundamental'
@@ -346,10 +304,11 @@ WHERE tur.an_letivo = ?
   AND tur.st_turma_escola IN ('O', 'A', 'E', 'C')
 """
 
-SQL_COMPONENTES_NAO_CANCELADOS = """
+SQL_COMPONENTES_NAO_CANCELADOS = f"""
 SELECT
     cd_componente_curricular              AS Codigo,
-    RTRIM(LTRIM(dc_componente_curricular)) AS Descricao
+    RTRIM(LTRIM(dc_componente_curricular)) AS Descricao,
+    CASE WHEN cd_componente_curricular IN ({_PLACEHOLDERS_REGENCIA}) THEN 1 ELSE 0 END AS Regencia
 FROM componente_curricular
 WHERE dt_cancelamento IS NULL
 """
@@ -411,38 +370,6 @@ SELECT *
 FROM componentesAnoTurmas
 WHERE Modalidade > 0
 """
-
-# Alimenta: cruzamento para derivar planejamento_33
-SQL_LOOKUP_PLANEJAMENTO_REGENCIA = f"""
-SELECT DISTINCT
-    gcc.cd_componente_curricular   AS IdComponenteCurricular,
-    dtt.qt_hora_duracao            AS Turno,
-    serie_ensino.sg_resumida_serie AS Ano
-FROM grade_componente_curricular gcc
-    INNER JOIN grade g
-        ON g.cd_grade = gcc.cd_grade
-    INNER JOIN serie_ensino
-        ON serie_ensino.cd_serie_ensino = g.cd_serie_ensino
-    INNER JOIN escola_grade eg
-        ON eg.cd_grade = g.cd_grade
-    INNER JOIN serie_turma_grade stg
-        ON stg.cd_escola_grade = eg.cd_escola_grade
-        AND stg.dt_fim IS NULL
-    INNER JOIN serie_turma_escola ste
-        ON ste.cd_turma_escola = stg.cd_turma_escola
-    INNER JOIN turma_escola te
-        ON te.cd_turma_escola = ste.cd_turma_escola
-    INNER JOIN duracao_tipo_turno dtt
-        ON te.cd_tipo_turno = dtt.cd_tipo_turno
-        AND te.cd_duracao = dtt.cd_duracao
-    INNER JOIN componente_curricular cc
-        ON cc.cd_componente_curricular = gcc.cd_componente_curricular
-WHERE gcc.cd_componente_curricular IN ({_PLACEHOLDERS_REGENCIA})
-  AND cc.dt_cancelamento IS NULL
-  AND te.st_turma_escola IN ('O', 'A', 'C')
-  AND te.an_letivo = ?
-"""
-
 
 # Alimenta: agrupamento_atribuicao_territorio_saber
 # e componente_curricular_agrupamento

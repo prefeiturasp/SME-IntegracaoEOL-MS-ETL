@@ -11,11 +11,6 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.AddField(
-            model_name="componenteturma",
-            name="codigo_serie_ensino",
-            field=models.IntegerField(blank=True, null=True),
-        ),
-        migrations.AddField(
             model_name="turma",
             name="codigo_modalidade_etapa",
             field=models.IntegerField(blank=True, null=True),

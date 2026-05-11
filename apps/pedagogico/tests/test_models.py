@@ -4,7 +4,6 @@ from apps.pedagogico.models import (
     AgrupamentoAtribuicaoTerritorioSaber,
     ComponenteCurricular,
     ComponenteCurricularAgrupamento,
-    ComponenteInicioTurma,
     GradeComponenteCurricular,
     Turma,
     TurmaItinerarioEnsinoMedio,
@@ -26,14 +25,6 @@ class PedagogicoModelsTest(TestCase):
             ano_letivo=2025,
         )
         self.assertEqual(str(obj), "componente=300 turma=T2 agrupamento=999")
-
-    def test_dados_aula_turma_str(self) -> None:
-        obj = ComponenteInicioTurma(
-            componente_codigo="500",
-            componente_descricao="História",
-            turma_codigo="T3",
-        )
-        self.assertEqual(str(obj), "500 turma=T3")
 
     def test_grade_componente_curricular_str(self) -> None:
         obj = GradeComponenteCurricular(

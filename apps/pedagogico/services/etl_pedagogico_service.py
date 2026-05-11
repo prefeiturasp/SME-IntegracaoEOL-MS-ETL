@@ -6,11 +6,11 @@ Responsabilidade:
 
 Estratégia de escrita: upsert incremental com hash SHA-256 via BaseEtlService.
     ComponenteCurricular            — unique: codigo
-    ComponenteTurma                 — unique: (turma_codigo, componente_codigo)
-    AtribuicaoComponente            — unique: (turma_codigo, componente_codigo, professor)
+    ComponenteTurma                 — unique: turma e componente
+    AtribuicaoComponente            — unique: turma, componente e professor
     AgrupamentoAtribuicaoTS         — unique: cod_agrupamento
-    ComponenteCurricularAgrupamento — unique: (componente_codigo, turma_codigo, codigo_agrupamento)
-    GradeComponenteCurricular       — unique: (codigo_componente_curricular, ano_letivo, modalidade, codigo_ano_turma, ue_codigo)
+    ComponenteCurricularAgrupamento — unique: componente, turma e agrupamento
+    GradeComponenteCurricular       — unique: componente, ano e modalidade
 """
 
 import logging
@@ -33,7 +33,6 @@ from apps.pedagogico.dtos.model_in import (
     ComponenteCurricularSimplesIn,
     ComponenteTurmaIn,
     GradeComponenteCurricularIn,
-    RegenciaComponenteCurricularIn,
     TurmaIn,
 )
 from apps.pedagogico.models import (
@@ -52,7 +51,6 @@ from apps.pedagogico.queries import (
     SQL_COMPONENTE_TURMA,
     SQL_COMPONENTES_NAO_CANCELADOS,
     SQL_GRADE_COMPONENTE_CURRICULAR,
-    SQL_LOOKUP_PLANEJAMENTO_REGENCIA,
     SQL_TURMAS,
 )
 from apps.pedagogico.services.agrupamentos import (
@@ -65,39 +63,6 @@ logger = logging.getLogger(__name__)
 _DB = "pedagogico_db"
 ProcessedRecord = tuple[str, str, Any]
 TransformResult = ProcessedRecord | None
-A3ExactKey = tuple[int, Any, Any]
-A3ExactSet = set[A3ExactKey]
-A3FallbackSet = set[int]
-
-# ---------------------------------------------------------------------------
-# Helpers de planejamento de regência
-# ---------------------------------------------------------------------------
-
-
-def _build_a3_index(
-    rows_a3: list[RegenciaComponenteCurricularIn],
-) -> tuple[A3ExactSet, A3FallbackSet]:
-    exact: A3ExactSet = set()
-    fallback: A3FallbackSet = set()
-    for r in rows_a3:
-        codigo = int(r.id_componente_curricular)
-        if r.turno is None and r.ano is None:
-            fallback.add(codigo)
-        else:
-            exact.add((codigo, r.turno, r.ano))
-    return exact, fallback
-
-
-def _planejamento_regencia(
-    codigo: int,
-    turno_turma: Any,
-    ano_turma: Any,
-    exact: A3ExactSet,
-    fallback: A3FallbackSet,
-) -> bool:
-    if (codigo, turno_turma, ano_turma) in exact:
-        return True
-    return codigo in fallback
 
 
 # ---------------------------------------------------------------------------
@@ -132,12 +97,11 @@ class EtlPedagogicoService(BaseEtlService):
     Customizações em relação ao padrão base:
         - ``_iter_chunks``: suporta templates com ``?`` para iteração
           por ano letivo (phases 2, 4, 5, 6).
-        - ``_criar_transform``: injeta ``_agora`` e lookups de regência
-          via closure, sem alocação extra a cada linha.
+        - ``_criar_transform``: injeta ``_agora`` via closure, sem
+          alocação extra a cada linha.
         - ``_executar_fase``: fase 3 (agrupamentos) é tratada à parte
           por escrever em duas tabelas após agregação completa em memória.
-        - ``executar``: pré-carrega lookups antes das fases que precisam
-          deles e trata o resultado duplo da fase 3.
+        - ``executar``: trata o resultado duplo da fase 3.
     """
 
     _dominio = "PEDAGOGICO"
@@ -161,8 +125,6 @@ class EtlPedagogicoService(BaseEtlService):
         )
         self.eol = eol or EOLService()
         self._agora = timezone.now()
-        self._exact: A3ExactSet = set()
-        self._fallback: A3FallbackSet = set()
         self._total_itens_agrupamento: int = 0
         self._cache_anos: list[int] | None = None
         self._ano_letivo: int | None = ano_letivo
@@ -202,7 +164,9 @@ class EtlPedagogicoService(BaseEtlService):
             "componente_curricular": self._transform_componente_curricular,
             "componente_turma": self._transform_componente_turma,
             "atribuicao_componente": self._transform_atribuicao_componente,
-            "grade_componente_curricular": self._transform_grade_componente_curricular,
+            "grade_componente_curricular": (
+                self._transform_grade_componente_curricular
+            ),
             "turma": self._transform_componente_curricular,
         }
         factory = transform_factories.get(config.nome)
@@ -231,17 +195,11 @@ class EtlPedagogicoService(BaseEtlService):
         agora: Any,
         hash_fields: list[str],
     ) -> Callable[[tuple[Any, ...]], TransformResult]:
-        exact = self._exact
-        fallback = self._fallback
-
         def transform(row: tuple[Any, ...]) -> TransformResult:
             dto = dto_in(*row)
             if dto.turma_codigo is None or dto.componente_codigo is None:
                 return None
-            plan = _planejamento_regencia(
-                int(dto.componente_codigo), dto.turno_turma, dto.ano_turma, exact, fallback
-            )
-            obj = model_class(**dto.to_domain(agora, plan))
+            obj = model_class(**dto.to_domain(agora))
             pk = f"{obj.turma_codigo}-{obj.componente_codigo}"
             return pk, calcular_hash(obj, hash_fields), obj
 
@@ -329,27 +287,6 @@ class EtlPedagogicoService(BaseEtlService):
             self._cache_anos = anos
         return self._cache_anos
 
-    def _carregar_lookups(self) -> None:
-        """Pré-carrega índice de planejamento de regência por ano letivo.
-
-        Chamado uma vez em ``executar()`` antes das fases que precisam
-        de lookup (componente_turma). Filtra por ano letivo para evitar
-        que configurações históricas contaminem anos correntes.
-        """
-        rows_a3: list[RegenciaComponenteCurricularIn] = []
-        for ano in self._anos_letivos():
-            sql = SQL_LOOKUP_PLANEJAMENTO_REGENCIA.replace("?", str(ano))
-            for chunk in self.eol.iter_query(sql):
-                for r in chunk:
-                    rows_a3.append(RegenciaComponenteCurricularIn(*r))
-        self._exact, self._fallback = _build_a3_index(rows_a3)
-
-        logger.info(
-            "[ETL PEDAG] Lookups: %d exact, %d fallback.",
-            len(self._exact),
-            len(self._fallback),
-        )
-
     # ------------------------------------------------------------------
     # Fase 3 — Agrupamentos (escrita em duas tabelas)
     # ------------------------------------------------------------------
@@ -404,7 +341,7 @@ class EtlPedagogicoService(BaseEtlService):
         total_agrup = 0
         for i in range(0, len(proc_agrup), 500):
             escritos, _ = self.sync_batch(
-                proc_agrup[i: i + 500],
+                proc_agrup[i : i + 500],
                 meta_agrup,
                 batch_num=i,
             )
@@ -435,7 +372,7 @@ class EtlPedagogicoService(BaseEtlService):
         total_itens = 0
         for i in range(0, len(proc_itens), 500):
             escritos, _ = self.sync_batch(
-                proc_itens[i: i + 500],
+                proc_itens[i : i + 500],
                 meta_itens,
                 batch_num=i,
             )
@@ -476,7 +413,7 @@ class EtlPedagogicoService(BaseEtlService):
                 model_class=ComponenteCurricular,
                 dto_in=ComponenteCurricularSimplesIn,
                 pk_field="codigo",
-                update_fields=("descricao", "transferido_em"),
+                update_fields=("descricao", "regencia", "transferido_em"),
                 unique_fields=("codigo",),
             ),
             PhaseConfig(
@@ -488,17 +425,7 @@ class EtlPedagogicoService(BaseEtlService):
                 dto_in=ComponenteTurmaIn,
                 pk_field=["turma_codigo", "componente_codigo"],
                 update_fields=(
-                    "descricao",
-                    "regencia",
-                    "planejamento_regencia",
-                    "territorio_saber",
                     "codigo_componente_territorio_saber",
-                    "codigo_componente_curricular_pai",
-                    "tipo_escola",
-                    "turno_turma",
-                    "ano_turma",
-                    "codigo_serie_ensino",
-                    "ano_letivo",
                     "transferido_em",
                 ),
                 unique_fields=("turma_codigo", "componente_codigo"),
@@ -517,7 +444,10 @@ class EtlPedagogicoService(BaseEtlService):
                     "transferido_em",
                 ),
                 unique_fields=(
-                    "turma_codigo", "componente_codigo", "professor"),
+                    "turma_codigo",
+                    "componente_codigo",
+                    "professor",
+                ),
             ),
             PhaseConfig(
                 nome="agrupamento_territorio_saber",
@@ -579,6 +509,7 @@ class EtlPedagogicoService(BaseEtlService):
                     "data_atualizacao",
                     "data_status_turma_escola",
                     "serie_ensino",
+                    "codigo_serie_ensino",
                     "modalidade",
                     "codigo_modalidade",
                     "codigo_tipo_programa",
@@ -608,13 +539,6 @@ class EtlPedagogicoService(BaseEtlService):
         """
         self._agora = timezone.now()
         self._cache_anos = None  # reseta cache de anos para o run
-
-        fases_com_lookup = {"componente_turma"}
-        precisa_lookup = self._fases_selecionadas is None or bool(
-            fases_com_lookup & set(self._fases_selecionadas or [])
-        )
-        if precisa_lookup:
-            self._carregar_lookups()
 
         resultados: dict[str, int] = {}
         logger.info(
