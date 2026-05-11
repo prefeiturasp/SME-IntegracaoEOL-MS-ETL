@@ -3,7 +3,14 @@
 from dataclasses import dataclass
 from typing import Any
 
-from apps.core.libs.helpers import make_aware, strip_str
+from apps.core.libs.helpers import (
+    aware_or_none,
+    int_or_none,
+    str_or_none,
+    str_value_or_none,
+    strip_or_none,
+    strip_str,
+)
 
 
 @dataclass
@@ -158,65 +165,29 @@ class TurmaIn:
         return {
             "codigo": int(self.codigo),
             "ano_letivo": int(self.ano_letivo),
-            "ano": str(self.ano) if self.ano is not None else None,
+            "ano": str_value_or_none(self.ano),
             "tipo_turma": int(self.tipo_turma),
             "nome_turma": strip_str(self.nome_turma),
-            "duracao_turno": (
-                int(self.duracao_turno)
-                if self.duracao_turno is not None
-                else None
-            ),
-            "tipo_turno": (
-                int(self.tipo_turno) if self.tipo_turno is not None else None
-            ),
-            "data_inicio_turma": (
-                make_aware(self.data_inicio_turma)
-                if self.data_inicio_turma
-                else None
-            ),
-            "data_fim": (make_aware(self.data_fim) if self.data_fim else None),
+            "duracao_turno": int_or_none(self.duracao_turno),
+            "tipo_turno": int_or_none(self.tipo_turno),
+            "data_inicio_turma": aware_or_none(self.data_inicio_turma),
+            "data_fim": aware_or_none(self.data_fim),
             "extinta": bool(self.extinta),
-            "situacao": str(self.situacao) if self.situacao else None,
-            "ue_codigo": str(self.ue_codigo) if self.ue_codigo else None,
-            "data_atualizacao": (
-                make_aware(self.data_atualizacao)
-                if self.data_atualizacao
-                else None
+            "situacao": str_or_none(self.situacao),
+            "ue_codigo": str_or_none(self.ue_codigo),
+            "data_atualizacao": aware_or_none(self.data_atualizacao),
+            "data_status_turma_escola": aware_or_none(
+                self.data_status_turma_escola
             ),
-            "data_status_turma_escola": (
-                make_aware(self.data_status_turma_escola)
-                if self.data_status_turma_escola
-                else None
+            "serie_ensino": strip_or_none(self.serie_ensino),
+            "codigo_serie_ensino": int_or_none(self.codigo_serie_ensino),
+            "modalidade": strip_or_none(self.modalidade),
+            "codigo_modalidade": int_or_none(self.codigo_modalidade),
+            "codigo_tipo_programa": int_or_none(self.codigo_tipo_programa),
+            "codigo_modalidade_etapa": int_or_none(
+                self.codigo_modalidade_etapa
             ),
-            "serie_ensino": (
-                strip_str(self.serie_ensino) if self.serie_ensino else None
-            ),
-            "codigo_serie_ensino": (
-                int(self.codigo_serie_ensino)
-                if self.codigo_serie_ensino is not None
-                else None
-            ),
-            "modalidade": (
-                strip_str(self.modalidade) if self.modalidade else None
-            ),
-            "codigo_modalidade": (
-                int(self.codigo_modalidade)
-                if self.codigo_modalidade is not None
-                else None
-            ),
-            "codigo_tipo_programa": (
-                int(self.codigo_tipo_programa)
-                if self.codigo_tipo_programa is not None
-                else None
-            ),
-            "codigo_modalidade_etapa": (
-                int(self.codigo_modalidade_etapa)
-                if self.codigo_modalidade_etapa is not None
-                else None
-            ),
-            "semestre": (
-                int(self.semestre) if self.semestre is not None else 0
-            ),
+            "semestre": int_or_none(self.semestre) or 0,
             "ensino_especial": bool(self.ensino_especial),
             "transferido_em": transferido_em,
         }
