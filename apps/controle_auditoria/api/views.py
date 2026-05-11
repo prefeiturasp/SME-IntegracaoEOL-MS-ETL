@@ -574,10 +574,15 @@ class KanbanView(View):
             tabelas_lidas = lidas_map.get(key, [])
             tabelas_escritas = escritas_map.get(key, [])
             cp = checkpoints.get(exec_obj.dominio)
+            cp_da_execucao = bool(
+                cp
+                and str(cp.ultimo_id_execucao) == str(exec_obj.id_execucao)
+            )
             dominios_kanban.append(
                 {
                     "exec": exec_obj,
                     "checkpoint": cp,
+                    "checkpoint_da_execucao": cp_da_execucao,
                     "tabelas_lidas": tabelas_lidas,
                     "tabelas_escritas": tabelas_escritas,
                     "total_lido": sum(

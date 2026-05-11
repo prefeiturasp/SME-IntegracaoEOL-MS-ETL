@@ -324,7 +324,7 @@
       <div class="kcard">
         <div class="kcard-header check"><i class="bi bi-bookmark-check"></i> Checkpoint</div>
         <div class="kcard-body">
-          {% if item.checkpoint %}
+          {% if item.checkpoint and item.checkpoint_da_execucao %}
           <div class="kcard-total" style="color:var(--col-check)">{{ item.checkpoint.token_parada|default:"0"|numero_br }}</div>
           <div class="kcard-label">token acumulado</div>
           <div class="cp-row"><span class="cp-key">situação</span><span class="cp-val">{{ item.checkpoint.ultima_situacao }}</span></div>
@@ -334,7 +334,10 @@
           <div class="cp-row"><span class="cp-key">último sucesso</span><span class="cp-val">{{ item.checkpoint.ultimo_sucesso_em|date:"d/m H:i:s" }}</span></div>
           {% endif %}
           {% else %}
-          <div style="font-size:.75rem;color:#475569">sem checkpoint</div>
+          <div class="empty-state" style="padding:1.5rem">
+            <i class="bi bi-bookmark-x" style="font-size:1.5rem;color:#334155"></i>
+            <div style="font-size:.75rem;color:#475569;margin-top:.5rem">checkpoint não disponível<br>para execuções históricas</div>
+          </div>
           {% endif %}
         </div>
       </div>
