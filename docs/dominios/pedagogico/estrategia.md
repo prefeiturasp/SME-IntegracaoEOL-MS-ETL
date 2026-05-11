@@ -9,16 +9,17 @@ O controle incremental é feito por hash SHA-256 dos `update_fields` de cada lin
 | Tabela | Unique (chave de upsert) |
 | :--- | :--- |
 | `componente_curricular` | `codigo` |
-| `componente_curricular_por_turma` | `(codigo, turma_codigo, professor)` |
+| `componente_turma` | `(turma_codigo, componente_codigo)` |
+| `atribuicao_componente` | `(turma_codigo, componente_codigo, professor)` |
 | `agrupamento_atribuicao_territorio_saber` | `cod_agrupamento` |
 | `componente_curricular_agrupamento` | `(componente_codigo, turma_codigo, codigo_agrupamento)` |
-| `componente_inicio_turma` | `(componente_codigo, turma_codigo)` |
-| `grade_curricular_serie` | `(codigo_componente_curricular, ano_letivo, modalidade)` |
+| `grade_componente_curricular` | `(codigo_componente_curricular, ano_letivo, modalidade, codigo_ano_turma)` |
+| `turma` | `codigo` |
 
 ## Tratamento de `None` no transform
 
-Fases 2 e 5 podem emitir `None` do transform quando a linha está incompleta (ex: `codigo` ou `turma_codigo` nulos). O método `_processar_batch` é sobrescrito em `EtlPedagogicoService` para filtrar esses `None` antes de passar ao batch.
+Fases 2 e 3 podem emitir `None` do transform quando a linha está incompleta (ex: `turma_codigo`, `componente_codigo` ou `professor` nulos). O método `_processar_batch` é sobrescrito em `EtlPedagogicoService` para filtrar esses `None` antes de passar ao batch.
 
-## Fase 3 — escrita em duas tabelas
+## Fase 4 — escrita em duas tabelas
 
 A fase de agrupamentos escreve sequencialmente em `AgrupamentoAtribuicaoTerritorioSaber` e depois em `ComponenteCurricularAgrupamento`, em lotes de 500. O resultado da fase reporta ambas as contagens separadamente no dict de retorno de `executar()`.

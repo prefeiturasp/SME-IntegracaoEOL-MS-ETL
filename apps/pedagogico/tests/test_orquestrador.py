@@ -29,14 +29,14 @@ class TestEtlPedagogicoOrquestrador(TestCase):
         orq = self._make_orquestrador(id_execucao=id_fixo)
         self.assertEqual(orq.id_execucao, id_fixo)
 
-    def test_get_meta_fase_3(self) -> None:
-        """Valida metadados da fase 3 (agrupamento_territorio_saber)."""
+    def test_get_meta_fase_4(self) -> None:
+        """Valida metadados da fase 4 (agrupamento_territorio_saber)."""
         orq = self._make_orquestrador()
         meta = orq.service.get_meta(
-            orq.service._fases[2], 3, 6, orq.id_execucao
+            orq.service._fases[3], 4, 6, orq.id_execucao
         )
 
-        self.assertEqual(meta.numero_fase, 3)
+        self.assertEqual(meta.numero_fase, 4)
         self.assertEqual(meta.nome, "agrupamento_territorio_saber")
         self.assertIn(
             "apps.core.tasks.processar_chunk", meta.task_processamento_path

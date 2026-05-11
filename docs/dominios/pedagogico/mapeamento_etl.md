@@ -12,34 +12,46 @@ Resumo de origem e destino por fase. Para o mapeamento campo a campo e decisões
 | :--- | :--- | :--- |
 | `cd_componente_curricular` | `codigo` | `int()` |
 | `dc_componente_curricular` | `descricao` | `strip_str()` |
+| CASE sobre `_IDS_REGENCIA` | `regencia` | `bool()` |
 | — | `transferido_em` | `timezone.now()` |
 
 ---
 
-## Fase 2 — ComponenteCurricularPorTurma
+## Fase 2 — ComponenteTurma
 
-**Query:** `SQL_COMPONENTES_POR_TURMA` (parâmetro `?` por ano letivo)
+**Query:** `SQL_COMPONENTE_TURMA` (parâmetro `?` por ano letivo)
 
-`regencia` e `territorio_saber` são calculados via `CASE` inline na query (`EhRegencia`, `EhTerritorio`) — não há lookup A2 separado.
+Estrutura turma × componente, sem professor e sem regra de planejamento.
+Serve para dizer quais componentes existem em cada turma real do EOL.
 
 | Campo Origem | Campo Destino | Transformação |
 | :--- | :--- | :--- |
-| `Codigo` (EOL) | `codigo` | `int()` |
-| `Descricao` (EOL) | `descricao` | `strip_str()` |
-| `EhRegencia` (CASE inline) | `regencia` | `bool()` |
-| `EhTerritorio` (CASE inline) | `territorio_saber` | `bool()` |
-| lookup A3 (`SQL_LOOKUP_PLANEJAMENTO_REGENCIA`) | `planejamento_regencia` | exact → fallback |
-| `codigo` se `territorio_saber` | `codigo_componente_territorio_saber` | `codigo` ou `None` |
-| `MAPA_COMPONENTE_PAI` | `codigo_componente_curricular_pai` | `.get(codigo)` |
 | `cd_turma_escola` | `turma_codigo` | `str()` ou `None` |
-| RF ou CPF (por `AtribuicaoExterna`) | `professor` | `str()` ou `None` |
-| `anoletivo` | `ano_letivo` | `int()` |
-| `MAPA_COMPONENTE_PAI` + `ano_letivo` | `exibir_componente_eol` | `not (ano <= 2021 and cod in mapa)` |
+| `cd_componente_curricular` | `componente_codigo` | `int()` |
+| presença em `turma_grade_territorio_experiencia` | `codigo_componente_territorio_saber` | código do componente ou `None` |
 | — | `transferido_em` | `timezone.now()` |
 
 ---
 
-## Fase 3 — AgrupamentoAtribuicaoTerritorioSaber + ComponenteCurricularAgrupamento
+## Fase 3 — AtribuicaoComponente
+
+**Query:** `SQL_ATRIBUICAO_COMPONENTE` (parâmetro `?` por ano letivo)
+
+Relação professor × turma × componente. A query une atribuições SME e externas,
+ativas e históricas, excluindo motivo de disponibilização `26`.
+
+| Campo Origem | Campo Destino | Transformação |
+| :--- | :--- | :--- |
+| `cd_turma_escola` | `turma_codigo` | `str()` ou `None` |
+| `cd_componente_curricular` | `componente_codigo` | `int()` |
+| RF ou CPF | `professor` | `str()` ou `None` |
+| branch externo | `atribuicao_externa` | `bool()` |
+| ano da atribuição | `ano_letivo` | `int()` |
+| — | `transferido_em` | `timezone.now()` |
+
+---
+
+## Fase 4 — AgrupamentoAtribuicaoTerritorioSaber + ComponenteCurricularAgrupamento
 
 **Query:** `SQL_ATRIBUICOES_TERRITORIO_SABER` (UNION ALL SME RF + Externo CPF, todos os anos)
 
@@ -68,26 +80,9 @@ O agrupamento ocorre em Python via `_agrupar()`. Somente grupos com 2+ component
 
 ---
 
-## Fase 4 — ComponenteInicioTurma
+## Fase 5 — GradeComponenteCurricular
 
-**Query:** `SQL_COMPONENTE_INICIO_TURMA` (parâmetro `?` por ano letivo)
-
-| Campo EOL | Campo Destino | Transformação |
-| :--- | :--- | :--- |
-| `ComponenteCurricularCodigo` | `componente_codigo` | `str()` |
-| `ComponenteCurricularDescricao` | `componente_descricao` | `strip_str()` |
-| `TurmaCodigo` | `turma_codigo` | `str()` |
-| `DataInicioTurma` | `data_inicio_turma` | `make_aware()` |
-| `UeCodigo` | `ue_codigo` | `str()` ou `None` |
-| `AnoLetivo` | `ano_letivo` | `int()` ou `None` |
-| `TipoPeriodicidade` | `tipo_periodicidade` | `int()` ou `None` |
-| — | `transferido_em` | `timezone.now()` |
-
----
-
-## Fase 5 — GradeCurricularSerie
-
-**Query:** `SQL_GRADE_CURRICULAR_SERIE` (parâmetro `?` por ano letivo)
+**Query:** `SQL_GRADE_COMPONENTE_CURRICULAR` (parâmetro `?` por ano letivo)
 
 | Campo EOL | Campo Destino | Transformação |
 | :--- | :--- | :--- |
@@ -125,8 +120,11 @@ Origem: `turma_escola` (NOLOCK) com joins em `escola`, `serie_turma_escola`, `se
 | `dt_atualizacao_tabela` | `data_atualizacao` | `make_aware()` ou `None` |
 | `dt_status_turma_escola` | `data_status_turma_escola` | `make_aware()` ou `None` |
 | `dc_serie_ensino` | `serie_ensino` | `strip_str()` ou `None` |
+| `cd_serie_ensino` | `codigo_serie_ensino` | `int()` ou `None` |
 | CASE sobre `cd_etapa_ensino` | `modalidade` | `str()` (`'EJA'`, `'Fundamental'`, `'Médio'`, `'Infantil'`) ou `None` |
 | CASE sobre `cd_etapa_ensino` + `tp_escola` | `codigo_modalidade` | `int()` (1=EI, 3=EJA, 4=CIEJA, 5=EF, 6=EM) |
+| `cd_tipo_programa` | `codigo_tipo_programa` | `int()` ou `None` |
+| `cd_etapa_ensino` | `codigo_modalidade_etapa` | `int()` ou `None` |
 | CASE EJA pelo mês de `dt_inicio_turma` | `semestre` | `int()` (1 ou 2 para EJA; 0 demais) |
 | `cd_etapa_ensino = 13` e `cd_modalidade_ensino = 2` | `ensino_especial` | `bool()` |
 | — | `transferido_em` | `timezone.now()` |
