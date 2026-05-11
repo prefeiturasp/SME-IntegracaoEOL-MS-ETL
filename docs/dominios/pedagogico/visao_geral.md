@@ -72,6 +72,7 @@ O código define **11 modelos** em `apps/pedagogico/models.py`:
 
 ### Fase 5 — GradeComponenteCurricular
 - Catálogo de oferta de componentes por série, ano letivo e modalidade.
+- Chave de upsert: componente, ano letivo, modalidade, ano turma e série de ensino.
 - **Query:** `SQL_GRADE_COMPONENTE_CURRICULAR` com `?` por ano letivo.
 
 ### Fase 6 — Turma
