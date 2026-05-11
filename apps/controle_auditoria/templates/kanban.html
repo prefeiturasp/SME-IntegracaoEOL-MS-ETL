@@ -100,15 +100,17 @@
     .kcard-label { font-size: .7rem; color: #64748b; margin-bottom: .75rem; }
 
     /* ── Table rows inside kcard ── */
-    .ktable { width: 100%; border-collapse: collapse; font-size: .78rem; }
+    .ktable-wrap { max-height: 220px; overflow-y: auto; }
+    .ktable { width: 100%; border-collapse: collapse; font-size: .78rem; table-layout: fixed; }
     .ktable tr { border-bottom: 1px solid #263245; }
     .ktable tr:last-child { border-bottom: none; }
     .ktable td { padding: .35rem 0; vertical-align: middle; }
-    .ktable .td-name { color: #94a3b8; word-break: break-all; }
-    .ktable .td-val  { text-align: right; font-weight: 600; white-space: nowrap; padding-left: .5rem; }
+    .ktable .td-name { color: #94a3b8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 0; width: 100%; }
+    .ktable .td-val  { text-align: right; font-weight: 600; white-space: nowrap; padding-left: .5rem; width: 1%; }
     .td-val.read-color  { color: var(--col-read);  }
     .td-val.hash-color  { color: var(--col-hash);  }
     .td-val.write-color { color: var(--col-write); }
+    .td-paginas { font-size: .6rem; color: #475569; margin-left: .3rem; white-space: nowrap; }
 
     /* ── Checkpoint card ── */
     .cp-row { display: flex; justify-content: space-between; font-size: .78rem; padding: .25rem 0; border-bottom: 1px solid #263245; }
@@ -226,6 +228,7 @@
           <div class="kcard-total" style="color:var(--col-read)">{{ item.total_lido|numero_br }}</div>
           <div class="kcard-label">registros lidos</div>
           {% if item.tabelas_lidas %}
+          <div class="ktable-wrap">
           <table class="ktable">
             <thead>
               <tr style="border-bottom: 2px solid #334155;">
@@ -236,12 +239,16 @@
             <tbody>
               {% for tl in item.tabelas_lidas %}
               <tr>
-                <td class="td-name">{{ tl.tabela_origem }}</td>
+                <td class="td-name" title="{{ tl.tabela_origem }}">
+                  {{ tl.tabela_origem }}
+                  {% if tl.num_paginas > 1 %}<span class="td-paginas">× {{ tl.num_paginas }} pág.</span>{% endif %}
+                </td>
                 <td class="td-val read-color">{{ tl.linhas_lidas|numero_br }}</td>
               </tr>
               {% endfor %}
             </tbody>
           </table>
+          </div>
           {% else %}
           <div style="font-size:.75rem;color:#475569">sem dados registrados</div>
           {% endif %}
@@ -255,6 +262,7 @@
           <div class="kcard-total" style="color:var(--col-hash)">{{ item.total_hashes|numero_br }}</div>
           <div class="kcard-label">hashes rastreados</div>
           {% if item.hash_por_tabela %}
+          <div class="ktable-wrap">
           <table class="ktable">
             <thead>
               <tr style="border-bottom: 2px solid #334155;">
@@ -265,12 +273,13 @@
             <tbody>
               {% for tabela, qtd in item.hash_por_tabela.items %}
               <tr>
-                <td class="td-name">{{ tabela }}</td>
+                <td class="td-name" title="{{ tabela }}">{{ tabela }}</td>
                 <td class="td-val hash-color">{{ qtd|numero_br }}</td>
               </tr>
               {% endfor %}
             </tbody>
           </table>
+          </div>
           {% else %}
           <div style="font-size:.75rem;color:#475569">sem hashes registrados</div>
           {% endif %}
@@ -284,6 +293,7 @@
           <div class="kcard-total" style="color:var(--col-write)">{{ item.total_escrito|numero_br }}</div>
           <div class="kcard-label">registros escritos</div>
           {% if item.tabelas_escritas %}
+          <div class="ktable-wrap">
           <table class="ktable">
             <thead>
               <tr style="border-bottom: 2px solid #334155;">
@@ -294,7 +304,7 @@
             <tbody>
               {% for te in item.tabelas_escritas %}
               <tr>
-                <td class="td-name">
+                <td class="td-name" title="{{ te.tabela_destino }} ({{ te.modo_escrita }})">
                   {{ te.tabela_destino }}
                   <span style="font-size:.65rem;color:#475569">({{ te.modo_escrita }})</span>
                 </td>
@@ -303,6 +313,7 @@
               {% endfor %}
             </tbody>
           </table>
+          </div>
           {% else %}
           <div style="font-size:.75rem;color:#475569">sem escritas registradas</div>
           {% endif %}
@@ -345,7 +356,7 @@
   "total_escrito": {{ item.total_escrito }},
   "total_hashes": {{ item.total_hashes }},
   "tabelas_lidas": [{% for tl in item.tabelas_lidas %}
-    { "tabela": "{{ tl.tabela_origem }}", "linhas_lidas": {{ tl.linhas_lidas }}, "pagina": {{ tl.numero_pagina }} }{% if not forloop.last %},{% endif %}{% endfor %}
+    { "tabela": "{{ tl.tabela_origem }}", "linhas_lidas": {{ tl.linhas_lidas }}, "paginas": {{ tl.num_paginas }} }{% if not forloop.last %},{% endif %}{% endfor %}
   ],
   "tabelas_escritas": [{% for te in item.tabelas_escritas %}
     { "tabela": "{{ te.tabela_destino }}", "linhas_escritas": {{ te.linhas_escritas }}, "modo": "{{ te.modo_escrita }}" }{% if not forloop.last %},{% endif %}{% endfor %}

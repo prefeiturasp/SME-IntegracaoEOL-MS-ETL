@@ -448,6 +448,79 @@ class DashboardView(View):
         )
 
 
+def _agregar_tabelas_lidas(ids_execucao: list) -> dict[str, list]:
+    """Agrega linhas lidas por tabela_origem, somando totais e contando páginas."""
+    agg: dict[str, dict[str, dict]] = {}
+    for tl in EtlExecucaoTabelaLida.objects.filter(
+        id_execucao__in=ids_execucao
+    ).order_by("tabela_origem"):
+        key = str(tl.id_execucao)
+        bucket = agg.setdefault(key, {})
+        tabela = tl.tabela_origem
+        if tabela not in bucket:
+            bucket[tabela] = {
+                "tabela_origem": tabela,
+                "linhas_lidas": 0,
+                "num_paginas": 0,
+            }
+        bucket[tabela]["linhas_lidas"] += tl.linhas_lidas
+        bucket[tabela]["num_paginas"] += 1
+    return {
+        key: sorted(tabelas.values(), key=lambda x: x["tabela_origem"])
+        for key, tabelas in agg.items()
+    }
+
+
+def _agregar_tabelas_escritas(ids_execucao: list) -> dict[str, list]:
+    """Agrega linhas escritas por tabela_destino, mantendo modo_escrita mais recente."""
+    agg: dict[str, dict[str, dict]] = {}
+    for te in EtlExecucaoTabelaEscrita.objects.filter(
+        id_execucao__in=ids_execucao
+    ).order_by("tabela_destino", "-escrito_em"):
+        key = str(te.id_execucao)
+        bucket = agg.setdefault(key, {})
+        tabela = te.tabela_destino
+        if tabela not in bucket:
+            bucket[tabela] = {
+                "tabela_destino": tabela,
+                "linhas_escritas": 0,
+                "modo_escrita": te.modo_escrita,
+            }
+        bucket[tabela]["linhas_escritas"] += te.linhas_escritas
+    return {
+        key: sorted(tabelas.values(), key=lambda x: x["tabela_destino"])
+        for key, tabelas in agg.items()
+    }
+
+
+def _resolver_execucoes_kanban(
+    qs_base: QuerySet,
+    id_execucao_filtro: str,
+    dominio_filtro: str,
+    execucoes_disponiveis: list,
+) -> tuple[list, str]:
+    """Resolve execuções a renderizar no kanban e mensagem de estado vazio."""
+    if not id_execucao_filtro:
+        ultima = list(_qs_ultima_execucao_por_dominio())
+        if dominio_filtro:
+            ultima = [e for e in ultima if e.dominio == dominio_filtro]
+        return ultima, "Nenhuma execução encontrada."
+
+    try:
+        selecionada = qs_base.get(id_execucao=id_execucao_filtro)
+    except (EtlExecucao.DoesNotExist, ValidationError, ValueError):
+        selecionada = None
+
+    if selecionada is None:
+        return [], "Execução não encontrada para os filtros aplicados."
+
+    if not any(
+        e.id_execucao == selecionada.id_execucao for e in execucoes_disponiveis
+    ):
+        execucoes_disponiveis.insert(0, selecionada)
+    return [selecionada], "Nenhuma execução encontrada."
+
+
 class KanbanView(View):
     """Kanban de processamento ETL por domínio."""
 
@@ -468,61 +541,23 @@ class KanbanView(View):
             ]
         )
 
-        mensagem_kanban_vazio = "Nenhuma execução encontrada."
-        if id_execucao_filtro:
-            try:
-                execucao_selecionada = qs_execucoes_select.get(
-                    id_execucao=id_execucao_filtro
-                )
-            except (
-                EtlExecucao.DoesNotExist,
-                ValidationError,
-                ValueError,
-            ):
-                execucao_selecionada = None
-
-            if execucao_selecionada is None:
-                ultima_por_dominio = []
-                mensagem_kanban_vazio = (
-                    "Execução não encontrada para os filtros aplicados."
-                )
-            else:
-                ultima_por_dominio = [execucao_selecionada]
-                if not any(
-                    e.id_execucao == execucao_selecionada.id_execucao
-                    for e in execucoes_disponiveis
-                ):
-                    execucoes_disponiveis.insert(0, execucao_selecionada)
-        else:
-            ultima_por_dominio = list(_qs_ultima_execucao_por_dominio())
-            if dominio_filtro:
-                ultima_por_dominio = [
-                    e
-                    for e in ultima_por_dominio
-                    if e.dominio == dominio_filtro
-                ]
+        ultima_por_dominio, mensagem_kanban_vazio = _resolver_execucoes_kanban(
+            qs_execucoes_select,
+            id_execucao_filtro,
+            dominio_filtro,
+            execucoes_disponiveis,
+        )
 
         checkpoints = {
             c.dominio: c for c in EtlCheckpointDominio.objects.all()
         }
-
         ids_execucao = [e.id_execucao for e in ultima_por_dominio]
 
-        lidas_map: dict[str, list] = {}
-        for tl in EtlExecucaoTabelaLida.objects.filter(
-            id_execucao__in=ids_execucao
-        ).order_by("tabela_origem"):
-            lidas_map.setdefault(str(tl.id_execucao), []).append(tl)
+        lidas_map = _agregar_tabelas_lidas(ids_execucao)
+        escritas_map = _agregar_tabelas_escritas(ids_execucao)
 
-        escritas_map: dict[str, list] = {}
-        for te in EtlExecucaoTabelaEscrita.objects.filter(
-            id_execucao__in=ids_execucao
-        ).order_by("tabela_destino"):
-            escritas_map.setdefault(str(te.id_execucao), []).append(te)
-
-        # Contagem de hashes por prefixo de tabela (tabela:id)
         tabelas_unicas = {
-            te.tabela_destino
+            te["tabela_destino"]
             for lista in escritas_map.values()
             for te in lista
         }
@@ -539,25 +574,26 @@ class KanbanView(View):
             tabelas_lidas = lidas_map.get(key, [])
             tabelas_escritas = escritas_map.get(key, [])
             cp = checkpoints.get(exec_obj.dominio)
-
             dominios_kanban.append(
                 {
                     "exec": exec_obj,
                     "checkpoint": cp,
                     "tabelas_lidas": tabelas_lidas,
                     "tabelas_escritas": tabelas_escritas,
-                    "total_lido": sum(t.linhas_lidas for t in tabelas_lidas),
+                    "total_lido": sum(
+                        t["linhas_lidas"] for t in tabelas_lidas
+                    ),
                     "total_escrito": sum(
-                        t.linhas_escritas for t in tabelas_escritas
+                        t["linhas_escritas"] for t in tabelas_escritas
                     ),
                     "hash_por_tabela": {
-                        te.tabela_destino: hash_por_tabela.get(
-                            te.tabela_destino, 0
+                        te["tabela_destino"]: hash_por_tabela.get(
+                            te["tabela_destino"], 0
                         )
                         for te in tabelas_escritas
                     },
                     "total_hashes": sum(
-                        hash_por_tabela.get(te.tabela_destino, 0)
+                        hash_por_tabela.get(te["tabela_destino"], 0)
                         for te in tabelas_escritas
                     ),
                 }
