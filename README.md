@@ -304,6 +304,51 @@ O comando retorna código de saída `0` se compatível ou `1` se algum verificad
 | `VerificadorTerritorioReplicado` | `ObterComponentesCurricularesTerritorioAtribuidos` |
 | `VerificadorTerritorioAtribuicao` | cadeia JOIN com `AtribuicaoAula` |
 
+## Atalhos Make
+
+Use `make help` para listar todos os comandos disponíveis. Os principais:
+
+**Infraestrutura**
+
+| Comando | Descrição |
+|---|---|
+| `make build` | Build da imagem `etl_auditoria` |
+| `make up` | Sobe `postgres` e `keydb` em background |
+| `make down` | Derruba todos os containers |
+| `make logs` | Acompanha logs do `etl_auditoria` em tempo real |
+| `make shell` | Abre shell Django interativo |
+
+**Migrações**
+
+| Comando | Descrição |
+|---|---|
+| `make migrate` | Aplica migrations com `--fake-initial` |
+
+**ETL — execução direta (sem broker)**
+
+| Comando | Descrição |
+|---|---|
+| `make etl-institucional` | ETL institucional completo (DRE + TipoEscola + SubPrefeitura + UE) |
+| `make etl-institucional-ue` | Somente fase 4: `unidade_educacional` |
+| `make etl-alunos` | ETL do domínio alunos |
+| `make etl-pedagogico` | ETL do domínio pedagógico |
+| `make etl-professores` | ETL do domínio professores |
+| `make etl-programas` | ETL do domínio programas |
+| `make etl` | Roda todos os domínios em sequência |
+
+**ETL — agendamento via Celery (requer worker e broker ativos)**
+
+| Comando | Descrição |
+|---|---|
+| `make agendar-institucional` | Enfileira ETL institucional na fila Celery |
+
+**Qualidade**
+
+| Comando | Descrição |
+|---|---|
+| `make test` | Roda testes com coverage (mínimo 80%) |
+| `make lint` | Roda pre-commit nos arquivos do projeto |
+
 ## Testes
 
 Executa testes no container via ambiente dev:
