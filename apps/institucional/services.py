@@ -119,7 +119,9 @@ SELECT
   , vcue.nm_unidade_educacao AS nome
   , vcue.nm_exibicao_unidade AS nome_nao_oficial
   , tpue.dc_tipo_unidade_educacao AS tipo_ue
+  , vcue.tp_unidade_educacao AS codigo_tipo_unidade_educacao
   , tpl.dc_tp_logradouro AS tipo_logradouro
+  , vcue.cd_logradouro AS codigo_logradouro
   , vcue.nm_logradouro AS logradouro
   , vcue.cd_nr_endereco AS numero
   , vcue.nm_bairro AS bairro
@@ -166,6 +168,7 @@ SELECT
   , vuedg.sg_tipo_situacao_unidade AS status
   , vcue.cd_unidade_administrativa_referencia AS codigo_dre
   , te.tp_escola AS codigo_tipo_escola
+  , COALESCE(vuedg.tp_escola, escola.tp_escola) AS codigo_tp_equipamento
   , vcue.cd_sub_prefeitura AS codigo_sub_prefeitura
 FROM v_cadastro_unidade_educacao vcue
 INNER JOIN unidade_administrativa dre
@@ -278,6 +281,7 @@ class EtlInstitucionalService(BaseEtlService):
                     "nome_nao_oficial",
                     "tipo_ue",
                     "tipo_logradouro",
+                    "codigo_logradouro",
                     "logradouro",
                     "numero",
                     "bairro",
@@ -303,6 +307,8 @@ class EtlInstitucionalService(BaseEtlService):
                     "status",
                     "dre_id",
                     "tipo_escola_id",
+                    "codigo_tp_equipamento",
+                    "codigo_tipo_unidade_educacao",
                     "subprefeitura_id",
                     "codigo_ue_integracao",
                 ),

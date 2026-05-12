@@ -20,37 +20,40 @@ from apps.institucional.models import DRE, TipoEscola, UnidadeEducacional
 from apps.institucional.services import EtlInstitucionalService
 
 _ROW_UE = (
-    "000001",
-    "UE 1",
-    "UE 1",
-    "EMEF",
-    "R",
-    "Rua 1",
-    "1",
-    "B",
-    "000",
-    "SP",
-    "D",
-    "e@e.com",
-    "123",
-    None,
-    2020,
-    "P",
-    False,
-    False,
-    None,
-    10,
-    10,
-    0,
-    0,
-    0,
-    20,
-    5,
-    123456,
-    "A",
-    "108900",
-    1,
-    1,
+    "000001",  # codigo_ue
+    "UE 1",  # nome
+    "UE 1",  # nome_nao_oficial
+    "EMEF",  # tipo_ue
+    3,  # codigo_tipo_unidade_educacao
+    "R",  # tipo_logradouro
+    19674,  # codigo_logradouro
+    "Rua 1",  # logradouro
+    "1",  # numero
+    "B",  # bairro
+    "000",  # cep
+    "SP",  # municipio
+    "D",  # distrito
+    "e@e.com",  # email
+    "123",  # telefone_1
+    None,  # telefone_2
+    2020,  # ano_construcao
+    "P",  # propriedade
+    False,  # organizacao_parceira
+    False,  # eh_ceu
+    None,  # data_atualizacao
+    10,  # vagas_matutino
+    10,  # vagas_vespertino
+    0,  # vagas_noturno
+    0,  # vagas_intermediario
+    0,  # vagas_integral
+    20,  # vagas_total
+    5,  # quantidade_funcionarios
+    123456,  # codigo_inep
+    "A",  # status
+    "108900",  # codigo_dre
+    1,  # codigo_tipo_escola
+    3,  # codigo_tp_equipamento
+    1,  # codigo_sub_prefeitura
 )
 
 

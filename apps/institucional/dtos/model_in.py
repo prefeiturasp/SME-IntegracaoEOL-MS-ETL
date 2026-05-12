@@ -79,13 +79,20 @@ class DREIn:
 
 @dataclass(slots=True)
 class UnidadeEducacionalIn:
-    """Dados de Unidade Educacional."""
+    """Dados de Unidade Educacional.
+
+    A ordem dos campos deve espelhar exatamente a ordem das colunas no
+    SQL_UNIDADE_EDUCACIONAL em services.py, pois o ETL instancia via
+    UnidadeEducacionalIn(*row) (posicional).
+    """
 
     codigo_ue: str
     nome: str
     nome_nao_oficial: str | None
     tipo_ue: str | None
+    codigo_tipo_unidade_educacao: int | None
     tipo_logradouro: str | None
+    codigo_logradouro: int | None
     logradouro: str | None
     numero: str | None
     bairro: str | None
@@ -111,6 +118,7 @@ class UnidadeEducacionalIn:
     status: str | None
     codigo_dre: str | None
     codigo_tipo_escola: int | None
+    codigo_tp_equipamento: int | None
     codigo_sub_prefeitura: int | None
     codigo_ue_integracao: str | None = None
 
@@ -124,6 +132,7 @@ class UnidadeEducacionalIn:
             "nome_nao_oficial": strip_str(self.nome_nao_oficial),
             "tipo_ue": strip_str(self.tipo_ue),
             "tipo_logradouro": strip_str(self.tipo_logradouro),
+            "codigo_logradouro": _int(self.codigo_logradouro),
             "logradouro": strip_str(self.logradouro),
             "numero": strip_str(self.numero),
             "bairro": strip_str(self.bairro),
@@ -149,6 +158,10 @@ class UnidadeEducacionalIn:
             "status": strip_str(self.status),
             "dre_id": str(self.codigo_dre) if self.codigo_dre else None,
             "tipo_escola_id": _int(self.codigo_tipo_escola),
+            "codigo_tp_equipamento": _int(self.codigo_tp_equipamento),
+            "codigo_tipo_unidade_educacao": _int(
+                self.codigo_tipo_unidade_educacao
+            ),
             "subprefeitura_id": _int(self.codigo_sub_prefeitura),
             "codigo_ue_integracao": self.codigo_ue_integracao,
         }
