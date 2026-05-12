@@ -300,7 +300,6 @@ LEFT JOIN (
 ) prog_etapa ON prog_etapa.cd_turma_escola = tur.cd_turma_escola
 
 WHERE tur.an_letivo = ?
-  AND tur.cd_tipo_turma <> 4
   AND tur.st_turma_escola IN ('O', 'A', 'E', 'C')
 """
 

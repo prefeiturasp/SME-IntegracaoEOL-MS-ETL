@@ -310,8 +310,7 @@ class Turma(ModeloBase):
     """Dados cadastrais de turmas do EOL.
 
     Fonte: `SQL_TURMAS` — `turma_escola`.
-    Filtra `st_turma_escola IN ('O','A','E','C')`
-    e `cd_tipo_turma <> 4`.
+    Filtra `st_turma_escola IN ('O','A','E','C')`.
 
     Campos calculados na query:
     - `Ano`: primeiro char de `dc_turma_escola` se numérico, senão '0'

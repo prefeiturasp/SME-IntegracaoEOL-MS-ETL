@@ -77,7 +77,7 @@ O código define **11 modelos** em `apps/pedagogico/models.py`:
 
 ### Fase 6 — Turma
 - Dados cadastrais de turmas do EOL (situação, modalidade, série, UE).
-- **Query:** `SQL_TURMAS` com `?` por ano letivo. Filtra `cd_tipo_turma <> 4` e `st_turma_escola IN ('O', 'A', 'E', 'C')`.
+- **Query:** `SQL_TURMAS` com `?` por ano letivo. Filtra `st_turma_escola IN ('O', 'A', 'E', 'C')`.
 - `Modalidade`, `CodigoModalidade`, `Semestre` e `Extinta` são calculados via `CASE` inline na query.
 
 ## Fluxo

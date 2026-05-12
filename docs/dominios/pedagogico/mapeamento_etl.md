@@ -103,7 +103,7 @@ O agrupamento ocorre em Python via `_agrupar()`. Somente grupos com 2+ component
 
 **Query:** `SQL_TURMAS` (parâmetro `?` por ano letivo)
 
-Origem: `turma_escola` (NOLOCK) com joins em `escola`, `serie_turma_escola`, `serie_ensino` e `etapa_ensino`. Filtra `cd_tipo_turma <> 4` e `st_turma_escola IN ('O', 'A', 'E', 'C')`.
+Origem: `turma_escola` (NOLOCK) com joins em `escola`, `serie_turma_escola`, `serie_ensino` e `etapa_ensino`. Filtra `st_turma_escola IN ('O', 'A', 'E', 'C')`.
 
 | Campo EOL | Campo Destino | Transformação |
 | :--- | :--- | :--- |
