@@ -408,11 +408,7 @@ class DashboardView(View):
         # Últimas 10 execuções com detalhes de tabelas escritas
         ultimas_10 = list(qs_filtrado[:10])
         ids_ultimas_10 = [e.id_execucao for e in ultimas_10]
-        tabelas_map: dict[str, list] = {}
-        for te in EtlExecucaoTabelaEscrita.objects.filter(
-            id_execucao__in=ids_ultimas_10
-        ).order_by("tabela_destino"):
-            tabelas_map.setdefault(str(te.id_execucao), []).append(te)
+        tabelas_map = _agregar_tabelas_escritas(ids_ultimas_10)
         ultimas_10_com_tabelas = [
             {"exec": e, "tabelas": tabelas_map.get(str(e.id_execucao), [])}
             for e in ultimas_10
@@ -449,7 +445,7 @@ class DashboardView(View):
 
 
 def _agregar_tabelas_lidas(ids_execucao: list) -> dict[str, list]:
-    """Agrega linhas lidas por tabela_origem, somando totais e contando páginas."""
+    """Agrega linhas lidas por tabela_origem."""
     agg: dict[str, dict[str, dict]] = {}
     for tl in EtlExecucaoTabelaLida.objects.filter(
         id_execucao__in=ids_execucao
@@ -472,7 +468,7 @@ def _agregar_tabelas_lidas(ids_execucao: list) -> dict[str, list]:
 
 
 def _agregar_tabelas_escritas(ids_execucao: list) -> dict[str, list]:
-    """Agrega linhas escritas por tabela_destino, mantendo modo_escrita mais recente."""
+    """Mantém a escrita mais recente por tabela_destino."""
     agg: dict[str, dict[str, dict]] = {}
     for te in EtlExecucaoTabelaEscrita.objects.filter(
         id_execucao__in=ids_execucao
@@ -486,7 +482,7 @@ def _agregar_tabelas_escritas(ids_execucao: list) -> dict[str, list]:
                 "linhas_escritas": 0,
                 "modo_escrita": te.modo_escrita,
             }
-        bucket[tabela]["linhas_escritas"] += te.linhas_escritas
+            bucket[tabela]["linhas_escritas"] = te.linhas_escritas
     return {
         key: sorted(tabelas.values(), key=lambda x: x["tabela_destino"])
         for key, tabelas in agg.items()
@@ -499,7 +495,7 @@ def _resolver_execucoes_kanban(
     dominio_filtro: str,
     execucoes_disponiveis: list,
 ) -> tuple[list, str]:
-    """Resolve execuções a renderizar no kanban e mensagem de estado vazio."""
+    """Resolve execuções a renderizar no kanban."""
     if not id_execucao_filtro:
         ultima = list(_qs_ultima_execucao_por_dominio())
         if dominio_filtro:
@@ -575,8 +571,7 @@ class KanbanView(View):
             tabelas_escritas = escritas_map.get(key, [])
             cp = checkpoints.get(exec_obj.dominio)
             cp_da_execucao = bool(
-                cp
-                and str(cp.ultimo_id_execucao) == str(exec_obj.id_execucao)
+                cp and str(cp.ultimo_id_execucao) == str(exec_obj.id_execucao)
             )
             dominios_kanban.append(
                 {

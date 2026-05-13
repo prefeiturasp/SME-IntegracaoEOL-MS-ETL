@@ -104,8 +104,10 @@ class ViewsApiControleAuditoriaTestCase(TestCase):
 
     @patch("apps.controle_auditoria.api.views.executar_dominio_task")
     def test_deve_enfileirar_execucao_imediata(self, tarefa_mock: Any) -> None:
-        """POST sem data agenda em execução imediata (apply_async sem eta)."""
-        tarefa_mock.apply_async.return_value = type("Result", (), {"id": "task-1"})()
+        """POST sem data agenda execução imediata."""
+        tarefa_mock.apply_async.return_value = type(
+            "Result", (), {"id": "task-1"}
+        )()
         resposta = self.client.post(
             "/api/v1/dominios/institucional/executar/",
             data={"volume": 10, "offset": 1, "continuar": True},
@@ -125,7 +127,9 @@ class ViewsApiControleAuditoriaTestCase(TestCase):
         )
 
     @patch("apps.controle_auditoria.api.views.executar_dominio_task")
-    def test_deve_agendar_execucao_com_data_hora(self, tarefa_mock: Any) -> None:
+    def test_deve_agendar_execucao_com_data_hora(
+        self, tarefa_mock: Any
+    ) -> None:
         """POST com executar_em usa apply_async com eta."""
         tarefa_mock.apply_async.return_value = type(
             "Result",
@@ -194,20 +198,26 @@ class ViewsApiControleAuditoriaTestCase(TestCase):
             modo_escrita="upsert",
         )
 
-        resposta = self.client.get(f"/api/v1/execucoes/{id_exec}/", **self.headers)
+        resposta = self.client.get(
+            f"/api/v1/execucoes/{id_exec}/", **self.headers
+        )
         self.assertEqual(resposta.status_code, 200)
         dados = resposta.json()
         self.assertEqual(dados["id_execucao"], str(id_exec))
         self.assertEqual(len(dados["tabelas_lidas"]), 1)
         self.assertEqual(len(dados["tabelas_escritas"]), 1)
-        self.assertEqual(dados["tabelas_lidas"][0]["tabela_origem"], "dbo.v_cadastro")
+        self.assertEqual(
+            dados["tabelas_lidas"][0]["tabela_origem"], "dbo.v_cadastro"
+        )
         self.assertEqual(
             dados["tabelas_escritas"][0]["tabela_destino"], "institucional"
         )
 
     def test_deve_retornar_404_para_execucao_inexistente(self) -> None:
         """Retorna 404 quando id_execucao não existe."""
-        resposta = self.client.get(f"/api/v1/execucoes/{uuid4()}/", **self.headers)
+        resposta = self.client.get(
+            f"/api/v1/execucoes/{uuid4()}/", **self.headers
+        )
         self.assertEqual(resposta.status_code, 404)
         self.assertIn("erro", resposta.json())
 
@@ -220,7 +230,9 @@ class ViewsApiControleAuditoriaTestCase(TestCase):
             linhas_lidas=50,
         )
 
-        resposta = self.client.get("/api/v1/execucoes/tabelas-lidas/", **self.headers)
+        resposta = self.client.get(
+            "/api/v1/execucoes/tabelas-lidas/", **self.headers
+        )
         self.assertEqual(resposta.status_code, 200)
         self.assertEqual(len(resposta.json()), 1)
 
@@ -278,8 +290,10 @@ class MonitoramentoViewsTestCase(TestCase):
         self.assertEqual(dados[0]["dominio"], "institucional")
 
     def test_monitoramento_deve_filtrar_por_situacao(self) -> None:
-        """Filtro por situacao retorna apenas execuções com aquela situação."""
-        resposta = self.client.get("/api/v1/monitoramento/execucoes/?situacao=erro")
+        """Filtro por situacao retorna execuções da situação."""
+        resposta = self.client.get(
+            "/api/v1/monitoramento/execucoes/?situacao=erro"
+        )
         self.assertEqual(resposta.status_code, 200)
         dados = resposta.json()
         self.assertEqual(len(dados), 1)
@@ -297,7 +311,9 @@ class MonitoramentoViewsTestCase(TestCase):
     def test_monitoramento_deve_filtrar_por_data_fim(self) -> None:
         """Filtro por data_fim retorna execuções até aquela data."""
         hoje = timezone.now().date().isoformat()
-        resposta = self.client.get(f"/api/v1/monitoramento/execucoes/?data_fim={hoje}")
+        resposta = self.client.get(
+            f"/api/v1/monitoramento/execucoes/?data_fim={hoje}"
+        )
         self.assertEqual(resposta.status_code, 200)
         self.assertEqual(len(resposta.json()), 2)
 
@@ -310,7 +326,9 @@ class MonitoramentoViewsTestCase(TestCase):
         self.assertIn("institucional", dominios)
         self.assertIn("sinc_rec_db", dominios)
 
-    def test_monitoramento_resumo_retorna_apenas_ultima_por_dominio(self) -> None:
+    def test_monitoramento_resumo_retorna_apenas_ultima_por_dominio(
+        self,
+    ) -> None:
         """Resumo retorna somente 1 entrada por domínio."""
         EtlExecucao.objects.create(
             id_execucao=uuid4(),
@@ -366,6 +384,37 @@ class DashboardViewTestCase(TestCase):
         EtlExecucao.objects.all().delete()
         resposta = self.client.get("/dashboard/")
         self.assertEqual(resposta.status_code, 200)
+
+    def test_dashboard_usa_escrita_mais_recente_para_tabela_repetida(
+        self,
+    ) -> None:
+        """Dashboard ignora registros antigos repetidos da mesma tabela."""
+        execucao = EtlExecucao.objects.create(
+            id_execucao=uuid4(),
+            dominio="pedagogico",
+            situacao="concluido",
+            iniciado_em=timezone.now() + timedelta(minutes=1),
+        )
+        EtlExecucaoTabelaEscrita.objects.create(
+            id_execucao=execucao.id_execucao,
+            tabela_destino="componente_curricular",
+            linhas_escritas=10,
+            modo_escrita="upsert",
+        )
+        EtlExecucaoTabelaEscrita.objects.create(
+            id_execucao=execucao.id_execucao,
+            tabela_destino="componente_curricular",
+            linhas_escritas=5,
+            modo_escrita="upsert",
+        )
+
+        resposta = self.client.get("/dashboard/?dominio=pedagogico")
+
+        self.assertEqual(resposta.status_code, 200)
+        tabelas = resposta.context["ultimas_10"][0]["tabelas"]
+        self.assertEqual(len(tabelas), 1)
+        self.assertEqual(tabelas[0]["tabela_destino"], "componente_curricular")
+        self.assertEqual(tabelas[0]["linhas_escritas"], 5)
 
 
 class KanbanViewTestCase(TestCase):
@@ -487,7 +536,9 @@ class HealthSincRecViewTestCase(TestCase):
     @patch("apps.controle_auditoria.api.views.connections")
     def test_health_banco_erro(self, connections_mock: Any) -> None:
         """Retorna 503 quando banco lança excecao."""
-        connections_mock.__getitem__.return_value.cursor.side_effect = Exception()
+        connections_mock.__getitem__.return_value.cursor.side_effect = (
+            Exception()
+        )
 
         response = self.client.get("/api/v1/sinc_rec/health/")
 
