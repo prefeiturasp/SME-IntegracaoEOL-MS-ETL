@@ -130,10 +130,6 @@ class Migration(migrations.Migration):
         migrations.DeleteModel(
             name="GradeCurricularSerie",
         ),
-        migrations.RemoveField(
-            model_name="turmaitinerarioensinomedio",
-            name="transferido_em",
-        ),
         migrations.AlterModelTable(
             name="componentecurricularpap",
             table="componente_curricular_pap",
