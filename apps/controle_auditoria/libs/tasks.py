@@ -6,6 +6,7 @@ from celery import Task
 from django.core.management import call_command
 
 from apps.controle_auditoria.libs.celery_app import aplicacao_celery
+from apps.controle_auditoria.libs.dominios import validar_parametros_dominio
 from apps.controle_auditoria.libs.repositorio_auditoria import (
     RepositorioAuditoriaPostgres,
 )
@@ -28,6 +29,14 @@ def executar_dominio_task(
     fases: list[str] | None = None,
 ) -> str:
     """Executa domínio ETL via fila Celery com retomada por checkpoint."""
+    erro_parametros = validar_parametros_dominio(
+        dominio,
+        ano_letivo=ano_letivo,
+        fases=fases,
+    )
+    if erro_parametros:
+        return f"erro:{erro_parametros}"
+
     repositorio = RepositorioAuditoriaPostgres()
     continuar_execucao: bool = continuar
     total_linhas_processadas: int = 0
