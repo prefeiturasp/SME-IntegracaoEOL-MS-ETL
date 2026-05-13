@@ -24,6 +24,7 @@ from apps.controle_auditoria.api.serializers import (
     EtlExecucaoTabelaLidaSerializer,
     HealthStatusSerializer,
 )
+from apps.controle_auditoria.libs.dominios import validar_parametros_dominio
 from apps.controle_auditoria.libs.tasks import executar_dominio_task
 from apps.controle_auditoria.models import (
     EtlAuditoriaLinha,
@@ -239,9 +240,10 @@ class ExecutarDominioView(APIView):
                         "x-nullable": True,
                         "description": (
                             "Opcional. Lista de nomes de fases a executar. "
-                            "Quando omitido, todas as fases são executadas."
+                            "Os nomes variam por domínio. Quando omitido, "
+                            "todas as fases são executadas."
                         ),
-                        "example": ["turma", "componente_curricular"],
+                        "example": None,
                     },
                 },
             }
@@ -263,6 +265,17 @@ class ExecutarDominioView(APIView):
         prioridade = int(request.data.get("prioridade", 5))
         ano_letivo = request.data.get("ano_letivo")
         fases = request.data.get("fases")
+
+        erro_parametros = validar_parametros_dominio(
+            dominio,
+            ano_letivo=int(ano_letivo) if ano_letivo is not None else None,
+            fases=list(fases) if fases is not None else None,
+        )
+        if erro_parametros:
+            return Response(
+                {"erro": erro_parametros},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         kwargs_task: dict[str, Any] = {
             "dominio": dominio,

@@ -164,6 +164,38 @@ class ViewsApiControleAuditoriaTestCase(TestCase):
         self.assertIn("erro", resposta.json())
         tarefa_mock.apply_async.assert_not_called()
 
+    @patch("apps.controle_auditoria.api.views.executar_dominio_task")
+    def test_deve_rejeitar_ano_letivo_em_dominio_sem_suporte(
+        self,
+        tarefa_mock: Any,
+    ) -> None:
+        """Retorna 400 quando domínio não aceita ano_letivo."""
+        resposta = self.client.post(
+            "/api/v1/dominios/programas/executar/",
+            data={"ano_letivo": 2025},
+            format="json",
+            **self.headers,
+        )
+        self.assertEqual(resposta.status_code, 400)
+        self.assertIn("ano_letivo", resposta.json()["erro"])
+        tarefa_mock.apply_async.assert_not_called()
+
+    @patch("apps.controle_auditoria.api.views.executar_dominio_task")
+    def test_deve_rejeitar_fases_em_dominio_sem_suporte(
+        self,
+        tarefa_mock: Any,
+    ) -> None:
+        """Retorna 400 quando domínio não aceita fases."""
+        resposta = self.client.post(
+            "/api/v1/dominios/programas/executar/",
+            data={"fases": ["turma"]},
+            format="json",
+            **self.headers,
+        )
+        self.assertEqual(resposta.status_code, 400)
+        self.assertIn("fases", resposta.json()["erro"])
+        tarefa_mock.apply_async.assert_not_called()
+
     def test_docs_e_schema_devem_ser_publicos(self) -> None:
         """Swagger e schema devem responder sem autenticação."""
         schema = self.client.get("/api/v1/schema/")

@@ -4,9 +4,11 @@
 Executa um domínio específico.
 
 Suporta:
-- `sinc_rec_db`
 - `institucional`
 - `professores`
+- `alunos`
+- `pedagogico`
+- `programas`
 
 ## `executar_dominios`
 Executa os domínios ativos definidos hoje no comando.
