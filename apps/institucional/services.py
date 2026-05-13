@@ -33,6 +33,7 @@ SELECT
     tp_escola AS codigo_tipo_escola
   , LTRIM(RTRIM(sg_tp_escola)) AS sigla
   , LTRIM(RTRIM(dc_tipo_escola)) AS descricao
+  , dt_atualizacao_tabela AS data_atualizacao
 FROM tipo_escola
 """
 
@@ -118,7 +119,9 @@ SELECT
   , vcue.nm_unidade_educacao AS nome
   , vcue.nm_exibicao_unidade AS nome_nao_oficial
   , tpue.dc_tipo_unidade_educacao AS tipo_ue
+  , vcue.tp_unidade_educacao AS codigo_tipo_unidade_educacao
   , tpl.dc_tp_logradouro AS tipo_logradouro
+  , vcue.cd_logradouro AS codigo_logradouro
   , vcue.nm_logradouro AS logradouro
   , vcue.cd_nr_endereco AS numero
   , vcue.nm_bairro AS bairro
@@ -138,6 +141,9 @@ SELECT
   , vuedg.dc_tipo_forma_ocupacao_predio AS propriedade
   , CASE WHEN vuedg.tp_escola IN (11, 12) THEN CAST(1 AS BIT)
          ELSE CAST(0 AS BIT) END AS organizacao_parceira
+  , CASE WHEN COALESCE(vuedg.tp_escola, escola.tp_escola) = 5
+         THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT) END AS eh_ceu
+  , vcue.dt_atualizacao_endereco AS data_atualizacao
   , ISNULL((SELECT quantidadeVagaTurno FROM capacidadeVaga
             WHERE cd_escola = vuedg.cd_unidade_educacao
               AND cd_tipo_turno = 1), 0) AS vagas_matutino
@@ -161,7 +167,8 @@ SELECT
   , vcue.cd_cie_unidade_educacao AS codigo_inep
   , vuedg.sg_tipo_situacao_unidade AS status
   , vcue.cd_unidade_administrativa_referencia AS codigo_dre
-  , vuedg.tp_escola AS codigo_tipo_escola
+  , te.tp_escola AS codigo_tipo_escola
+  , COALESCE(vuedg.tp_escola, escola.tp_escola) AS codigo_tp_equipamento
   , vcue.cd_sub_prefeitura AS codigo_sub_prefeitura
 FROM v_cadastro_unidade_educacao vcue
 INNER JOIN unidade_administrativa dre
@@ -171,6 +178,8 @@ LEFT JOIN v_unidade_educacao_dados_gerais vuedg
     ON vuedg.cd_unidade_educacao = vcue.cd_unidade_educacao
 LEFT JOIN escola
     ON escola.cd_escola = vcue.cd_unidade_educacao
+LEFT JOIN tipo_escola te
+    ON te.tp_escola = COALESCE(vuedg.tp_escola, escola.tp_escola)
 LEFT JOIN tipo_unidade_educacao tpue
     ON tpue.tp_unidade_educacao = vcue.tp_unidade_educacao
 LEFT JOIN tipo_logradouro tpl
@@ -243,7 +252,7 @@ class EtlInstitucionalService(BaseEtlService):
                 model_class=TipoEscola,
                 dto_in=TipoEscolaIn,
                 pk_field="codigo_tipo_escola",
-                update_fields=("sigla", "descricao"),
+                update_fields=("sigla", "descricao", "data_atualizacao"),
                 unique_fields=("codigo_tipo_escola",),
                 modo_escrita="upsert",
             ),
@@ -272,6 +281,7 @@ class EtlInstitucionalService(BaseEtlService):
                     "nome_nao_oficial",
                     "tipo_ue",
                     "tipo_logradouro",
+                    "codigo_logradouro",
                     "logradouro",
                     "numero",
                     "bairro",
@@ -284,6 +294,8 @@ class EtlInstitucionalService(BaseEtlService):
                     "ano_construcao",
                     "propriedade",
                     "organizacao_parceira",
+                    "eh_ceu",
+                    "data_atualizacao",
                     "vagas_matutino",
                     "vagas_vespertino",
                     "vagas_noturno",
@@ -295,6 +307,8 @@ class EtlInstitucionalService(BaseEtlService):
                     "status",
                     "dre_id",
                     "tipo_escola_id",
+                    "codigo_tp_equipamento",
+                    "codigo_tipo_unidade_educacao",
                     "subprefeitura_id",
                     "codigo_ue_integracao",
                 ),

@@ -20,35 +20,40 @@ from apps.institucional.models import DRE, TipoEscola, UnidadeEducacional
 from apps.institucional.services import EtlInstitucionalService
 
 _ROW_UE = (
-    "000001",
-    "UE 1",
-    "UE 1",
-    "EMEF",
-    "R",
-    "Rua 1",
-    "1",
-    "B",
-    "000",
-    "SP",
-    "D",
-    "e@e.com",
-    "123",
-    None,
-    2020,
-    "P",
-    False,
-    10,
-    10,
-    0,
-    0,
-    0,
-    20,
-    5,
-    123456,
-    "A",
-    "108900",
-    1,
-    1,
+    "000001",  # codigo_ue
+    "UE 1",  # nome
+    "UE 1",  # nome_nao_oficial
+    "EMEF",  # tipo_ue
+    3,  # codigo_tipo_unidade_educacao
+    "R",  # tipo_logradouro
+    19674,  # codigo_logradouro
+    "Rua 1",  # logradouro
+    "1",  # numero
+    "B",  # bairro
+    "000",  # cep
+    "SP",  # municipio
+    "D",  # distrito
+    "e@e.com",  # email
+    "123",  # telefone_1
+    None,  # telefone_2
+    2020,  # ano_construcao
+    "P",  # propriedade
+    False,  # organizacao_parceira
+    False,  # eh_ceu
+    None,  # data_atualizacao
+    10,  # vagas_matutino
+    10,  # vagas_vespertino
+    0,  # vagas_noturno
+    0,  # vagas_intermediario
+    0,  # vagas_integral
+    20,  # vagas_total
+    5,  # quantidade_funcionarios
+    123456,  # codigo_inep
+    "A",  # status
+    "108900",  # codigo_dre
+    1,  # codigo_tipo_escola
+    3,  # codigo_tp_equipamento
+    1,  # codigo_sub_prefeitura
 )
 
 
@@ -155,7 +160,6 @@ class EtlInstitucionalServiceTestCase(TestCase):
 
         self.mock_cache.get_hash.assert_called_once()
 
-
     @patch.object(EtlInstitucionalService, "sync_batch")
     def test_executar_fase_tipo_escola_chama_sync_batch(
         self, mock_sync: MagicMock
@@ -222,14 +226,14 @@ class EtlInstitucionalServiceTestCase(TestCase):
         with self.assertRaises(RuntimeError):
             self.service._executar_fase(config)
 
-
     def test_executar_chama_cache_antes_da_fase1(self) -> None:
         """executar() pré-carrega cache SSO quando fase_inicial=1."""
-        with patch.object(
-            self.service, "_popular_cache_integracao_ue"
-        ) as mock_pop, patch.object(
-            self.service, "_executar_fase"
-        ) as mock_fase:
+        with (
+            patch.object(
+                self.service, "_popular_cache_integracao_ue"
+            ) as mock_pop,
+            patch.object(self.service, "_executar_fase") as mock_fase,
+        ):
             mock_fase.return_value = PipelineMetrics(total_escritos=0)
             self.service.executar(fase_inicial=1)
 
@@ -237,11 +241,12 @@ class EtlInstitucionalServiceTestCase(TestCase):
 
     def test_executar_nao_chama_cache_se_fase_apos_1(self) -> None:
         """executar() pula pré-carga do cache quando fase_inicial > 1."""
-        with patch.object(
-            self.service, "_popular_cache_integracao_ue"
-        ) as mock_pop, patch.object(
-            self.service, "_executar_fase"
-        ) as mock_fase:
+        with (
+            patch.object(
+                self.service, "_popular_cache_integracao_ue"
+            ) as mock_pop,
+            patch.object(self.service, "_executar_fase") as mock_fase,
+        ):
             mock_fase.return_value = PipelineMetrics(total_escritos=0)
             self.service.executar(fase_inicial=2)
 
@@ -263,10 +268,11 @@ class EtlInstitucionalServiceTestCase(TestCase):
 
     def test_executar_completo_retorna_4_chaves(self) -> None:
         """Execução completa retorna resultado para cada fase."""
-        with patch.object(
-            EtlInstitucionalService, "_executar_fase"
-        ) as mock_fase, patch.object(
-            self.service, "_popular_cache_integracao_ue"
+        with (
+            patch.object(
+                EtlInstitucionalService, "_executar_fase"
+            ) as mock_fase,
+            patch.object(self.service, "_popular_cache_integracao_ue"),
         ):
             mock_fase.return_value = PipelineMetrics(total_escritos=10)
             res = self.service.executar(fase_inicial=1)
@@ -274,7 +280,6 @@ class EtlInstitucionalServiceTestCase(TestCase):
         self.assertEqual(len(res), 4)
         self.assertEqual(mock_fase.call_count, 4)
         self.assertEqual(res["tipo_escola"], 10)
-
 
     def test_popular_cache_popula_mapeamentos(self) -> None:
         """Método pré-carrega cache com mapeamentos SSO para a DRE."""

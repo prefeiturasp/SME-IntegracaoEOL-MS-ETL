@@ -1,0 +1,65 @@
+[
+  {
+    "model": "pedagogico.componentecurricularhierarquia",
+    "pk": 1,
+    "fields": {
+      "id_componente_curricular_pai": 512,
+      "id_componente_curricular": 512,
+      "vigencia": "2021-12-31T00:00:00"
+    }
+  },
+  {
+    "model": "pedagogico.componentecurricularhierarquia",
+    "pk": 2,
+    "fields": {
+      "id_componente_curricular_pai": 512,
+      "id_componente_curricular": 513,
+      "vigencia": "2021-12-31T00:00:00"
+    }
+  },
+  {
+    "model": "pedagogico.componentecurricularhierarquia",
+    "pk": 3,
+    "fields": {
+      "id_componente_curricular_pai": 512,
+      "id_componente_curricular": 534,
+      "vigencia": "2021-12-31T00:00:00"
+    }
+  },
+  {
+    "model": "pedagogico.componentecurricularhierarquia",
+    "pk": 4,
+    "fields": {
+      "id_componente_curricular_pai": 512,
+      "id_componente_curricular": 535,
+      "vigencia": "2021-12-31T00:00:00"
+    }
+  },
+  {
+    "model": "pedagogico.componentecurricularhierarquia",
+    "pk": 5,
+    "fields": {
+      "id_componente_curricular_pai": 512,
+      "id_componente_curricular": 515,
+      "vigencia": "2021-12-31T00:00:00"
+    }
+  },
+  {
+    "model": "pedagogico.componentecurricularhierarquia",
+    "pk": 6,
+    "fields": {
+      "id_componente_curricular_pai": 512,
+      "id_componente_curricular": 517,
+      "vigencia": "2021-12-31T00:00:00"
+    }
+  },
+  {
+    "model": "pedagogico.componentecurricularhierarquia",
+    "pk": 7,
+    "fields": {
+      "id_componente_curricular_pai": 512,
+      "id_componente_curricular": 518,
+      "vigencia": "2021-12-31T00:00:00"
+    }
+  }
+]

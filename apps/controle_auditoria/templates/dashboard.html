@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+{% load formatadores %}
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
@@ -333,7 +334,7 @@
         </div>
         <div class="mt-2" style="font-size:.75rem;color:#64748b">
           <i class="bi bi-database-check me-1"></i>
-          <strong style="color:#f1f5f9">{{ exec.total_processado }}</strong> registros processados
+          <strong style="color:#f1f5f9">{{ exec.total_processado|numero_br }}</strong> registros processados
         </div>
         {% if exec.mensagem_erro %}
         <div class="domain-error">
@@ -384,7 +385,7 @@
               <td class="text-nowrap" rowspan="{{ item.tabelas|length }}">{{ item.exec.iniciado_em|date:"d/m H:i" }}</td>
               {% endif %}
               <td style="color:#94a3b8;font-size:.78rem">{{ tabela.tabela_destino }}</td>
-              <td style="text-align:right;font-weight:600;color:#60a5fa">{{ tabela.linhas_escritas }}</td>
+              <td style="text-align:right;font-weight:600;color:#60a5fa">{{ tabela.linhas_escritas|numero_br }}</td>
             </tr>
             {% endfor %}
           {% else %}
