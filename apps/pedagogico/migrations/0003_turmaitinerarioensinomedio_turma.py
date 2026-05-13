@@ -25,7 +25,6 @@ class Migration(migrations.Migration):
                         verbose_name="ID",
                     ),
                 ),
-                ("transferido_em", models.DateTimeField()),
                 ("nome", models.CharField(max_length=100)),
                 (
                     "serie",
