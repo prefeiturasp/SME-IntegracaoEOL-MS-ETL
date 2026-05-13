@@ -3,12 +3,9 @@
 from unittest.mock import MagicMock, patch
 
 from django.core.management.base import CommandError
-from django.test import TestCase
+from django.test import SimpleTestCase
 
 from apps.core.libs.base_etl_command import BaseEtlCommand
-
-
-from django.test import SimpleTestCase
 
 
 class BaseEtlCommandTestCase(SimpleTestCase):
@@ -41,7 +38,7 @@ class BaseEtlCommandTestCase(SimpleTestCase):
         self.patcher_repo.stop()
 
     def test_executa_fluxo_sucesso_completo(self) -> None:
-        """Valida que todos os métodos do repositório são chamados corretamente."""
+        """Valida chamadas ao repositório no fluxo de sucesso."""
         self.servico.executar.return_value = {"tabela_teste": 50}
         self.servico.ultima_fase_concluida = 1
         mock_fase = MagicMock()
@@ -108,6 +105,29 @@ class BaseEtlCommandTestCase(SimpleTestCase):
             sucesso=False,
         )
 
+    def test_trata_erro_ao_criar_servico_e_finaliza_execucao(self) -> None:
+        """Falha antes do service não deixa execução em aberto."""
+        self.mock_servico_class.side_effect = Exception("Falha no setup")
+
+        with self.assertRaises(CommandError):
+            self.cmd.handle(volume=100, offset=0, continuar=False)
+
+        id_exec = self.repo.iniciar_execucao.return_value
+        self.repo.finalizar_execucao.assert_called_with(
+            id_exec,
+            situacao="erro",
+            mensagem_erro="Falha no setup",
+        )
+        self.repo.atualizar_checkpoint_dominio.assert_called_with(
+            dominio="teste_base",
+            ultimo_id_execucao=id_exec,
+            ultima_pagina=0,
+            token_parada="0",
+            indice_sincronizacao="ERRO:offset:0",
+            ultima_situacao="erro",
+            sucesso=False,
+        )
+
     def test_falta_configuracao_gera_erro_no_setup(self) -> None:
         """Verifica se a base protege contra falta de dominio/servico."""
 
@@ -148,7 +168,7 @@ class BaseEtlCommandTestCase(SimpleTestCase):
         self.servico.executar.assert_called_with(fase_inicial=1)
 
     def test_checkpoint_usa_id_execucao_proprio(self) -> None:
-        """Checkpoint agora é atualizado pelo serviço durante a execução."""
+        """Checkpoint é atualizado pelo serviço durante a execução."""
         pass
 
     def test_get_modo_escrita_default(self) -> None:
@@ -174,7 +194,7 @@ class BaseEtlCommandTestCase(SimpleTestCase):
             "ultima_situacao": "erro",
         }
         self.cmd.handle(volume=100, fase=4, continuar=True)
-        
+
         self.servico.executar.assert_called_with(fase_inicial=4)
 
     def test_trata_interrupcao_manual_e_persiste_situacao_interrompido(

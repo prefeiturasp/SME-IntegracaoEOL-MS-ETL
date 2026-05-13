@@ -5,19 +5,11 @@ from typing import Any
 from django.core.management import call_command
 from django.core.management.base import BaseCommand, CommandError
 
-from apps.controle_auditoria.libs.servico_sinc_rec_db import (
-    exibir_validacao_sinc_rec_db,
+from apps.controle_auditoria.libs.dominios import (
+    COMANDOS_POR_DOMINIO,
+    DOMINIOS_VALIDOS,
+    validar_parametros_dominio,
 )
-
-COMANDOS_POR_DOMINIO: dict[str, str] = {
-    "institucional": "etl_institucional",
-    "professores": "etl_professores",
-    "alunos": "etl_alunos",
-    "pedagogico": "etl_pedagogico",
-    "programas": "etl_programas",
-}
-
-DOMINIOS_VALIDOS = ["sinc_rec_db", *COMANDOS_POR_DOMINIO.keys()]
 
 
 class Command(BaseCommand):
@@ -57,21 +49,21 @@ class Command(BaseCommand):
         ano_letivo = options.get("ano_letivo")
         fases = options.get("fases")
 
-        if dominio == "sinc_rec_db":
-            exibir_validacao_sinc_rec_db()
-            return
+        erro_parametros = validar_parametros_dominio(
+            dominio,
+            ano_letivo=ano_letivo,
+            fases=fases,
+        )
+        if erro_parametros:
+            raise CommandError(erro_parametros)
 
         comando_etl = COMANDOS_POR_DOMINIO.get(dominio)
-        if comando_etl is None:
-            raise CommandError(
-                f"Dominio invalido. Use: {', '.join(DOMINIOS_VALIDOS)}"
-            )
 
         argumentos = ["--volume", str(volume), "--offset", str(offset)]
         if continuar:
             argumentos.append("--continuar")
-        if ano_letivo is not None and dominio == "pedagogico":
+        if ano_letivo is not None:
             argumentos += ["--ano-letivo", str(ano_letivo)]
         if fases:
             argumentos += ["--fases", *fases]
-        call_command(comando_etl, *argumentos)
+        call_command(str(comando_etl), *argumentos)

@@ -9,7 +9,7 @@ from django.core.management.base import BaseCommand
 class Command(BaseCommand):
     """Executa todos os dominios ativos no momento."""
 
-    help = "Executa dominios ativos: sinc_rec_db e institucional"
+    help = "Executa dominios ativos: institucional"
 
     def add_arguments(self, parser: Any) -> None:
         """Adiciona argumentos ao comando."""
@@ -20,8 +20,6 @@ class Command(BaseCommand):
         """Executa todos os dominios ativos no momento."""
         volume = options["volume"]
         continuar = options["continuar"]
-
-        call_command("executar_dominio", "--dominio", "sinc_rec_db")
 
         argumentos = [
             "--dominio",

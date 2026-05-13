@@ -161,22 +161,25 @@ class BaseEtlCommand(BaseCommand):
     ) -> None:
         """Execução síncrona local."""
         fases = options.get("fases")
-        servico = self.service_class(
-            db_alias=f"{self.dominio}_db",
-            id_execucao=id_execucao,
-            repositorio_auditoria=repositorio,
-            primeiro_run=options.get("carga_inicial", False),
-            **({"fases": fases} if fases else {}),
-            **self._extra_service_kwargs(**options),
-        )
+        servico = None
 
         try:
+            servico = self.service_class(
+                db_alias=f"{self.dominio}_db",
+                id_execucao=id_execucao,
+                repositorio_auditoria=repositorio,
+                primeiro_run=options.get("carga_inicial", False),
+                **({"fases": fases} if fases else {}),
+                **self._extra_service_kwargs(**options),
+            )
             resultado = servico.executar(fase_inicial=fase_inicial)
             self._finalizar_com_sucesso(
                 repositorio, id_execucao, servico, resultado, token_ant
             )
         except KeyboardInterrupt:
-            self._finalizar_com_interrupcao(repositorio, id_execucao, servico)
+            self._finalizar_com_interrupcao(
+                repositorio, id_execucao, servico, token_ant
+            )
             raise
         except Exception as erro:
             self._finalizar_com_erro(
@@ -184,11 +187,15 @@ class BaseEtlCommand(BaseCommand):
             )
 
     def _finalizar_com_interrupcao(
-        self, repositorio: Any, id_exec: Any, servico: Any
+        self,
+        repositorio: Any,
+        id_exec: Any,
+        servico: Any | None,
+        token_ant: int = 0,
     ) -> None:
         """Registra interrupção manual pelo usuário."""
-        token = servico.ultimo_token or "0"
-        fase = servico.ultima_fase_concluida + 1
+        token = getattr(servico, "ultimo_token", None) or str(token_ant)
+        fase = getattr(servico, "ultima_fase_concluida", 0) + 1
         repositorio.atualizar_checkpoint_dominio(
             dominio=self.dominio.lower(),
             ultimo_id_execucao=id_exec,
@@ -268,13 +275,13 @@ class BaseEtlCommand(BaseCommand):
         self,
         repositorio: Any,
         id_exec: Any,
-        servico: Any,
+        servico: Any | None,
         erro: Exception,
         token_ant: int,
     ) -> None:
         """Registra falha na auditoria e no checkpoint para retomada."""
-        token_erro = servico.ultimo_token or str(token_ant)
-        fase = servico.ultima_fase_concluida
+        token_erro = getattr(servico, "ultimo_token", None) or str(token_ant)
+        fase = getattr(servico, "ultima_fase_concluida", 0)
 
         repositorio.atualizar_checkpoint_dominio(
             dominio=self.dominio,

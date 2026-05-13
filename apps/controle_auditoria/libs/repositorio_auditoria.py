@@ -64,6 +64,18 @@ class RepositorioAuditoriaPostgres:
         modo_escrita: str = "upsert",
     ) -> None:
         """Registra metadados de escrita no log de execucao."""
+        registros = EtlExecucaoTabelaEscrita.objects.filter(
+            id_execucao=id_execucao,
+            tabela_destino=tabela_destino,
+        )
+        registro = registros.order_by("-escrito_em").first()
+        if registro:
+            registro.linhas_escritas = linhas_escritas
+            registro.modo_escrita = modo_escrita
+            registro.save(update_fields=["linhas_escritas", "modo_escrita"])
+            registros.exclude(pk=registro.pk).delete()
+            return
+
         EtlExecucaoTabelaEscrita.objects.create(
             id_execucao=id_execucao,
             tabela_destino=tabela_destino,
