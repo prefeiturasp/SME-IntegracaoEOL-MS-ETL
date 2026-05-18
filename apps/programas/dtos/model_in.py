@@ -125,6 +125,30 @@ class TurmaProgramaComponenteCurricularIn:
 
 
 @dataclass(slots=True)
+class AlunoPapAnoLetivoIn:
+    """Linha bruta da query pré-agregada de alunos PAP por ano letivo."""
+
+    codigo_aluno: Any
+    codigo_turma: Any
+    codigo_componente_curricular: Any
+    ano_letivo: Any
+    codigo_ue: Any
+    codigo_dre: Any
+
+    def to_domain(self) -> dict:
+        return {
+            "codigo_aluno": int(self.codigo_aluno),
+            "codigo_turma": int(self.codigo_turma),
+            "codigo_componente_curricular": int(
+                self.codigo_componente_curricular
+            ),
+            "ano_letivo": int(self.ano_letivo),
+            "codigo_ue": str(self.codigo_ue),
+            "codigo_dre": str(self.codigo_dre),
+        }
+
+
+@dataclass(slots=True)
 class MatriculaTurmaProgramaIn:
     """Linha bruta da query de matrículas em turmas de programa.
 

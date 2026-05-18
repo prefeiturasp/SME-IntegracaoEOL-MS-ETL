@@ -5,6 +5,7 @@ import datetime
 from django.test import TestCase
 
 from apps.programas.dtos.model_in import (
+    AlunoPapAnoLetivoIn,
     ComponenteCurricularProgramaIn,
     MatriculaTurmaProgramaIn,
     TipoProgramaIn,
@@ -274,9 +275,7 @@ class TestMatriculaTurmaProgramaIn(TestCase):
         self.assertEqual(d["categoria"], CategoriaPrograma.PAEE)
 
     def test_categoria_pap_pelo_componente(self) -> None:
-        d = MatriculaTurmaProgramaIn(
-            *_row_matricula(comp=1322)
-        ).to_domain()
+        d = MatriculaTurmaProgramaIn(*_row_matricula(comp=1322)).to_domain()
         self.assertEqual(d["categoria"], CategoriaPrograma.PAP)
 
     def test_codigos_ue_dre_preservados(self) -> None:
@@ -285,3 +284,66 @@ class TestMatriculaTurmaProgramaIn(TestCase):
         ).to_domain()
         self.assertEqual(d["codigo_ue"], "000001")
         self.assertEqual(d["codigo_dre"], "108900")
+
+
+def _row_aluno_pap(
+    aluno=99999,
+    turma=12345,
+    comp=1322,
+    ano=2026,
+    ue="000001",
+    dre="108900",
+):
+    return (aluno, turma, comp, ano, ue, dre)
+
+
+class TestAlunoPapAnoLetivoIn(TestCase):
+    def test_to_domain_basico(self) -> None:
+        d = AlunoPapAnoLetivoIn(*_row_aluno_pap()).to_domain()
+        self.assertEqual(d["codigo_aluno"], 99999)
+        self.assertEqual(d["codigo_turma"], 12345)
+        self.assertEqual(d["codigo_componente_curricular"], 1322)
+        self.assertEqual(d["ano_letivo"], 2026)
+        self.assertEqual(d["codigo_ue"], "000001")
+        self.assertEqual(d["codigo_dre"], "108900")
+
+    def test_to_domain_coerce_str_to_int(self) -> None:
+        d = AlunoPapAnoLetivoIn(*_row_aluno_pap(aluno="99999")).to_domain()
+        self.assertEqual(d["codigo_aluno"], 99999)
+
+    def test_to_domain_codigo_ue_e_dre_sao_string(self) -> None:
+        d = AlunoPapAnoLetivoIn(*_row_aluno_pap(ue=1, dre=108900)).to_domain()
+        self.assertEqual(d["codigo_ue"], "1")
+        self.assertEqual(d["codigo_dre"], "108900")
+
+
+class TestComponenteCurricularEOLPapVigentes(TestCase):
+    """Valida os códigos PAP vigentes usados na carga."""
+
+    def test_codigos_pap_vigentes_contem_apenas_pap_atuais(self) -> None:
+        codigos = ComponenteCurricularEOL.codigos_pap_vigentes()
+        esperados = {
+            ComponenteCurricularEOL.PAP_RECUPERACAO_APRENDIZAGENS.value,
+            ComponenteCurricularEOL.PAP_PROJETO_COLABORATIVO.value,
+            ComponenteCurricularEOL.PAP_2ANO_ALFABETIZACAO.value,
+            ComponenteCurricularEOL.PAP_2ANO_COLABORATIVO_ALFABETIZACAO.value,
+        }
+        self.assertEqual(set(codigos), esperados)
+
+    def test_codigos_pap_vigentes_nao_inclui_paee(self) -> None:
+        codigos = ComponenteCurricularEOL.codigos_pap_vigentes()
+        self.assertNotIn(
+            ComponenteCurricularEOL.PAEE_SALA_RECURSOS_MULTIFUNCIONAIS.value,
+            codigos,
+        )
+
+    def test_codigos_pap_vigentes_nao_inclui_legados(self) -> None:
+        codigos = ComponenteCurricularEOL.codigos_pap_vigentes()
+        legados = {
+            ComponenteCurricularEOL.PAP_LEGADO_MATEMATICA.value,
+            ComponenteCurricularEOL.PAP_LEGADO_CIENCIAS.value,
+            ComponenteCurricularEOL.PAP_LEGADO_GEOGRAFIA.value,
+            ComponenteCurricularEOL.PAP_LEGADO_HISTORIA.value,
+            ComponenteCurricularEOL.PAP_LEGADO_PORTUGUES.value,
+        }
+        self.assertFalse(set(codigos) & legados)

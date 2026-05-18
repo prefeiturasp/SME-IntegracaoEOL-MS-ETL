@@ -14,6 +14,10 @@ Configuração de componentes por categoria:
     (substitui as constantes hardcoded IDS_COMPONENTES_CURRICULARES_PAP_NOVO
     e COMPONENTE_CURRICULAR_ID_SRM do Pedagogico-API)
 
+Tabelas pré-agregadas (carga MS-ETL — consumidas pelo domínio Programas):
+      AlunoPapAnoLetivo            (carga live)
+      AlunoPapAnoLetivoHistorico   (carga histórica)
+
 Referências cruzadas (sem FK física, integridade pela camada de aplicação):
     - codigo_turma                 → turma_programa.codigo_turma (mesmo banco)
     - codigo_componente_curricular → componente_curricular_programa (mesmo banco)
@@ -27,12 +31,13 @@ Ordem de carga ETL:
     4. TurmaProgramaComponenteCurricular     (depende de: TurmaPrograma)
     5. MatriculaTurmaPrograma                (depende de: TurmaPrograma)
     6. MatriculaTurmaProgramaHistorico       (lê v_historico_matricula_cotic)
+    7. AlunoPapAnoLetivo                     (carga live)
+    8. AlunoPapAnoLetivoHistorico            (carga histórica)
 """
 
 from django.db import models
 
 from apps.programas.enums import CategoriaPrograma
-
 
 class TipoPrograma(models.Model):
     """Subtipos de programa do EOL (cd_tipo_programa), agrupados por categoria.
@@ -463,10 +468,14 @@ class MatriculaTurmaProgramaHistorico(models.Model):
             )
         ]
         indexes = [
-            models.Index(fields=["codigo_aluno"], name="idx_hist_matricula_aluno"),
+            models.Index(
+                fields=["codigo_aluno"], name="idx_hist_matricula_aluno"
+            ),
             models.Index(fields=["ano_letivo"], name="idx_hist_matricula_ano"),
             models.Index(fields=["codigo_ue"], name="idx_hist_matricula_ue"),
-            models.Index(fields=["categoria"], name="idx_hist_matricula_categoria"),
+            models.Index(
+                fields=["categoria"], name="idx_hist_matricula_categoria"
+            ),
         ]
 
     def __str__(self) -> str:
@@ -475,4 +484,122 @@ class MatriculaTurmaProgramaHistorico(models.Model):
             f" — turma {self.codigo_turma}"
             f" / CC {self.codigo_componente_curricular}"
             f" (histórico)"
+        )
+
+
+class AlunoPapAnoLetivo(models.Model):
+    """Alunos PAP por ano letivo, pré-agregados (carga live)."""
+
+    codigo_aluno = models.BigIntegerField(
+        help_text="EOL cd_aluno — FK lógica para aluno (PEDAGOGICO_DB).",
+    )
+    codigo_turma = models.BigIntegerField(
+        help_text="FK lógica → turma_programa.codigo_turma.",
+    )
+    codigo_componente_curricular = models.BigIntegerField(
+        help_text=(
+            "FK lógica → componente_curricular_programa"
+            ".codigo_componente_curricular."
+        ),
+    )
+    ano_letivo = models.SmallIntegerField(
+        help_text="EOL turma_escola.an_letivo — chave do filtro do endpoint.",
+    )
+    codigo_ue = models.CharField(
+        max_length=20,
+        help_text="EOL escola.cd_escola — desnormalizado.",
+    )
+    codigo_dre = models.CharField(
+        max_length=20,
+        help_text=(
+            "EOL unidade_administrativa.cd_unidade_administrativa "
+            "— desnormalizado."
+        ),
+    )
+
+    class Meta:
+        app_label = "programas"
+        db_table = "aluno_pap_ano_letivo"
+        verbose_name = "aluno PAP por ano letivo"
+        verbose_name_plural = "alunos PAP por ano letivo"
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "ano_letivo",
+                    "codigo_turma",
+                    "codigo_aluno",
+                    "codigo_componente_curricular",
+                ],
+                name="uq_aluno_pap_ano_turma_aluno_cc",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["ano_letivo"], name="idx_aluno_pap_ano"),
+        ]
+
+    def __str__(self) -> str:
+        return (
+            f"Aluno {self.codigo_aluno}"
+            f" — turma {self.codigo_turma}"
+            f" / CC {self.codigo_componente_curricular}"
+            f" ({self.ano_letivo})"
+        )
+
+
+class AlunoPapAnoLetivoHistorico(models.Model):
+    """Alunos PAP por ano letivo, pré-agregados (carga histórica)."""
+
+    codigo_aluno = models.BigIntegerField(
+        help_text="EOL cd_aluno — FK lógica para aluno (PEDAGOGICO_DB).",
+    )
+    codigo_turma = models.BigIntegerField(
+        help_text="FK lógica → turma_programa.codigo_turma.",
+    )
+    codigo_componente_curricular = models.BigIntegerField(
+        help_text=(
+            "FK lógica → componente_curricular_programa"
+            ".codigo_componente_curricular."
+        ),
+    )
+    ano_letivo = models.SmallIntegerField(
+        help_text="EOL turma_escola.an_letivo — chave do filtro do endpoint.",
+    )
+    codigo_ue = models.CharField(
+        max_length=20,
+        help_text="EOL escola.cd_escola — desnormalizado.",
+    )
+    codigo_dre = models.CharField(
+        max_length=20,
+        help_text=(
+            "EOL unidade_administrativa.cd_unidade_administrativa "
+            "— desnormalizado."
+        ),
+    )
+
+    class Meta:
+        app_label = "programas"
+        db_table = "aluno_pap_ano_letivo_historico"
+        verbose_name = "aluno PAP por ano letivo (histórico)"
+        verbose_name_plural = "alunos PAP por ano letivo (histórico)"
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "ano_letivo",
+                    "codigo_turma",
+                    "codigo_aluno",
+                    "codigo_componente_curricular",
+                ],
+                name="uq_aluno_pap_hist_ano_turma_aluno_cc",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["ano_letivo"], name="idx_aluno_pap_hist_ano"),
+        ]
+
+    def __str__(self) -> str:
+        return (
+            f"Aluno {self.codigo_aluno}"
+            f" — turma {self.codigo_turma}"
+            f" / CC {self.codigo_componente_curricular}"
+            f" ({self.ano_letivo}, histórico)"
         )

@@ -59,9 +59,7 @@ class TipoProgramaEOL(IntEnum):
         PAEE quando a sigla ou descrição contém "PAEE" ou "SRM"; PAP caso contrário.
         Substitui a tabela hardcoded de códigos como fonte de verdade.
         """
-        textos = " ".join(
-            t.upper() for t in (sigla, descricao) if t
-        )
+        textos = " ".join(t.upper() for t in (sigla, descricao) if t)
         if "PAEE" in textos or "SRM" in textos:
             return CategoriaPrograma.PAEE
         return CategoriaPrograma.PAP
@@ -113,6 +111,16 @@ class ComponenteCurricularEOL(IntEnum):
     def codigos(cls) -> tuple[int, ...]:
         """Retorna todos os códigos como tupla — útil para filtros SQL IN (...)."""
         return tuple(m.value for m in cls)
+
+    @classmethod
+    def codigos_pap_vigentes(cls) -> tuple[int, ...]:
+        """Retorna os códigos vigentes da categoria PAP (sem PAEE, sem legado)."""
+        return tuple(
+            m.value
+            for m in cls
+            if m.value in _COMPONENTES_VIGENTES
+            and m.value not in _COMPONENTES_PAEE
+        )
 
 
 _COMPONENTES_PAEE: frozenset[int] = frozenset(

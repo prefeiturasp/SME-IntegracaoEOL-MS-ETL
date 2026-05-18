@@ -3,6 +3,8 @@
 from django.test import TestCase
 
 from apps.programas.models import (
+    AlunoPapAnoLetivo,
+    AlunoPapAnoLetivoHistorico,
     ComponenteCurricularPrograma,
     MatriculaTurmaPrograma,
     TipoPrograma,
@@ -71,9 +73,7 @@ class TestTurmaProgramaStr(TestCase):
             categoria="PAP",
             descricao_grade="PAP COLABORATIVO 3 / 4 E 5 ANO",
         )
-        self.assertEqual(
-            t.descricao_grade, "PAP COLABORATIVO 3 / 4 E 5 ANO"
-        )
+        self.assertEqual(t.descricao_grade, "PAP COLABORATIVO 3 / 4 E 5 ANO")
 
 
 class TestTurmaProgramaComponenteCurricularStr(TestCase):
@@ -99,3 +99,36 @@ class TestMatriculaTurmaProgramaStr(TestCase):
         self.assertIn("99999", resultado)
         self.assertIn("12345", resultado)
         self.assertIn("1322", resultado)
+
+
+class TestAlunoPapAnoLetivoStr(TestCase):
+    def test_str_inclui_ano_e_chaves(self) -> None:
+        a = AlunoPapAnoLetivo(
+            codigo_aluno=99999,
+            codigo_turma=12345,
+            codigo_componente_curricular=1322,
+            ano_letivo=2026,
+            codigo_ue="000001",
+            codigo_dre="108900",
+        )
+        resultado = str(a)
+        self.assertIn("99999", resultado)
+        self.assertIn("12345", resultado)
+        self.assertIn("1322", resultado)
+        self.assertIn("2026", resultado)
+
+
+class TestAlunoPapAnoLetivoHistoricoStr(TestCase):
+    def test_str_indica_historico(self) -> None:
+        a = AlunoPapAnoLetivoHistorico(
+            codigo_aluno=99999,
+            codigo_turma=12345,
+            codigo_componente_curricular=1322,
+            ano_letivo=2024,
+            codigo_ue="000001",
+            codigo_dre="108900",
+        )
+        resultado = str(a)
+        self.assertIn("99999", resultado)
+        self.assertIn("2024", resultado)
+        self.assertIn("histórico", resultado)

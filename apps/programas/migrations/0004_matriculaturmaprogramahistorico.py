@@ -139,7 +139,11 @@ class Migration(migrations.Migration):
         migrations.AddConstraint(
             model_name="matriculaturmaprogramahistorico",
             constraint=models.UniqueConstraint(
-                fields=["codigo_turma", "codigo_aluno", "codigo_componente_curricular"],
+                fields=[
+                    "codigo_turma",
+                    "codigo_aluno",
+                    "codigo_componente_curricular",
+                ],
                 name="uq_hist_matricula_turma_aluno_componente",
             ),
         ),

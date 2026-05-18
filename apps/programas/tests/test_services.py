@@ -38,9 +38,9 @@ class TestProgramasService(TestCase):
         with self.assertRaises(AttributeError):
             config.nome = "mudar"  # type: ignore[misc]
 
-    def test_fases_contem_6_configs(self) -> None:
-        """Valida que o service define as 6 fases esperadas."""
-        self.assertEqual(len(self.service._fases), 6)
+    def test_fases_contem_8_configs(self) -> None:
+        """Valida que o service define as 8 fases esperadas."""
+        self.assertEqual(len(self.service._fases), 8)
         nomes = [f.nome for f in self.service._fases]
         self.assertEqual(
             nomes,
@@ -51,6 +51,8 @@ class TestProgramasService(TestCase):
                 "turma_programa_componente_curricular",
                 "matricula_turma_programa",
                 "matricula_turma_programa_historico",
+                "aluno_pap_ano_letivo",
+                "aluno_pap_ano_letivo_historico",
             ],
         )
 
@@ -103,7 +105,7 @@ class TestProgramasService(TestCase):
             "108900",  # codigo_dre
         )
         pk, _, _ = transform(row)
-        
+
         self.assertEqual(pk, "12345-99999-1322")
 
     @patch.object(EtlProgramasService, "sync_batch")
@@ -137,22 +139,22 @@ class TestProgramasService(TestCase):
         with patch.object(EtlProgramasService, "_executar_fase") as mock_fase:
             mock_fase.return_value = PipelineMetrics(total_escritos=1)
 
-            res = self.service.executar(fase_inicial=6)
+            res = self.service.executar(fase_inicial=8)
 
             self.assertEqual(len(res), 1)
-            self.assertIn("matricula_turma_programa_historico", res)
+            self.assertIn("aluno_pap_ano_letivo_historico", res)
             self.assertEqual(mock_fase.call_count, 1)
 
     def test_executar_completo_acumula_resultados(self) -> None:
-        """Valida execução completa das 6 fases."""
+        """Valida execução completa das 8 fases."""
         with patch.object(EtlProgramasService, "_executar_fase") as mock_fase:
             mock_fase.return_value = PipelineMetrics(total_escritos=10)
 
             res = self.service.executar(fase_inicial=1)
 
-            self.assertEqual(len(res), 6)
+            self.assertEqual(len(res), 8)
             self.assertEqual(res["tipo_programa"], 10)
-            self.assertEqual(mock_fase.call_count, 6)
+            self.assertEqual(mock_fase.call_count, 8)
 
     @patch.object(EtlProgramasService, "sync_batch")
     def test_sync_batch_argumentos_corretos(
@@ -201,3 +203,34 @@ class TestProgramasService(TestCase):
         turma_fase = self.service._fases[2]
         self.assertEqual(turma_fase.table_name, "turma_programa")
         self.assertEqual(turma_fase.source_table, "turma_escola")
+
+    def test_aluno_pap_ano_letivo_le_v_matricula_cotic(self) -> None:
+        """Valida a fonte EOL da fase pré-agregada live."""
+        fase = self.service._fases[6]
+        self.assertEqual(fase.nome, "aluno_pap_ano_letivo")
+        self.assertEqual(fase.table_name, "aluno_pap_ano_letivo")
+        self.assertEqual(fase.source_table, "v_matricula_cotic")
+
+    def test_aluno_pap_ano_letivo_historico_le_v_historico(self) -> None:
+        """Valida a fonte EOL da fase pré-agregada histórica."""
+        fase = self.service._fases[7]
+        self.assertEqual(fase.nome, "aluno_pap_ano_letivo_historico")
+        self.assertEqual(fase.table_name, "aluno_pap_ano_letivo_historico")
+        self.assertEqual(fase.source_table, "v_historico_matricula_cotic")
+
+    def test_criar_transform_aluno_pap_pk_composta(self) -> None:
+        """Valida a PK composta da fase aluno PAP."""
+        config = self.service._fases[6]
+        transform = self.service._criar_transform(config)
+
+        row = (
+            99999,  # codigo_aluno
+            12345,  # codigo_turma
+            1322,  # codigo_componente_curricular
+            2026,  # ano_letivo
+            "000001",  # codigo_ue
+            "108900",  # codigo_dre
+        )
+        pk, _, _ = transform(row)
+
+        self.assertEqual(pk, "2026-12345-99999-1322")
