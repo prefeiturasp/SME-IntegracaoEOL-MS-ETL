@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 from django.test import TestCase
 
 from apps.controle_auditoria.models import EtlCheckpointDominio, EtlExecucao
+from apps.professores.management.commands.etl_professores import Command
 
 _RESULTADO_MOCK = {
     "unidade_educacional": 10,
@@ -106,7 +107,6 @@ class EtlProfessoresCommandTest(TestCase):
         self, mock_servico: MagicMock
     ) -> None:
         """Ao usar --continuar, retoma execução da fase seguinte após erro."""
-        # Simula erro na fase 2
         mock_servico.return_value.executar.side_effect = RuntimeError(
             "erro fase 2"
         )
@@ -114,7 +114,6 @@ class EtlProfessoresCommandTest(TestCase):
         with self.assertRaises(RuntimeError):
             self._executar()
 
-        # Retoma: deve iniciar da fase 2
         mock_servico.return_value.executar.side_effect = None
         mock_servico.return_value.executar.return_value = {"professor": 50}
         mock_servico.return_value.ultima_fase_concluida = 3
@@ -138,3 +137,68 @@ class EtlProfessoresCommandTest(TestCase):
 
         _, kwargs = mock_servico.return_value.executar.call_args
         self.assertEqual(kwargs.get("fase_inicial", 1), 1)
+
+    @patch(
+        "apps.professores.management.commands.etl_professores.EtlProfessoresService"
+    )
+    def test_callbacks_salvam_checkpoint_parcial(
+        self, mock_servico: MagicMock
+    ) -> None:
+        """Callbacks de lote e tabela persistem indice parcial."""
+
+        def executar_com_callbacks(**kwargs: object) -> dict[str, int]:
+            kwargs["on_lote"]("professor", 2)  # type: ignore[index]
+            kwargs["on_tabela_concluida"]("professor", 10)  # type: ignore[index]
+            return {"professor": 10}
+
+        mock_servico.return_value.executar.side_effect = executar_com_callbacks
+        mock_servico.return_value.ultima_fase_concluida = 1
+
+        self._executar()
+
+        checkpoint = EtlCheckpointDominio.objects.get(dominio="professores")
+        self.assertEqual(checkpoint.ultima_situacao, "concluido")
+        self.assertIsNone(checkpoint.indice_sincronizacao)
+
+    def test_obter_contexto_sem_checkpoint_reinicia(self) -> None:
+        """Sem checkpoint, --continuar inicia do zero."""
+        repositorio = MagicMock()
+        repositorio.obter_checkpoint_dominio.return_value = None
+
+        contexto = Command()._obter_contexto_retomada(True, repositorio)
+
+        self.assertEqual(contexto, (1, None, 0, 0))
+
+    def test_calcular_pulo_sem_indice_reinicia_fase(self) -> None:
+        """Indice vazio retoma a fase sem pular tabela."""
+        pular_ate, lote_inicial = Command()._calcular_pulo_e_lote("", 2)
+
+        self.assertIsNone(pular_ate)
+        self.assertEqual(lote_inicial, 0)
+
+    def test_calcular_pulo_por_tabela_concluida(self) -> None:
+        """Indice de tabela concluida pula ate essa tabela."""
+        pular_ate, lote_inicial = Command()._calcular_pulo_e_lote(
+            "professor", 2
+        )
+
+        self.assertEqual(pular_ate, "professor")
+        self.assertEqual(lote_inicial, 0)
+
+    def test_calcular_pulo_por_lote_de_upsert(self) -> None:
+        """Indice tabela:lote retoma no lote salvo para tabela upsert."""
+        pular_ate, lote_inicial = Command()._calcular_pulo_e_lote(
+            "professor:3", 1
+        )
+
+        self.assertIsNone(pular_ate)
+        self.assertEqual(lote_inicial, 3)
+
+    def test_calcular_pulo_por_lote_full_refresh_ignora_lote(self) -> None:
+        """Tabelas full-refresh retomam pelo inicio da tabela."""
+        pular_ate, lote_inicial = Command()._calcular_pulo_e_lote(
+            "lotacao_servidor:4", 3
+        )
+
+        self.assertEqual(pular_ate, "contrato_externo")
+        self.assertEqual(lote_inicial, 0)
