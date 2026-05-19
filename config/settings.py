@@ -41,6 +41,7 @@ def _parse_db_url(url: Any) -> dict:
         "HOST": parsed.hostname or "localhost",
         "PORT": str(parsed.port or 5432),
         "POOL_OPTIONS": _POOL_OPTIONS,
+        "OPTIONS": {"options": "-c synchronous_commit=off"},
     }
 
 
@@ -176,6 +177,7 @@ DATABASES = {
         "HOST": os.getenv("POSTGRES_HOST", "localhost"),
         "PORT": os.getenv("POSTGRES_PORT", "5432"),
         "POOL_OPTIONS": _POOL_OPTIONS,
+        "OPTIONS": {"options": "-c synchronous_commit=off"},
     },
     "eol_db": _parse_readonly_db(os.getenv("EOL_DB", "")),
     "core_sso_db": _parse_readonly_db(os.getenv("CORE_SSO_DB", "")),
@@ -215,6 +217,7 @@ INTERVALO_EXECUCAO_ETL_SEGUNDOS = int(
 API_KEY = os.getenv("API_KEY", "dev-key-default")
 API_KEY_HEADER = os.getenv("API_KEY_HEADER", "X-API-Key")
 CELERY_BROKER_URL = URL_KEYDB
+CELERY_RESULT_BACKEND = URL_KEYDB
 # Execução síncrona automática em testes/CI
 CELERY_TASK_ALWAYS_EAGER = os.getenv("CELERY_TASK_ALWAYS_EAGER", "1") == "1"
 

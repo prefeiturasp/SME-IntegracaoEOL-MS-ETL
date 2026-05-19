@@ -1,11 +1,18 @@
 from datetime import date
-from queue import Empty
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 from django.test import TestCase
 
-from apps.alunos.dtos.model_in import MatriculaTurmaIn, NecessidadeEspecialAlunoIn
+from apps.alunos.dtos.model_in import (
+    MatriculaTurmaIn,
+    NecessidadeEspecialAlunoIn,
+)
+from apps.alunos.models import (
+    DadosAlunoAcompanhamentoEscolar,
+    MatriculaAnoLetivo,
+    MatriculaComponenteCurricularAnoLetivo,
+)
 from apps.alunos.services import EtlAlunosService, PhaseConfig
 from apps.core.libs.base_etl_service import PipelineMetrics
 
@@ -14,14 +21,16 @@ class TestAlunosService(TestCase):
     """Testes para EtlAlunosService (Arquitetura Turbo/PhaseConfig)."""
 
     def setUp(self) -> None:
-        """Inicializa service com EOL mockado."""
+        """Inicializa service com EOL mockado.
+
+        _truncar_tabela é mockado para evitar UndefinedTable do psycopg.
+        """
         self.mock_eol = MagicMock()
         self.service = EtlAlunosService(
             db_alias="default",
             eol=self.mock_eol,
             id_execucao=uuid4(),
         )
-        # Mock _truncar_tabela para evitar erro de psycopg UndefinedTable em testes SimpleTestCase/TestCase
         self.service._truncar_tabela = MagicMock()
 
     def test_phase_config_e_imutavel(self) -> None:
@@ -32,7 +41,6 @@ class TestAlunosService(TestCase):
             table_name="tb",
             model_class=None,
             dto_in=None,
-            dto_out=None,
             pk_field="id",
             update_fields=("f1",),
             unique_fields=("id",),
@@ -40,9 +48,9 @@ class TestAlunosService(TestCase):
         with self.assertRaises(AttributeError):
             config.nome = "mudar"  # type: ignore[misc]
 
-    def test_fases_contem_6_configs(self) -> None:
-        """Valida que o service define as 6 fases esperadas."""
-        self.assertEqual(len(self.service._fases), 6)
+    def test_fases_contem_9_configs(self) -> None:
+        """Valida que o service define as 9 fases esperadas."""
+        self.assertEqual(len(self.service._fases), 9)
         nomes = [f.nome for f in self.service._fases]
         self.assertEqual(
             nomes,
@@ -53,6 +61,9 @@ class TestAlunosService(TestCase):
                 "nee_aluno",
                 "matricula",
                 "matricula_turma",
+                "matricula_ano_letivo",
+                "matricula_componente_curricular_ano_letivo",
+                "dados_aluno_acompanhamento_escolar",
             ],
         )
 
@@ -71,7 +82,7 @@ class TestAlunosService(TestCase):
 
     def test_criar_transform_pk_composta(self) -> None:
         """Valida geração de PK composta (Matricula-Turma)."""
-        config = self.service._fases[-1]
+        config = self.service._fases[5]
         transform = self.service._criar_transform(config)
 
         row = (123, 456, "01", None)
@@ -106,15 +117,15 @@ class TestAlunosService(TestCase):
             self.service._executar_fase(config)
 
     def test_executar_pula_fases_anteriores(self) -> None:
-        """Valida o parâmetro fase_inicial."""
+        """Valida o parâmetro fase_inicial — fases 1-5 devem ser ignoradas."""
         with patch.object(EtlAlunosService, "_executar_fase") as mock_fase:
             mock_fase.return_value = PipelineMetrics(total_escritos=1)
 
             res = self.service.executar(fase_inicial=6)
 
-            self.assertEqual(len(res), 1)
+            self.assertEqual(len(res), 4)
             self.assertIn("matricula_turma", res)
-            self.assertEqual(mock_fase.call_count, 1)
+            self.assertEqual(mock_fase.call_count, 4)
 
     def test_executar_completo_acumula_resultados(self) -> None:
         """Valida execução completa."""
@@ -123,9 +134,9 @@ class TestAlunosService(TestCase):
 
             res = self.service.executar(fase_inicial=1)
 
-            self.assertEqual(len(res), 6)
+            self.assertEqual(len(res), 9)
             self.assertEqual(res["aluno"], 10)
-            self.assertEqual(mock_fase.call_count, 6)
+            self.assertEqual(mock_fase.call_count, 9)
 
     @patch.object(EtlAlunosService, "sync_batch")
     def test_executar_fase_passa_batch_num_correto(
@@ -142,8 +153,6 @@ class TestAlunosService(TestCase):
 
         self.service._executar_fase(config)
 
-        # Parâmetro batch_num foi removido do _sync_batch por recomendação do Sonar
-        # O teste agora apenas valida que a chamada ocorreu
         self.assertTrue(mock_sync.called)
 
     @patch.object(EtlAlunosService, "sync_batch")
@@ -220,3 +229,132 @@ class TestAlunosService(TestCase):
         domain = dto.to_domain()
         self.assertIsNone(domain["codigo_matricula"])
         self.assertEqual(domain["codigo_turma"], 101)
+
+    def test_fase_7_nome_e_model_corretos(self) -> None:
+        """Valida nome e model_class da fase 7."""
+        fase = self.service._fases[6]
+        self.assertEqual(fase.nome, "matricula_ano_letivo")
+        self.assertEqual(fase.model_class, MatriculaAnoLetivo)
+
+    def test_fase_8_nome_e_model_corretos(self) -> None:
+        """Valida nome e model_class da fase 8."""
+        fase = self.service._fases[7]
+        self.assertEqual(
+            fase.nome, "matricula_componente_curricular_ano_letivo"
+        )
+        self.assertEqual(
+            fase.model_class, MatriculaComponenteCurricularAnoLetivo
+        )
+
+    def test_fase_7_suporta_bulk_insert(self) -> None:
+        """Valida que fase 7 tem suporta_bulk_insert=True."""
+        self.assertTrue(self.service._fases[6].suporta_bulk_insert)
+
+    def test_fase_8_suporta_bulk_insert(self) -> None:
+        """Valida que fase 8 tem suporta_bulk_insert=True."""
+        self.assertTrue(self.service._fases[7].suporta_bulk_insert)
+
+    def test_criar_transform_fase_7_pk_composta(self) -> None:
+        """Valida PK composta de 7 campos na fase 7."""
+        config = self.service._fases[6]
+        transform = self.service._criar_transform(config)
+        row = ("DRE01", "UE01", 1, 2024, 5, "EF", 3, "3A", "Turma A", 100)
+        pk, h, _ = transform(row)
+        self.assertEqual(pk, "DRE01-UE01-1-2024-EF-3A-Turma A")
+        self.assertEqual(len(h), 64)
+
+    def test_criar_transform_fase_8_pk_composta(self) -> None:
+        """Valida PK composta de 6 campos na fase 8."""
+        config = self.service._fases[7]
+        transform = self.service._criar_transform(config)
+        row = ("UE01", "DRE01", 2024, "EF", 3, 100, "3A", "T A", 50)
+        pk, h, _ = transform(row)
+        self.assertEqual(pk, "UE01-DRE01-2024-EF-100-3A")
+        self.assertEqual(len(h), 64)
+
+    def test_executar_pula_fases_1_a_6(self) -> None:
+        """Valida que executar(fase_inicial=7) retorna exatamente 3 chaves."""
+        with patch.object(
+            EtlAlunosService, "_executar_fase"
+        ) as mock_fase:
+            mock_fase.return_value = PipelineMetrics(total_escritos=1)
+            res = self.service.executar(fase_inicial=7)
+            self.assertEqual(len(res), 3)
+            self.assertIn("matricula_ano_letivo", res)
+            self.assertIn(
+                "matricula_componente_curricular_ano_letivo", res
+            )
+            self.assertIn("dados_aluno_acompanhamento_escolar", res)
+            self.assertEqual(mock_fase.call_count, 3)
+
+    @patch.object(EtlAlunosService, "sync_batch")
+    def test_fase_7_chama_sync_batch_por_chunk(
+        self, mock_sync: MagicMock
+    ) -> None:
+        """Valida 2 chunks sync_batch chamado 2 vezes para fase 7."""
+        config = self.service._fases[6]
+        self.mock_eol.iter_query.return_value = [
+            [("DRE01", "UE01", 1, 2024, 5, "EF", 3, "3A", "T A", 10)],
+            [("DRE02", "UE02", 1, 2024, 5, "EF", 3, "3A", "T B", 20)],
+        ]
+        mock_sync.return_value = (1, 0)
+        metrics = self.service._executar_fase(config)
+        self.assertEqual(mock_sync.call_count, 2)
+        self.assertEqual(metrics.total_lidos, 2)
+
+    @patch.object(EtlAlunosService, "sync_batch")
+    def test_fase_8_chama_sync_batch_por_chunk(
+        self, mock_sync: MagicMock
+    ) -> None:
+        """Valida 2 chunks sync_batch chamado 2 vezes para fase 8."""
+        config = self.service._fases[7]
+        self.mock_eol.iter_query.return_value = [
+            [("UE01", "DRE01", 2024, "EF", 3, 100, "3A", "T A", 10)],
+            [("UE02", "DRE02", 2024, "EF", 3, 200, "3A", "T B", 20)],
+        ]
+        mock_sync.return_value = (1, 0)
+        metrics = self.service._executar_fase(config)
+        self.assertEqual(mock_sync.call_count, 2)
+        self.assertEqual(metrics.total_lidos, 2)
+
+    def test_fase_9_nome_e_model_corretos(self) -> None:
+        """Valida nome e model_class da fase 9."""
+        fase = self.service._fases[8]
+        self.assertEqual(fase.nome, "dados_aluno_acompanhamento_escolar")
+        self.assertEqual(fase.model_class, DadosAlunoAcompanhamentoEscolar)
+
+    def test_fase_9_suporta_bulk_insert(self) -> None:
+        """Valida que fase 9 tem suporta_bulk_insert=True."""
+        self.assertTrue(self.service._fases[8].suporta_bulk_insert)
+
+    def test_criar_transform_fase_9_pk_composta(self) -> None:
+        """Valida PK composta de 3 campos na fase 9."""
+        config = self.service._fases[8]
+        transform = self.service._criar_transform(config)
+        row = (
+            1001, "JOAO", None, "MARIA", "123", None,
+            "EMEF", 1, "DRE01", "DRE-N", "UE01",
+            "EMEF TESTE", 555, "T A", 1,
+            "Ativo", None, 5, 2, "5A", 5,
+        )
+        pk, h, _ = transform(row)
+        self.assertEqual(pk, "1001-555-1")
+        self.assertEqual(len(h), 64)
+
+    @patch.object(EtlAlunosService, "sync_batch")
+    def test_fase_9_chama_sync_batch_por_chunk(
+        self, mock_sync: MagicMock
+    ) -> None:
+        """Valida 2 chunks sync_batch chamado 2 vezes para fase 9."""
+        config = self.service._fases[8]
+        row = (
+            1001, "JOAO", None, "MARIA", "123", None,
+            "EMEF", 1, "DRE01", "DRE-N", "UE01",
+            "EMEF TESTE", 555, "T A", 1,
+            "Ativo", None, 5, 2, "5A", 5,
+        )
+        self.mock_eol.iter_query.return_value = [[row], [row]]
+        mock_sync.return_value = (1, 0)
+        metrics = self.service._executar_fase(config)
+        self.assertEqual(mock_sync.call_count, 2)
+        self.assertEqual(metrics.total_lidos, 2)
