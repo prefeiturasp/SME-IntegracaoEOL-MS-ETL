@@ -19,7 +19,7 @@ from apps.programas.enums import (
     TipoProgramaEOL,
 )
 
-_DATA_MATRICULA = datetime.date(2025, 2, 1)
+_DATA_MATRICULA = datetime.datetime(2025, 2, 1, 11, 51, 46, 820000)
 
 
 def _row_tipo(id_=649, sigla="PAP-RECUP", descricao="PAP Recuperação"):

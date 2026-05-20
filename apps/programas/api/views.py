@@ -10,6 +10,7 @@ from rest_framework.views import APIView
 
 from apps.core.api.serializers import HealthStatusSerializer
 
+
 class HealthProgramasView(APIView):
     """Verifica a saúde do domínio Programas."""
 

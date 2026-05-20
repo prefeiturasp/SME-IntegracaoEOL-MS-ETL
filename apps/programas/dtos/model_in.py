@@ -1,7 +1,7 @@
 """DTOs de entrada do domínio Programas."""
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from typing import Any
 
 from apps.programas.enums import (
@@ -146,7 +146,7 @@ class MatriculaTurmaProgramaIn:
     codigo_componente_curricular: Any
     nome_componente_curricular: Any
     codigo_situacao_matricula: Any
-    data_matricula: date | None
+    data_matricula: datetime | None
     data_situacao: date | None
     ano_letivo: Any
     codigo_ue: Any

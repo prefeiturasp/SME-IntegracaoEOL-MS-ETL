@@ -96,7 +96,9 @@ class TestProgramasService(TestCase):
             1322,  # codigo_componente_curricular
             "PAP Rec",  # nome_componente_curricular
             1,  # codigo_situacao_matricula
-            datetime.date(2025, 2, 1),  # data_matricula
+            datetime.datetime(
+                2025, 2, 1, 11, 51, 46, 820000
+            ),  # data_matricula
             None,  # data_situacao
             2025,  # ano_letivo
             "000001",  # codigo_ue

@@ -206,9 +206,7 @@ _HT_CODIGO_ALUNO = (
     "EOL cd_aluno — FK lógica para aluno (PEDAGOGICO_DB — banco diferente)."
 )
 _HT_SITUACAO_MATRICULA = "EOL st_matricula."
-_HT_DESC_SITUACAO = (
-    "Ex: 'Ativo', 'Concluído' — desnormalizado para evitar mapeamento em código."
-)
+_HT_DESC_SITUACAO = "Ex: 'Ativo', 'Concluído' — desnormalizado para evitar mapeamento em código."
 _HT_DATA_SITUACAO = "EOL dt_situacao_aluno."
 _HT_ANO_LETIVO_MATRICULA = (
     "Desnormalizado da turma — necessário para filtros diretos por ano."
@@ -264,7 +262,7 @@ class MatriculaTurmaProgramaBase(models.Model):
 class MatriculaTurmaPrograma(MatriculaTurmaProgramaBase):
     """Matrículas de alunos em turmas de programa, por componente curricular."""
 
-    data_matricula = models.DateField(help_text="EOL dt_status_matricula.")
+    data_matricula = models.DateTimeField(help_text="EOL dt_status_matricula.")
 
     class Meta:
         app_label = "programas"
@@ -285,9 +283,7 @@ class MatriculaTurmaPrograma(MatriculaTurmaProgramaBase):
             models.Index(fields=["codigo_aluno"], name="idx_matricula_aluno"),
             models.Index(fields=["ano_letivo"], name="idx_matricula_ano"),
             models.Index(fields=["codigo_ue"], name="idx_matricula_ue"),
-            models.Index(
-                fields=["categoria"], name="idx_matricula_categoria"
-            ),
+            models.Index(fields=["categoria"], name="idx_matricula_categoria"),
         ]
 
     def __str__(self) -> str:
@@ -301,7 +297,7 @@ class MatriculaTurmaPrograma(MatriculaTurmaProgramaBase):
 class MatriculaTurmaProgramaHistorico(MatriculaTurmaProgramaBase):
     """Matrículas históricas em turmas de programa, por componente curricular."""
 
-    data_matricula = models.DateField(
+    data_matricula = models.DateTimeField(
         null=True,
         blank=True,
         help_text="EOL dt_status_matricula — nullable no histórico.",
