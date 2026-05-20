@@ -13,10 +13,6 @@ from apps.professores.compat.base import (
     _formatar_data,
 )
 
-# ---------------------------------------------------------------------------
-# ResultadoCompatibilidade
-# ---------------------------------------------------------------------------
-
 
 class ResultadoCompatibilidadeTaxaTest(TestCase):
     """Testes para a propriedade taxa_correspondencia."""
@@ -146,11 +142,6 @@ class ResultadoCompatibilidadeStrTest(TestCase):
         self.assertIn("75%", s)
 
 
-# ---------------------------------------------------------------------------
-# _formatar_data
-# ---------------------------------------------------------------------------
-
-
 class FormatarDataTest(TestCase):
     """Testes para _formatar_data."""
 
@@ -176,11 +167,6 @@ class FormatarDataTest(TestCase):
         """Verifica que datetime à meia-noite retorna só a data."""
         dt = datetime.datetime(2023, 1, 5, 0, 0, 0)
         self.assertEqual(_formatar_data(dt), "2023-01-05")
-
-
-# ---------------------------------------------------------------------------
-# VerificadorBase.executar
-# ---------------------------------------------------------------------------
 
 
 def _make_verificador(
@@ -228,10 +214,8 @@ class VerificadorBaseErroOrigemTest(TestCase):
     def test_erro_nao_propaga_excecao(self) -> None:
         """Verifica que o erro não vaza como exceção não tratada."""
         v = _make_verificador([], [], raise_origem=ValueError("db error"))
-        try:
-            v.executar(MagicMock())
-        except Exception:  # noqa: BLE001
-            self.fail("executar não deveria propagar exceção")
+        resultado = v.executar(MagicMock())
+        self.assertIn("db error", resultado.erro)
 
 
 class VerificadorBaseOrigemVaziaTest(TestCase):
@@ -272,10 +256,8 @@ class VerificadorBaseErroDestinoTest(TestCase):
             linhas_destino=[],
             raise_destino=RuntimeError("crash"),
         )
-        try:
-            v.executar(MagicMock())
-        except Exception:  # noqa: BLE001
-            self.fail("executar não deveria propagar exceção de destino")
+        resultado = v.executar(MagicMock())
+        self.assertIn("crash", resultado.erro)
 
 
 class VerificadorBaseComparacaoTest(TestCase):
@@ -308,6 +290,21 @@ class VerificadorBaseComparacaoTest(TestCase):
         r = v.executar(MagicMock())
         self.assertLessEqual(len(r.divergencias), 5)
 
+    def test_chave_customizada_e_usada_na_comparacao(self) -> None:
+        """Verifica uso de funcao customizada para chave de comparacao."""
+        def chave_fn(linha: dict) -> tuple:
+            return (linha["codigo"],)
+
+        v = _make_verificador(
+            linhas_origem=[{"codigo": "A"}],
+            linhas_destino=[{"codigo": "A"}],
+            chave_fn=chave_fn,
+        )
+
+        resultado = v.executar(MagicMock())
+
+        self.assertEqual(resultado.correspondencias, 1)
+
     def test_total_destino_preenchido(self) -> None:
         """Se total_destino reflete o número de linhas do destino."""
         linhas_o = [{"id": 1}]
@@ -327,10 +324,10 @@ class VerificadorBaseComparacaoTest(TestCase):
 
             def buscar_origem(self, eol: object, limite: int) -> list:
                 chamadas.append(limite)
-                return []
+                return [{"id": 1}]
 
             def buscar_destino(self, lo: list) -> list:
-                return []
+                return lo
 
             def chave_comparacao(self, linha: dict) -> tuple:
                 return (linha.get("id"),)
@@ -349,10 +346,10 @@ class VerificadorBaseComparacaoTest(TestCase):
 
             def buscar_origem(self, eol: object, limite: int) -> list:
                 chamadas.append(limite)
-                return []
+                return [{"id": 1}]
 
             def buscar_destino(self, lo: list) -> list:
-                return []
+                return lo
 
             def chave_comparacao(self, linha: dict) -> tuple:
                 return (linha.get("id"),)
@@ -366,3 +363,18 @@ class VerificadorBaseComparacaoTest(TestCase):
         r = v.executar(MagicMock())
         self.assertEqual(r.verificador, "Teste")
         self.assertEqual(r.consulta, "ConsultaTeste")
+
+
+class VerificadorBaseContratoTest(TestCase):
+    """Testes dos metodos abstratos de VerificadorBase."""
+
+    def test_metodos_base_exigem_implementacao(self) -> None:
+        """Verifica que a classe base declara contrato obrigatorio."""
+        verificador = VerificadorBase()
+
+        with self.assertRaises(NotImplementedError):
+            verificador.buscar_origem(MagicMock(), 1)
+        with self.assertRaises(NotImplementedError):
+            verificador.buscar_destino([])
+        with self.assertRaises(NotImplementedError):
+            verificador.chave_comparacao({})

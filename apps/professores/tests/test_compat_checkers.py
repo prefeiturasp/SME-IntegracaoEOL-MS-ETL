@@ -1,10 +1,4 @@
-"""Testes para compat/checkers/ — todos os 12 verificadores.
-
-Estratégia:
-- buscar_origem: mock de eol.executar_query, valida mapeamento de campos.
-- chave_comparacao: valida a tupla retornada a partir de um dict.
-- buscar_destino: mock das queries ORM via patch no módulo do checker.
-"""
+"""Testes para compat/checkers/ — todos verificadores."""
 
 import datetime
 from unittest.mock import MagicMock, patch
@@ -25,30 +19,13 @@ from apps.professores.compat.checkers.cargo_base import (
     VerificadorCargoBaseAtivo,
     VerificadorValidadeProf,
 )
-from apps.professores.compat.checkers.territorio import (
-    VerificadorTerritorioAtribuicao,
-    VerificadorTerritorioReplicado,
-)
-from apps.professores.compat.checkers.turma_escola import (
-    VerificadorTurmaEscola,
-    VerificadorTurmaEscolaGradePrograma,
-)
 
 _DT = datetime.date(2024, 2, 1)
 _DT_STR = "2024-02-01"
 
-# Prefixos de módulo para patch
 _MOD_AA = "apps.professores.compat.checkers.atribuicao_aula"
 _MOD_AE = "apps.professores.compat.checkers.atribuicao_externo"
 _MOD_CB = "apps.professores.compat.checkers.cargo_base"
-_MOD_TE = "apps.professores.compat.checkers.turma_escola"
-_MOD_TR = "apps.professores.compat.checkers.territorio"
-_MOD_MODELS = "apps.professores.models"
-
-
-# ===========================================================================
-# VerificadorAtribuicaoAula
-# ===========================================================================
 
 
 class VerificadorAtribuicaoAulaBuscarOrigemTest(TestCase):
@@ -155,11 +132,6 @@ class VerificadorAtribuicaoAulaChaveTest(TestCase):
         self.assertEqual(chave, (9001, "012345", 200, 10, 2024))
 
 
-# ===========================================================================
-# VerificadorTitularServidor
-# ===========================================================================
-
-
 class VerificadorTitularServidorTest(TestCase):
     """Testes para VerificadorTitularServidor."""
 
@@ -167,13 +139,9 @@ class VerificadorTitularServidorTest(TestCase):
         """Verifica mapeamento da row de titular servidor."""
         eol = MagicMock()
         eol.executar_query.return_value = [
-            (" 012345 ", " 012345 ", 200, 10, 2024, 300)
-        ]
-        v = VerificadorTitularServidor()
-        # row: (id, rf, serie_grade, componente, ano, id_tegp)
-        eol.executar_query.return_value = [
             (9001, " 012345 ", 200, 10, 2024, 300)
         ]
+        v = VerificadorTitularServidor()
         result = v.buscar_origem(eol, 10)
         self.assertEqual(result[0]["id"], 9001)
         self.assertEqual(result[0]["codigo_rf"], "012345")
@@ -209,11 +177,6 @@ class VerificadorTitularServidorTest(TestCase):
         self.assertTrue(filtros["dt_disponibilizacao_aulas__isnull"])
 
 
-# ===========================================================================
-# VerificadorPerfilProfServidor
-# ===========================================================================
-
-
 class VerificadorPerfilProfServidorTest(TestCase):
     """Testes para VerificadorPerfilProfServidor."""
 
@@ -242,32 +205,21 @@ class VerificadorPerfilProfServidorTest(TestCase):
         self.assertEqual(chave, ("012345", "000001", 9999, 2024))
 
     @patch(f"{_MOD_AA}.AtribuicaoAula")
-    @patch(f"{_MOD_AA}.SerieTurmaGrade")
-    def test_buscar_destino_combina_stg_e_atribuicao(
-        self, mock_stg: MagicMock, mock_aa: MagicMock
+    def test_buscar_destino_mapeia_campos(
+        self, mock_aa: MagicMock
     ) -> None:
-        """Combina STG e AtribuicaoAula."""
-        stg_qs = mock_stg.objects.using.return_value.filter.return_value
+        """Verifica mapeamento de campos via AtribuicaoAula no destino."""
         aa_qs = mock_aa.objects.using.return_value.filter.return_value
-
-        stg_qs.values.return_value = [
-            {
-                "codigo_serie_grade": 200,
-                "codigo_escola": "000001",
-                "codigo_turma": 9999,
-            }
-        ]
-
         aa_qs.values.return_value = [
             {
                 "cargo_base__professor_id": "012345",
+                "codigo_unidade_educacao": "000001",
+                "codigo_turma_escola": 9999,
                 "codigo_serie_grade": 200,
                 "ano_atribuicao": 2024,
             }
         ]
-
         v = VerificadorPerfilProfServidor()
-
         linhas = [
             {
                 "codigo_rf": "012345",
@@ -278,61 +230,43 @@ class VerificadorPerfilProfServidorTest(TestCase):
                 "codigo_componente": 10,
             }
         ]
-
         result = v.buscar_destino(linhas)
-
         self.assertEqual(len(result), 1)
-
         esperado = result[0]
-
         self.assertEqual(esperado["codigo_rf"], "012345")
         self.assertEqual(esperado["codigo_turma"], 9999)
 
     @patch(f"{_MOD_AA}.AtribuicaoAula")
-    @patch(f"{_MOD_AA}.SerieTurmaGrade")
-    def test_buscar_destino_serie_grade_sem_match_resulta_none(
-        self, mock_stg: MagicMock, mock_aa: MagicMock
+    def test_buscar_destino_codigo_turma_escola_none(
+        self, mock_aa: MagicMock
     ) -> None:
-        """Serie_grade não encontrada resulta em None."""
-        stg_qs = mock_stg.objects.using.return_value.filter.return_value
+        """Verifica que codigo_turma_escola None é preservado no resultado."""
         aa_qs = mock_aa.objects.using.return_value.filter.return_value
-
-        stg_qs.values.return_value = []
-
         aa_qs.values.return_value = [
             {
                 "cargo_base__professor_id": "012345",
+                "codigo_unidade_educacao": "000001",
+                "codigo_turma_escola": None,
                 "codigo_serie_grade": 999,
                 "ano_atribuicao": 2024,
             }
         ]
-
         v = VerificadorPerfilProfServidor()
-
         linhas = [
             {
                 "codigo_rf": "012345",
                 "codigo_escola": "000001",
-                "codigo_turma": 9999,
+                "codigo_turma": None,
                 "ano_letivo": 2024,
                 "codigo_serie_grade": 999,
                 "codigo_componente": 10,
             }
         ]
-
         result = v.buscar_destino(linhas)
-
         self.assertEqual(len(result), 1)
-
         esperado = result[0]
-
-        self.assertIsNone(esperado["codigo_escola"])
         self.assertIsNone(esperado["codigo_turma"])
-
-
-# ===========================================================================
-# VerificadorAtribuicaoExterno
-# ===========================================================================
+        self.assertEqual(esperado["codigo_escola"], "000001")
 
 
 class VerificadorAtribuicaoExternoTest(TestCase):
@@ -412,11 +346,6 @@ class VerificadorAtribuicaoExternoTest(TestCase):
         self.assertEqual(esperado["dt_atribuicao"], _DT_STR)
 
 
-# ===========================================================================
-# VerificadorTitularExterno
-# ===========================================================================
-
-
 class VerificadorTitularExternoTest(TestCase):
     """Testes para VerificadorTitularExterno."""
 
@@ -460,11 +389,6 @@ class VerificadorTitularExternoTest(TestCase):
         self.assertTrue(filtros["dt_disponibilizacao__isnull"])
 
 
-# ===========================================================================
-# VerificadorPerfilProfExterno
-# ===========================================================================
-
-
 class VerificadorPerfilProfExternoTest(TestCase):
     """Testes para VerificadorPerfilProfExterno."""
 
@@ -502,32 +426,21 @@ class VerificadorPerfilProfExternoTest(TestCase):
         self.assertEqual(chave, ("123.456.789-00", "000001", 9999, 2024))
 
     @patch(f"{_MOD_AE}.AtribuicaoExterno")
-    @patch(f"{_MOD_AE}.SerieTurmaGrade")
-    def test_buscar_destino_combina_stg_e_atribuicao_externo(
-        self, mock_stg: MagicMock, mock_ae: MagicMock
+    def test_buscar_destino_mapeia_campos(
+        self, mock_ae: MagicMock
     ) -> None:
-        """Combina STG e AtribuicaoExterno."""
-        stg_qs = mock_stg.objects.using.return_value.filter.return_value
+        """Verifica mapeamento de campos via AtribuicaoExterno no destino."""
         ae_qs = mock_ae.objects.using.return_value.filter.return_value
-
-        stg_qs.values.return_value = [
-            {
-                "codigo_serie_grade": 200,
-                "codigo_escola": "000001",
-                "codigo_turma": 9999,
-            }
-        ]
-
         ae_qs.values.return_value = [
             {
                 "contrato_externo__pessoa__cpf": "123.456.789-00",
+                "codigo_unidade_educacao": "000001",
+                "codigo_turma_escola": 9999,
                 "codigo_serie_grade": 200,
                 "ano_atribuicao": 2024,
             }
         ]
-
         v = VerificadorPerfilProfExterno()
-
         linhas = [
             {
                 "cpf_pessoa": "123.456.789-00",
@@ -538,20 +451,11 @@ class VerificadorPerfilProfExternoTest(TestCase):
                 "codigo_componente": 10,
             }
         ]
-
         result = v.buscar_destino(linhas)
-
         self.assertEqual(len(result), 1)
-
         esperado = result[0]
-
         self.assertEqual(esperado["cpf_pessoa"], "123.456.789-00")
         self.assertEqual(esperado["codigo_turma"], 9999)
-
-
-# ===========================================================================
-# VerificadorCargoBaseAtivo
-# ===========================================================================
 
 
 class VerificadorCargoBaseAtivoTest(TestCase):
@@ -610,18 +514,12 @@ class VerificadorCargoBaseAtivoTest(TestCase):
         self.assertEqual(esperado["dt_posse"], _DT_STR)
 
 
-# ===========================================================================
-# VerificadorValidadeProf
-# ===========================================================================
-
-
 class VerificadorValidadeProfTest(TestCase):
     """Testes para VerificadorValidadeProf."""
 
     def test_buscar_origem_mapeamento(self) -> None:
         """Verifica mapeamento da row de validade prof."""
         eol = MagicMock()
-        # (id_cargo_base, rf, situacao_funcional, sem_laudo)
         eol.executar_query.return_value = [(1001, " 012345 ", 6, 1)]
         v = VerificadorValidadeProf()
         result = v.buscar_origem(eol, 10)
@@ -697,319 +595,3 @@ class VerificadorValidadeProfTest(TestCase):
         result = v.buscar_destino([{"id_cargo_base": 1001}])
 
         self.assertFalse(result[0]["sem_laudo"])
-
-
-# ===========================================================================
-# VerificadorTurmaEscola
-# ===========================================================================
-
-
-class VerificadorTurmaEscolaTest(TestCase):
-    """Testes para VerificadorTurmaEscola."""
-
-    def test_buscar_origem_mapeamento(self) -> None:
-        """Verifica mapeamento da row de turma escola."""
-        eol = MagicMock()
-        eol.executar_query.return_value = [
-            (9999, " 000001 ", 2024, "A", 1, _DT, _DT, None)
-        ]
-        v = VerificadorTurmaEscola()
-        result = v.buscar_origem(eol, 10)
-        self.assertEqual(result[0]["codigo_turma"], 9999)
-        self.assertEqual(result[0]["codigo_escola"], "000001")
-        self.assertEqual(result[0]["ano_letivo"], 2024)
-        self.assertEqual(result[0]["status"], "A")
-        self.assertEqual(result[0]["tipo_turma"], 1)
-        self.assertEqual(result[0]["dt_inicio_turma"], _DT_STR)
-
-    def test_buscar_origem_status_none_vira_vazio(self) -> None:
-        """Verifica que status None é convertido para string vazia."""
-        eol = MagicMock()
-        eol.executar_query.return_value = [
-            (9999, " 000001 ", 2024, None, 1, None, None, None)
-        ]
-        v = VerificadorTurmaEscola()
-        result = v.buscar_origem(eol, 10)
-        self.assertEqual(result[0]["status"], "")
-
-    def test_chave_turma_escola_ano_status_tipo_dt_inicio(self) -> None:
-        """Verifica que a chave inclui campos de identificação da turma."""
-        linha = {
-            "codigo_turma": 9999,
-            "codigo_escola": "000001",
-            "ano_letivo": 2024,
-            "status": "A",
-            "tipo_turma": 1,
-            "dt_inicio_turma": _DT_STR,
-        }
-        chave = VerificadorTurmaEscola().chave_comparacao(linha)
-        self.assertEqual(chave, (9999, "000001", 2024, "A", 1, _DT_STR))
-
-    @patch(f"{_MOD_TE}.TurmaEscola")
-    def test_buscar_destino_mapeamento(self, mock_model: MagicMock) -> None:
-        """Verifica que buscar_destino mapeia todos os campos."""
-        qs = mock_model.objects.using.return_value.filter.return_value
-
-        qs.values.return_value = [
-            {
-                "codigo_turma": 9999,
-                "codigo_escola": "000001",
-                "ano_letivo": 2024,
-                "status": "A",
-                "tipo_turma": 1,
-                "dt_inicio_turma": _DT,
-                "dt_fim_turma": None,
-                "dt_fim": None,
-            }
-        ]
-
-        v = VerificadorTurmaEscola()
-
-        result = v.buscar_destino([{"codigo_turma": 9999}])
-
-        esperado = result[0]
-
-        self.assertEqual(esperado["codigo_turma"], 9999)
-        self.assertEqual(esperado["dt_inicio_turma"], _DT_STR)
-        self.assertIsNone(esperado["dt_fim"])
-
-
-# ===========================================================================
-# VerificadorTurmaEscolaGradePrograma
-# ===========================================================================
-
-
-class VerificadorTurmaEscolaGradeProgramaTest(TestCase):
-    """Testes para VerificadorTurmaEscolaGradePrograma."""
-
-    def test_buscar_origem_mapeamento(self) -> None:
-        """Verifica mapeamento da row de turma escola grade programa."""
-        eol = MagicMock()
-        eol.executar_query.return_value = [(300, 9999, 50, None)]
-        v = VerificadorTurmaEscolaGradePrograma()
-        result = v.buscar_origem(eol, 10)
-        self.assertEqual(result[0]["id"], 300)
-        self.assertEqual(result[0]["codigo_turma"], 9999)
-        self.assertEqual(result[0]["codigo_escola_grade"], 50)
-        self.assertIsNone(result[0]["dt_fim"])
-
-    def test_chave_id_turma_escola_grade(self) -> None:
-        """Se a chave inclui id, codigo_turma, codigo_escola_grade."""
-        linha = {"id": 300, "codigo_turma": 9999, "codigo_escola_grade": 50}
-        chave = VerificadorTurmaEscolaGradePrograma().chave_comparacao(linha)
-        self.assertEqual(chave, (300, 9999, 50))
-
-    @patch(f"{_MOD_TE}.TurmaEscolaGradePrograma")
-    def test_buscar_destino_mapeamento(self, mock_model: MagicMock) -> None:
-        """Verifica mapeamento de campos do destino."""
-        qs = mock_model.objects.using.return_value.filter.return_value
-
-        qs.values.return_value = [
-            {
-                "codigo": 300,
-                "codigo_turma": 9999,
-                "codigo_escola_grade": 50,
-                "dt_fim": None,
-            }
-        ]
-
-        v = VerificadorTurmaEscolaGradePrograma()
-
-        result = v.buscar_destino([{"id": 300}])
-
-        self.assertEqual(result[0]["id"], 300)
-        self.assertEqual(result[0]["codigo_turma"], 9999)
-
-
-# ===========================================================================
-# VerificadorTerritorioReplicado
-# ===========================================================================
-
-
-class VerificadorTerritorioReplicadoTest(TestCase):
-    """Testes para VerificadorTerritorioReplicado."""
-
-    def test_buscar_origem_mapeamento(self) -> None:
-        """Verifica mapeamento da row de território replicado."""
-        eol = MagicMock()
-        eol.executar_query.return_value = [(200, 10, 1, 2, _DT)]
-        v = VerificadorTerritorioReplicado()
-        result = v.buscar_origem(eol, 10)
-        self.assertEqual(result[0]["codigo_serie_grade"], 200)
-        self.assertEqual(result[0]["codigo_componente"], 10)
-        self.assertEqual(result[0]["codigo_territorio"], 1)
-        self.assertEqual(result[0]["codigo_experiencia"], 2)
-
-    def test_chave_serie_componente_territorio_experiencia(self) -> None:
-        """Verifica que a chave inclui os 4 campos naturais."""
-        linha = {
-            "codigo_serie_grade": 200,
-            "codigo_componente": 10,
-            "codigo_territorio": 1,
-            "codigo_experiencia": 2,
-        }
-        chave = VerificadorTerritorioReplicado().chave_comparacao(linha)
-        self.assertEqual(chave, (200, 10, 1, 2))
-
-    @patch(f"{_MOD_TR}.TurmaGradeTerritorioExperiencia")
-    def test_buscar_destino_mapeamento(self, mock_model: MagicMock) -> None:
-        """Verifica que buscar_destino mapeia os campos corretamente."""
-        qs = mock_model.objects.using.return_value.filter.return_value
-
-        qs.values.return_value = [
-            {
-                "codigo_serie_grade": 200,
-                "codigo_componente_curricular": 10,
-                "codigo_territorio_saber": 1,
-                "codigo_experiencia_pedagogica": 2,
-            }
-        ]
-
-        v = VerificadorTerritorioReplicado()
-
-        entrada = [
-            {
-                "codigo_serie_grade": 200,
-                "codigo_componente": 10,
-                "codigo_territorio": 1,
-                "codigo_experiencia": 2,
-            }
-        ]
-
-        result = v.buscar_destino(entrada)
-
-        esperado = result[0]
-
-        self.assertEqual(esperado["codigo_componente"], 10)
-        self.assertEqual(esperado["codigo_territorio"], 1)
-
-
-# ===========================================================================
-# VerificadorTerritorioAtribuicao
-# ===========================================================================
-
-
-class VerificadorTerritorioAtribuicaoTest(TestCase):
-    """Testes para VerificadorTerritorioAtribuicao."""
-
-    def test_buscar_origem_mapeamento(self) -> None:
-        """Verifica mapeamento da row de território + atribuição."""
-        eol = MagicMock()
-        eol.executar_query.return_value = [(" 012345 ", 9999, 10, 1, 2, 2024)]
-        v = VerificadorTerritorioAtribuicao()
-        result = v.buscar_origem(eol, 10)
-        self.assertEqual(result[0]["codigo_rf"], "012345")
-        self.assertEqual(result[0]["codigo_turma"], 9999)
-        self.assertEqual(result[0]["codigo_componente"], 10)
-        self.assertEqual(result[0]["codigo_territorio"], 1)
-        self.assertEqual(result[0]["codigo_experiencia"], 2)
-        self.assertEqual(result[0]["ano_atribuicao"], 2024)
-
-    def test_chave_rf_turma_componente_territorio_experiencia_ano(
-        self,
-    ) -> None:
-        """Verifica que a chave inclui todos os 6 campos."""
-        linha = {
-            "codigo_rf": "012345",
-            "codigo_turma": 9999,
-            "codigo_componente": 10,
-            "codigo_territorio": 1,
-            "codigo_experiencia": 2,
-            "ano_atribuicao": 2024,
-        }
-        chave = VerificadorTerritorioAtribuicao().chave_comparacao(linha)
-        self.assertEqual(chave, ("012345", 9999, 10, 1, 2, 2024))
-
-    @patch(f"{_MOD_MODELS}.AtribuicaoAula")
-    @patch(f"{_MOD_TR}.TurmaGradeTerritorioExperiencia")
-    @patch(f"{_MOD_MODELS}.SerieTurmaGrade")
-    def test_buscar_destino_combina_tres_queries(
-        self,
-        mock_stg: MagicMock,
-        mock_tgt: MagicMock,
-        mock_aa: MagicMock,
-    ) -> None:
-        """Verifica que buscar_destino combina STG, TGT e AtribuicaoAula."""
-        stg_qs = mock_stg.objects.using.return_value.filter.return_value
-        tgt_qs = mock_tgt.objects.using.return_value.filter.return_value
-        aa_qs = mock_aa.objects.using.return_value.filter.return_value
-
-        stg_qs.values.return_value = [
-            {"codigo_turma": 9999, "codigo_serie_grade": 200}
-        ]
-
-        tgt_qs.values.return_value = [
-            {
-                "codigo_serie_grade": 200,
-                "codigo_componente_curricular": 10,
-                "codigo_territorio_saber": 1,
-                "codigo_experiencia_pedagogica": 2,
-            }
-        ]
-
-        aa_qs.values.return_value = [
-            {
-                "cargo_base__professor_id": "012345",
-                "codigo_serie_grade": 200,
-                "codigo_componente_curricular": 10,
-                "ano_atribuicao": 2024,
-            }
-        ]
-        v = VerificadorTerritorioAtribuicao()
-        linhas = [
-            {
-                "codigo_rf": "012345",
-                "codigo_turma": 9999,
-                "codigo_componente": 10,
-                "codigo_territorio": 1,
-                "codigo_experiencia": 2,
-                "ano_atribuicao": 2024,
-            }
-        ]
-        result = v.buscar_destino(linhas)
-        self.assertEqual(len(result), 1)
-        self.assertEqual(result[0]["codigo_rf"], "012345")
-        self.assertEqual(result[0]["codigo_turma"], 9999)
-        self.assertEqual(result[0]["codigo_componente"], 10)
-
-    @patch(f"{_MOD_MODELS}.AtribuicaoAula")
-    @patch(f"{_MOD_TR}.TurmaGradeTerritorioExperiencia")
-    @patch(f"{_MOD_MODELS}.SerieTurmaGrade")
-    def test_buscar_destino_sem_match_tgt_retorna_vazio(
-        self,
-        mock_stg: MagicMock,
-        mock_tgt: MagicMock,
-        mock_aa: MagicMock,
-    ) -> None:
-        """Verifica que sem matches em TGT nenhum resultado é produzido."""
-        stg_qs = mock_stg.objects.using.return_value.filter.return_value
-        tgt_qs = mock_tgt.objects.using.return_value.filter.return_value
-        aa_qs = mock_aa.objects.using.return_value.filter.return_value
-
-        stg_qs.values.return_value = [
-            {"codigo_turma": 9999, "codigo_serie_grade": 200}
-        ]
-
-        tgt_qs.values.return_value = []
-
-        aa_qs.values.return_value = [
-            {
-                "cargo_base__professor_id": "012345",
-                "codigo_serie_grade": 200,
-                "codigo_componente_curricular": 10,
-                "ano_atribuicao": 2024,
-            }
-        ]
-        v = VerificadorTerritorioAtribuicao()
-        linhas = [
-            {
-                "codigo_rf": "012345",
-                "codigo_turma": 9999,
-                "codigo_componente": 10,
-                "codigo_territorio": 1,
-                "codigo_experiencia": 2,
-                "ano_atribuicao": 2024,
-            }
-        ]
-        result = v.buscar_destino(linhas)
-        self.assertEqual(result, [])

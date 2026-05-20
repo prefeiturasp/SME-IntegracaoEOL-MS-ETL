@@ -1,40 +1,4 @@
-"""Executor de compatibilidade.
-
-Executa todos os verificadores e agrega resultados.
-
-Uso programático:
-    from apps.professores.compat.executor import ExecutorCompatibilidade
-    from apps.eol_connection.libs.servico_eol import EOLService
-
-    executor = ExecutorCompatibilidade(EOLService(), limite=30)
-    resultados = executor.executar_todos()
-    for r in resultados:
-        print(r)
-
-Consultas cobertas (ProfessorController.txt):
-    FuncionarioRepository
-        BuscaFuncionarioPorRfAsync ......... VerificadorCargoBaseAtivo
-
-    PerfilSGPRepository
-        BuscarInformacoesPerfilProfAsync ... VerificadorPerfilProfServidor
-        BuscarInformacoesPerfilProf (ext)  . VerificadorPerfilProfExterno
-
-    ProfessorRepository
-        BuscaProfessoresAsync .............. VerificadorAtribuicaoAula
-        BuscaProfessoresAsync (ext) ........ VerificadorAtribuicaoExterno
-        BuscarProfessorTitular ............. VerificadorTitularServidor
-        BuscarProfessorTitular (ext) ....... VerificadorTitularExterno
-        VerificarValidadeProfessorAsync .... VerificadorValidadeProf
-        VerificaSeEhTurmaDeProgramaAsync ... VerificadorTurmaEscola
-        VerificaSeTemAtribuicaoNaTurma .... VerificadorTurmaEscolaGradePrograma
-
-    ComponenteCurricularRepository
-        ObterComponentesCurricularesTerr ... VerificadorTerritorioReplicado
-        ObterComponentesCurriculares(join)  . VerificadorTerritorioAtribuicao
-
-    AgrupamentoAtribuicaoTerritorioSaber
-        VerificadorAgrupamentoTS ........ popular_agrupamentos_territorio_saber
-"""
+"""Executor de compatibilidade e agrega de resultados."""
 
 import logging
 from typing import Any
@@ -54,40 +18,18 @@ from apps.professores.compat.checkers.cargo_base import (
     VerificadorCargoBaseAtivo,
     VerificadorValidadeProf,
 )
-from apps.professores.compat.checkers.territorio import (
-    VerificadorAgrupamentoTS,
-    VerificadorTerritorioAtribuicao,
-    VerificadorTerritorioReplicado,
-)
-from apps.professores.compat.checkers.turma_escola import (
-    VerificadorTurmaEscola,
-    VerificadorTurmaEscolaGradePrograma,
-)
 
 logger = logging.getLogger(__name__)
 
 _TODOS_VERIFICADORES = [
-    # Funcionário / Cargo Base
     VerificadorCargoBaseAtivo,
     VerificadorValidadeProf,
-    # Perfil professor — servidor
     VerificadorPerfilProfServidor,
-    # Perfil professor — externo
     VerificadorPerfilProfExterno,
-    # AtribuicaoAula (servidor)
     VerificadorAtribuicaoAula,
     VerificadorTitularServidor,
-    # AtribuicaoExterno
     VerificadorAtribuicaoExterno,
     VerificadorTitularExterno,
-    # TurmaEscola / TurmaEscolaGradePrograma
-    VerificadorTurmaEscola,
-    VerificadorTurmaEscolaGradePrograma,
-    # Território do Saber (ComponenteCurricular)
-    VerificadorTerritorioReplicado,
-    VerificadorTerritorioAtribuicao,
-    # AgrupamentoAtribuicaoTerritorioSaber
-    VerificadorAgrupamentoTS,
 ]
 
 

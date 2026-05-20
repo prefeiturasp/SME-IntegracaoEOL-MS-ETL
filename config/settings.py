@@ -19,6 +19,7 @@ _POOL_OPTIONS = {
 THREAD_POOL_MAX_WORKERS = int(os.getenv("THREAD_POOL_MAX_WORKERS", "4"))
 THREAD_POOL_CHUNK_TIMEOUT = int(os.getenv("THREAD_POOL_CHUNK_TIMEOUT", "120"))
 
+
 def _parse_db_url(url: Any) -> dict:
     """Faz o parse de uma URL PostgreSQL para dict de configuração Django."""
     if not url:
@@ -41,7 +42,6 @@ def _parse_db_url(url: Any) -> dict:
         "HOST": parsed.hostname or "localhost",
         "PORT": str(parsed.port or 5432),
         "POOL_OPTIONS": _POOL_OPTIONS,
-        "OPTIONS": {"options": "-c synchronous_commit=off"},
     }
 
 
@@ -177,7 +177,6 @@ DATABASES = {
         "HOST": os.getenv("POSTGRES_HOST", "localhost"),
         "PORT": os.getenv("POSTGRES_PORT", "5432"),
         "POOL_OPTIONS": _POOL_OPTIONS,
-        "OPTIONS": {"options": "-c synchronous_commit=off"},
     },
     "eol_db": _parse_readonly_db(os.getenv("EOL_DB", "")),
     "core_sso_db": _parse_readonly_db(os.getenv("CORE_SSO_DB", "")),
