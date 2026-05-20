@@ -4,7 +4,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("programas", "0004_matriculaturmaprogramahistorico"),
+        ("programas", "0005_alter_matriculaturmaprogramahistorico_categoria"),
     ]
 
     operations = [
