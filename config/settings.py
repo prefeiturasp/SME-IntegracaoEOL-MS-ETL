@@ -19,6 +19,7 @@ _POOL_OPTIONS = {
 THREAD_POOL_MAX_WORKERS = int(os.getenv("THREAD_POOL_MAX_WORKERS", "4"))
 THREAD_POOL_CHUNK_TIMEOUT = int(os.getenv("THREAD_POOL_CHUNK_TIMEOUT", "120"))
 
+
 def _parse_db_url(url: Any) -> dict:
     """Faz o parse de uma URL PostgreSQL para dict de configuração Django."""
     if not url:
@@ -215,6 +216,7 @@ INTERVALO_EXECUCAO_ETL_SEGUNDOS = int(
 API_KEY = os.getenv("API_KEY", "dev-key-default")
 API_KEY_HEADER = os.getenv("API_KEY_HEADER", "X-API-Key")
 CELERY_BROKER_URL = URL_KEYDB
+CELERY_RESULT_BACKEND = URL_KEYDB
 # Execução síncrona automática em testes/CI
 CELERY_TASK_ALWAYS_EAGER = os.getenv("CELERY_TASK_ALWAYS_EAGER", "1") == "1"
 

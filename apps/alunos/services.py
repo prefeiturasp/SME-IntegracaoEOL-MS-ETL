@@ -6,6 +6,9 @@ from uuid import UUID
 
 from apps.alunos.dtos.model_in import (
     AlunoIn,
+    DadosAlunoAcompanhamentoEscolarIn,
+    MatriculaAnoLetivoIn,
+    MatriculaComponenteCurricularAnoLetivoIn,
     MatriculaIn,
     MatriculaTurmaIn,
     NecessidadeEspecialAlunoIn,
@@ -14,119 +17,28 @@ from apps.alunos.dtos.model_in import (
 )
 from apps.alunos.models import (
     Aluno,
+    DadosAlunoAcompanhamentoEscolar,
     Matricula,
+    MatriculaAnoLetivo,
+    MatriculaComponenteCurricularAnoLetivo,
     MatriculaTurma,
     NecessidadeEspecialAluno,
     ResponsavelAluno,
     TipoNecessidadeEspecial,
 )
+from apps.alunos.queries import (
+    SQL_ALUNO,
+    SQL_DADOS_ALUNO_ACOMPANHAMENTO_ESCOLAR,
+    SQL_MATRICULA,
+    SQL_MATRICULA_ANO_LETIVO,
+    SQL_MATRICULA_COMPONENTE_CURRICULAR_ANO_LETIVO,
+    SQL_MATRICULA_TURMA,
+    SQL_NEE_ALUNO,
+    SQL_RESPONSAVEL,
+    SQL_TIPO_NEE,
+)
 from apps.core.libs.base_etl_service import BaseEtlService, PhaseConfig
 from apps.eol_connection.libs.servico_eol import EOLService
-
-SQL_TIPO_NEE = """
-SELECT
-    tp_necessidade_especial AS codigo_necessidade_especial
-  , dc_necessidade_especial AS descricao
-  , tp_necessidade_especial_estado AS codigo_estado
-  , dt_cancelamento
-FROM tipo_necessidade_especial
-"""
-
-SQL_ALUNO = """
-SELECT
-     a.cd_aluno AS codigo_aluno
-   , v.nm_aluno AS nome
-   , v.nm_social_aluno AS nome_social
-   , v.dt_nascimento_aluno AS data_nascimento
-   , v.cd_sexo_aluno AS sexo
-   , a.cd_nacionalidade_aluno AS nacionalidade
-   , a.cd_identificacao_social AS nis
-   , a.cd_cpf_aluno AS cpf
-   , a.nm_mae_aluno AS nome_mae
-   , trc.dc_raca_cor AS raca_cor
-   , a.dt_atualizacao_tabela  AS data_atualizacao_contato
-   , CASE WHEN nea.tp_necessidade_especial IS NULL
-		THEN 0 ELSE 1
-	END possui_deficiencia
-FROM aluno a
-LEFT JOIN v_aluno_cotic v ON a.cd_aluno = v.cd_aluno
-LEFT JOIN tipo_raca_cor trc ON trc.tp_raca_cor = a.tp_raca_cor
-LEFT JOIN necessidade_especial_aluno nea ON nea.cd_aluno = a.cd_aluno;
-"""
-
-SQL_RESPONSAVEL = """
-SELECT
-     ra.cd_identificador_responsavel AS codigo_responsavel
-   , ra.cd_aluno AS codigo_aluno
-   , ra.tp_pessoa_responsavel AS tipo_responsavel
-   , ra.nm_responsavel AS nome
-   , ra.cd_cpf_responsavel AS cpf
-   , ra.email_responsavel AS email
-   , ra.cd_ddd_celular_responsavel AS ddd_celular
-   , ra.nr_celular_responsavel AS numero_celular
-   , ra.in_autoriza_envio_sms AS autoriza_sms
-   , e.nm_logradouro AS logradouro
-   , e.cd_cep AS cep
-   , ra.dt_fim AS data_fim_vinculo_aluno
-FROM responsavel_aluno ra
-LEFT JOIN endereco e ON e.ci_endereco = ra.ci_endereco
-"""
-
-SQL_NEE_ALUNO = """
-SELECT
-    cd_identificador_necessidade_especial_aluno
-        AS codigo_necessidade_especial_aluno
-  , cd_aluno AS codigo_aluno
-  , tp_necessidade_especial AS codigo_necessidade_especial
-  , dt_inicio
-  , dt_fim
-FROM necessidade_especial_aluno
-"""
-
-SQL_MATRICULA = """
-SELECT
-    cd_matricula, cd_aluno, codigo_ue, data_situacao_matricula, ano_letivo,
-    codigo_situacao_matricula
-FROM (
-    SELECT
-        cd_matricula
-      , cd_aluno
-      , cd_escola AS codigo_ue
-      , dt_status_matricula AS data_situacao_matricula
-      , an_letivo AS ano_letivo
-      , st_matricula AS codigo_situacao_matricula
-    FROM v_matricula_cotic
-    UNION ALL
-    SELECT
-        cd_matricula
-      , cd_aluno
-      , cd_escola AS codigo_ue
-      , dt_status_matricula AS data_situacao_matricula
-      , an_letivo AS ano_letivo
-      , st_matricula AS codigo_situacao_matricula
-    FROM v_historico_matricula_cotic
-) AS mt
-"""
-
-SQL_MATRICULA_TURMA = """
-WITH CteMatriculaTurma AS (
-    SELECT
-        mt.cd_matricula
-      , mt.cd_turma_escola AS codigo_turma
-      , mt.nr_chamada_aluno AS numero_chamada
-      , mt.dt_situacao_aluno AS data_situacao
-    FROM matricula_turma_escola mt
-    UNION ALL
-    SELECT
-        mt.cd_matricula
-      , mt.cd_turma_escola AS codigo_turma
-      , mt.nr_chamada_aluno AS numero_chamada
-      , mt.dt_situacao_aluno AS data_situacao
-    FROM historico_matricula_turma_escola mt
-)
-SELECT mt.cd_matricula, mt.codigo_turma, mt.numero_chamada, mt.data_situacao
-FROM CteMatriculaTurma mt
-"""
 
 
 class EtlAlunosService(BaseEtlService):
@@ -270,5 +182,98 @@ class EtlAlunosService(BaseEtlService):
                 update_fields=("numero_chamada", "data_situacao_aluno"),
                 unique_fields=("codigo_matricula", "codigo_turma"),
                 suporta_bulk_insert=False,
+            ),
+            PhaseConfig(
+                nome="matricula_ano_letivo",
+                sql=SQL_MATRICULA_ANO_LETIVO,
+                table_name="matricula_ano_letivo",
+                source_table="v_matricula_cotic",
+                model_class=MatriculaAnoLetivo,
+                dto_in=MatriculaAnoLetivoIn,
+                pk_field=[
+                    "codigo_dre",
+                    "codigo_ue",
+                    "tipo_escola",
+                    "ano_letivo",
+                    "modalidade",
+                    "ano",
+                    "turma",
+                ],
+                update_fields=("quantidade",),
+                unique_fields=(
+                    "codigo_dre",
+                    "codigo_ue",
+                    "tipo_escola",
+                    "ano_letivo",
+                    "modalidade",
+                    "ano",
+                    "turma",
+                ),
+                suporta_bulk_insert=True
+            ),
+            PhaseConfig(
+                nome="matricula_componente_curricular_ano_letivo",
+                sql=SQL_MATRICULA_COMPONENTE_CURRICULAR_ANO_LETIVO,
+                table_name=("matricula_componente_curricular_ano_letivo"),
+                source_table="v_matricula_cotic",
+                model_class=MatriculaComponenteCurricularAnoLetivo,
+                dto_in=MatriculaComponenteCurricularAnoLetivoIn,
+                pk_field=[
+                    "codigo_ue",
+                    "codigo_dre",
+                    "ano_letivo",
+                    "modalidade",
+                    "componente_curricular_id",
+                    "ano",
+                ],
+                update_fields=("quantidade",),
+                unique_fields=(
+                    "codigo_ue",
+                    "codigo_dre",
+                    "ano_letivo",
+                    "modalidade",
+                    "componente_curricular_id",
+                    "ano",
+                ),
+                suporta_bulk_insert=True
+            ),
+            PhaseConfig(
+                nome="dados_aluno_acompanhamento_escolar",
+                sql=SQL_DADOS_ALUNO_ACOMPANHAMENTO_ESCOLAR,
+                table_name="dados_aluno_acompanhamento_escolar",
+                source_table="v_aluno_cotic",
+                model_class=DadosAlunoAcompanhamentoEscolar,
+                dto_in=DadosAlunoAcompanhamentoEscolarIn,
+                pk_field=[
+                    "codigo_aluno",
+                    "codigo_turma",
+                    "tipo_responsavel",
+                ],
+                update_fields=(
+                    "nome",
+                    "nome_social",
+                    "nome_responsavel",
+                    "cpf_responsavel",
+                    "data_nascimento",
+                    "descricao_tipo_escola",
+                    "codigo_dre",
+                    "sigla_dre",
+                    "codigo_ue",
+                    "unidade_educacional",
+                    "turma",
+                    "codigo_tipo_escola",
+                    "situacao_matricula",
+                    "data_situacao_matricula",
+                    "codigo_etapa_ensino",
+                    "codigo_ciclo_ensino",
+                    "serie_resumida",
+                    "codigo_modalidade_turma",
+                ),
+                unique_fields=(
+                    "codigo_aluno",
+                    "codigo_turma",
+                    "tipo_responsavel",
+                ),
+                suporta_bulk_insert=True
             ),
         ]

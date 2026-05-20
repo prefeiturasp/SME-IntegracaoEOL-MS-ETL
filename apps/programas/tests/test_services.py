@@ -30,7 +30,6 @@ class TestProgramasService(TestCase):
             table_name="tb",
             model_class=None,
             dto_in=None,
-            dto_out=None,
             pk_field="id",
             update_fields=("f1",),
             unique_fields=("id",),
@@ -160,7 +159,7 @@ class TestProgramasService(TestCase):
     def test_sync_batch_argumentos_corretos(
         self, mock_sync: MagicMock
     ) -> None:
-        """Valida que model_class, table_name, update/unique_fields são passados."""
+        """Valida model_class, table_name e update/unique_fields passados."""
         config = self.service._fases[0]
         self.mock_eol.iter_query.return_value = [
             [(649, "PAP-RECUP", "PAP Recuperação")]

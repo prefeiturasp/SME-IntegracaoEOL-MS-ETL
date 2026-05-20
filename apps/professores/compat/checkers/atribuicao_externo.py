@@ -1,14 +1,4 @@
-"""Verificadores de compatibilidade: AtribuicaoExterno (professor externo).
-
-Cobre:
-    PerfilSGPRepository.BuscarInformacoesPerfilProf (externo/CPF)
-    ProfessorRepository.BuscaProfessoresAsync (UNION externo)
-    ProfessorRepository.BuscarProfessorTitularPorDisciplinaAsync (externo)
-    ProfessorRepository.VerificaSeTemAtribuicaoNaTurmaDeProgramaNaDisciplina
-
-Chave natural: (id, cpf_pessoa, codigo_serie_grade, codigo_componente,
-                ano_atribuicao).
-"""
+"""Verificadores de compatibilidade: AtribuicaoExterno (professor externo)."""
 
 from typing import Any
 
@@ -16,11 +6,7 @@ from apps.professores.compat.base import (
     VerificadorBase,
     _formatar_data,
 )
-from apps.professores.models import AtribuicaoExterno, SerieTurmaGrade
-
-# ---------------------------------------------------------------------------
-# Consultas SQL Server (origem)
-# ---------------------------------------------------------------------------
+from apps.professores.models import AtribuicaoExterno
 
 _SQL_ATRIBUICAO_EXTERNO = """
     SELECT DISTINCT TOP {limite}
@@ -86,12 +72,6 @@ _SQL_PERFIL_EXTERNO = """
       AND turma_escola.st_turma_escola IN ('O','A','C','E')
     ORDER BY turma_escola.cd_turma_escola
 """
-
-
-# ---------------------------------------------------------------------------
-# Verificador 1: BuscaProfessoresAsync (UNION externo)
-# ---------------------------------------------------------------------------
-
 
 class VerificadorAtribuicaoExterno(VerificadorBase):
     """Valida AtribuicaoExterno — BuscaProfessoresAsync (UNION externo).
@@ -165,11 +145,6 @@ class VerificadorAtribuicaoExterno(VerificadorBase):
         )
 
 
-# ---------------------------------------------------------------------------
-# Verificador 2: BuscarProfessorTitularPorDisciplinaAsync (externo)
-# ---------------------------------------------------------------------------
-
-
 class VerificadorTitularExterno(VerificadorBase):
     """Valida titulares externos (sem disponibilização).
 
@@ -235,13 +210,8 @@ class VerificadorTitularExterno(VerificadorBase):
         )
 
 
-# ---------------------------------------------------------------------------
-# Verificador 3: BuscarInformacoesPerfilProf (externo) — cadeia JOIN
-# ---------------------------------------------------------------------------
-
-
 class VerificadorPerfilProfExterno(VerificadorBase):
-    """Valida cadeia AtribuicaoExterno → SerieTurmaGrade → TurmaEscola.
+    """Valida cadeia AtribuicaoExterno → TurmaEscola (externo/CPF).
 
     BuscarInformacoesPerfilProf (externo/CPF).
     Chave: (cpf_pessoa, codigo_escola, codigo_turma, ano_letivo).
@@ -269,23 +239,8 @@ class VerificadorPerfilProfExterno(VerificadorBase):
     def buscar_destino(
         self, linhas_origem: list[dict[str, Any]]
     ) -> list[dict[str, Any]]:
-        """Reconstrói pares cpf/escola/turma via JOINs internos do destino."""
+        """Reconstrói pares cpf/escola/turma via AtribuicaoExterno."""
         serie_grades = list({r["codigo_serie_grade"] for r in linhas_origem})
-        mapa_stg: dict[int, tuple[str, int]] = {
-            linha["codigo_serie_grade"]: (
-                linha["codigo_escola"],
-                linha["codigo_turma"],
-            )
-            for linha in (
-                SerieTurmaGrade.objects.using("professores_db")
-                .filter(codigo_serie_grade__in=serie_grades)
-                .values(
-                    "codigo_serie_grade",
-                    "codigo_escola",
-                    "codigo_turma",
-                )
-            )
-        }
         consulta = (
             AtribuicaoExterno.objects.using("professores_db")
             .filter(
@@ -294,23 +249,22 @@ class VerificadorPerfilProfExterno(VerificadorBase):
             )
             .values(
                 "contrato_externo__pessoa__cpf",
+                "codigo_unidade_educacao",
+                "codigo_turma_escola",
                 "codigo_serie_grade",
                 "ano_atribuicao",
             )
         )
-        resultado = []
-        for linha in consulta:
-            sg = linha["codigo_serie_grade"]
-            escola, turma = mapa_stg.get(sg, (None, None))
-            resultado.append(
-                {
-                    "cpf_pessoa": linha["contrato_externo__pessoa__cpf"],
-                    "codigo_escola": escola,
-                    "codigo_turma": turma,
-                    "ano_letivo": linha["ano_atribuicao"],
-                }
-            )
-        return resultado
+        return [
+            {
+                "cpf_pessoa": linha["contrato_externo__pessoa__cpf"],
+                "codigo_escola": linha["codigo_unidade_educacao"],
+                "codigo_turma": linha["codigo_turma_escola"],
+                "ano_letivo": linha["ano_atribuicao"],
+                "codigo_serie_grade": linha["codigo_serie_grade"],
+            }
+            for linha in consulta
+        ]
 
     def chave_comparacao(self, linha: dict[str, Any]) -> tuple:
         """Chave: cpf + escola + turma + ano."""

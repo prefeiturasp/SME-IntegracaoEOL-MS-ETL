@@ -1,17 +1,4 @@
-"""Verificadores de compatibilidade: AtribuicaoAula (servidor efetivo).
-
-Cobre:
-    ProfessorRepository.BuscaProfessoresAsync
-    ProfessorRepository.BuscaTurmasAtribuidasAsync
-    ProfessorRepository.BuscaTurmasAtribuidasProfessorAsync
-    ProfessorRepository.BuscarProfessorTitularPorDisciplinaAsync
-    ProfessorRepository.BuscarProfessoresTitularesPorTurmas
-    PerfilSGPRepository.BuscarInformacoesPerfilProfAsync (servidor)
-
-Estratégia:
-    O ETL replica o PK original (cd_atribuicao_aula = id), portanto
-    usamos busca por PK no destino e comparamos os campos-chave.
-"""
+"""Verificadores de compatibilidade: AtribuicaoAula (servidor efetivo)."""
 
 from typing import Any
 
@@ -19,12 +6,8 @@ from apps.professores.compat.base import (
     VerificadorBase,
     _formatar_data,
 )
-from apps.professores.models import AtribuicaoAula, SerieTurmaGrade
-from apps.professores.services import _PLACEHOLDERS_CARGO, CARGOS_PROFESSOR
-
-# ---------------------------------------------------------------------------
-# Consultas SQL Server (origem)
-# ---------------------------------------------------------------------------
+from apps.professores.models import AtribuicaoAula
+from apps.professores.queries import _PLACEHOLDERS_CARGO, CARGOS_PROFESSOR
 
 _SQL_ATRIBUICAO_AULA = f"""
     SELECT DISTINCT TOP {{limite}}
@@ -94,18 +77,8 @@ _SQL_PERFIL_SERVIDOR = """
     ORDER BY turma_escola.cd_turma_escola
 """
 
-
-# ---------------------------------------------------------------------------
-# Verificador 1: BuscaProfessoresAsync / BuscaTurmasAtribuidasAsync
-# ---------------------------------------------------------------------------
-
-
 class VerificadorAtribuicaoAula(VerificadorBase):
-    """Valida AtribuicaoAula (servidor) — BuscaProfessoresAsync.
-
-    Chave: (id, codigo_rf, codigo_serie_grade, codigo_componente,
-            ano_atribuicao).
-    """
+    """Valida AtribuicaoAula (servidor) — BuscaProfessoresAsync."""
 
     nome = "ProfessorRepository"
     nome_consulta = "BuscaProfessoresAsync"
@@ -170,11 +143,6 @@ class VerificadorAtribuicaoAula(VerificadorBase):
             linha["codigo_componente"],
             linha["ano_atribuicao"],
         )
-
-
-# ---------------------------------------------------------------------------
-# Verificador 2: BuscarProfessorTitularPorDisciplinaAsync
-# ---------------------------------------------------------------------------
 
 
 class VerificadorTitularServidor(VerificadorBase):
@@ -243,11 +211,6 @@ class VerificadorTitularServidor(VerificadorBase):
         )
 
 
-# ---------------------------------------------------------------------------
-# Verificador 3: BuscarInformacoesPerfilProfAsync (servidor) — cadeia JOIN
-# ---------------------------------------------------------------------------
-
-
 class VerificadorPerfilProfServidor(VerificadorBase):
     """Valida cadeia AtribuicaoAula → SerieTurmaGrade → TurmaEscola.
 
@@ -281,23 +244,8 @@ class VerificadorPerfilProfServidor(VerificadorBase):
     def buscar_destino(
         self, linhas_origem: list[dict[str, Any]]
     ) -> list[dict[str, Any]]:
-        """Reconstrói pares rf/escola/turma via JOINs internos do destino."""
+        """Reconstrói pares rf/escola/turma via AtribuicaoAula no destino."""
         serie_grades = list({r["codigo_serie_grade"] for r in linhas_origem})
-        mapa_stg: dict[int, tuple[str, int]] = {
-            linha["codigo_serie_grade"]: (
-                linha["codigo_escola"],
-                linha["codigo_turma"],
-            )
-            for linha in (
-                SerieTurmaGrade.objects.using("professores_db")
-                .filter(codigo_serie_grade__in=serie_grades)
-                .values(
-                    "codigo_serie_grade",
-                    "codigo_escola",
-                    "codigo_turma",
-                )
-            )
-        }
         consulta = (
             AtribuicaoAula.objects.using("professores_db")
             .filter(
@@ -306,24 +254,22 @@ class VerificadorPerfilProfServidor(VerificadorBase):
             )
             .values(
                 "cargo_base__professor_id",
+                "codigo_unidade_educacao",
+                "codigo_turma_escola",
                 "codigo_serie_grade",
                 "ano_atribuicao",
             )
         )
-        resultado = []
-        for linha in consulta:
-            sg = linha["codigo_serie_grade"]
-            escola, turma = mapa_stg.get(sg, (None, None))
-            resultado.append(
-                {
-                    "codigo_rf": linha["cargo_base__professor_id"],
-                    "codigo_escola": escola,
-                    "codigo_turma": turma,
-                    "ano_letivo": linha["ano_atribuicao"],
-                    "codigo_serie_grade": sg,
-                }
-            )
-        return resultado
+        return [
+            {
+                "codigo_rf": linha["cargo_base__professor_id"],
+                "codigo_escola": linha["codigo_unidade_educacao"],
+                "codigo_turma": linha["codigo_turma_escola"],
+                "ano_letivo": linha["ano_atribuicao"],
+                "codigo_serie_grade": linha["codigo_serie_grade"],
+            }
+            for linha in consulta
+        ]
 
     def chave_comparacao(self, linha: dict[str, Any]) -> tuple:
         """Chave: rf + escola + turma + ano."""
