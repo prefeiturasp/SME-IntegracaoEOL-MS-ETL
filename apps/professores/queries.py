@@ -144,7 +144,7 @@ SQL_ATRIBUICOES_AULA = f"""
         aa.cd_serie_grade,
         aa.an_atribuicao,
         aa.dt_atribuicao_aula,
-        aa.dt_disponibilizacao_aulas,
+        COALESCE(aa.dt_disponibilizacao_aulas, te.dt_fim_turma) AS dt_disponibilizacao_aulas,
         aa.cd_motivo_disponibilizacao,
         aa.dt_cancelamento
     FROM atribuicao_aula aa
@@ -155,6 +155,8 @@ SQL_ATRIBUICOES_AULA = f"""
     LEFT JOIN turma_escola_grade_programa tegp
         ON tegp.cd_turma_escola_grade_programa
             = aa.cd_turma_escola_grade_programa
+    LEFT JOIN turma_escola te 
+        ON te.cd_turma_escola = tegp.cd_turma_escola            
     WHERE cbs.cd_cargo IN ({_PLACEHOLDERS_CARGO})
 """
 
@@ -170,7 +172,7 @@ SQL_ATRIBUICOES_EXTERNO = """
         ae.cd_turma_escola_grade_programa,
         ae.an_atribuicao,
         ae.dt_atribuicao,
-        ae.dt_disponibilizacao,
+        COALESCE(ae.dt_disponibilizacao, te.dt_fim_turma) AS dt_disponibilizacao,
         ae.cd_motivo_disponibilizacao_externo,
         ae.dt_cancelamento
     FROM atribuicao_externo ae
@@ -181,5 +183,7 @@ SQL_ATRIBUICOES_EXTERNO = """
     LEFT JOIN turma_escola_grade_programa tegp
         ON tegp.cd_turma_escola_grade_programa
             = ae.cd_turma_escola_grade_programa
+    LEFT JOIN turma_escola te 
+        ON te.cd_turma_escola = tegp.cd_turma_escola            
     WHERE ce.dt_cancelamento IS NULL
 """
