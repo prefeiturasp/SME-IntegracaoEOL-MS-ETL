@@ -1,4 +1,4 @@
-"""Testes para EtlProgramasOrquestrador."""
+"""Valida o disparo de chord e o estado do orquestrador de Programas."""
 
 from typing import Any
 from unittest.mock import MagicMock, patch

@@ -9,10 +9,9 @@ from rest_framework.test import APIClient
 
 
 class HealthProgramasViewTestCase(TestCase):
-    """Testes para endpoints do HealthProgramasView."""
+    """Valida o endpoint de health do domínio Programas."""
 
     def setUp(self) -> None:
-        """Prepara cliente API para testes."""
         self.client = APIClient()
 
     @patch.dict(os.environ, {}, clear=True)

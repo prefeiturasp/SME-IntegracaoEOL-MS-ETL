@@ -1,4 +1,4 @@
-"""Testes do EtlProgramasService (arquitetura BaseEtlService/PhaseConfig)."""
+"""Testes do EtlProgramasService."""
 
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
@@ -10,10 +10,9 @@ from apps.programas.services import EtlProgramasService
 
 
 class TestProgramasService(TestCase):
-    """Testes para EtlProgramasService."""
+    """Valida montagem das fases e o pipeline de extração/escrita."""
 
     def setUp(self) -> None:
-        """Inicializa service com EOL mockado."""
         self.mock_eol = MagicMock()
         self.service = EtlProgramasService(
             db_alias="programas_db",

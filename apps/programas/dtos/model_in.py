@@ -1,10 +1,4 @@
-"""DTOs de entrada para o domínio Programas.
-
-Cada dataclass mapeia diretamente a posição das tuplas retornadas pelo
-cursor pyodbc via unpacking: ``ModelIn(*row)``. O método ``to_domain()``
-converte a linha bruta no dicionário de campos do model Django destino,
-absorvendo a lógica antes espalhada em ``model_out.py``.
-"""
+"""DTOs de entrada do domínio Programas."""
 
 from dataclasses import dataclass
 from datetime import date
@@ -68,12 +62,7 @@ class ComponenteCurricularProgramaIn:
 
 @dataclass(slots=True)
 class TurmaProgramaIn:
-    """Linha bruta da query de turma_escola onde cd_tipo_turma = 3.
-
-    A categoria (PAP/PAEE) é derivada na própria SQL via CASE WHEN EXISTS
-    contra o componente 1030 (SRM). cd_tipo_programa pode ser NULL — não
-    é mais usado como filtro nem como fonte da categoria.
-    """
+    """Linha bruta da query de turma de programa do EOL."""
 
     codigo_turma: Any
     nome_turma: Any
@@ -150,12 +139,7 @@ class AlunoPapAnoLetivoIn:
 
 @dataclass(slots=True)
 class MatriculaTurmaProgramaIn:
-    """Linha bruta da query de matrículas em turmas de programa.
-
-    A categoria (PAP/PAEE) é derivada do componente curricular — fonte
-    estável: 1030 → PAEE, demais componentes PAP/PAEE conhecidos → PAP.
-    cd_tipo_programa não é mais lido nem usado.
-    """
+    """Linha bruta da query de matrículas em turmas de programa do EOL."""
 
     codigo_aluno: Any
     codigo_turma: Any

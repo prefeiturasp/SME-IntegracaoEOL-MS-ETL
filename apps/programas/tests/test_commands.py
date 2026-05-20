@@ -1,8 +1,4 @@
-"""Testes do comando de gerenciamento etl_programas.
-
-Valida a orquestração do comando, o uso de checkpoints e a integração
-com o RepositorioAuditoriaPostgres (banco default).
-"""
+"""Testes do comando de gerenciamento etl_programas."""
 
 from unittest.mock import patch
 from uuid import UUID
@@ -15,12 +11,11 @@ _ID_EXECUCAO = UUID("12345678-1234-5678-1234-567812345678")
 
 
 class EtlProgramasCommandTestCase(TestCase):
-    """Testes para o comando etl_programas."""
+    """Valida o fluxo do comando etl_programas e a integração com auditoria."""
 
     databases = ["default", "eol_db", "programas_db"]
 
     def setUp(self) -> None:
-        """Mocka dependências externas."""
         self.patcher_repo = patch(
             "apps.core.libs.base_etl_command.RepositorioAuditoriaPostgres"
         )
@@ -44,7 +39,6 @@ class EtlProgramasCommandTestCase(TestCase):
         self.servico.ultimo_token = None
 
     def tearDown(self) -> None:
-        """Encerra os mocks de repositório e serviço."""
         self.patcher_repo.stop()
         self.patcher_servico.stop()
 

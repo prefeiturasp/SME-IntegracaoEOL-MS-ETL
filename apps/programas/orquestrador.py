@@ -11,7 +11,7 @@ finalizar_fase_programas = finalizar_fase
 
 
 class EtlProgramasOrquestrador(GenericEtlOrquestrador):
-    """Orquestrador assíncrono para Programas utilizando Core genérico."""
+    """Orquestrador assíncrono do ETL de Programas."""
 
     def __init__(self, **kwargs: Any) -> None:
         kwargs.setdefault("dominio", "programas")

@@ -1,18 +1,4 @@
-"""Enums e mapeamentos do domínio Programas.
-
-Centraliza os valores do EOL usados pelo domínio:
-    - CategoriaPrograma           PAP / PAEE
-    - TipoProgramaEOL             cd_tipo_programa → categoria
-    - ComponenteCurricularEOL     cd_componente_curricular → categoria + vigência
-    - SituacaoTurma               st_turma_escola (O/A/C/E)
-    - SituacaoMatricula           st_matricula / cd_situacao_aluno (1-17)
-
-Os enums substituem:
-    - O CASE WHEN embutido no SQL_MATRICULA_TURMA_PROGRAMA (services.py)
-    - Os dicts _CATEGORIA_POR_TIPO_PROGRAMA, _CATEGORIA_POR_COMPONENTE
-      e frozensets _COMPONENTES_*_VIGENTES do model_out.py
-    - As constantes PAP/PAEE duplicadas nos models
-"""
+"""Enums e mapeamentos do domínio Programas."""
 
 from enum import IntEnum, StrEnum
 
@@ -20,29 +6,14 @@ from django.db import models
 
 
 class CategoriaPrograma(models.TextChoices):
-    """Categoria de programa — PAP ou PAEE.
-
-    Herda de TextChoices (e não StrEnum) para expor `.choices` consumível
-    diretamente pelo `choices=` do CharField nos models. O comportamento
-    como string é preservado — `CategoriaPrograma.PAP == "PAP"`.
-    """
+    """Categoria de programa — PAP ou PAEE."""
 
     PAP = "PAP", "PAP"
     PAEE = "PAEE", "PAEE"
 
 
 class TipoProgramaEOL(IntEnum):
-    """Subset histórico de cd_tipo_programa do EOL.
-
-    Mantido por retrocompatibilidade — não é mais usado como filtro de extração.
-    A descoberta no EOL (2026-04) revelou ~20 códigos distintos de cd_tipo_programa
-    associados a turmas PAP/PAEE (ex: 94/95/96/97 SRM Complementar, 426 PAP,
-    603 PAP Colaborativo, etc.). Filtrar por uma lista hardcoded é frágil.
-
-    A nova estratégia: identificar PAP/PAEE pelo componente curricular (estável)
-    e derivar a categoria pela sigla/descrição vinda da própria tabela tipo_programa
-    do EOL via :meth:`categoria_por_sigla`.
-    """
+    """Subset histórico de tipos de programas do EOL (uso retrocompatível)."""
 
     PAP_RECUPERACAO = 649
     PAP_COLABORATIVO = 650
@@ -57,7 +28,6 @@ class TipoProgramaEOL(IntEnum):
         """Deriva PAP/PAEE pela sigla/descrição do tipo_programa do EOL.
 
         PAEE quando a sigla ou descrição contém "PAEE" ou "SRM"; PAP caso contrário.
-        Substitui a tabela hardcoded de códigos como fonte de verdade.
         """
         textos = " ".join(t.upper() for t in (sigla, descricao) if t)
         if "PAEE" in textos or "SRM" in textos:
@@ -66,7 +36,7 @@ class TipoProgramaEOL(IntEnum):
 
     @classmethod
     def codigos(cls) -> tuple[int, ...]:
-        """Retorna os códigos canônicos históricos (uso restrito a testes)."""
+        """Retorna os códigos canônicos históricos."""
         return tuple(m.value for m in cls)
 
 
@@ -109,7 +79,7 @@ class ComponenteCurricularEOL(IntEnum):
 
     @classmethod
     def codigos(cls) -> tuple[int, ...]:
-        """Retorna todos os códigos como tupla — útil para filtros SQL IN (...)."""
+        """Retorna todos os códigos do enum como tupla."""
         return tuple(m.value for m in cls)
 
     @classmethod
@@ -165,11 +135,7 @@ class SituacaoTurma(StrEnum):
 
 
 class SituacaoMatricula(IntEnum):
-    """Mapeamento de cd_situacao_aluno / st_matricula do EOL.
-
-    Espelha apps.alunos.enums.SituacaoMatricula — replicado aqui para manter
-    independência entre domínios (sem cross-app imports).
-    """
+    """Mapeamento da situação do aluno / situação da matrícula do EOL."""
 
     ATIVO = 1
     DESISTENTE = 2

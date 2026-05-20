@@ -1,10 +1,4 @@
-"""Serviço de ETL do domínio PROGRAMAS_DB.
-
-Herda de ``BaseEtlService`` para reutilizar o pipeline genérico:
-threadpool producer/consumer, upsert incremental via hash SHA-256
-em ``etl_auditoria_linha`` e registro automático em
-``etl_execucao_tabela_lida`` / ``etl_execucao_tabela_escrita``.
-"""
+"""Serviço de ETL do domínio PROGRAMAS_DB."""
 
 import logging
 from collections.abc import Iterator
@@ -34,10 +28,6 @@ from apps.programas.models import (
 )
 
 logger = logging.getLogger(__name__)
-
-# ---------------------------------------------------------------------------
-# SQLs — Extração
-# ---------------------------------------------------------------------------
 
 _COMPONENTES_IN = ", ".join(str(c) for c in ComponenteCurricularEOL.codigos())
 _COMPONENTE_PAEE_SRM = int(
@@ -306,7 +296,6 @@ class EtlProgramasService(BaseEtlService):
         primeiro_run: bool = False,
         eol: EOLService | None = None,
     ) -> None:
-        """Inicializa o serviço de programas conectando ao EOL."""
         super().__init__(
             db_alias=db_alias,
             id_execucao=id_execucao,

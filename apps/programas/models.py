@@ -1,39 +1,4 @@
-"""Modelos do app programas — banco destino PROGRAMAS_DB.
-
-Domínio: programas com, atualmente, PAP (Programa de Apoio Pedagógico) e PAEE
-(Programa de Atendimento Educacional Especializado / SRM).
-
-Hierarquia de modelos:
-    TipoPrograma
-        └── TurmaPrograma  (turmas cd_tipo_turma=3 do EOL)
-                ├── TurmaProgramaComponenteCurricular
-                └── MatriculaTurmaPrograma
-
-Configuração de componentes por categoria:
-    ComponenteCurricularPrograma
-    (substitui as constantes hardcoded IDS_COMPONENTES_CURRICULARES_PAP_NOVO
-    e COMPONENTE_CURRICULAR_ID_SRM do Pedagogico-API)
-
-Tabelas pré-agregadas (carga MS-ETL — consumidas pelo domínio Programas):
-      AlunoPapAnoLetivo            (carga live)
-      AlunoPapAnoLetivoHistorico   (carga histórica)
-
-Referências cruzadas (sem FK física, integridade pela camada de aplicação):
-    - codigo_turma                 → turma_programa.codigo_turma (mesmo banco)
-    - codigo_componente_curricular → componente_curricular_programa (mesmo banco)
-    - codigo_aluno                 → PEDAGOGICO_DB (aluno.codigo_aluno)
-    - codigo_ue / codigo_dre       → PEDAGOGICO_DB (escola_unidade / unidade_administrativa)
-
-Ordem de carga ETL:
-    1. TipoPrograma                          (seed — dados estáticos do EOL)
-    2. ComponenteCurricularPrograma          (seed — substituem constantes hardcoded)
-    3. TurmaPrograma                         (ETL incremental)
-    4. TurmaProgramaComponenteCurricular     (depende de: TurmaPrograma)
-    5. MatriculaTurmaPrograma                (depende de: TurmaPrograma)
-    6. MatriculaTurmaProgramaHistorico       (lê v_historico_matricula_cotic)
-    7. AlunoPapAnoLetivo                     (carga live)
-    8. AlunoPapAnoLetivoHistorico            (carga histórica)
-"""
+"""Modelos do app programas — banco destino PROGRAMAS_DB."""
 
 from django.db import models
 
@@ -52,18 +17,7 @@ _HT_PAP_DTO = "Desnormalizado da turma — exigido por AlunoTurmaPapDto."
 
 
 class TipoPrograma(models.Model):
-    """Subtipos de programa do EOL (cd_tipo_programa), agrupados por categoria.
-
-    O id preserva o mesmo valor do EOL — nenhum mapeamento necessário no ETL.
-    O campo categoria discrimina PAP de PAEE sem necessidade de JOIN.
-
-    Dados esperados (seed):
-        649 → PAP Recuperação        (PAP)
-        650 → PAP Colaborativo       (PAP)
-        656 → PAEE SRM               (PAEE)
-        657 → PAEE Colaborativo      (PAEE)
-        658 → PAEE Itinerante        (PAEE)
-    """
+    """Subtipos de programa do EOL agrupados por categoria PAP/PAEE."""
 
     codigo_tipo_programa = models.IntegerField(
         primary_key=True,
@@ -88,25 +42,7 @@ class TipoPrograma(models.Model):
 
 
 class ComponenteCurricularPrograma(models.Model):
-    """Componentes curriculares que caracterizam uma categoria de programa.
-
-    Camada de configuração — substitui as constantes hardcoded no Pedagogico-API.
-    Responde: "quais componentes identificam o PAP? quais identificam o PAEE?"
-
-    Dados esperados (seed — PAP vigentes):
-        1322 → PAP Recuperação de Aprendizagens
-        1770 → PAP Projeto Colaborativo
-        1804 → PAP 2º Ano Alfabetização
-        1805 → PAP 2º Ano Colaborativo Alfabetização
-    Dados esperados (seed — PAP legados) (deixei pra melhor visualização de como era o PAP antigo, sem os novos componentes de alfabetização):
-        1033 → Recuperação Paralela Matemática
-        1051 → Recuperação Paralela Ciências
-        1052 → Recuperação Paralela Geografia
-        1053 → Recuperação Paralela História
-        1054 → Recuperação Paralela Português
-    Dados esperados (seed — PAEE vigente):
-        1030 → Sala de Recursos Multifuncionais
-    """
+    """Componentes curriculares que caracterizam uma categoria de programa."""
 
     codigo_componente_curricular = models.BigIntegerField(
         unique=True,
@@ -139,23 +75,7 @@ class ComponenteCurricularPrograma(models.Model):
 
 
 class TurmaPrograma(models.Model):
-    """Turmas de programa (cd_tipo_turma=3 no EOL) extraídas do EOL.
-
-    Tabela central do domínio — referência lógica para TurmaProgramaComponenteCurricular
-    e MatriculaTurmaPrograma. Cobre os endpoints de listagem de turmas PAP/SRM.
-
-    Sem FK física para TipoPrograma — categoria é desnormalizada para permitir
-    filtros PAP/PAEE diretos sem JOIN (ex: turmas-pap/{anoLetivo}/ues/{codigoEscola}).
-
-    Os campos descricao_turno, codigo_ue e codigo_dre são desnormalizados para
-    evitar JOINs nos endpoints que retornam dados de turma com informações de escola.
-
-    situacao espelha SituacaoTurma do EOL:
-        O = Organizada
-        A = Não Organizada
-        C = Concluída
-        E = Extinta
-    """
+    """Turma de programa (PAP/PAEE) extraída do EOL."""
 
     codigo_turma = models.BigIntegerField(
         unique=True,
@@ -244,16 +164,7 @@ class TurmaPrograma(models.Model):
 
 
 class TurmaProgramaComponenteCurricular(models.Model):
-    """Componentes curriculares que uma turma de programa efetivamente oferece.
-
-    Equivale à cadeia turma_escola_grade_programa → grade → grade_componente_curricular
-    do EOL. Responde: "quais componentes essa turma específica cobre?"
-
-    Cobre o endpoint {codigoAluno}/turmas-programa/{anoLetivo}/componentes-curriculares
-    (ComponenteTurmaAlunoDto.NomeComponenteCurricular).
-
-    Sem FK física — integridade garantida pela ordem de carga do ETL.
-    """
+    """Componentes curriculares oferecidos por uma turma de programa."""
 
     codigo_turma = models.BigIntegerField(
         help_text=_HT_FK_TURMA,
@@ -308,10 +219,7 @@ _HT_CATEGORIA_MATRICULA = (
 
 
 class MatriculaTurmaProgramaBase(models.Model):
-    """Campos comuns às matrículas em turmas de programa (live e histórico).
-
-    ``data_matricula`` é definida nas subclasses pois difere em nullability.
-    """
+    """Campos comuns às matrículas em turmas de programa."""
 
     codigo_aluno = models.BigIntegerField(help_text=_HT_CODIGO_ALUNO)
     codigo_turma = models.BigIntegerField(help_text=_HT_FK_TURMA)
@@ -354,24 +262,7 @@ class MatriculaTurmaProgramaBase(models.Model):
 
 
 class MatriculaTurmaPrograma(MatriculaTurmaProgramaBase):
-    """Matrículas de alunos em turmas de programa, por componente curricular.
-
-    Tabela principal para consultas — cobre os endpoints:
-        - srm-paee/aluno/{codigoAluno}             → DadosSrmPaeeColaborativoDto
-        - paee/turma-srm-e-regular/aluno/{cod}     → TurmasDoAlunoDTO
-        - alunos-pap/{anoLetivo}                   → AlunosTurmaProgramaPapDto
-        - pap/ano-letivo/{anoLetivo}               → AlunoTurmaPapDto
-
-    Os campos ano_letivo, codigo_ue, codigo_dre e categoria são desnormalizados
-    para permitir filtros diretos sem JOIN.
-
-    codigo_situacao_matricula:
-        1  → Ativo
-        5  → Concluído
-        6  → Pend. Rematrícula
-        10 → Rematriculado
-        13 → Sem continuidade
-    """
+    """Matrículas de alunos em turmas de programa, por componente curricular."""
 
     data_matricula = models.DateField(help_text="EOL dt_status_matricula.")
 
@@ -408,16 +299,7 @@ class MatriculaTurmaPrograma(MatriculaTurmaProgramaBase):
 
 
 class MatriculaTurmaProgramaHistorico(MatriculaTurmaProgramaBase):
-    """Matrículas históricas em turmas de programa, por componente curricular.
-
-    Espelha MatriculaTurmaPrograma, mas é carregada a partir de
-    ``v_historico_matricula_cotic`` em vez de ``v_matricula_cotic`` (live).
-    Permite que EP-05 (pap/ano-letivo/{anoLetivo}) retorne dados coerentes
-    com o legado, que também lia do histórico.
-
-    ``data_matricula`` é nullable — a view histórica pode não registrar essa
-    data em todos os casos.
-    """
+    """Matrículas históricas em turmas de programa, por componente curricular."""
 
     data_matricula = models.DateField(
         null=True,
