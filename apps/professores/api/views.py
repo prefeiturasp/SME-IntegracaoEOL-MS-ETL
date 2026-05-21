@@ -1,57 +1,42 @@
-"""Views da API de professores."""
+"""Views DRF para o dominio Professores."""
 
-from drf_spectacular.utils import OpenApiParameter, extend_schema
+import os
+
+from django.db import connections
+from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.professores.api.serializers import FuncionarioUnidadeEducacionalSerializer
-from apps.professores.models import FuncionarioUnidadeEducacional
+from apps.core.api.serializers import HealthStatusSerializer
 
 
-class FuncionariosEscolaView(APIView):
-    """Lista funcionarios de uma unidade educacional."""
+class HealthProfessoresView(APIView):
+    """Health do dominio Professores."""
 
-    serializer_class = FuncionarioUnidadeEducacionalSerializer
+    serializer_class = HealthStatusSerializer
 
-    @extend_schema(
-        parameters=[
-            OpenApiParameter(
-                name="codigo_ue",
-                type=str,
-                location=OpenApiParameter.PATH,
-                required=True,
-                description="Codigo da unidade educacional.",
-            ),
-            OpenApiParameter(
-                name="codigo_cargo",
-                type=int,
-                location=OpenApiParameter.QUERY,
-                required=False,
-                description="Filtro opcional por cargo.",
-            ),
-        ],
-        responses={200: FuncionarioUnidadeEducacionalSerializer(many=True)},
-    )
-    def get(self, request: Request, codigo_ue: str) -> Response:
-        """Retorna funcionarios da escola.
+    authentication_classes: list[type] = []
+    permission_classes = [AllowAny]
 
-        Args:
-            request: Requisicao HTTP com query params.
-            codigo_ue: Codigo da unidade educacional.
-        Returns:
-            Lista de funcionarios ou erro de validacao.
-        """
-        codigo_cargo = request.query_params.get("codigo_cargo")
-        if codigo_cargo is not None and not codigo_cargo.isdecimal():
-            return Response({"erro": "codigo_cargo invalido"}, status=400)
+    def get(self, request: Request) -> Response:
+        """Retorna o status de saude do dominio Professores."""
+        resultado = self._check_database()
 
-        queryset = FuncionarioUnidadeEducacional.objects.using(
-            "professores_db"
-        ).filter(codigo_ue=str(codigo_ue))
-        if codigo_cargo is not None:
-            queryset = queryset.filter(codigo_cargo=str(int(codigo_cargo)))
+        status_http = 200 if resultado["status"] == "healthy" else 503
+        serializer = HealthStatusSerializer(resultado)
+        return Response(serializer.data, status=status_http)
 
-        queryset = queryset.order_by("nome")
-        serializer = FuncionarioUnidadeEducacionalSerializer(queryset, many=True)
-        return Response(serializer.data)
+    def _check_database(self) -> dict[str, str]:
+        if not os.getenv("URL_BANCO_PROFESSORES"):
+            return {"status": "unhealthy"}
+
+        try:
+            with connections["default"].cursor() as cursor:
+                cursor.execute("SELECT 1")
+                cursor.fetchone()
+
+            return {"status": "healthy"}
+
+        except Exception:
+            return {"status": "unhealthy"}

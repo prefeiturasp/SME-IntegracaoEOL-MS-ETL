@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from typing import Any
 
-from django.utils import timezone
+from apps.core.libs.helpers import make_aware
 
 
 @dataclass(slots=True)
@@ -309,9 +309,7 @@ def _normalizar_datetime(valor: Any) -> Any:
     """
     if valor is None or not hasattr(valor, "tzinfo"):
         return valor
-    if timezone.is_naive(valor):
-        return timezone.make_aware(valor, timezone.get_current_timezone())
-    return valor
+    return make_aware(valor)
 
 
 @dataclass(slots=True)

@@ -1,10 +1,13 @@
-from datetime import datetime
+from datetime import date, datetime
 
 from django.test import SimpleTestCase
 from django.utils import timezone
-from datetime import date
 
-from apps.core.libs.helpers import make_aware, parse_date, strip_str
+from apps.core.libs.helpers import (
+    make_aware,
+    parse_date,
+    strip_str,
+)
 
 
 class StripStrTest(SimpleTestCase):
@@ -76,3 +79,7 @@ class MakeAwareTest(SimpleTestCase):
             timezone.get_current_timezone(),
         )
         self.assertIs(make_aware(aware), aware)
+
+
+
+

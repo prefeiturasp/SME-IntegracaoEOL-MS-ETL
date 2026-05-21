@@ -277,6 +277,32 @@ class RowToFuncionarioTest(TestCase):
         self.assertEqual(r["funcao_externo"], 0)
         self.assertEqual(r["tipo_funcao_externo"], 0)
 
+    def test_normaliza_bool_texto_e_preserva_datetime_aware(self) -> None:
+        """Cobre indicadores textuais e datas ja aware."""
+        dt = timezone.now()
+        row = (
+            "ANA",
+            None,
+            None,
+            "7506988",
+            "019372",
+            dt,
+            None,
+            None,
+            None,
+            "",
+            "sim",
+            "false",
+            "",
+            "",
+        )
+
+        r = _row_to_funcionario(row)
+
+        self.assertIs(r["data_inicio"], dt)
+        self.assertTrue(r["eh_professor"])
+        self.assertFalse(r["esta_afastado"])
+
 
 class ParamsCargoTest(TestCase):
     """Testes para a função _params_cargo."""
@@ -443,6 +469,43 @@ class UpsertIncrementalTest(TestCase):
         self.assertEqual(kwargs["unique_fields"], ["codigo_rf", "codigo_ue"])
         self.assertEqual(kwargs["update_fields"], ["nome"])
         mock_hash_bulk_create.assert_called_once()
+
+    def test_reinsere_chave_composta_quando_destino_sumiu(self) -> None:
+        """Reinsere registro quando hash existe mas destino foi removido."""
+        row = {
+            "codigo_rf": "7506988",
+            "codigo_ue": "019372",
+            "nome": "ANA",
+        }
+        update_fields = ["codigo_rf", "codigo_ue", "nome"]
+        unique_fields = ["codigo_rf", "codigo_ue"]
+
+        _upsert_incremental(
+            FuncionarioUnidadeEducacional,
+            "funcionario_unidade_educacional",
+            [row],
+            update_fields,
+            unique_fields,
+        )
+        FuncionarioUnidadeEducacional.objects.using(
+            "professores_db"
+        ).all().delete()
+
+        total = _upsert_incremental(
+            FuncionarioUnidadeEducacional,
+            "funcionario_unidade_educacional",
+            [row],
+            update_fields,
+            unique_fields,
+        )
+
+        self.assertEqual(total, 1)
+        self.assertEqual(
+            FuncionarioUnidadeEducacional.objects.using(
+                "professores_db"
+            ).count(),
+            1,
+        )
 
 
 _EOL_PATCH = "apps.professores.services.EOLService"

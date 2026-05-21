@@ -1,13 +1,13 @@
-"""Rotas da API de professores."""
+"""Rotas da API de Professores."""
 
 from django.urls import path
 
-from apps.professores.api.views import FuncionariosEscolaView
+from apps.professores.api.views import HealthProfessoresView
 
 urlpatterns = [
     path(
-        "professores/escolas/<str:codigo_ue>/funcionarios/",
-        FuncionariosEscolaView.as_view(),
-        name="professores-funcionarios-escola",
+        "professores/health/",
+        HealthProfessoresView.as_view(),
+        name="professores",
     ),
 ]
