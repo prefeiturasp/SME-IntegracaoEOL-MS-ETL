@@ -312,10 +312,15 @@ SQL_FUNCIONARIOS_UNIDADE_EDUCACIONAL = f"""
         0 AS cd_tipo_funcao_atividade,
         0 AS eh_professor,
         0 AS esta_afastado,
-        COALESCE(ce.cd_tipo_funcao_funcionario_externo, 0) AS funcao_externo,
-        COALESCE(ce.cd_tipo_funcao_funcionario_externo, 0) AS tipo_funcao_externo
+        COALESCE(ffe.cd_funcao_externo, 0) AS funcao_externo,
+        COALESCE(
+            ffe.cd_tipo_funcao_funcionario_externo, 0
+        ) AS tipo_funcao_externo
     FROM contrato_externo ce
     INNER JOIN pessoa p
         ON p.cd_pessoa = ce.cd_pessoa
+    INNER JOIN funcao_funcionario_externo ffe
+        ON ffe.cd_tipo_funcao_funcionario_externo
+            = ce.cd_tipo_funcao_funcionario_externo
     WHERE ce.dt_cancelamento IS NULL
 """
