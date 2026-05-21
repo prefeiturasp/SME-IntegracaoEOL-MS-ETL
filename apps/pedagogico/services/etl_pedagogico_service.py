@@ -443,6 +443,11 @@ class EtlPedagogicoService(BaseEtlService):
                 update_fields=(
                     "atribuicao_externa",
                     "ano_letivo",
+                    "id_atribuicao_origem",
+                    "dt_atribuicao",
+                    "dt_cancelamento",
+                    "dt_disponibilizacao",
+                    "cd_motivo_disponibilizacao",
                     "transferido_em",
                 ),
                 unique_fields=(

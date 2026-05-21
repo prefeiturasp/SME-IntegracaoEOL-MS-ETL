@@ -65,20 +65,25 @@ class ComponenteTurma(ModeloBase):
 
 
 class AtribuicaoComponente(ModeloBase):
-    """Atribuições de professor a turma/componente — SME e externos.
+    """Atribuições de professor a turma/componente, SME e externos.
 
-    Fonte: `SQL_ATRIBUICAO_COMPONENTE` — quatro branches via UNION:
-    - Branch 1: SME ativo.
-    - Branch 2: externo ativo.
-    - Branch 3: SME histórico com disponibilização.
-    - Branch 4: externo histórico com disponibilização.
+    Fonte:
+        `SQL_ATRIBUICAO_COMPONENTE`, composta por branches via `UNION`:
+        SME ativo por série, SME ativo por programa, externo ativo, externo
+        ativo por programa, SME histórico com disponibilização e externo
+        histórico com disponibilização.
 
-    Todos os branches filtram `st_turma_escola IN ('O','A','C','E')`
-    e excluem `cd_motivo_disponibilizacao = 26`.
-    Externos limitados a `tp_escola IN (11,12,32,33)`.
-    `professor = NULL` não ocorre — ausência de linha indica sem professor.
+    Filtros:
+        Todos os branches consideram turmas com situação `O`, `A`, `C` ou
+        `E`, excluem motivo de disponibilização por erro de cadastro (`26`) e
+        limitam externos aos tipos de escola `11`, `12`, `32` e `33`.
 
-    Upsert: (turma_codigo, componente_codigo, professor).
+    Observações:
+        `professor = NULL` não ocorre; ausência de linha indica componente
+        sem professor atribuído.
+
+    Upsert:
+        Usa `turma_codigo`, `componente_codigo` e `professor`.
     """
 
     turma_codigo = models.CharField(max_length=20)
@@ -88,6 +93,11 @@ class AtribuicaoComponente(ModeloBase):
     )  # NOSONAR
     atribuicao_externa = models.BooleanField(default=False)
     ano_letivo = models.IntegerField()
+    id_atribuicao_origem = models.BigIntegerField(null=True, blank=True)
+    dt_atribuicao = models.DateTimeField(null=True, blank=True)
+    dt_cancelamento = models.DateTimeField(null=True, blank=True)
+    dt_disponibilizacao = models.DateTimeField(null=True, blank=True)
+    cd_motivo_disponibilizacao = models.IntegerField(null=True, blank=True)
 
     class Meta:
         db_table = "atribuicao_componente"
@@ -107,6 +117,23 @@ class AtribuicaoComponente(ModeloBase):
             ),
             models.Index(
                 fields=["professor", "ano_letivo"], name="idx_ac_prof_ano"
+            ),
+            models.Index(
+                fields=["professor", "ano_letivo"],
+                name="idx_ac_prof_ano_vigente",
+                condition=models.Q(
+                    dt_cancelamento__isnull=True,
+                    dt_disponibilizacao__isnull=True,
+                ),
+            ),
+            models.Index(
+                fields=[
+                    "turma_codigo",
+                    "professor",
+                    "componente_codigo",
+                    "ano_letivo",
+                ],
+                name="idx_ac_turma_prof_comp_ano",
             ),
         ]
 
@@ -353,6 +380,23 @@ class Turma(ModeloBase):
             models.Index(
                 fields=["ue_codigo", "ano_letivo"], name="idx_turma_ue_ano"
             ),
+            models.Index(
+                fields=[
+                    "ue_codigo",
+                    "ano_letivo",
+                    "codigo_modalidade_etapa",
+                    "codigo",
+                ],
+                name="idx_turma_ue_ano_mod_codigo",
+            ),
+            models.Index(
+                fields=[
+                    "ue_codigo",
+                    "ano_letivo",
+                    "codigo_tipo_programa",
+                ],
+                name="idx_turma_ue_ano_programa",
+            ),
             models.Index(fields=["tipo_turma"], name="idx_turma_tipo"),
             models.Index(fields=["ano_letivo"], name="idx_turma_ano_letivo"),
         ]
@@ -408,6 +452,12 @@ class ComponenteCurricularHierarquia(models.Model):
 
     class Meta:
         db_table = "componente_curricular_hierarquia"
+        indexes = [
+            models.Index(
+                fields=["id_componente_curricular", "-vigencia"],
+                name="idx_cch_comp_vigencia",
+            ),
+        ]
 
 
 class ComponenteCurricularPAP(models.Model):
