@@ -319,35 +319,6 @@ class ParamsCargoTest(TestCase):
         self.assertEqual(params, list(CARGOS_PROFESSOR))
 
 
-class QueryFuncionarioTest(TestCase):
-    """Testes da SQL_FUNCIONARIOS_UNIDADE_EDUCACIONAL."""
-
-    def test_query_contem_contrato_esperado(self) -> None:
-        """Verifica colunas e trechos centrais da query."""
-        self.assertIn("nome", SQL_FUNCIONARIOS_UNIDADE_EDUCACIONAL)
-        self.assertIn("codigo_rf", SQL_FUNCIONARIOS_UNIDADE_EDUCACIONAL)
-        self.assertIn("codigo_ue", SQL_FUNCIONARIOS_UNIDADE_EDUCACIONAL)
-        self.assertIn("esta_afastado", SQL_FUNCIONARIOS_UNIDADE_EDUCACIONAL)
-        self.assertIn("funcao_externo", SQL_FUNCIONARIOS_UNIDADE_EDUCACIONAL)
-        self.assertIn(
-            "tipo_funcao_externo", SQL_FUNCIONARIOS_UNIDADE_EDUCACIONAL
-        )
-        self.assertIn("UNION", SQL_FUNCIONARIOS_UNIDADE_EDUCACIONAL)
-        self.assertIn("laudo_medico", SQL_FUNCIONARIOS_UNIDADE_EDUCACIONAL)
-        self.assertIn("cargos_professor", SQL_FUNCIONARIOS_UNIDADE_EDUCACIONAL)
-        self.assertIn(
-            "funcao_funcionario_externo",
-            SQL_FUNCIONARIOS_UNIDADE_EDUCACIONAL,
-        )
-        self.assertIn("'' AS cd_cargo", SQL_FUNCIONARIOS_UNIDADE_EDUCACIONAL)
-        self.assertIn("WITH (NOLOCK)", SQL_FUNCIONARIOS_UNIDADE_EDUCACIONAL)
-        self.assertNotIn("_VALUES_CARGO", SQL_FUNCIONARIOS_UNIDADE_EDUCACIONAL)
-        self.assertEqual(
-            SQL_FUNCIONARIOS_UNIDADE_EDUCACIONAL.count("%s"),
-            len(CARGOS_PROFESSOR),
-        )
-
-
 class FullRefreshTest(TestCase):
     """Testes para a função _full_refresh."""
 

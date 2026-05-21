@@ -200,9 +200,8 @@ SQL_FUNCIONARIOS_UNIDADE_EDUCACIONAL = f"""
         SELECT v.codigo_cargo
         FROM (VALUES {_VALUES_CARGO}) AS v(codigo_cargo)
     )
-
     SELECT
-        sc.nm_pessoa AS nome_servidor,
+        sc.nm_pessoa AS nome,
         sc.nm_social AS nome_social,
         sc.cd_cpf_pessoa AS cpf,
         sc.cd_registro_funcional AS codigo_rf,
@@ -219,30 +218,22 @@ SQL_FUNCIONARIOS_UNIDADE_EDUCACIONAL = f"""
         END AS esta_afastado,
         0 AS funcao_externo,
         0 AS tipo_funcao_externo
-
     FROM lotacao_servidor ls
-
     INNER JOIN v_cargo_base_cotic cbs
         ON cbs.cd_cargo_base_servidor = ls.cd_cargo_base_servidor
-
     INNER JOIN v_servidor_cotic sc
         ON sc.cd_servidor = cbs.cd_servidor
-
     INNER JOIN cargo c
         ON c.cd_cargo = cbs.cd_cargo
-
     LEFT JOIN laudo_medico lm
         ON lm.cd_cargo_base_servidor = cbs.cd_cargo_base_servidor
         AND lm.cd_tipo_laudo IN ('T', 'D')
         AND lm.dt_publicacao_doc_cessacao_laudo IS NULL
-
     WHERE cbs.cd_cargo IN (SELECT codigo_cargo FROM cargos_professor)
     AND sc.cd_registro_funcional IS NOT NULL
-
     UNION
-
     SELECT
-        sc.nm_pessoa AS nome_servidor,
+        sc.nm_pessoa AS nome,
         sc.nm_social AS nome_social,
         sc.cd_cpf_pessoa AS cpf,
         sc.cd_registro_funcional AS codigo_rf,
@@ -263,29 +254,22 @@ SQL_FUNCIONARIOS_UNIDADE_EDUCACIONAL = f"""
         END AS esta_afastado,
         0 AS funcao_externo,
         0 AS tipo_funcao_externo
-
     FROM cargo_sobreposto_servidor css
-
     INNER JOIN v_cargo_base_cotic cbs
         ON cbs.cd_cargo_base_servidor = css.cd_cargo_base_servidor
-
     INNER JOIN v_servidor_cotic sc
         ON sc.cd_servidor = cbs.cd_servidor
-
     LEFT JOIN cargo c
         ON c.cd_cargo = css.cd_cargo
-
     LEFT JOIN laudo_medico lm
         ON lm.cd_cargo_base_servidor = cbs.cd_cargo_base_servidor
         AND lm.cd_tipo_laudo IN ('T', 'D')
         AND lm.dt_publicacao_doc_cessacao_laudo IS NULL
 
     WHERE cbs.cd_cargo IN (SELECT codigo_cargo FROM cargos_professor)
-
     UNION
-
     SELECT
-        sc.nm_pessoa AS nome_servidor,
+        sc.nm_pessoa AS nome,
         sc.nm_social AS nome_social,
         sc.cd_cpf_pessoa AS cpf,
         sc.cd_registro_funcional AS codigo_rf,
@@ -302,29 +286,21 @@ SQL_FUNCIONARIOS_UNIDADE_EDUCACIONAL = f"""
         END AS esta_afastado,
         0 AS funcao_externo,
         0 AS tipo_funcao_externo
-
     FROM funcao_atividade_cargo_servidor facs
-
     INNER JOIN v_cargo_base_cotic cbs
         ON cbs.cd_cargo_base_servidor = facs.cd_cargo_base_servidor
-
     INNER JOIN v_servidor_cotic sc
         ON sc.cd_servidor = cbs.cd_servidor
-
     INNER JOIN cargo c
         ON c.cd_cargo = cbs.cd_cargo
-
     LEFT JOIN laudo_medico lm
         ON lm.cd_cargo_base_servidor = cbs.cd_cargo_base_servidor
         AND lm.cd_tipo_laudo IN ('T', 'D')
         AND lm.dt_publicacao_doc_cessacao_laudo IS NULL
-
     WHERE cbs.cd_cargo IN (SELECT codigo_cargo FROM cargos_professor)
-
     UNION
-
     SELECT
-        p.nm_pessoa AS nome_servidor,
+        p.nm_pessoa AS nome,
         p.nm_social AS nome_social,
         p.cd_cpf_pessoa AS cpf,
         p.cd_cpf_pessoa AS codigo_rf,
@@ -338,11 +314,8 @@ SQL_FUNCIONARIOS_UNIDADE_EDUCACIONAL = f"""
         0 AS esta_afastado,
         COALESCE(ce.cd_tipo_funcao_funcionario_externo, 0) AS funcao_externo,
         COALESCE(ce.cd_tipo_funcao_funcionario_externo, 0) AS tipo_funcao_externo
-
     FROM contrato_externo ce
-
     INNER JOIN pessoa p
         ON p.cd_pessoa = ce.cd_pessoa
-
     WHERE ce.dt_cancelamento IS NULL
 """
