@@ -40,6 +40,21 @@ Serve para dizer quais componentes existem em cada turma real do EOL.
 Relação professor × turma × componente. A query une atribuições SME e externas,
 ativas e históricas, excluindo motivo de disponibilização `26`.
 
+Branches contemplados:
+
+- SME ativo por série.
+- SME ativo por programa explícito.
+- SME ativo por programa via `escola_grade`.
+- Externo ativo por série.
+- Externo ativo por programa.
+- SME liberado por disponibilização.
+- Externo liberado por disponibilização.
+
+Todos os branches consideram turmas com situação `O`, `A`, `C` ou `E`.
+Registros externos são limitados aos tipos de escola `11`, `12`, `32` e `33`.
+`professor = NULL` não é usado para representar ausência de professor; nesse
+caso a linha não deve existir.
+
 | Campo Origem | Campo Destino | Transformação |
 | :--- | :--- | :--- |
 | `cd_turma_escola` | `turma_codigo` | `str()` ou `None` |
@@ -84,7 +99,16 @@ O agrupamento ocorre em Python via `_agrupar()`. Somente grupos com 2+ component
 
 **Query:** `SQL_GRADE_COMPONENTE_CURRICULAR` (parâmetro `?` por ano letivo)
 
-**Chave de upsert:** `(codigo_componente_curricular, ano_letivo, modalidade, codigo_ano_turma, codigo_serie_ensino)`.
+Catálogo de oferta curricular por série, ano letivo e modalidade. Considera
+turmas abertas, aguardando abertura e continuadas (`O`, `A`, `C`), mas não
+turmas extintas. Exige série válida (`sg_resumida_serie IS NOT NULL`) e inclui
+ofertas de programas via `turma_escola_grade_programa`.
+
+**Chave de upsert:** `(codigo_componente_curricular, ano_letivo, modalidade, codigo_serie_ensino)`.
+
+`codigo_ano_turma` é atualizado como atributo de resposta, mas não compõe a
+identidade do registro. No legado, esse valor pode variar para a mesma série de
+ensino; por isso `codigo_serie_ensino` é a referência de identidade.
 
 | Campo EOL | Campo Destino | Transformação |
 | :--- | :--- | :--- |

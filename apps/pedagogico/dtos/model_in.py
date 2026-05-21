@@ -73,6 +73,11 @@ class AtribuicaoComponenteIn:
     professor: Any
     atribuicao_externa: bool
     ano_letivo: Any
+    id_atribuicao_origem: Any
+    dt_atribuicao: Any
+    dt_cancelamento: Any
+    dt_disponibilizacao: Any
+    cd_motivo_disponibilizacao: Any
 
     def to_domain(self, transferido_em: Any) -> dict:
         return {
@@ -87,6 +92,19 @@ class AtribuicaoComponenteIn:
             ),
             "atribuicao_externa": self.atribuicao_externa,
             "ano_letivo": int(self.ano_letivo),
+            "id_atribuicao_origem": (
+                int(self.id_atribuicao_origem)
+                if self.id_atribuicao_origem is not None
+                else None
+            ),
+            "dt_atribuicao": aware_or_none(self.dt_atribuicao),
+            "dt_cancelamento": aware_or_none(self.dt_cancelamento),
+            "dt_disponibilizacao": aware_or_none(self.dt_disponibilizacao),
+            "cd_motivo_disponibilizacao": (
+                int(self.cd_motivo_disponibilizacao)
+                if self.cd_motivo_disponibilizacao is not None
+                else None
+            ),
             "transferido_em": transferido_em,
         }
 
