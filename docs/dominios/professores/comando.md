@@ -30,3 +30,10 @@ As tabelas em `_TABELAS_UPSERT` recebem `modo_escrita="upsert"`; as demais, `ful
 python manage.py etl_professores --volume 500
 python manage.py etl_professores --volume 500 --continuar
 ```
+
+## FuncionarioUnidadeEducacional
+
+`funcionario_unidade_educacional` e carregada na fase final por
+`popular_funcionarios`, usa
+`upsert` incremental e registra leitura, escrita e checkpoint como as demais
+tabelas incrementais do dominio.

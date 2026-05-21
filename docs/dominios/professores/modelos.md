@@ -304,3 +304,39 @@ Modelos atuais de `apps/professores/models.py`.
 | `dt_cancelamento` | `DateField` | null=True — IS NULL = ativa |
 
 Índices: `codigo_unidade_educacao`, `codigo_componente_curricular`, `ano_atribuicao`, `dt_cancelamento`.
+
+---
+
+## Consulta Consolidada
+
+### FuncionarioUnidadeEducacional
+
+- **db_table:** `funcionario_unidade_educacional`
+- **Fonte EOL:** `SQL_FUNCIONARIOS_UNIDADE_EDUCACIONAL`
+- **Estrategia:** `upsert_incremental`
+
+| Campo | Tipo | Detalhes |
+|---|---|---|
+| `id` | `BigAutoField` | primary_key=True |
+| `nome` | `CharField` | max_length=200 |
+| `nome_social` | `CharField` | max_length=200; null=True; nao exposto na API |
+| `cpf` | `CharField` | max_length=14; null=True; nao exposto na API |
+| `codigo_rf` | `CharField` | max_length=20; RF ou CPF para externo |
+| `codigo_ue` | `CharField` | max_length=20; filtro principal da API |
+| `data_inicio` | `DateTimeField` | null=True |
+| `data_fim` | `DateTimeField` | null=True |
+| `codigo_cargo` | `CharField` | max_length=20; null=True |
+| `cargo` | `CharField` | max_length=100; null=True |
+| `codigo_tipo_funcao_atividade` | `IntegerField` | default=0 |
+| `eh_professor` | `BooleanField` | default=False; interno |
+| `esta_afastado` | `BooleanField` | default=False |
+| `funcao_externo` | `IntegerField` | default=0 |
+| `tipo_funcao_externo` | `IntegerField` | default=0 |
+
+Indices: `codigo_ue`, `codigo_cargo`, `codigo_rf`, `(codigo_ue, codigo_cargo)`.
+Restricao unica: `(codigo_rf, codigo_ue)` para permitir o mesmo servidor em
+mais de uma UE sem sobrescrever registros no upsert.
+
+O endpoint `GET /api/v1/professores/escolas/{codigo_ue}/funcionarios/`
+consulta apenas esta tabela no `professores_db`. O filtro `codigo_cargo` e
+opcional por query string.

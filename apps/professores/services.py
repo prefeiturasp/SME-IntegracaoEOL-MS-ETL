@@ -5,6 +5,8 @@ import logging
 from collections.abc import Callable, Iterator
 from typing import Any
 
+from django.db.models import Q
+
 from apps.controle_auditoria.models import EtlAuditoriaLinha
 from apps.core.libs.thread_processor import ThreadPoolProcessor
 from apps.eol_connection.libs.servico_eol import EOLService
@@ -15,6 +17,7 @@ from apps.professores.dtos.model_in import (
     CargoSobrepostoServidorIn,
     ContratoExternoIn,
     FuncaoAtividadeCargoServidorIn,
+    FuncionarioUnidadeEducacionalIn,
     LaudoMedicoIn,
     LotacaoServidorIn,
     PessoaIn,
@@ -25,6 +28,7 @@ from apps.professores.dtos.model_out import (
     AtribuicaoExternoOut,
     CargoBaseServidorOut,
     ContratoExternoOut,
+    FuncionarioUnidadeEducacionalOut,
     PessoaOut,
     ProfessorOut,
 )
@@ -35,6 +39,7 @@ from apps.professores.models import (
     CargoSobrepostoServidor,
     ContratoExterno,
     FuncaoAtividadeCargoServidor,
+    FuncionarioUnidadeEducacional,
     LaudoMedico,
     LotacaoServidor,
     Pessoa,
@@ -47,6 +52,7 @@ from apps.professores.queries import (
     SQL_CARGOS_BASE,
     SQL_CARGOS_SOBREPOSTOS,
     SQL_CONTRATOS_EXTERNOS,
+    SQL_FUNCIONARIOS_UNIDADE_EDUCACIONAL,
     SQL_FUNCOES_ATIVIDADE,
     SQL_LAUDOS,
     SQL_LOTACOES,
@@ -97,6 +103,17 @@ def _row_to_atribuicao_externo(row: tuple) -> dict:
     return AtribuicaoExternoIn(*row).to_domain().to_dict()
 
 
+def _row_to_funcionario(row: tuple) -> dict:
+    """Converta linha de funcionario para dicionario de destino.
+
+    Args:
+        row: Linha retornada pela query consolidada.
+    Returns:
+        Dados prontos para persistencia no destino.
+    """
+    return FuncionarioUnidadeEducacionalIn(*row).to_domain().to_dict()
+
+
 def _full_refresh_por_lote(
     model_class: Any,
     lotes: Iterator[list[Any]],
@@ -128,9 +145,15 @@ def _full_refresh(model_class: Any, objs: list[Any]) -> int:
     return _full_refresh_por_lote(model_class, iter([objs]))
 
 
-def _params_cargo() -> list[int]:
-    """Retorna cargos de professor como parâmetros posicionais (%s)."""
-    return list(CARGOS_PROFESSOR)
+def _params_cargo(repeticoes: int = 1) -> list[int]:
+    """Retorna cargos de professor como parametros posicionais (%s).
+
+    Args:
+        repeticoes: Quantidade de grupos de placeholders na consulta.
+    Returns:
+        Lista de parametros para filtros de cargo.
+    """
+    return list(CARGOS_PROFESSOR) * repeticoes
 
 
 _HASH_LOOKUP_BATCH = 1000
@@ -147,26 +170,39 @@ def _calcular_hash(campos: dict[str, Any]) -> str:
 
 def _reinsere_se_ausente(
     model_class: Any,
-    pk_name: str,
-    pks: list[str],
-    map_linha: dict[str, tuple[str, str, dict[str, Any]]],
+    unique_fields: list[str],
+    chaves: list[tuple[str, ...]],
+    map_linha: dict[tuple[str, ...], tuple[str, str, dict[str, Any]]],
     objs: list[Any],
     hashes: dict[str, str],
 ) -> None:
     """Força reinserção se o hash não mudou mas o registro sumiu do destino."""
-    if not pks:
+    if not chaves:
         return
-    existentes: set[str] = set()
-    for i in range(0, len(pks), _HASH_LOOKUP_BATCH):
-        lote = pks[i : i + _HASH_LOOKUP_BATCH]
+    existentes: set[tuple[str, ...]] = set()
+    for i in range(0, len(chaves), _HASH_LOOKUP_BATCH):
+        lote = chaves[i : i + _HASH_LOOKUP_BATCH]
+        if len(unique_fields) == 1:
+            campo = unique_fields[0]
+            existentes.update(
+                (str(valor),)
+                for valor in model_class.objects.using("professores_db")
+                .filter(**{f"{campo}__in": [chave[0] for chave in lote]})
+                .values_list(campo, flat=True)
+            )
+            continue
+
+        filtro = Q()
+        for chave in lote:
+            filtro |= Q(**dict(zip(unique_fields, chave, strict=True)))
         existentes.update(
-            str(pk)
-            for pk in model_class.objects.using("professores_db")
-            .filter(**{f"{pk_name}__in": lote})
-            .values_list(pk_name, flat=True)
+            tuple(str(valor) for valor in valores)
+            for valores in model_class.objects.using("professores_db")
+            .filter(filtro)
+            .values_list(*unique_fields)
         )
-    for pk_str, (id_dest, novo_h, row_dict) in map_linha.items():
-        if pk_str not in existentes:
+    for chave, (id_dest, novo_h, row_dict) in map_linha.items():
+        if chave not in existentes:
             objs.append(model_class(**row_dict))
             hashes[id_dest] = novo_h
 
@@ -176,19 +212,27 @@ def _upsert_incremental(
     tabela: str,
     rows: list[dict[str, Any]],
     update_fields: list[str],
+    unique_fields: list[str] | None = None,
 ) -> int:
     """Upsert apenas registros cujo hash de linha mudou."""
     if not rows:
         return 0
 
     pk_name: str = model_class._meta.pk.name
+    campos_unique = unique_fields or [pk_name]
+    campos_update = [
+        campo
+        for campo in update_fields
+        if campo not in campos_unique and campo != pk_name
+    ]
+    campos_hash = list(dict.fromkeys([*campos_unique, *update_fields]))
 
     linhas: list[tuple[str, str, dict[str, Any]]] = []
     for row_dict in rows:
-        pk_str = str(row_dict[pk_name])
-        id_destino = f"{tabela}:{pk_str}"
-        campos_hash = {k: row_dict.get(k) for k in update_fields}
-        linhas.append((id_destino, _calcular_hash(campos_hash), row_dict))
+        chave = tuple(str(row_dict[campo]) for campo in campos_unique)
+        id_destino = f"{tabela}:{'|'.join(chave)}"
+        valores_hash = {k: row_dict.get(k) for k in campos_hash}
+        linhas.append((id_destino, _calcular_hash(valores_hash), row_dict))
 
     ids_destino = [item[0] for item in linhas]
     hashes_existentes: dict[str, str] = {}
@@ -202,22 +246,24 @@ def _upsert_incremental(
 
     objs_para_salvar: list[Any] = []
     novos_hashes: dict[str, str] = {}
-    pks_hash_inalterado: list[str] = []
-    map_pk_para_linha: dict[str, tuple[str, str, dict[str, Any]]] = {}
+    chaves_hash_inalterado: list[tuple[str, ...]] = []
+    map_chave_para_linha: dict[
+        tuple[str, ...], tuple[str, str, dict[str, Any]]
+    ] = {}
     for id_destino, novo_hash, row_dict in linhas:
-        pk_str = str(row_dict[pk_name])
+        chave = tuple(str(row_dict[campo]) for campo in campos_unique)
         if hashes_existentes.get(id_destino) != novo_hash:
             objs_para_salvar.append(model_class(**row_dict))
             novos_hashes[id_destino] = novo_hash
         else:
-            pks_hash_inalterado.append(pk_str)
-            map_pk_para_linha[pk_str] = (id_destino, novo_hash, row_dict)
+            chaves_hash_inalterado.append(chave)
+            map_chave_para_linha[chave] = (id_destino, novo_hash, row_dict)
 
     _reinsere_se_ausente(
         model_class,
-        pk_name,
-        pks_hash_inalterado,
-        map_pk_para_linha,
+        campos_unique,
+        chaves_hash_inalterado,
+        map_chave_para_linha,
         objs_para_salvar,
         novos_hashes,
     )
@@ -225,20 +271,20 @@ def _upsert_incremental(
     if not objs_para_salvar:
         return 0
 
-    seen_pks: set[Any] = set()
+    seen_chaves: set[tuple[Any, ...]] = set()
     objs_dedup: list[Any] = []
     for obj in objs_para_salvar:
-        pk_val = getattr(obj, pk_name)
-        if pk_val not in seen_pks:
-            seen_pks.add(pk_val)
+        chave = tuple(getattr(obj, campo) for campo in campos_unique)
+        if chave not in seen_chaves:
+            seen_chaves.add(chave)
             objs_dedup.append(obj)
     objs_para_salvar = objs_dedup
 
     model_class.objects.using("professores_db").bulk_create(
         objs_para_salvar,
         update_conflicts=True,
-        unique_fields=[pk_name],
-        update_fields=update_fields,
+        unique_fields=campos_unique,
+        update_fields=campos_update,
         batch_size=500,
     )
 
@@ -277,6 +323,7 @@ _ORDEM_TABELAS: tuple[str, ...] = (
     "laudo_medico",
     "atribuicao_aula",
     "atribuicao_externo",
+    "funcionario_unidade_educacional",
 )
 
 
@@ -516,6 +563,50 @@ class EtlProfessoresService:
                 )
         return total
 
+    def popular_funcionarios(self) -> int:
+        """Popula funcionario por UE via hash incremental.
+
+        Returns:
+            Quantidade de linhas inseridas ou atualizadas.
+        """
+        total = 0
+        with ThreadPoolProcessor(
+            prefixo_log="PROF:funcionario_unidade_educacional"
+        ) as proc:
+            for chunk in self.eol.iter_query(
+                SQL_FUNCIONARIOS_UNIDADE_EDUCACIONAL, _params_cargo()
+            ):
+                out_objs: list[FuncionarioUnidadeEducacionalOut] = (
+                    proc.processar(
+                        chunk,
+                        lambda r: FuncionarioUnidadeEducacionalIn(
+                            *r
+                        ).to_domain(),
+                    )
+                )
+                total += _upsert_incremental(
+                    FuncionarioUnidadeEducacional,
+                    "funcionario_unidade_educacional",
+                    [o.to_dict() for o in out_objs],
+                    [
+                        "nome",
+                        "nome_social",
+                        "cpf",
+                        "codigo_ue",
+                        "data_inicio",
+                        "data_fim",
+                        "codigo_cargo",
+                        "cargo",
+                        "codigo_tipo_funcao_atividade",
+                        "eh_professor",
+                        "esta_afastado",
+                        "funcao_externo",
+                        "tipo_funcao_externo",
+                    ],
+                    ["codigo_rf", "codigo_ue"],
+                )
+        return total
+
     def _fase_1(
         self,
         executar_tabela: Callable[[str, Callable[[], int]], None],
@@ -557,6 +648,22 @@ class EtlProfessoresService:
         executar_tabela("atribuicao_externo", self.popular_atribuicoes_externo)
         self.ultima_fase_concluida = 3
         logger.info("[ETL PROF] Fase 3 concluída.")
+
+    def _fase_4(
+        self,
+        executar_tabela: Callable[[str, Callable[[], int]], None],
+    ) -> None:
+        """Executa fase final de funcionarios.
+
+        Args:
+            executar_tabela: Callback de execucao com auditoria/checkpoint.
+        """
+        logger.info("[ETL PROF] === Fase 4: Funcionarios ===")
+        executar_tabela(
+            "funcionario_unidade_educacional", self.popular_funcionarios
+        )
+        self.ultima_fase_concluida = 4
+        logger.info("[ETL PROF] Fase 4 concluida.")
 
     def _iter_lotes(
         self,
@@ -653,9 +760,12 @@ class EtlProfessoresService:
         if fase_inicial <= 3:
             self._fase_3(_executar_tabela)
 
+        if fase_inicial <= 4:
+            self._fase_4(_executar_tabela)
+
         total = sum(r.values())
         log(
-            "[ETL PROF] Concluído. Linhas alteradas: %d (fases %d–3).",
+            "[ETL PROF] Concluído. Linhas alteradas: %d (fases %d-4).",
             total,
             fase_inicial,
         )
