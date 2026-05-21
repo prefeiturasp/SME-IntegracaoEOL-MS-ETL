@@ -5,7 +5,11 @@ from unittest.mock import MagicMock, patch
 from django.test import TestCase
 
 from apps.controle_auditoria.models import EtlCheckpointDominio, EtlExecucao
-from apps.professores.management.commands.etl_professores import Command
+from apps.professores.management.commands.etl_professores import (
+    _TABELAS_UPSERT,
+    Command,
+)
+from apps.professores.services import _ORDEM_TABELAS
 
 _RESULTADO_MOCK = {
     "unidade_educacional": 10,
@@ -13,6 +17,7 @@ _RESULTADO_MOCK = {
     "professor": 200,
     "cargo_base_servidor": 350,
     "atribuicao_aula": 1500,
+    "funcionario_unidade_educacional": 20,
 }
 
 
@@ -35,7 +40,7 @@ class EtlProfessoresCommandTest(TestCase):
     ) -> None:
         """Verifica que o command cria e finaliza execução com sucesso."""
         mock_servico.return_value.executar.return_value = _RESULTADO_MOCK
-        mock_servico.return_value.ultima_fase_concluida = 3
+        mock_servico.return_value.ultima_fase_concluida = 4
 
         self._executar()
 
@@ -51,13 +56,13 @@ class EtlProfessoresCommandTest(TestCase):
     ) -> None:
         """Verifica que o command cria checkpoint após exec bem-sucedida."""
         mock_servico.return_value.executar.return_value = _RESULTADO_MOCK
-        mock_servico.return_value.ultima_fase_concluida = 3
+        mock_servico.return_value.ultima_fase_concluida = 4
 
         self._executar()
 
         checkpoint = EtlCheckpointDominio.objects.get(dominio="professores")
         self.assertEqual(checkpoint.ultima_situacao, "concluido")
-        self.assertEqual(checkpoint.ultima_pagina, 3)
+        self.assertEqual(checkpoint.ultima_pagina, 4)
         total = sum(_RESULTADO_MOCK.values())
         self.assertEqual(checkpoint.token_parada, str(total))
 
@@ -69,7 +74,7 @@ class EtlProfessoresCommandTest(TestCase):
     ) -> None:
         """Token de parada acumula entre execuções consecutivas."""
         mock_servico.return_value.executar.return_value = {"professor": 100}
-        mock_servico.return_value.ultima_fase_concluida = 3
+        mock_servico.return_value.ultima_fase_concluida = 4
 
         self._executar()
         self._executar(["--continuar"])
@@ -116,7 +121,7 @@ class EtlProfessoresCommandTest(TestCase):
 
         mock_servico.return_value.executar.side_effect = None
         mock_servico.return_value.executar.return_value = {"professor": 50}
-        mock_servico.return_value.ultima_fase_concluida = 3
+        mock_servico.return_value.ultima_fase_concluida = 4
         self._executar(["--continuar"])
 
         _, kwargs = mock_servico.return_value.executar.call_args
@@ -147,8 +152,8 @@ class EtlProfessoresCommandTest(TestCase):
         """Callbacks de lote e tabela persistem indice parcial."""
 
         def executar_com_callbacks(**kwargs: object) -> dict[str, int]:
-            kwargs["on_lote"]("professor", 2)  # type: ignore[index]
-            kwargs["on_tabela_concluida"]("professor", 10)  # type: ignore[index]
+            kwargs["on_lote"]("professor", 2)  # type: ignore[index,operator]
+            kwargs["on_tabela_concluida"]("professor", 10)  # type: ignore[index,operator]
             return {"professor": 10}
 
         mock_servico.return_value.executar.side_effect = executar_com_callbacks
@@ -202,3 +207,10 @@ class EtlProfessoresCommandTest(TestCase):
 
         self.assertEqual(pular_ate, "contrato_externo")
         self.assertEqual(lote_inicial, 0)
+
+    def test_funcionario_na_ordem_e_upsert(self) -> None:
+        """Funcionario participa da ordem de carga e usa upsert."""
+        self.assertIn("funcionario_unidade_educacional", _ORDEM_TABELAS)
+        self.assertIn(
+            "funcionario_unidade_educacional", _TABELAS_UPSERT
+        )

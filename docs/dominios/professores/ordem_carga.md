@@ -41,3 +41,10 @@ digraph G {
     F1 -> F2 -> F3 -> F4;
 }
 ```
+
+## Atualizacao - FuncionarioUnidadeEducacional
+
+A tabela `funcionario_unidade_educacional` e carregada na fase final, apos as
+tabelas que
+alimentam a consulta consolidada de servidores, vinculos, afastamentos,
+atribuicoes e externos.

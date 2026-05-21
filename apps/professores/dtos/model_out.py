@@ -3,6 +3,8 @@
 from dataclasses import dataclass
 from typing import Any
 
+from apps.core.libs.helpers import make_aware
+
 
 @dataclass(slots=True)
 class ProfessorOut:
@@ -229,4 +231,148 @@ class AtribuicaoExternoOut:
                 self.codigo_motivo_disponibilizacao_externo
             ),
             "dt_cancelamento": self.dt_cancelamento,
+        }
+
+
+def _normalizar_texto(valor: Any, default: str = "") -> str:
+    """Normaliza texto de entrada para DTO de saida.
+
+    Args:
+        valor: Valor recebido da origem.
+        default: Valor usado quando a origem vier nula.
+    Returns:
+        Texto normalizado.
+    """
+    if valor is None:
+        return default
+    return str(valor).strip()
+
+
+def _normalizar_texto_opcional(valor: Any) -> str | None:
+    """Normaliza texto opcional para DTO de saida.
+
+    Args:
+        valor: Valor recebido da origem.
+    Returns:
+        Texto normalizado ou `None`.
+    """
+    texto = _normalizar_texto(valor)
+    return texto or None
+
+
+def _normalizar_int(valor: Any) -> int:
+    """Converta nulo e vazio para zero.
+
+    Args:
+        valor: Valor recebido da origem.
+    Returns:
+        Valor inteiro normalizado.
+    """
+    if valor in (None, ""):
+        return 0
+    return int(valor)
+
+
+def _normalizar_int_opcional(valor: Any) -> int | None:
+    """Converta nulo e vazio para None.
+
+    Args:
+        valor: Valor recebido da origem.
+    Returns:
+        Valor inteiro normalizado ou `None`.
+    """
+    if valor in (None, ""):
+        return None
+    return int(valor)
+
+
+def _normalizar_bool(valor: Any) -> bool:
+    """Converta indicadores SQL para booleano.
+
+    Args:
+        valor: Valor recebido da origem.
+    Returns:
+        Indicador convertido para booleano.
+    """
+    if isinstance(valor, str):
+        return valor.strip().lower() in {"1", "true", "t", "s", "sim"}
+    return bool(valor)
+
+
+def _normalizar_datetime(valor: Any) -> Any:
+    """Converta datetime naive para aware.
+
+    Args:
+        valor: Valor de data/hora recebido da origem.
+    Returns:
+        Data/hora pronta para persistencia no Django.
+    """
+    if valor is None or not hasattr(valor, "tzinfo"):
+        return valor
+    return make_aware(valor)
+
+
+@dataclass(slots=True)
+class FuncionarioUnidadeEducacionalOut:
+    """Estrutura para o model ``FuncionarioUnidadeEducacional``."""
+
+    nome: str
+    nome_social: str | None
+    cpf: str | None
+    codigo_rf: str
+    codigo_ue: str
+    data_inicio: Any
+    data_fim: Any
+    codigo_cargo: str | None
+    cargo: str | None
+    codigo_tipo_funcao_atividade: int | None
+    eh_professor: Any
+    esta_afastado: Any
+    funcao_externo: int | None
+    tipo_funcao_externo: int | None
+
+    def __post_init__(self) -> None:
+        """Normaliza campos do contrato de funcionario."""
+        self.nome = _normalizar_texto(self.nome)
+        self.nome_social = _normalizar_texto_opcional(self.nome_social)
+        self.cpf = _normalizar_texto_opcional(self.cpf)
+        self.codigo_rf = _normalizar_texto(self.codigo_rf)
+        self.codigo_ue = _normalizar_texto(self.codigo_ue)
+        self.data_inicio = _normalizar_datetime(self.data_inicio)
+        self.data_fim = _normalizar_datetime(self.data_fim)
+        self.codigo_cargo = _normalizar_texto_opcional(self.codigo_cargo)
+        self.cargo = _normalizar_texto_opcional(self.cargo)
+        self.codigo_tipo_funcao_atividade = _normalizar_int_opcional(
+            self.codigo_tipo_funcao_atividade
+        )
+        self.eh_professor = _normalizar_bool(self.eh_professor)
+        self.esta_afastado = _normalizar_bool(self.esta_afastado)
+        self.funcao_externo = _normalizar_int(self.funcao_externo)
+        self.tipo_funcao_externo = _normalizar_int(
+            self.tipo_funcao_externo
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        """Converta para dicionario de persistencia.
+
+        Returns:
+            Campos compatíveis com o model `FuncionarioUnidadeEducacional`.
+        """
+        return {
+            "nome": self.nome,
+            "nome_social": self.nome_social,
+            "cpf": self.cpf,
+            "codigo_rf": self.codigo_rf,
+            "codigo_ue": self.codigo_ue,
+            "data_inicio": self.data_inicio,
+            "data_fim": self.data_fim,
+            "codigo_cargo": self.codigo_cargo,
+            "cargo": self.cargo,
+            "codigo_tipo_funcao_atividade": (
+                self.codigo_tipo_funcao_atividade
+            ),
+            "eh_professor": self.eh_professor,
+            "esta_afastado": self.esta_afastado,
+            "funcao_externo": self.funcao_externo,
+            "tipo_funcao_externo": self.tipo_funcao_externo,
         }

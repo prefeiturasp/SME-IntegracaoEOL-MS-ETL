@@ -11,6 +11,7 @@ if TYPE_CHECKING:
         CargoSobrepostoServidorOut,
         ContratoExternoOut,
         FuncaoAtividadeCargoServidorOut,
+        FuncionarioUnidadeEducacionalOut,
         LaudoMedicoOut,
         LotacaoServidorOut,
         PessoaOut,
@@ -270,4 +271,53 @@ class AtribuicaoExternoIn:
                 self.cd_motivo_disponibilizacao_externo
             ),
             dt_cancelamento=self.dt_cancelamento,
+        )
+
+
+@dataclass(slots=True)
+class FuncionarioUnidadeEducacionalIn:
+    """Dados consolidados de funcionario por unidade educacional."""
+
+    nome: Any
+    nome_social: Any
+    cpf: Any
+    codigo_rf: Any
+    codigo_ue: Any
+    data_inicio: Any
+    data_fim: Any
+    cd_cargo: Any
+    cargo: Any
+    cd_tipo_funcao_atividade: Any
+    eh_professor: Any
+    esta_afastado: Any
+    funcao_externo: Any
+    tipo_funcao_externo: Any
+
+    def to_domain(self) -> "FuncionarioUnidadeEducacionalOut":
+        """Converta a linha de origem em DTO de destino.
+
+        Returns:
+            Dados normalizados do funcionario.
+        """
+        from apps.professores.dtos.model_out import FuncionarioUnidadeEducacionalOut
+
+        return FuncionarioUnidadeEducacionalOut(
+            nome=self.nome or "",
+            nome_social=self.nome_social or None,
+            cpf=str(self.cpf).strip() if self.cpf else None,
+            codigo_rf=str(self.codigo_rf).strip(),
+            codigo_ue=str(self.codigo_ue).strip(),
+            data_inicio=self.data_inicio,
+            data_fim=self.data_fim,
+            codigo_cargo=(
+                str(self.cd_cargo).strip()
+                if self.cd_cargo
+                else None
+            ),
+            cargo=self.cargo or None,
+            codigo_tipo_funcao_atividade=self.cd_tipo_funcao_atividade,
+            eh_professor=self.eh_professor,
+            esta_afastado=self.esta_afastado,
+            funcao_externo=self.funcao_externo,
+            tipo_funcao_externo=self.tipo_funcao_externo,
         )

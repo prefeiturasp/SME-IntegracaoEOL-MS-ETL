@@ -33,6 +33,7 @@ CARGOS_PROFESSOR = (
 )
 
 _PLACEHOLDERS_CARGO = ",".join(["%s"] * len(CARGOS_PROFESSOR))
+_VALUES_CARGO = ",".join(["(%s)"] * len(CARGOS_PROFESSOR))
 
 SQL_PROFESSORES = f"""
     SELECT DISTINCT
@@ -144,7 +145,10 @@ SQL_ATRIBUICOES_AULA = f"""
         aa.cd_serie_grade,
         aa.an_atribuicao,
         aa.dt_atribuicao_aula,
-        COALESCE(aa.dt_disponibilizacao_aulas, te.dt_fim_turma) AS dt_disponibilizacao_aulas,
+        COALESCE(
+            aa.dt_disponibilizacao_aulas,
+            te.dt_fim_turma
+        ) AS dt_disponibilizacao_aulas,
         aa.cd_motivo_disponibilizacao,
         aa.dt_cancelamento
     FROM atribuicao_aula aa
@@ -155,8 +159,8 @@ SQL_ATRIBUICOES_AULA = f"""
     LEFT JOIN turma_escola_grade_programa tegp
         ON tegp.cd_turma_escola_grade_programa
             = aa.cd_turma_escola_grade_programa
-    LEFT JOIN turma_escola te 
-        ON te.cd_turma_escola = tegp.cd_turma_escola            
+    LEFT JOIN turma_escola te
+        ON te.cd_turma_escola = tegp.cd_turma_escola
     WHERE cbs.cd_cargo IN ({_PLACEHOLDERS_CARGO})
 """
 
@@ -172,7 +176,10 @@ SQL_ATRIBUICOES_EXTERNO = """
         ae.cd_turma_escola_grade_programa,
         ae.an_atribuicao,
         ae.dt_atribuicao,
-        COALESCE(ae.dt_disponibilizacao, te.dt_fim_turma) AS dt_disponibilizacao,
+        COALESCE(
+            ae.dt_disponibilizacao,
+            te.dt_fim_turma
+        ) AS dt_disponibilizacao,
         ae.cd_motivo_disponibilizacao_externo,
         ae.dt_cancelamento
     FROM atribuicao_externo ae
@@ -183,7 +190,137 @@ SQL_ATRIBUICOES_EXTERNO = """
     LEFT JOIN turma_escola_grade_programa tegp
         ON tegp.cd_turma_escola_grade_programa
             = ae.cd_turma_escola_grade_programa
-    LEFT JOIN turma_escola te 
-        ON te.cd_turma_escola = tegp.cd_turma_escola            
+    LEFT JOIN turma_escola te
+        ON te.cd_turma_escola = tegp.cd_turma_escola
+    WHERE ce.dt_cancelamento IS NULL
+"""
+
+SQL_FUNCIONARIOS_UNIDADE_EDUCACIONAL = f"""
+    ;WITH cargos_professor AS (
+        SELECT v.codigo_cargo
+        FROM (VALUES {_VALUES_CARGO}) AS v(codigo_cargo)
+    )
+    SELECT
+        sc.nm_pessoa AS nome,
+        sc.nm_social AS nome_social,
+        sc.cd_cpf_pessoa AS cpf,
+        sc.cd_registro_funcional AS codigo_rf,
+        ls.cd_unidade_educacao AS codigo_ue,
+        ls.dt_inicio AS data_inicio,
+        ls.dt_fim AS data_fim,
+        cbs.cd_cargo AS cd_cargo,
+        LTRIM(RTRIM(c.dc_cargo)) AS cargo,
+        0 AS cd_tipo_funcao_atividade,
+        1 AS eh_professor,
+        CASE
+            WHEN lm.cd_cargo_base_servidor IS NULL THEN 0
+            ELSE 1
+        END AS esta_afastado,
+        0 AS funcao_externo,
+        0 AS tipo_funcao_externo
+    FROM lotacao_servidor ls
+    INNER JOIN v_cargo_base_cotic cbs
+        ON cbs.cd_cargo_base_servidor = ls.cd_cargo_base_servidor
+    INNER JOIN v_servidor_cotic sc
+        ON sc.cd_servidor = cbs.cd_servidor
+    INNER JOIN cargo c
+        ON c.cd_cargo = cbs.cd_cargo
+    LEFT JOIN laudo_medico lm
+        ON lm.cd_cargo_base_servidor = cbs.cd_cargo_base_servidor
+        AND lm.cd_tipo_laudo IN ('T', 'D')
+        AND lm.dt_publicacao_doc_cessacao_laudo IS NULL
+    WHERE cbs.cd_cargo IN (SELECT codigo_cargo FROM cargos_professor)
+    AND sc.cd_registro_funcional IS NOT NULL
+    UNION
+    SELECT
+        sc.nm_pessoa AS nome,
+        sc.nm_social AS nome_social,
+        sc.cd_cpf_pessoa AS cpf,
+        sc.cd_registro_funcional AS codigo_rf,
+        css.cd_unidade_local_servico AS codigo_ue,
+        cbs.dt_posse AS data_inicio,
+        css.dt_fim_cargo_sobreposto AS data_fim,
+        css.cd_cargo AS cd_cargo,
+        LTRIM(RTRIM(c.dc_cargo)) AS cargo,
+        0 AS cd_tipo_funcao_atividade,
+        CASE
+            WHEN css.cd_cargo IN (SELECT codigo_cargo FROM cargos_professor)
+            THEN 1
+            ELSE 0
+        END AS eh_professor,
+        CASE
+            WHEN lm.cd_cargo_base_servidor IS NULL THEN 0
+            ELSE 1
+        END AS esta_afastado,
+        0 AS funcao_externo,
+        0 AS tipo_funcao_externo
+    FROM cargo_sobreposto_servidor css
+    INNER JOIN v_cargo_base_cotic cbs
+        ON cbs.cd_cargo_base_servidor = css.cd_cargo_base_servidor
+    INNER JOIN v_servidor_cotic sc
+        ON sc.cd_servidor = cbs.cd_servidor
+    LEFT JOIN cargo c
+        ON c.cd_cargo = css.cd_cargo
+    LEFT JOIN laudo_medico lm
+        ON lm.cd_cargo_base_servidor = cbs.cd_cargo_base_servidor
+        AND lm.cd_tipo_laudo IN ('T', 'D')
+        AND lm.dt_publicacao_doc_cessacao_laudo IS NULL
+
+    WHERE cbs.cd_cargo IN (SELECT codigo_cargo FROM cargos_professor)
+    UNION
+    SELECT
+        sc.nm_pessoa AS nome,
+        sc.nm_social AS nome_social,
+        sc.cd_cpf_pessoa AS cpf,
+        sc.cd_registro_funcional AS codigo_rf,
+        facs.cd_unidade_local_servico AS codigo_ue,
+        cbs.dt_posse AS data_inicio,
+        facs.dt_fim_funcao_atividade AS data_fim,
+        cbs.cd_cargo AS cd_cargo,
+        LTRIM(RTRIM(c.dc_cargo)) AS cargo,
+        COALESCE(facs.cd_tipo_funcao, 0) AS cd_tipo_funcao_atividade,
+        1 AS eh_professor,
+        CASE
+            WHEN lm.cd_cargo_base_servidor IS NULL THEN 0
+            ELSE 1
+        END AS esta_afastado,
+        0 AS funcao_externo,
+        0 AS tipo_funcao_externo
+    FROM funcao_atividade_cargo_servidor facs
+    INNER JOIN v_cargo_base_cotic cbs
+        ON cbs.cd_cargo_base_servidor = facs.cd_cargo_base_servidor
+    INNER JOIN v_servidor_cotic sc
+        ON sc.cd_servidor = cbs.cd_servidor
+    INNER JOIN cargo c
+        ON c.cd_cargo = cbs.cd_cargo
+    LEFT JOIN laudo_medico lm
+        ON lm.cd_cargo_base_servidor = cbs.cd_cargo_base_servidor
+        AND lm.cd_tipo_laudo IN ('T', 'D')
+        AND lm.dt_publicacao_doc_cessacao_laudo IS NULL
+    WHERE cbs.cd_cargo IN (SELECT codigo_cargo FROM cargos_professor)
+    UNION
+    SELECT
+        p.nm_pessoa AS nome,
+        p.nm_social AS nome_social,
+        p.cd_cpf_pessoa AS cpf,
+        p.cd_cpf_pessoa AS codigo_rf,
+        ce.cd_unidade_educacao AS codigo_ue,
+        ce.dt_inicio AS data_inicio,
+        ce.dt_cancelamento AS data_fim,
+        NULL AS cd_cargo,
+        NULL AS cargo,
+        0 AS cd_tipo_funcao_atividade,
+        0 AS eh_professor,
+        0 AS esta_afastado,
+        COALESCE(ffe.cd_funcao_externo, 0) AS funcao_externo,
+        COALESCE(
+            ffe.cd_tipo_funcao_funcionario_externo, 0
+        ) AS tipo_funcao_externo
+    FROM contrato_externo ce
+    INNER JOIN pessoa p
+        ON p.cd_pessoa = ce.cd_pessoa
+    INNER JOIN funcao_funcionario_externo ffe
+        ON ffe.cd_tipo_funcao_funcionario_externo
+            = ce.cd_tipo_funcao_funcionario_externo
     WHERE ce.dt_cancelamento IS NULL
 """

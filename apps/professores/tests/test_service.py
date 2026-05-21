@@ -4,8 +4,13 @@ import datetime
 from unittest.mock import MagicMock, patch
 
 from django.test import TestCase
+from django.utils import timezone
 
-from apps.professores.queries import CARGOS_PROFESSOR
+from apps.professores.models import FuncionarioUnidadeEducacional, Professor
+from apps.professores.queries import (
+    CARGOS_PROFESSOR,
+    SQL_FUNCIONARIOS_UNIDADE_EDUCACIONAL,
+)
 from apps.professores.services import (
     EtlProfessoresService,
     _full_refresh,
@@ -16,10 +21,12 @@ from apps.professores.services import (
     _row_to_cargo_sobreposto,
     _row_to_contrato_externo,
     _row_to_funcao_atividade,
+    _row_to_funcionario,
     _row_to_laudo,
     _row_to_lotacao,
     _row_to_pessoa,
     _row_to_professor,
+    _upsert_incremental,
 )
 
 
@@ -229,6 +236,74 @@ class RowToAtribuicaoExternoTest(TestCase):
         self.assertIsNone(r["codigo_turma_escola"])
 
 
+class RowToFuncionarioTest(TestCase):
+    """Testes para a funcao _row_to_funcionario."""
+
+    def test_campos_normalizados_e_hash(self) -> None:
+        """Verifica normalizacao, defaults e chave SHA-256."""
+        dt = datetime.datetime(2026, 2, 1, 7, 30)
+        row = (
+            " ANA ",
+            " Ana ",
+            " 123 ",
+            " 7506988 ",
+            " 019372 ",
+            dt,
+            None,
+            3239,
+            " PROFESSOR ",
+            None,
+            1,
+            0,
+            None,
+            None,
+        )
+
+        r = _row_to_funcionario(row)
+
+        self.assertNotIn("id", r)
+        self.assertEqual(r["nome"], "ANA")
+        self.assertEqual(r["nome_social"], "Ana")
+        self.assertEqual(r["cpf"], "123")
+        self.assertEqual(r["codigo_rf"], "7506988")
+        self.assertEqual(r["codigo_ue"], "019372")
+        self.assertTrue(timezone.is_aware(r["data_inicio"]))
+        self.assertIsNone(r["data_fim"])
+        self.assertEqual(r["codigo_cargo"], "3239")
+        self.assertEqual(r["cargo"], "PROFESSOR")
+        self.assertIsNone(r["codigo_tipo_funcao_atividade"])
+        self.assertTrue(r["eh_professor"])
+        self.assertFalse(r["esta_afastado"])
+        self.assertEqual(r["funcao_externo"], 0)
+        self.assertEqual(r["tipo_funcao_externo"], 0)
+
+    def test_normaliza_bool_texto_e_preserva_datetime_aware(self) -> None:
+        """Cobre indicadores textuais e datas ja aware."""
+        dt = timezone.now()
+        row = (
+            "ANA",
+            None,
+            None,
+            "7506988",
+            "019372",
+            dt,
+            None,
+            None,
+            None,
+            "",
+            "sim",
+            "false",
+            "",
+            "",
+        )
+
+        r = _row_to_funcionario(row)
+
+        self.assertIs(r["data_inicio"], dt)
+        self.assertTrue(r["eh_professor"])
+        self.assertFalse(r["esta_afastado"])
+
+
 class ParamsCargoTest(TestCase):
     """Testes para a função _params_cargo."""
 
@@ -283,6 +358,124 @@ class FullRefreshTest(TestCase):
             Professor.objects.using("professores_db")
             .filter(codigo_rf="T02")
             .exists()
+        )
+
+
+class UpsertIncrementalTest(TestCase):
+    """Testes do upsert incremental."""
+
+    databases = ["default", "professores_db"]
+
+    @patch("apps.professores.services.EtlAuditoriaLinha.objects.bulk_create")
+    @patch("apps.professores.services.Professor.objects")
+    def test_remove_chave_primaria_dos_campos_de_update(
+        self,
+        mock_manager: MagicMock,
+        mock_hash_bulk_create: MagicMock,
+    ) -> None:
+        """Evita erro do Django ao atualizar conflito pela propria PK."""
+        mock_manager.using.return_value.bulk_create.return_value = None
+        mock_filter = MagicMock()
+        mock_filter.values_list.return_value = []
+        mock_manager.filter.return_value = mock_filter
+
+        total = _upsert_incremental(
+            Professor,
+            "professor",
+            [
+                {
+                    "codigo_rf": "7506988",
+                    "nome": "ANA",
+                    "nome_social": None,
+                    "cpf": None,
+                }
+            ],
+            ["codigo_rf", "nome", "nome_social", "cpf"],
+        )
+
+        self.assertEqual(total, 1)
+        _, kwargs = mock_manager.using.return_value.bulk_create.call_args
+        self.assertEqual(kwargs["unique_fields"], ["codigo_rf"])
+        self.assertEqual(
+            kwargs["update_fields"], ["nome", "nome_social", "cpf"]
+        )
+        mock_hash_bulk_create.assert_called_once()
+
+    @patch("apps.professores.services.EtlAuditoriaLinha.objects.bulk_create")
+    @patch(
+        "apps.professores.services.FuncionarioUnidadeEducacional.objects"
+    )
+    def test_usa_chave_natural_composta_para_funcionario(
+        self,
+        mock_manager: MagicMock,
+        mock_hash_bulk_create: MagicMock,
+    ) -> None:
+        """Permite o mesmo RF em UEs distintas no upsert."""
+        mock_manager.using.return_value.bulk_create.return_value = None
+        mock_filter = MagicMock()
+        mock_filter.values_list.return_value = []
+        mock_manager.filter.return_value = mock_filter
+
+        total = _upsert_incremental(
+            FuncionarioUnidadeEducacional,
+            "funcionario_unidade_educacional",
+            [
+                {
+                    "codigo_rf": "7506988",
+                    "codigo_ue": "019372",
+                    "nome": "ANA",
+                },
+                {
+                    "codigo_rf": "7506988",
+                    "codigo_ue": "019373",
+                    "nome": "ANA",
+                },
+            ],
+            ["codigo_rf", "codigo_ue", "nome"],
+            ["codigo_rf", "codigo_ue"],
+        )
+
+        self.assertEqual(total, 2)
+        _, kwargs = mock_manager.using.return_value.bulk_create.call_args
+        self.assertEqual(kwargs["unique_fields"], ["codigo_rf", "codigo_ue"])
+        self.assertEqual(kwargs["update_fields"], ["nome"])
+        mock_hash_bulk_create.assert_called_once()
+
+    def test_reinsere_chave_composta_quando_destino_sumiu(self) -> None:
+        """Reinsere registro quando hash existe mas destino foi removido."""
+        row = {
+            "codigo_rf": "7506988",
+            "codigo_ue": "019372",
+            "nome": "ANA",
+        }
+        update_fields = ["codigo_rf", "codigo_ue", "nome"]
+        unique_fields = ["codigo_rf", "codigo_ue"]
+
+        _upsert_incremental(
+            FuncionarioUnidadeEducacional,
+            "funcionario_unidade_educacional",
+            [row],
+            update_fields,
+            unique_fields,
+        )
+        FuncionarioUnidadeEducacional.objects.using(
+            "professores_db"
+        ).all().delete()
+
+        total = _upsert_incremental(
+            FuncionarioUnidadeEducacional,
+            "funcionario_unidade_educacional",
+            [row],
+            update_fields,
+            unique_fields,
+        )
+
+        self.assertEqual(total, 1)
+        self.assertEqual(
+            FuncionarioUnidadeEducacional.objects.using(
+                "professores_db"
+            ).count(),
+            1,
         )
 
 
@@ -467,6 +660,55 @@ class EtlProfessoresServiceFase3Test(TestCase):
         self.assertEqual(resultado, 8)
 
 
+class EtlProfessoresServiceFase4Test(TestCase):
+    """Testes da fase final de funcionarios."""
+
+    databases = ["default", "professores_db"]
+
+    @patch(_UPSERT_PATCH, return_value=2)
+    @patch(_EOL_PATCH)
+    def test_popular_funcionarios(
+        self, mock_eol: MagicMock, mock_upsert: MagicMock
+    ) -> None:
+        """Verifica query, parametros e persistencia incremental."""
+        dt = datetime.datetime(2026, 2, 1, 7, 30)
+        mock_eol.return_value.iter_query.return_value = [
+            [
+                (
+                    "ANA",
+                    None,
+                    None,
+                    "7506988",
+                    "019372",
+                    dt,
+                    None,
+                    3239,
+                    "PROFESSOR",
+                    0,
+                    1,
+                    0,
+                    0,
+                    0,
+                )
+            ]
+        ]
+
+        srv = EtlProfessoresService()
+        resultado = srv.popular_funcionarios()
+
+        self.assertEqual(resultado, 2)
+        mock_eol.return_value.iter_query.assert_called_once_with(
+            SQL_FUNCIONARIOS_UNIDADE_EDUCACIONAL, _params_cargo()
+        )
+        self.assertEqual(
+            mock_upsert.call_args.args[1],
+            "funcionario_unidade_educacional",
+        )
+        self.assertEqual(
+            mock_upsert.call_args.args[4], ["codigo_rf", "codigo_ue"]
+        )
+
+
 class EtlProfessoresServiceExecutarTest(TestCase):
     """Testes para o método executar do EtlProfessoresService."""
 
@@ -487,15 +729,16 @@ class EtlProfessoresServiceExecutarTest(TestCase):
         """Verifica que executar com fase_inicial=1 completa todas as fases."""
         srv = self._make_service_com_populares_mockados(1)
         resultado = srv.executar(fase_inicial=1)
-        self.assertEqual(srv.ultima_fase_concluida, 3)
+        self.assertEqual(srv.ultima_fase_concluida, 4)
         self.assertIn("professor", resultado)
         self.assertIn("atribuicao_aula", resultado)
+        self.assertIn("funcionario_unidade_educacional", resultado)
 
     def test_executar_fase2_pula_fase1(self) -> None:
         """Verifica que executar com fase_inicial=2 pula os dados da fase 1."""
         srv = self._make_service_com_populares_mockados(1)
         resultado = srv.executar(fase_inicial=2)
-        self.assertEqual(srv.ultima_fase_concluida, 3)
+        self.assertEqual(srv.ultima_fase_concluida, 4)
         self.assertNotIn("professor", resultado)
         self.assertIn("cargo_base_servidor", resultado)
 
@@ -506,6 +749,15 @@ class EtlProfessoresServiceExecutarTest(TestCase):
         self.assertNotIn("professor", resultado)
         self.assertNotIn("cargo_base_servidor", resultado)
         self.assertIn("atribuicao_aula", resultado)
+
+    def test_executar_fase4_pula_fases_anteriores(self) -> None:
+        """Verifica que fase 4 executa apenas funcionario."""
+        srv = self._make_service_com_populares_mockados(1)
+
+        resultado = srv.executar(fase_inicial=4)
+
+        self.assertEqual(srv.ultima_fase_concluida, 4)
+        self.assertEqual(resultado, {"funcionario_unidade_educacional": 1})
 
     def test_executar_retorna_soma_de_registros(self) -> None:
         """Verifica que executar retorna a soma de registros por tabela."""
@@ -538,7 +790,9 @@ class EtlProfessoresServiceExecutarTest(TestCase):
     def test_executar_com_lote_inicial_rastreia_iter_query(self) -> None:
         """Retomada por lote substitui iter_query durante a tabela."""
         srv = self._make_service_com_populares_mockados(0)
-        srv.eol.iter_query = MagicMock(return_value=iter([[1], [2]]))
+        srv.eol.iter_query = MagicMock(  # type: ignore[method-assign]
+            return_value=iter([[1], [2]])
+        )
         lotes: list[tuple[str, int]] = []
         tabelas: list[tuple[str, int]] = []
 
