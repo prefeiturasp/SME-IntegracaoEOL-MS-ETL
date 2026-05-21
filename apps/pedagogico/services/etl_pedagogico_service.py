@@ -1,17 +1,8 @@
-"""Servico ETL do dominio PEDAGOGICO_DB.
+"""Serviço ETL do domínio pedagógico.
 
-Responsabilidade:
-    Ler dados do EOL (SQL Server via EOLService) e popular os models
-    do app pedagogico no banco pedagogico_db.
-
-Estratégia de escrita: upsert incremental com hash SHA-256 via BaseEtlService.
-    ComponenteCurricular            — unique: codigo
-    ComponenteTurma                 — unique: turma e componente
-    AtribuicaoComponente            — unique: turma, componente e professor
-    AgrupamentoAtribuicaoTS         — unique: cod_agrupamento
-    ComponenteCurricularAgrupamento — unique: componente, turma e agrupamento
-    GradeComponenteCurricular       — unique: componente, ano, modalidade,
-                                      ano turma e série ensino
+Lê dados do EOL, transforma para os modelos do app `pedagogico` e grava no
+banco `pedagogico_db`. As regras de origem, chaves e filtros ficam
+documentadas em `docs/dominios/pedagogico/`.
 """
 
 import logging
@@ -242,7 +233,6 @@ class EtlPedagogicoService(BaseEtlService):
                 f"{obj.codigo_componente_curricular}"
                 f"-{obj.ano_letivo}"
                 f"-{obj.modalidade or ''}"
-                f"-{obj.codigo_ano_turma or ''}"
                 f"-{obj.codigo_serie_ensino or ''}"
             )
             return pk, calcular_hash(obj, hash_fields), obj
@@ -478,11 +468,11 @@ class EtlPedagogicoService(BaseEtlService):
                     "codigo_componente_curricular",
                     "ano_letivo",
                     "modalidade",
-                    "codigo_ano_turma",
                     "codigo_serie_ensino",
                 ],
                 update_fields=(
                     "descricao_componente_curricular",
+                    "codigo_ano_turma",
                     "descricao_serie_ensino",
                     "codigo_serie_ensino",
                     "transferido_em",
@@ -491,7 +481,6 @@ class EtlPedagogicoService(BaseEtlService):
                     "codigo_componente_curricular",
                     "ano_letivo",
                     "modalidade",
-                    "codigo_ano_turma",
                     "codigo_serie_ensino",
                 ),
             ),
