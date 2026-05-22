@@ -119,8 +119,12 @@ class TestTipoProgramaIn(TestCase):
         d = TipoProgramaIn(649, "SIG", "").to_domain()
         self.assertEqual(d["nome"], "SIG")
 
-    def test_categoria_default_pap_para_id_desconhecido(self) -> None:
+    def test_categoria_outros_para_id_desconhecido(self) -> None:
         d = TipoProgramaIn(999, "X", "Desconhecido").to_domain()
+        self.assertEqual(d["categoria"], CategoriaPrograma.OUTROS)
+
+    def test_categoria_pap_quando_sigla_contem_pap(self) -> None:
+        d = TipoProgramaIn(700, "PAP-X", "Programa qualquer").to_domain()
         self.assertEqual(d["categoria"], CategoriaPrograma.PAP)
 
     def test_strip_em_campos_texto(self) -> None:
@@ -174,6 +178,13 @@ class TestComponenteCurricularProgramaIn(TestCase):
         d = ComponenteCurricularProgramaIn(*_row_componente(1030)).to_domain()
         self.assertEqual(d["categoria"], CategoriaPrograma.PAEE)
         self.assertTrue(d["vigente"])
+
+    def test_componente_desconhecido_vira_outros(self) -> None:
+        d = ComponenteCurricularProgramaIn(
+            *_row_componente(1769, nome="POSL COMPARTILHADO")
+        ).to_domain()
+        self.assertEqual(d["categoria"], CategoriaPrograma.OUTROS)
+        self.assertFalse(d["vigente"])
 
 
 class TestTurmaProgramaIn(TestCase):

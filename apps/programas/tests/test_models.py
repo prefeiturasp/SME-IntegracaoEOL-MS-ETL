@@ -22,6 +22,8 @@ class TestTipoProgramaStr(TestCase):
 
 
 class TestComponenteCurricularProgramaStr(TestCase):
+    databases = {"default", "programas_db"}
+
     def test_str(self) -> None:
         cc = ComponenteCurricularPrograma(
             codigo_componente_curricular=1322,
@@ -32,6 +34,15 @@ class TestComponenteCurricularProgramaStr(TestCase):
         self.assertIn("1322", resultado)
         self.assertIn("PAP Rec", resultado)
         self.assertIn("PAP", resultado)
+
+    def test_aceita_categoria_outros(self) -> None:
+        cc = ComponenteCurricularPrograma.objects.create(
+            codigo_componente_curricular=1769,
+            nome_componente_curricular="POSL COMPARTILHADO",
+            categoria="OUTROS",
+            vigente=True,
+        )
+        self.assertEqual(cc.categoria, "OUTROS")
 
 
 class TestTurmaProgramaStr(TestCase):

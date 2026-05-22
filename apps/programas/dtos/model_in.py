@@ -95,7 +95,7 @@ class TurmaProgramaIn:
 
 @dataclass(slots=True)
 class TurmaProgramaComponenteCurricularIn:
-    """Linha bruta da query de componentes curriculares por turma de programa."""
+    """Linha bruta da query de componentes curriculares por turma."""
 
     codigo_turma: Any
     codigo_componente_curricular: Any

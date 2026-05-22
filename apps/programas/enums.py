@@ -6,10 +6,11 @@ from django.db import models
 
 
 class CategoriaPrograma(models.TextChoices):
-    """Categoria de programa — PAP ou PAEE."""
+    """Categoria de programa — PAP, PAEE ou OUTROS."""
 
     PAP = "PAP", "PAP"
     PAEE = "PAEE", "PAEE"
+    OUTROS = "OUTROS", "Outros"
 
 
 class TipoProgramaEOL(IntEnum):
@@ -25,14 +26,18 @@ class TipoProgramaEOL(IntEnum):
     def categoria_por_sigla(
         cls, sigla: str | None, descricao: str | None = None
     ) -> CategoriaPrograma:
-        """Deriva PAP/PAEE pela sigla/descrição do tipo_programa do EOL.
+        """Deriva PAP/PAEE/OUTROS pela sigla/descrição do tipo_programa do EOL.
 
-        PAEE quando a sigla ou descrição contém "PAEE" ou "SRM"; PAP caso contrário.
+        PAEE quando a sigla ou descrição contém "PAEE" ou "SRM";
+        PAP quando contém "PAP";
+        OUTROS caso contrário.
         """
         textos = " ".join(t.upper() for t in (sigla, descricao) if t)
         if "PAEE" in textos or "SRM" in textos:
             return CategoriaPrograma.PAEE
-        return CategoriaPrograma.PAP
+        if "PAP" in textos:
+            return CategoriaPrograma.PAP
+        return CategoriaPrograma.OUTROS
 
     @classmethod
     def codigos(cls) -> tuple[int, ...]:
@@ -58,15 +63,17 @@ class ComponenteCurricularEOL(IntEnum):
 
     @classmethod
     def categoria(cls, codigo: int | str | None) -> CategoriaPrograma:
-        """Retorna a categoria (PAP/PAEE) a partir do cd_componente_curricular."""
+        """Retorna (PAP/PAEE/OUTROS) a partir do cd_componente_curricular."""
         try:
             cod = int(codigo) if codigo is not None else None
         except (ValueError, TypeError):
-            return CategoriaPrograma.PAP
+            return CategoriaPrograma.OUTROS
 
         if cod in _COMPONENTES_PAEE:
             return CategoriaPrograma.PAEE
-        return CategoriaPrograma.PAP
+        if cod in _COMPONENTES_PAP_CONHECIDOS:
+            return CategoriaPrograma.PAP
+        return CategoriaPrograma.OUTROS
 
     @classmethod
     def vigente(cls, codigo: int | str | None) -> bool:
@@ -84,7 +91,7 @@ class ComponenteCurricularEOL(IntEnum):
 
     @classmethod
     def codigos_pap_vigentes(cls) -> tuple[int, ...]:
-        """Retorna os códigos vigentes da categoria PAP (sem PAEE, sem legado)."""
+        """Retorna os códigos vigentes de PAP (sem PAEE, sem legado)."""
         return tuple(
             m.value
             for m in cls
@@ -95,6 +102,20 @@ class ComponenteCurricularEOL(IntEnum):
 
 _COMPONENTES_PAEE: frozenset[int] = frozenset(
     {ComponenteCurricularEOL.PAEE_SALA_RECURSOS_MULTIFUNCIONAIS}
+)
+
+_COMPONENTES_PAP_CONHECIDOS: frozenset[int] = frozenset(
+    {
+        ComponenteCurricularEOL.PAP_RECUPERACAO_APRENDIZAGENS,
+        ComponenteCurricularEOL.PAP_PROJETO_COLABORATIVO,
+        ComponenteCurricularEOL.PAP_2ANO_ALFABETIZACAO,
+        ComponenteCurricularEOL.PAP_2ANO_COLABORATIVO_ALFABETIZACAO,
+        ComponenteCurricularEOL.PAP_LEGADO_MATEMATICA,
+        ComponenteCurricularEOL.PAP_LEGADO_CIENCIAS,
+        ComponenteCurricularEOL.PAP_LEGADO_GEOGRAFIA,
+        ComponenteCurricularEOL.PAP_LEGADO_HISTORIA,
+        ComponenteCurricularEOL.PAP_LEGADO_PORTUGUES,
+    }
 )
 
 _COMPONENTES_VIGENTES: frozenset[int] = frozenset(

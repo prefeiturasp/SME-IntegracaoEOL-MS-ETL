@@ -27,7 +27,7 @@ class TipoPrograma(models.Model):
     categoria = models.CharField(
         max_length=10,
         choices=CategoriaPrograma.choices,
-        help_text="'PAP' ou 'PAEE'.",
+        help_text="'PAP', 'PAEE' ou 'OUTROS'.",
     )
     ativo = models.BooleanField(default=True)
 
@@ -55,10 +55,10 @@ class ComponenteCurricularPrograma(models.Model):
     categoria = models.CharField(
         max_length=10,
         choices=CategoriaPrograma.choices,
-        help_text="'PAP' ou 'PAEE'.",
+        help_text="'PAP', 'PAEE' ou 'OUTROS'.",
     )
     vigente = models.BooleanField(
-        help_text="True = componente ativo; False = legado (substituído por versão mais nova).",
+        help_text="True = componente ativo; False = legado.",
     )
 
     class Meta:
@@ -137,7 +137,7 @@ class TurmaPrograma(models.Model):
     categoria = models.CharField(
         max_length=10,
         choices=CategoriaPrograma.choices,
-        help_text="'PAP' ou 'PAEE' — desnormalizado de TipoPrograma para filtros diretos.",
+        help_text="'PAP', 'PAEE' ou 'OUTROS' — desnormalizado de TipoPrograma para filtros diretos.",
     )
     criado_em = models.DateTimeField(auto_now_add=True)
     atualizado_em = models.DateTimeField(
@@ -212,7 +212,7 @@ _HT_ANO_LETIVO_MATRICULA = (
     "Desnormalizado da turma — necessário para filtros diretos por ano."
 )
 _HT_CATEGORIA_MATRICULA = (
-    "'PAP' ou 'PAEE' — desnormalizado da turma para filtros diretos."
+    "'PAP', 'PAEE' ou 'OUTROS' — desnormalizado da turma para filtros diretos."
 )
 
 

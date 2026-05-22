@@ -15,7 +15,10 @@ from apps.programas.dtos.model_in import (
     TurmaProgramaComponenteCurricularIn,
     TurmaProgramaIn,
 )
-from apps.programas.enums import ComponenteCurricularEOL
+from apps.programas.enums import (
+    _COMPONENTES_PAP_CONHECIDOS,
+    ComponenteCurricularEOL,
+)
 from apps.programas.models import (
     AlunoPapAnoLetivo,
     AlunoPapAnoLetivoHistorico,
@@ -36,8 +39,9 @@ _COMPONENTE_PAEE_SRM = int(
 _COMPONENTES_PAP_VIGENTES_IN = ", ".join(
     str(c) for c in ComponenteCurricularEOL.codigos_pap_vigentes()
 )
+_COMPONENTES_PAP_IN = ", ".join(str(c) for c in _COMPONENTES_PAP_CONHECIDOS)
 
-SQL_TIPO_PROGRAMA = f"""
+SQL_TIPO_PROGRAMA = """
 SELECT DISTINCT
     tp.cd_tipo_programa
   , LTRIM(RTRIM(tp.sg_tipo_programa)) AS sigla
@@ -55,16 +59,26 @@ WHERE EXISTS (
     WHERE te_t.cd_tipo_programa = tp.cd_tipo_programa
       AND te_t.cd_tipo_turma = 3
       AND tegp_t.dt_fim IS NULL
-      AND gcc_t.cd_componente_curricular IN ({_COMPONENTES_IN})
 )
 """
 
-SQL_COMPONENTE_CURRICULAR_PROGRAMA = f"""
-SELECT
+SQL_COMPONENTE_CURRICULAR_PROGRAMA = """
+SELECT DISTINCT
     cc.cd_componente_curricular
   , LTRIM(RTRIM(cc.dc_componente_curricular)) AS nome_componente_curricular
 FROM componente_curricular cc
-WHERE cc.cd_componente_curricular IN ({_COMPONENTES_IN})
+INNER JOIN grade_componente_curricular gcc
+    ON gcc.cd_componente_curricular = cc.cd_componente_curricular
+INNER JOIN escola_grade eg
+    ON eg.cd_grade = gcc.cd_grade
+INNER JOIN turma_escola_grade_programa tegp
+    ON tegp.cd_escola_grade = eg.cd_escola_grade
+INNER JOIN turma_escola te
+    ON te.cd_turma_escola = tegp.cd_turma_escola
+WHERE te.cd_tipo_turma = 3
+  AND te.st_turma_escola IN ('O', 'A', 'C', 'E')
+  AND tegp.dt_fim IS NULL
+  AND cc.dt_cancelamento IS NULL
 """
 
 SQL_TURMA_PROGRAMA = f"""
@@ -90,7 +104,18 @@ SELECT
               AND tegp_paee.dt_fim IS NULL
               AND gcc_paee.cd_componente_curricular = {_COMPONENTE_PAEE_SRM}
         ) THEN 'PAEE'
-        ELSE 'PAP'
+        WHEN EXISTS (
+            SELECT 1
+            FROM turma_escola_grade_programa tegp_pap
+            INNER JOIN escola_grade eg_pap
+                ON eg_pap.cd_escola_grade = tegp_pap.cd_escola_grade
+            INNER JOIN grade_componente_curricular gcc_pap
+                ON gcc_pap.cd_grade = eg_pap.cd_grade
+            WHERE tegp_pap.cd_turma_escola = te.cd_turma_escola
+              AND tegp_pap.dt_fim IS NULL
+              AND gcc_pap.cd_componente_curricular IN ({_COMPONENTES_PAP_IN})
+        ) THEN 'PAP'
+        ELSE 'OUTROS'
     END AS categoria
   , g_one.descricao_grade
 FROM turma_escola te
@@ -113,18 +138,13 @@ WHERE te.cd_tipo_turma = 3
   AND EXISTS (
       SELECT 1
       FROM turma_escola_grade_programa tegp_f
-      INNER JOIN escola_grade eg_f
-          ON eg_f.cd_escola_grade = tegp_f.cd_escola_grade
-      INNER JOIN grade_componente_curricular gcc_f
-          ON gcc_f.cd_grade = eg_f.cd_grade
       WHERE tegp_f.cd_turma_escola = te.cd_turma_escola
         AND tegp_f.dt_fim IS NULL
-        AND gcc_f.cd_componente_curricular IN ({_COMPONENTES_IN})
   )
 ORDER BY te.cd_turma_escola
 """
 
-SQL_TURMA_PROGRAMA_COMPONENTE_CURRICULAR = f"""
+SQL_TURMA_PROGRAMA_COMPONENTE_CURRICULAR = """
 SELECT DISTINCT
     tegp.cd_turma_escola
   , gcc.cd_componente_curricular
@@ -139,14 +159,13 @@ INNER JOIN componente_curricular cc
 INNER JOIN turma_escola te
     ON te.cd_turma_escola = tegp.cd_turma_escola
 WHERE te.cd_tipo_turma = 3
-  AND gcc.cd_componente_curricular IN ({_COMPONENTES_IN})
   AND te.st_turma_escola IN ('O', 'A', 'C', 'E')
   AND tegp.dt_fim IS NULL
   AND cc.dt_cancelamento IS NULL
 ORDER BY tegp.cd_turma_escola
 """
 
-SQL_MATRICULA_TURMA_PROGRAMA = f"""
+SQL_MATRICULA_TURMA_PROGRAMA = """
 SELECT
       vm.cd_aluno
     , m.cd_turma_escola
@@ -174,7 +193,6 @@ SELECT
   INNER JOIN componente_curricular cc
       ON cc.cd_componente_curricular = gcc.cd_componente_curricular
   WHERE te.cd_tipo_turma = 3
-    AND gcc.cd_componente_curricular IN ({_COMPONENTES_IN})
     AND te.st_turma_escola IN ('O', 'A', 'C', 'E')
     AND tegp.dt_fim IS NULL
     AND cc.dt_cancelamento IS NULL
@@ -183,7 +201,7 @@ SELECT
 """
 
 
-SQL_MATRICULA_TURMA_PROGRAMA_HISTORICO = f"""
+SQL_MATRICULA_TURMA_PROGRAMA_HISTORICO = """
 SELECT DISTINCT
       vm.cd_aluno
     , m.cd_turma_escola
@@ -211,7 +229,6 @@ SELECT DISTINCT
   INNER JOIN componente_curricular cc WITH (NOLOCK)
       ON cc.cd_componente_curricular = gcc.cd_componente_curricular
   WHERE te.cd_tipo_turma = 3
-    AND gcc.cd_componente_curricular IN ({_COMPONENTES_IN})
     AND te.st_turma_escola IN ('O', 'A', 'C')
     AND vm.st_matricula IN ('1', '5')
     AND tegp.dt_fim IS NULL
