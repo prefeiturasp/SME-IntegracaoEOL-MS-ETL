@@ -18,17 +18,35 @@ Especializado / SRM) — extraídos do EOL (SQL Server) e persistidos no banco
 
 | Modelo | Tabela | Tipo de carga |
 |--------|--------|---------------|
-| `TipoPrograma` | `tipo_programa` | Seed (estático) |
-| `ComponenteCurricularPrograma` | `componente_curricular_programa` | Seed (estático) |
-| `TurmaPrograma` | `turma_programa` | ETL incremental |
-| `TurmaProgramaComponenteCurricular` | `turma_programa_componente_curricular` | ETL incremental |
-| `MatriculaTurmaPrograma` | `matricula_turma_programa` | ETL incremental |
+| `TipoPrograma` | `tipo_programa` | Seed/configuração (upsert) |
+| `ComponenteCurricularPrograma` | `componente_curricular_programa` | Seed/configuração (upsert) |
+| `TurmaPrograma` | `turma_programa` | ETL incremental (upsert) |
+| `TurmaProgramaComponenteCurricular` | `turma_programa_componente_curricular` | ETL incremental (upsert) |
+| `MatriculaTurmaPrograma` | `matricula_turma_programa` | ETL incremental (upsert) |
+| `MatriculaTurmaProgramaHistorico` | `matricula_turma_programa_historico` | ETL incremental (upsert) |
+| `AlunoPapAnoLetivo` | `aluno_pap_ano_letivo` | ETL incremental (upsert, pré-agregado live) |
+| `AlunoPapAnoLetivoHistorico` | `aluno_pap_ano_letivo_historico` | ETL incremental (upsert, pré-agregado histórico) |
+
+> `MatriculaTurmaPrograma` e `MatriculaTurmaProgramaHistorico` compartilham a classe
+> abstrata `MatriculaTurmaProgramaBase` em `apps/programas/models.py`.
 
 ## Categorias
 
-O campo `categoria` (`"PAP"` ou `"PAEE"`) aparece em três modelos
-(`TipoPrograma`, `TurmaPrograma`, `MatriculaTurmaPrograma`) e é desnormalizado para
-permitir filtros diretos sem JOIN.
+O campo `categoria` (`"PAP"`, `"PAEE"` ou `"OUTROS"`) aparece em quatro modelos
+(`TipoPrograma`, `ComponenteCurricularPrograma`, `TurmaPrograma`,
+`MatriculaTurmaPrograma` / `MatriculaTurmaProgramaHistorico`) e é desnormalizado
+para permitir filtros diretos sem JOIN.
+
+A derivação de categoria difere por modelo:
+
+- **`TipoPrograma`**: via `TipoProgramaEOL.categoria_por_sigla(sigla, descricao)`
+  (varre as strings em busca de `"PAEE"`/`"SRM"` ou `"PAP"`).
+- **`ComponenteCurricularPrograma`** e matrículas: via
+  `ComponenteCurricularEOL.categoria(cd_componente_curricular)`.
+- **`TurmaPrograma`**: resolvida diretamente na SQL (`CASE WHEN`) cruzando os
+  componentes curriculares vinculados à turma (PAEE se existir o componente
+  `PAEE_SALA_RECURSOS_MULTIFUNCIONAIS`; senão PAP se houver algum componente
+  PAP conhecido; caso contrário `OUTROS`).
 
 ## Referências cruzadas
 
@@ -46,12 +64,12 @@ são FK lógicas, com integridade garantida pela ordem de carga do ETL.
 
 | Módulo | Responsabilidade |
 |--------|------------------|
-| `apps/programas/models.py` | 5 modelos persistidos no `programas_db` |
-| `apps/programas/enums.py` | Enums centralizando constantes do EOL (PAP/PAEE, situação de turma, situação de matrícula). Ver {doc}`enums` |
-| `apps/programas/dtos/model_in.py` | Dataclasses que mapeiam posicionalmente as tuplas brutas do cursor pyodbc |
-| `apps/programas/dtos/model_out.py` | Proxy models com `from_in()` — centraliza strip, conversão e derivação de categoria/descricao via enums |
-| `apps/programas/services.py` | `EtlProgramasService` — 5 fases com `_upsert_incremental` por hash SHA-256 |
-| `apps/programas/management/commands/etl_programas.py` | Comando Django herdando de `BaseEtlCommand` |
+| `apps/programas/models.py` | 8 modelos persistidos no `programas_db` (5 concretos + 1 abstrato base + 2 pré-agregados) |
+| `apps/programas/enums.py` | Enums centralizando constantes do EOL — `CategoriaPrograma`, `TipoProgramaEOL`, `ComponenteCurricularEOL`, `SituacaoTurma`, `SituacaoMatricula`. Ver {doc}`enums` |
+| `apps/programas/dtos/model_in.py` | Dataclasses (`@dataclass(slots=True)`) que mapeiam posicionalmente as tuplas brutas do cursor e expõem `to_domain()` — centraliza strip, conversão de tipos e derivação de categoria/descricao via enums |
+| `apps/programas/services.py` | `EtlProgramasService` — herda de `BaseEtlService` e define 8 fases via `PhaseConfig` com `modo_escrita="upsert"` |
+| `apps/programas/orquestrador.py` | `EtlProgramasOrquestrador` — herda de `GenericEtlOrquestrador` (Celery, async) |
+| `apps/programas/management/commands/etl_programas.py` | Comando Django herdando de `BaseEtlCommand` (síncrono ou Celery) |
 | `apps/programas/api/views.py` | `HealthProgramasView` — health check do banco `programas_db` |
 | `apps/programas/api/urls.py` | Rota `GET /api/v1/programas/health/` |
 
@@ -71,6 +89,6 @@ curl http://localhost:8068/api/v1/programas/health/
 | `turmas-pap/{anoLetivo}/ues/{codigoEscola}` | `TurmaPrograma` |
 | `srm-paee/aluno/{codigoAluno}` | `MatriculaTurmaPrograma` |
 | `paee/turma-srm-e-regular/aluno/{cod}` | `MatriculaTurmaPrograma` |
-| `alunos-pap/{anoLetivo}` | `MatriculaTurmaPrograma` |
-| `pap/ano-letivo/{anoLetivo}` | `MatriculaTurmaPrograma` |
+| `alunos-pap/{anoLetivo}` | `AlunoPapAnoLetivo` / `AlunoPapAnoLetivoHistorico` |
+| `pap/ano-letivo/{anoLetivo}` | `AlunoPapAnoLetivo` / `AlunoPapAnoLetivoHistorico` |
 | `{codigoAluno}/turmas-programa/{anoLetivo}/componentes-curriculares` | `TurmaProgramaComponenteCurricular` |

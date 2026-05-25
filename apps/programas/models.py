@@ -1,33 +1,4 @@
-"""Modelos do app programas — banco destino PROGRAMAS_DB.
-
-Domínio: programas com, atualmente, PAP (Programa de Apoio Pedagógico) e PAEE
-(Programa de Atendimento Educacional Especializado / SRM).
-
-Hierarquia de modelos:
-    TipoPrograma
-        └── TurmaPrograma  (turmas cd_tipo_turma=3 do EOL)
-                ├── TurmaProgramaComponenteCurricular
-                └── MatriculaTurmaPrograma
-
-Configuração de componentes por categoria:
-    ComponenteCurricularPrograma
-    (substitui as constantes hardcoded IDS_COMPONENTES_CURRICULARES_PAP_NOVO
-    e COMPONENTE_CURRICULAR_ID_SRM do Pedagogico-API)
-
-Referências cruzadas (sem FK física, integridade pela camada de aplicação):
-    - codigo_turma                 → turma_programa.codigo_turma (mesmo banco)
-    - codigo_componente_curricular → componente_curricular_programa (mesmo banco)
-    - codigo_aluno                 → PEDAGOGICO_DB (aluno.codigo_aluno)
-    - codigo_ue / codigo_dre       → PEDAGOGICO_DB (escola_unidade / unidade_administrativa)
-
-Ordem de carga ETL:
-    1. TipoPrograma                          (seed — dados estáticos do EOL)
-    2. ComponenteCurricularPrograma          (seed — substituem constantes hardcoded)
-    3. TurmaPrograma                         (ETL incremental)
-    4. TurmaProgramaComponenteCurricular     (depende de: TurmaPrograma)
-    5. MatriculaTurmaPrograma                (depende de: TurmaPrograma)
-    6. MatriculaTurmaProgramaHistorico       (lê v_historico_matricula_cotic)
-"""
+"""Modelos do domínio Programas."""
 
 from django.db import models
 
@@ -46,18 +17,7 @@ _HT_PAP_DTO = "Desnormalizado da turma — exigido por AlunoTurmaPapDto."
 
 
 class TipoPrograma(models.Model):
-    """Subtipos de programa do EOL (cd_tipo_programa), agrupados por categoria.
-
-    O id preserva o mesmo valor do EOL — nenhum mapeamento necessário no ETL.
-    O campo categoria discrimina PAP de PAEE sem necessidade de JOIN.
-
-    Dados esperados (seed):
-        649 → PAP Recuperação        (PAP)
-        650 → PAP Colaborativo       (PAP)
-        656 → PAEE SRM               (PAEE)
-        657 → PAEE Colaborativo      (PAEE)
-        658 → PAEE Itinerante        (PAEE)
-    """
+    """Subtipos de programa do EOL agrupados por categoria PAP/PAEE."""
 
     codigo_tipo_programa = models.IntegerField(
         primary_key=True,
@@ -67,7 +27,7 @@ class TipoPrograma(models.Model):
     categoria = models.CharField(
         max_length=10,
         choices=CategoriaPrograma.choices,
-        help_text="'PAP' ou 'PAEE'.",
+        help_text="'PAP', 'PAEE' ou 'OUTROS'.",
     )
     ativo = models.BooleanField(default=True)
 
@@ -82,25 +42,7 @@ class TipoPrograma(models.Model):
 
 
 class ComponenteCurricularPrograma(models.Model):
-    """Componentes curriculares que caracterizam uma categoria de programa.
-
-    Camada de configuração — substitui as constantes hardcoded no Pedagogico-API.
-    Responde: "quais componentes identificam o PAP? quais identificam o PAEE?"
-
-    Dados esperados (seed — PAP vigentes):
-        1322 → PAP Recuperação de Aprendizagens
-        1770 → PAP Projeto Colaborativo
-        1804 → PAP 2º Ano Alfabetização
-        1805 → PAP 2º Ano Colaborativo Alfabetização
-    Dados esperados (seed — PAP legados) (deixei pra melhor visualização de como era o PAP antigo, sem os novos componentes de alfabetização):
-        1033 → Recuperação Paralela Matemática
-        1051 → Recuperação Paralela Ciências
-        1052 → Recuperação Paralela Geografia
-        1053 → Recuperação Paralela História
-        1054 → Recuperação Paralela Português
-    Dados esperados (seed — PAEE vigente):
-        1030 → Sala de Recursos Multifuncionais
-    """
+    """Componentes curriculares que caracterizam uma categoria de programa."""
 
     codigo_componente_curricular = models.BigIntegerField(
         unique=True,
@@ -113,10 +55,10 @@ class ComponenteCurricularPrograma(models.Model):
     categoria = models.CharField(
         max_length=10,
         choices=CategoriaPrograma.choices,
-        help_text="'PAP' ou 'PAEE'.",
+        help_text="'PAP', 'PAEE' ou 'OUTROS'.",
     )
     vigente = models.BooleanField(
-        help_text="True = componente ativo; False = legado (substituído por versão mais nova).",
+        help_text="True = componente ativo; False = legado.",
     )
 
     class Meta:
@@ -133,23 +75,7 @@ class ComponenteCurricularPrograma(models.Model):
 
 
 class TurmaPrograma(models.Model):
-    """Turmas de programa (cd_tipo_turma=3 no EOL) extraídas do EOL.
-
-    Tabela central do domínio — referência lógica para TurmaProgramaComponenteCurricular
-    e MatriculaTurmaPrograma. Cobre os endpoints de listagem de turmas PAP/SRM.
-
-    Sem FK física para TipoPrograma — categoria é desnormalizada para permitir
-    filtros PAP/PAEE diretos sem JOIN (ex: turmas-pap/{anoLetivo}/ues/{codigoEscola}).
-
-    Os campos descricao_turno, codigo_ue e codigo_dre são desnormalizados para
-    evitar JOINs nos endpoints que retornam dados de turma com informações de escola.
-
-    situacao espelha SituacaoTurma do EOL:
-        O = Organizada
-        A = Não Organizada
-        C = Concluída
-        E = Extinta
-    """
+    """Turma de programa (PAP/PAEE) extraída do EOL."""
 
     codigo_turma = models.BigIntegerField(
         unique=True,
@@ -211,7 +137,7 @@ class TurmaPrograma(models.Model):
     categoria = models.CharField(
         max_length=10,
         choices=CategoriaPrograma.choices,
-        help_text="'PAP' ou 'PAEE' — desnormalizado de TipoPrograma para filtros diretos.",
+        help_text="'PAP', 'PAEE' ou 'OUTROS' — desnormalizado de TipoPrograma para filtros diretos.",
     )
     criado_em = models.DateTimeField(auto_now_add=True)
     atualizado_em = models.DateTimeField(
@@ -238,16 +164,7 @@ class TurmaPrograma(models.Model):
 
 
 class TurmaProgramaComponenteCurricular(models.Model):
-    """Componentes curriculares que uma turma de programa efetivamente oferece.
-
-    Equivale à cadeia turma_escola_grade_programa → grade → grade_componente_curricular
-    do EOL. Responde: "quais componentes essa turma específica cobre?"
-
-    Cobre o endpoint {codigoAluno}/turmas-programa/{anoLetivo}/componentes-curriculares
-    (ComponenteTurmaAlunoDto.NomeComponenteCurricular).
-
-    Sem FK física — integridade garantida pela ordem de carga do ETL.
-    """
+    """Componentes curriculares oferecidos por uma turma de programa."""
 
     codigo_turma = models.BigIntegerField(
         help_text=_HT_FK_TURMA,
@@ -289,23 +206,18 @@ _HT_CODIGO_ALUNO = (
     "EOL cd_aluno — FK lógica para aluno (PEDAGOGICO_DB — banco diferente)."
 )
 _HT_SITUACAO_MATRICULA = "EOL st_matricula."
-_HT_DESC_SITUACAO = (
-    "Ex: 'Ativo', 'Concluído' — desnormalizado para evitar mapeamento em código."
-)
+_HT_DESC_SITUACAO = "Ex: 'Ativo', 'Concluído' — desnormalizado para evitar mapeamento em código."
 _HT_DATA_SITUACAO = "EOL dt_situacao_aluno."
 _HT_ANO_LETIVO_MATRICULA = (
     "Desnormalizado da turma — necessário para filtros diretos por ano."
 )
 _HT_CATEGORIA_MATRICULA = (
-    "'PAP' ou 'PAEE' — desnormalizado da turma para filtros diretos."
+    "'PAP', 'PAEE' ou 'OUTROS' — desnormalizado da turma para filtros diretos."
 )
 
 
 class MatriculaTurmaProgramaBase(models.Model):
-    """Campos comuns às matrículas em turmas de programa (live e histórico).
-
-    ``data_matricula`` é definida nas subclasses pois difere em nullability.
-    """
+    """Campos comuns às matrículas em turmas de programa."""
 
     codigo_aluno = models.BigIntegerField(help_text=_HT_CODIGO_ALUNO)
     codigo_turma = models.BigIntegerField(help_text=_HT_FK_TURMA)
@@ -348,26 +260,9 @@ class MatriculaTurmaProgramaBase(models.Model):
 
 
 class MatriculaTurmaPrograma(MatriculaTurmaProgramaBase):
-    """Matrículas de alunos em turmas de programa, por componente curricular.
+    """Matrículas de alunos em turmas de programa, por componente curricular."""
 
-    Tabela principal para consultas — cobre os endpoints:
-        - srm-paee/aluno/{codigoAluno}             → DadosSrmPaeeColaborativoDto
-        - paee/turma-srm-e-regular/aluno/{cod}     → TurmasDoAlunoDTO
-        - alunos-pap/{anoLetivo}                   → AlunosTurmaProgramaPapDto
-        - pap/ano-letivo/{anoLetivo}               → AlunoTurmaPapDto
-
-    Os campos ano_letivo, codigo_ue, codigo_dre e categoria são desnormalizados
-    para permitir filtros diretos sem JOIN.
-
-    codigo_situacao_matricula:
-        1  → Ativo
-        5  → Concluído
-        6  → Pend. Rematrícula
-        10 → Rematriculado
-        13 → Sem continuidade
-    """
-
-    data_matricula = models.DateField(help_text="EOL dt_status_matricula.")
+    data_matricula = models.DateTimeField(help_text="EOL dt_status_matricula.")
 
     class Meta:
         app_label = "programas"
@@ -388,9 +283,7 @@ class MatriculaTurmaPrograma(MatriculaTurmaProgramaBase):
             models.Index(fields=["codigo_aluno"], name="idx_matricula_aluno"),
             models.Index(fields=["ano_letivo"], name="idx_matricula_ano"),
             models.Index(fields=["codigo_ue"], name="idx_matricula_ue"),
-            models.Index(
-                fields=["categoria"], name="idx_matricula_categoria"
-            ),
+            models.Index(fields=["categoria"], name="idx_matricula_categoria"),
         ]
 
     def __str__(self) -> str:
@@ -402,18 +295,9 @@ class MatriculaTurmaPrograma(MatriculaTurmaProgramaBase):
 
 
 class MatriculaTurmaProgramaHistorico(MatriculaTurmaProgramaBase):
-    """Matrículas históricas em turmas de programa, por componente curricular.
+    """Matrículas históricas em turmas de programa, por componente curricular."""
 
-    Espelha MatriculaTurmaPrograma, mas é carregada a partir de
-    ``v_historico_matricula_cotic`` em vez de ``v_matricula_cotic`` (live).
-    Permite que EP-05 (pap/ano-letivo/{anoLetivo}) retorne dados coerentes
-    com o legado, que também lia do histórico.
-
-    ``data_matricula`` é nullable — a view histórica pode não registrar essa
-    data em todos os casos.
-    """
-
-    data_matricula = models.DateField(
+    data_matricula = models.DateTimeField(
         null=True,
         blank=True,
         help_text="EOL dt_status_matricula — nullable no histórico.",
@@ -438,12 +322,8 @@ class MatriculaTurmaProgramaHistorico(MatriculaTurmaProgramaBase):
             models.Index(
                 fields=["codigo_aluno"], name="idx_hist_matricula_aluno"
             ),
-            models.Index(
-                fields=["ano_letivo"], name="idx_hist_matricula_ano"
-            ),
-            models.Index(
-                fields=["codigo_ue"], name="idx_hist_matricula_ue"
-            ),
+            models.Index(fields=["ano_letivo"], name="idx_hist_matricula_ano"),
+            models.Index(fields=["codigo_ue"], name="idx_hist_matricula_ue"),
             models.Index(
                 fields=["categoria"], name="idx_hist_matricula_categoria"
             ),
@@ -455,4 +335,122 @@ class MatriculaTurmaProgramaHistorico(MatriculaTurmaProgramaBase):
             f" — turma {self.codigo_turma}"
             f" / CC {self.codigo_componente_curricular}"
             f" (histórico)"
+        )
+
+
+class AlunoPapAnoLetivo(models.Model):
+    """Alunos PAP por ano letivo, pré-agregados (carga live)."""
+
+    codigo_aluno = models.BigIntegerField(
+        help_text="EOL cd_aluno — FK lógica para aluno (PEDAGOGICO_DB).",
+    )
+    codigo_turma = models.BigIntegerField(
+        help_text="FK lógica → turma_programa.codigo_turma.",
+    )
+    codigo_componente_curricular = models.BigIntegerField(
+        help_text=(
+            "FK lógica → componente_curricular_programa"
+            ".codigo_componente_curricular."
+        ),
+    )
+    ano_letivo = models.SmallIntegerField(
+        help_text="EOL turma_escola.an_letivo — chave do filtro do endpoint.",
+    )
+    codigo_ue = models.CharField(
+        max_length=20,
+        help_text="EOL escola.cd_escola — desnormalizado.",
+    )
+    codigo_dre = models.CharField(
+        max_length=20,
+        help_text=(
+            "EOL unidade_administrativa.cd_unidade_administrativa "
+            "— desnormalizado."
+        ),
+    )
+
+    class Meta:
+        app_label = "programas"
+        db_table = "aluno_pap_ano_letivo"
+        verbose_name = "aluno PAP por ano letivo"
+        verbose_name_plural = "alunos PAP por ano letivo"
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "ano_letivo",
+                    "codigo_turma",
+                    "codigo_aluno",
+                    "codigo_componente_curricular",
+                ],
+                name="uq_aluno_pap_ano_turma_aluno_cc",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["ano_letivo"], name="idx_aluno_pap_ano"),
+        ]
+
+    def __str__(self) -> str:
+        return (
+            f"Aluno {self.codigo_aluno}"
+            f" — turma {self.codigo_turma}"
+            f" / CC {self.codigo_componente_curricular}"
+            f" ({self.ano_letivo})"
+        )
+
+
+class AlunoPapAnoLetivoHistorico(models.Model):
+    """Alunos PAP por ano letivo, pré-agregados (carga histórica)."""
+
+    codigo_aluno = models.BigIntegerField(
+        help_text="EOL cd_aluno — FK lógica para aluno (PEDAGOGICO_DB).",
+    )
+    codigo_turma = models.BigIntegerField(
+        help_text="FK lógica → turma_programa.codigo_turma.",
+    )
+    codigo_componente_curricular = models.BigIntegerField(
+        help_text=(
+            "FK lógica → componente_curricular_programa"
+            ".codigo_componente_curricular."
+        ),
+    )
+    ano_letivo = models.SmallIntegerField(
+        help_text="EOL turma_escola.an_letivo — chave do filtro do endpoint.",
+    )
+    codigo_ue = models.CharField(
+        max_length=20,
+        help_text="EOL escola.cd_escola — desnormalizado.",
+    )
+    codigo_dre = models.CharField(
+        max_length=20,
+        help_text=(
+            "EOL unidade_administrativa.cd_unidade_administrativa "
+            "— desnormalizado."
+        ),
+    )
+
+    class Meta:
+        app_label = "programas"
+        db_table = "aluno_pap_ano_letivo_historico"
+        verbose_name = "aluno PAP por ano letivo (histórico)"
+        verbose_name_plural = "alunos PAP por ano letivo (histórico)"
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "ano_letivo",
+                    "codigo_turma",
+                    "codigo_aluno",
+                    "codigo_componente_curricular",
+                ],
+                name="uq_aluno_pap_hist_ano_turma_aluno_cc",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["ano_letivo"], name="idx_aluno_pap_hist_ano"),
+        ]
+
+    def __str__(self) -> str:
+        return (
+            f"Aluno {self.codigo_aluno}"
+            f" — turma {self.codigo_turma}"
+            f" / CC {self.codigo_componente_curricular}"
+            f" ({self.ano_letivo}, histórico)"
         )

@@ -1,4 +1,4 @@
-"""Orquestrador assíncrono para o domínio PROGRAMAS_DB."""
+"""Orquestrador do ETL de Programas."""
 
 from typing import Any
 
@@ -11,7 +11,7 @@ finalizar_fase_programas = finalizar_fase
 
 
 class EtlProgramasOrquestrador(GenericEtlOrquestrador):
-    """Orquestrador assíncrono para Programas utilizando Core genérico."""
+    """Orquestra a execução assíncrona do ETL de Programas."""
 
     def __init__(self, **kwargs: Any) -> None:
         kwargs.setdefault("dominio", "programas")

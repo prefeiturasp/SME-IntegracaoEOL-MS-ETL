@@ -1,13 +1,7 @@
-"""DTOs de entrada para o domínio Programas.
-
-Cada dataclass mapeia diretamente a posição das tuplas retornadas pelo
-cursor pyodbc via unpacking: ``ModelIn(*row)``. O método ``to_domain()``
-converte a linha bruta no dicionário de campos do model Django destino,
-absorvendo a lógica antes espalhada em ``model_out.py``.
-"""
+"""DTOs de entrada do domínio Programas."""
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from typing import Any
 
 from apps.programas.enums import (
@@ -19,12 +13,12 @@ from apps.programas.enums import (
 
 
 def _strip(val: Any) -> str:
-    """Remove espaços em branco ou retorna vazio."""
+    """Normaliza valor para string sem espaços nas pontas."""
     return str(val).strip() if val else ""
 
 
 def _int_opt(val: Any) -> int | None:
-    """Converte para inteiro ou None."""
+    """Converte valor opcional para inteiro, preservando None."""
     return int(val) if val is not None else None
 
 
@@ -37,6 +31,7 @@ class TipoProgramaIn:
     descricao: Any
 
     def to_domain(self) -> dict:
+        """Retorna o dicionário pronto para persistência em TipoPrograma."""
         return {
             "codigo_tipo_programa": int(self.codigo_tipo_programa),
             "nome": _strip(self.descricao) or _strip(self.sigla),
@@ -55,6 +50,7 @@ class ComponenteCurricularProgramaIn:
     nome_componente_curricular: Any
 
     def to_domain(self) -> dict:
+        """Retorna o dicionário pronto para persistência em ComponenteCurricularPrograma."""
         codigo = int(self.codigo_componente_curricular)
         return {
             "codigo_componente_curricular": codigo,
@@ -68,12 +64,7 @@ class ComponenteCurricularProgramaIn:
 
 @dataclass(slots=True)
 class TurmaProgramaIn:
-    """Linha bruta da query de turma_escola onde cd_tipo_turma = 3.
-
-    A categoria (PAP/PAEE) é derivada na própria SQL via CASE WHEN EXISTS
-    contra o componente 1030 (SRM). cd_tipo_programa pode ser NULL — não
-    é mais usado como filtro nem como fonte da categoria.
-    """
+    """Linha bruta da query de turma de programa do EOL."""
 
     codigo_turma: Any
     nome_turma: Any
@@ -88,6 +79,7 @@ class TurmaProgramaIn:
     descricao_grade: Any = None
 
     def to_domain(self) -> dict:
+        """Retorna o dicionário pronto para persistência em TurmaPrograma."""
         descricao_grade = _strip(self.descricao_grade)
         return {
             "codigo_turma": int(self.codigo_turma),
@@ -106,13 +98,14 @@ class TurmaProgramaIn:
 
 @dataclass(slots=True)
 class TurmaProgramaComponenteCurricularIn:
-    """Linha bruta da query de componentes curriculares por turma de programa."""
+    """Linha bruta da query de componentes curriculares por turma."""
 
     codigo_turma: Any
     codigo_componente_curricular: Any
     nome_componente_curricular: Any
 
     def to_domain(self) -> dict:
+        """Retorna o dicionário pronto para persistência em TurmaProgramaComponenteCurricular."""
         return {
             "codigo_turma": int(self.codigo_turma),
             "codigo_componente_curricular": int(
@@ -125,26 +118,47 @@ class TurmaProgramaComponenteCurricularIn:
 
 
 @dataclass(slots=True)
-class MatriculaTurmaProgramaIn:
-    """Linha bruta da query de matrículas em turmas de programa.
+class AlunoPapAnoLetivoIn:
+    """Linha bruta da query pré-agregada de alunos PAP por ano letivo."""
 
-    A categoria (PAP/PAEE) é derivada do componente curricular — fonte
-    estável: 1030 → PAEE, demais componentes PAP/PAEE conhecidos → PAP.
-    cd_tipo_programa não é mais lido nem usado.
-    """
+    codigo_aluno: Any
+    codigo_turma: Any
+    codigo_componente_curricular: Any
+    ano_letivo: Any
+    codigo_ue: Any
+    codigo_dre: Any
+
+    def to_domain(self) -> dict:
+        """Retorna o dicionário pronto para persistência em AlunoPapAnoLetivo."""
+        return {
+            "codigo_aluno": int(self.codigo_aluno),
+            "codigo_turma": int(self.codigo_turma),
+            "codigo_componente_curricular": int(
+                self.codigo_componente_curricular
+            ),
+            "ano_letivo": int(self.ano_letivo),
+            "codigo_ue": str(self.codigo_ue),
+            "codigo_dre": str(self.codigo_dre),
+        }
+
+
+@dataclass(slots=True)
+class MatriculaTurmaProgramaIn:
+    """Linha bruta da query de matrículas em turmas de programa do EOL."""
 
     codigo_aluno: Any
     codigo_turma: Any
     codigo_componente_curricular: Any
     nome_componente_curricular: Any
     codigo_situacao_matricula: Any
-    data_matricula: date | None
+    data_matricula: datetime | None
     data_situacao: date | None
     ano_letivo: Any
     codigo_ue: Any
     codigo_dre: Any
 
     def to_domain(self) -> dict:
+        """Retorna o dicionário pronto para persistência em MatriculaTurmaPrograma."""
         codigo_componente = int(self.codigo_componente_curricular)
         return {
             "codigo_aluno": int(self.codigo_aluno),

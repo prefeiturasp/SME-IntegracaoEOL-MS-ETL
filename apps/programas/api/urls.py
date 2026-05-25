@@ -5,7 +5,5 @@ from django.urls import path
 from apps.programas.api.views import HealthProgramasView
 
 urlpatterns = [
-    path(
-        "programas/health/", HealthProgramasView.as_view(), name="programas"
-    ),
+    path("programas/health/", HealthProgramasView.as_view(), name="programas"),
 ]

@@ -282,7 +282,8 @@ LOGGING = {
     "handlers": _logging_handlers,
     "loggers": {
         "etl_apps": {
-            "handlers": ["console"] + (["rabbitmq"] if ENABLE_RABBITMQ_LOGGING else []),
+            "handlers": ["console"]
+            + (["rabbitmq"] if ENABLE_RABBITMQ_LOGGING else []),
             "level": NIVEL_LOG,
             "propagate": False,
         },
@@ -300,11 +301,19 @@ ELASTIC_APM = {
     "ENVIRONMENT": os.getenv("ELASTIC_APM_ENVIRONMENT", AMBIENTE_APLICACAO),
     "ENABLED": os.getenv("ELASTIC_APM_ENABLED", "0") == "1",
     "CAPTURE_HEADERS": os.getenv("ELASTIC_APM_CAPTURE_HEADERS", "1") == "1",
-    "TRANSACTION_SAMPLE_RATE": float(os.getenv("ELASTIC_APM_TRANSACTION_SAMPLE_RATE", "0.3")),
+    "TRANSACTION_SAMPLE_RATE": float(
+        os.getenv("ELASTIC_APM_TRANSACTION_SAMPLE_RATE", "0.3")
+    ),
     "METRICS_INTERVAL": os.getenv("ELASTIC_APM_METRICS_INTERVAL", "10s"),
     "FLUSH_INTERVAL": os.getenv("ELASTIC_APM_FLUSH_INTERVAL", "10s"),
-    "MAX_BATCH_EVENT_COUNT": int(os.getenv("ELASTIC_APM_MAX_BATCH_EVENT_COUNT", "1000")),
-    "MAX_QUEUE_EVENT_COUNT": int(os.getenv("ELASTIC_APM_MAX_QUEUE_EVENT_COUNT", "1000")),
-    "TRANSACTION_MAX_SPANS": int(os.getenv("ELASTIC_APM_TRANSACTION_MAX_SPANS", "500")),
+    "MAX_BATCH_EVENT_COUNT": int(
+        os.getenv("ELASTIC_APM_MAX_BATCH_EVENT_COUNT", "1000")
+    ),
+    "MAX_QUEUE_EVENT_COUNT": int(
+        os.getenv("ELASTIC_APM_MAX_QUEUE_EVENT_COUNT", "1000")
+    ),
+    "TRANSACTION_MAX_SPANS": int(
+        os.getenv("ELASTIC_APM_TRANSACTION_MAX_SPANS", "500")
+    ),
     "LOG_LEVEL": os.getenv("ELASTIC_APM_LOG_LEVEL", "INFO"),
 }
