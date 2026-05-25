@@ -147,8 +147,8 @@ class BaseEtlCommand(BaseCommand):
             extra={"etapa": "celery", "status": "RUNNING"},
         )
 
-    def _extra_service_kwargs(self, **options: Any) -> dict[str, Any]:
-        """Kwargs extras para o service. Sobrescrever nas subclasses."""
+    def _extra_service_kwargs(self, **_options: Any) -> dict[str, Any]:
+        """Kwargs extras para o service."""
         return {}
 
     def _handle_sync(

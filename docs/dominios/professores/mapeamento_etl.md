@@ -46,3 +46,9 @@ Documenta o fluxo real implementado nos métodos `popular_*` do serviço.
   `modo_escrita="upsert"` em `EtlExecucaoTabelaEscrita`.
 - As 5 tabelas `full_refresh` não possuem chave natural para hash por linha —
   o controle de mudanças é feito via recarga completa em transação.
+
+## Atualizacao - FuncionarioUnidadeEducacional
+
+A fase final tambem executa `popular_funcionarios`, que persiste a tabela
+`funcionario_unidade_educacional` por `upsert_incremental` a partir de
+`SQL_FUNCIONARIOS_UNIDADE_EDUCACIONAL`.

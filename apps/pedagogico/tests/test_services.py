@@ -41,7 +41,6 @@ class TestPedagogicoService(TestCase):
             table_name="tb",
             model_class=None,
             dto_in=None,
-            dto_out=None,
             pk_field="id",
             update_fields=("f1",),
             unique_fields=("id",),
@@ -157,7 +156,7 @@ class TestPedagogicoService(TestCase):
         self.assertIsNone(transform((100, "Desc", "1", "1 ano", 1, 5, None)))
 
     def test_criar_transform_grade_usa_serie_na_chave(self) -> None:
-        """Grade curricular deve preservar série na chave de upsert."""
+        """Grade usa série na chave e ano turma como campo atualizável."""
         config = self.service._fases[4]
         transform = self.service._criar_transform(config)
 
@@ -165,7 +164,7 @@ class TestPedagogicoService(TestCase):
         assert result is not None
         pk, _, obj = result
 
-        self.assertEqual(pk, "100-2024-5-1-88")
+        self.assertEqual(pk, "100-2024-5-88")
         self.assertEqual(obj.codigo_ano_turma, "1")
         self.assertEqual(obj.codigo_serie_ensino, 88)
         self.assertEqual(
@@ -174,17 +173,16 @@ class TestPedagogicoService(TestCase):
                 "codigo_componente_curricular",
                 "ano_letivo",
                 "modalidade",
-                "codigo_ano_turma",
                 "codigo_serie_ensino",
             ],
         )
+        self.assertIn("codigo_ano_turma", config.update_fields)
         self.assertEqual(
             config.unique_fields,
             (
                 "codigo_componente_curricular",
                 "ano_letivo",
                 "modalidade",
-                "codigo_ano_turma",
                 "codigo_serie_ensino",
             ),
         )

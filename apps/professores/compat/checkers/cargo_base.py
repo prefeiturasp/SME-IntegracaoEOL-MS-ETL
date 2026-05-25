@@ -1,14 +1,4 @@
-"""Verificadores de compatibilidade: FuncionarioRepository e ValidadeProf.
-
-Cobre:
-    FuncionarioRepository.BuscaFuncionarioPorRfAsync
-        Valida que CargoBaseServidor replica corretamente dt_posse,
-        dt_fim_nomeacao e situacao_funcional do servidor.
-
-    ProfessorRepository.VerificarValidadeProfessorAsync
-        Valida que os campos de bloqueio (LaudoMedico, CargoSobrepostoServidor)
-        e situacao_funcional estão presentes para a lógica de elegibilidade.
-"""
+"""Verificadores de compatibilidade: FuncionarioRepository e ValidadeProf."""
 
 from typing import Any
 
@@ -17,11 +7,7 @@ from apps.professores.compat.base import (
     _formatar_data,
 )
 from apps.professores.models import CargoBaseServidor, LaudoMedico
-from apps.professores.services import _PLACEHOLDERS_CARGO, CARGOS_PROFESSOR
-
-# ---------------------------------------------------------------------------
-# Consultas SQL Server (origem)
-# ---------------------------------------------------------------------------
+from apps.professores.queries import _PLACEHOLDERS_CARGO, CARGOS_PROFESSOR
 
 _SQL_CARGO_BASE_ATIVO = f"""
     SELECT DISTINCT TOP {{limite}}
@@ -78,12 +64,6 @@ _SQL_VALIDADE = f"""
            OR (ls.dt_fim IS NOT NULL AND ls.dt_fim < GETDATE()))
     ORDER BY cba.cd_cargo_base_servidor
 """
-
-
-# ---------------------------------------------------------------------------
-# Verificador 1: BuscaFuncionarioPorRfAsync
-# ---------------------------------------------------------------------------
-
 
 class VerificadorCargoBaseAtivo(VerificadorBase):
     """Valida CargoBaseServidor — BuscaFuncionarioPorRfAsync.
@@ -147,11 +127,6 @@ class VerificadorCargoBaseAtivo(VerificadorBase):
             linha["codigo_cargo"],
             linha["dt_posse"],
         )
-
-
-# ---------------------------------------------------------------------------
-# Verificador 2: VerificarValidadeProfessorAsync — campos de bloqueio
-# ---------------------------------------------------------------------------
 
 
 class VerificadorValidadeProf(VerificadorBase):

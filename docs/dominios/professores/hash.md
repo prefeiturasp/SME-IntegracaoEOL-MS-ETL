@@ -10,7 +10,7 @@ O controle incremental é implementado em `_calcular_hash` e `_upsert_incrementa
 - calcula SHA-256 em hexadecimal
 
 ### `_upsert_incremental`
-1. monta `id_destino = "{tabela}:{pk}"`
+1. monta `id_destino = "{tabela}:{chave_upsert}"`
 2. calcula hash dos `update_fields`
 3. busca hashes existentes em lotes de 1000
 4. filtra apenas registros novos ou alterados
@@ -46,3 +46,11 @@ Exemplos de `id_destino`:
 - evita reescrita desnecessária
 - permite token de progresso baseado apenas em linhas alteradas
 - preserva rastreabilidade da última sincronização
+
+## FuncionarioUnidadeEducacional
+
+Para `funcionario_unidade_educacional`, a chave primaria e `id`, enquanto o
+upsert usa a chave natural composta por `codigo_rf` e `codigo_ue`. O hash
+considera essa chave natural e os campos de atualizacao. O `id_destino` da
+auditoria usa o formato
+`funcionario_unidade_educacional:<codigo_rf>|<codigo_ue>`.

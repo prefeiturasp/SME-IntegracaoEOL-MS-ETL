@@ -8,7 +8,7 @@ Popular `pedagogico_db` com os dados de componentes curriculares do EOL — cat�
 
 Todos os dados são extraídos exclusivamente do banco **EOL (SQL Server)** via `EOLService`.
 
-Não há fonte secundária (o banco Postgres legado `ApiEolConnection` foi removido). Ver [remocao_dependencia_apieolconnection(postgres).md](remocao_dependencia_apieolconnection(postgres).md) para o histórico completo.
+Não há fonte secundária (o banco Postgres legado `ApiEolConnection` foi removido). Ver [remocao_dependencia_apieolconnection(postgres).md](<remocao_dependencia_apieolconnection(postgres).md>) para o histórico completo.
 
 ## Classe principal
 
@@ -18,12 +18,12 @@ Herda de `BaseEtlService` (pipeline Producer-Consumer com ThreadPool, auditoria 
 
 ## Customizações em relação ao `BaseEtlService`
 
-| Customização | Descrição |
-| :--- | :--- |
-| `_iter_chunks` | Quando o SQL contém `?`, itera para cada ano letivo substituindo o placeholder. |
-| `_criar_transform` | Injeta `_agora` via closure por fase, sem overhead por linha. |
-| `_executar_fase` | Fase 4 (agrupamentos) é tratada à parte: coleta tudo em memória, agrega em Python e escreve em duas tabelas. |
-| `executar` | Registra o resultado duplo da fase de agrupamentos. |
+| Customização       | Descrição                                                                                                    |
+| :----------------- | :----------------------------------------------------------------------------------------------------------- |
+| `_iter_chunks`     | Quando o SQL contém `?`, itera para cada ano letivo substituindo o placeholder.                              |
+| `_criar_transform` | Injeta `_agora` via closure por fase, sem overhead por linha.                                                |
+| `_executar_fase`   | Fase 4 (agrupamentos) é tratada à parte: coleta tudo em memória, agrega em Python e escreve em duas tabelas. |
+| `executar`         | Registra o resultado duplo da fase de agrupamentos.                                                          |
 
 ## Regras mantidas fora do ETL
 
@@ -53,29 +53,35 @@ O código define **11 modelos** em `apps/pedagogico/models.py`:
 ## Fases implementadas
 
 ### Fase 1 — ComponenteCurricular
+
 - Catálogo de componentes ativos (sem cancelamento).
 - **Query:** `SQL_COMPONENTES_NAO_CANCELADOS` — sem parâmetro de ano.
 - Também grava a flag `regencia`.
 
 ### Fase 2 — ComponenteTurma
+
 - Estrutura turma × componente, sem professor.
 - **Query:** `SQL_COMPONENTE_TURMA` com `?` por ano letivo.
 
 ### Fase 3 — AtribuicaoComponente
+
 - Relação professor × turma × componente.
 - **Query:** `SQL_ATRIBUICAO_COMPONENTE` com `?` por ano letivo.
 
 ### Fase 4 — Agrupamentos de Território do Saber
+
 - Escreve em **duas** tabelas: `AgrupamentoAtribuicaoTerritorioSaber` e `ComponenteCurricularAgrupamento`.
 - **Query:** `SQL_ATRIBUICOES_TERRITORIO_SABER` (UNION ALL SME RF + Externo CPF, todos os anos).
 - Agrupamento ocorre em Python via `_agrupar()`. `cod_agrupamento` é hash MD5 determinístico.
 
 ### Fase 5 — GradeComponenteCurricular
+
 - Catálogo de oferta de componentes por série, ano letivo e modalidade.
-- Chave de upsert: componente, ano letivo, modalidade, ano turma e série de ensino.
+- Chave de upsert: componente, ano letivo, modalidade e série de ensino.
 - **Query:** `SQL_GRADE_COMPONENTE_CURRICULAR` com `?` por ano letivo.
 
 ### Fase 6 — Turma
+
 - Dados cadastrais de turmas do EOL (situação, modalidade, série, UE).
 - **Query:** `SQL_TURMAS` com `?` por ano letivo. Filtra `st_turma_escola IN ('O', 'A', 'E', 'C')`.
 - `Modalidade`, `CodigoModalidade`, `Semestre` e `Extinta` são calculados via `CASE` inline na query.

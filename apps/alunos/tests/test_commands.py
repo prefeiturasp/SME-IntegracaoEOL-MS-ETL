@@ -16,11 +16,31 @@ class EtlAlunosCommandTest(TestCase):
         """Valida configuração básica do comando."""
         cmd = Command()
         self.assertEqual(cmd.dominio, "alunos")
-        self.assertEqual(cmd.fase_final, 6)
+        self.assertEqual(cmd.fase_final, 9)
         self.assertEqual(cmd.get_modo_escrita("aluno"), "upsert")
         self.assertEqual(cmd.get_modo_escrita("unknown"), "full_refresh")
 
-    @patch("apps.alunos.management.commands.etl_alunos.EtlAlunosOrquestrador.lancar")
+    def test_novas_tabelas_em_upsert(self) -> None:
+        """Valida modo de escrita das tabelas agregadas e acompanhamento."""
+        cmd = Command()
+        self.assertEqual(
+            cmd.get_modo_escrita("matricula_ano_letivo"), "upsert"
+        )
+        self.assertEqual(
+            cmd.get_modo_escrita(
+                "matricula_componente_curricular_ano_letivo"
+            ),
+            "upsert",
+        )
+        self.assertEqual(
+            cmd.get_modo_escrita("dados_aluno_acompanhamento_escolar"),
+            "upsert",
+        )
+
+    @patch(
+        "apps.alunos.management.commands.etl_alunos"
+        ".EtlAlunosOrquestrador.lancar"
+    )
     @patch("apps.core.libs.base_etl_command.RepositorioAuditoriaPostgres")
     def test_command_execution_com_fase(
         self, _mock_repo: MagicMock, mock_lancar: MagicMock
@@ -30,16 +50,24 @@ class EtlAlunosCommandTest(TestCase):
         call_command("etl_alunos", "--fase", "3", "--celery", stdout=out)
         mock_lancar.assert_called_with(fase_inicial=3)
 
-    @patch("apps.alunos.management.commands.etl_alunos.EtlAlunosOrquestrador.lancar")
+    @patch(
+        "apps.alunos.management.commands.etl_alunos"
+        ".EtlAlunosOrquestrador.lancar"
+    )
     @patch("apps.core.libs.base_etl_command.RepositorioAuditoriaPostgres")
-    @patch("apps.alunos.management.commands.etl_alunos.EtlAlunosOrquestrador.__init__")
+    @patch(
+        "apps.alunos.management.commands.etl_alunos"
+        ".EtlAlunosOrquestrador.__init__"
+    )
     def test_command_execution_com_carga_inicial(
-        self, mock_init: MagicMock, _mock_repo: MagicMock, _mock_lancar: MagicMock
+        self,
+        mock_init: MagicMock,
+        _mock_repo: MagicMock,
+        _mock_lancar: MagicMock,
     ) -> None:
         """Valida que o argumento --carga-inicial passa primeiro_run=True."""
         mock_init.return_value = None
         call_command("etl_alunos", "--carga-inicial", "--celery")
-        
-        # Verifica se o primeiro_run foi passado como True para o orquestrador
+
         _, kwargs = mock_init.call_args
         self.assertTrue(kwargs["primeiro_run"])
