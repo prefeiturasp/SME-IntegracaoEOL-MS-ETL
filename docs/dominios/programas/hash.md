@@ -2,10 +2,11 @@
 
 ## Implementação real
 
-O controle incremental é implementado em `_calcular_hash` e `_upsert_incremental`.
+O controle incremental é implementado em `_calcular_hash` e `_upsert_incremental`
+de `BaseEtlService` (`apps/core/libs/base_etl_service.py`) — o `EtlProgramasService` herda.
 
 ### `_calcular_hash`
-- lê os campos relevantes da instância Django
+- lê os campos relevantes (`update_fields` do `PhaseConfig`, sem o `timestamp_field`) da instância Django
 - serializa como JSON com chaves ordenadas (`json.dumps(..., sort_keys=True, default=str)`)
 - calcula SHA-256 em hexadecimal
 
@@ -45,11 +46,14 @@ Exemplos reais para o domínio `programas`:
 
 | Tabela | `unique_fields` | Exemplo de `id_destino` |
 |--------|-----------------|-------------------------|
-| `tipo_programa` | `[codigo_tipo_programa]` | `tipo_programa:649` |
-| `componente_curricular_programa` | `[codigo_componente_curricular]` | `componente_curricular_programa:1322` |
-| `turma_programa` | `[codigo_turma]` | `turma_programa:2528310` |
-| `turma_programa_componente_curricular` | `[codigo_turma, codigo_componente_curricular]` | `turma_programa_componente_curricular:2528310:1322` |
-| `matricula_turma_programa` | `[codigo_turma, codigo_aluno, codigo_componente_curricular]` | `matricula_turma_programa:2528310:8374625:1322` |
+| `tipo_programa` | `(codigo_tipo_programa,)` | `tipo_programa:649` |
+| `componente_curricular_programa` | `(codigo_componente_curricular,)` | `componente_curricular_programa:1322` |
+| `turma_programa` | `(codigo_turma,)` | `turma_programa:2528310` |
+| `turma_programa_componente_curricular` | `(codigo_turma, codigo_componente_curricular)` | `turma_programa_componente_curricular:2528310:1322` |
+| `matricula_turma_programa` | `(codigo_turma, codigo_aluno, codigo_componente_curricular)` | `matricula_turma_programa:2528310:8374625:1322` |
+| `matricula_turma_programa_historico` | `(codigo_turma, codigo_aluno, codigo_componente_curricular)` | `matricula_turma_programa_historico:2528310:8374625:1322` |
+| `aluno_pap_ano_letivo` | `(ano_letivo, codigo_turma, codigo_aluno, codigo_componente_curricular)` | `aluno_pap_ano_letivo:2025:2528310:8374625:1322` |
+| `aluno_pap_ano_letivo_historico` | `(ano_letivo, codigo_turma, codigo_aluno, codigo_componente_curricular)` | `aluno_pap_ano_letivo_historico:2024:2528310:8374625:1322` |
 
 ## Benefícios reais no código
 - evita reescrita desnecessária
