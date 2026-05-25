@@ -13,12 +13,12 @@ from apps.programas.enums import (
 
 
 def _strip(val: Any) -> str:
-    """Remove espaços em branco ou retorna vazio."""
+    """Normaliza valor para string sem espaços nas pontas."""
     return str(val).strip() if val else ""
 
 
 def _int_opt(val: Any) -> int | None:
-    """Converte para inteiro ou None."""
+    """Converte valor opcional para inteiro, preservando None."""
     return int(val) if val is not None else None
 
 
@@ -31,6 +31,7 @@ class TipoProgramaIn:
     descricao: Any
 
     def to_domain(self) -> dict:
+        """Retorna o dicionário pronto para persistência em TipoPrograma."""
         return {
             "codigo_tipo_programa": int(self.codigo_tipo_programa),
             "nome": _strip(self.descricao) or _strip(self.sigla),
@@ -49,6 +50,7 @@ class ComponenteCurricularProgramaIn:
     nome_componente_curricular: Any
 
     def to_domain(self) -> dict:
+        """Retorna o dicionário pronto para persistência em ComponenteCurricularPrograma."""
         codigo = int(self.codigo_componente_curricular)
         return {
             "codigo_componente_curricular": codigo,
@@ -77,6 +79,7 @@ class TurmaProgramaIn:
     descricao_grade: Any = None
 
     def to_domain(self) -> dict:
+        """Retorna o dicionário pronto para persistência em TurmaPrograma."""
         descricao_grade = _strip(self.descricao_grade)
         return {
             "codigo_turma": int(self.codigo_turma),
@@ -102,6 +105,7 @@ class TurmaProgramaComponenteCurricularIn:
     nome_componente_curricular: Any
 
     def to_domain(self) -> dict:
+        """Retorna o dicionário pronto para persistência em TurmaProgramaComponenteCurricular."""
         return {
             "codigo_turma": int(self.codigo_turma),
             "codigo_componente_curricular": int(
@@ -125,6 +129,7 @@ class AlunoPapAnoLetivoIn:
     codigo_dre: Any
 
     def to_domain(self) -> dict:
+        """Retorna o dicionário pronto para persistência em AlunoPapAnoLetivo."""
         return {
             "codigo_aluno": int(self.codigo_aluno),
             "codigo_turma": int(self.codigo_turma),
@@ -153,6 +158,7 @@ class MatriculaTurmaProgramaIn:
     codigo_dre: Any
 
     def to_domain(self) -> dict:
+        """Retorna o dicionário pronto para persistência em MatriculaTurmaPrograma."""
         codigo_componente = int(self.codigo_componente_curricular)
         return {
             "codigo_aluno": int(self.codigo_aluno),

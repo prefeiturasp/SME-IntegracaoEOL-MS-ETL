@@ -22,6 +22,7 @@ class TestEtlProgramasOrquestradorLancamento(TestCase):
     databases = {"default", "eol_db", "programas_db"}
 
     def _make_orquestrador(self, **kwargs: Any) -> EtlProgramasOrquestrador:
+        """Cria uma instância de orquestrador com EOL mockado."""
         kwargs.setdefault("id_execucao", uuid4())
         return EtlProgramasOrquestrador(
             db_alias="programas_db",
@@ -93,6 +94,7 @@ class TestEtlProgramasOrquestradorEstado(TestCase):
     databases = {"default", "eol_db", "programas_db"}
 
     def _make_orquestrador(self, **kwargs: Any) -> EtlProgramasOrquestrador:
+        """Cria uma instância de orquestrador com EOL mockado."""
         kwargs.setdefault("id_execucao", uuid4())
         return EtlProgramasOrquestrador(
             db_alias="programas_db",

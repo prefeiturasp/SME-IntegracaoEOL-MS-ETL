@@ -16,6 +16,7 @@ class EtlProgramasCommandTestCase(TestCase):
     databases = ["default", "eol_db", "programas_db"]
 
     def setUp(self) -> None:
+        """Prepara mocks de auditoria e service usados nos cenários."""
         self.patcher_repo = patch(
             "apps.core.libs.base_etl_command.RepositorioAuditoriaPostgres"
         )
@@ -39,6 +40,7 @@ class EtlProgramasCommandTestCase(TestCase):
         self.servico.ultimo_token = None
 
     def tearDown(self) -> None:
+        """Desliga os patchers iniciados em setUp."""
         self.patcher_repo.stop()
         self.patcher_servico.stop()
 

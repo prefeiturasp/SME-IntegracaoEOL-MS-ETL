@@ -20,7 +20,6 @@ class HealthProgramasView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request: Request) -> Response:
-        """Retorna o status de saúde do domínio Programas."""
         resultado = self._check_database()
 
         status_http = 200 if resultado["status"] == "healthy" else 503
@@ -28,6 +27,7 @@ class HealthProgramasView(APIView):
         return Response(serializer.data, status=status_http)
 
     def _check_database(self) -> dict[str, str]:
+        """Verifica se o banco PROGRAMAS_DB responde a um SELECT 1."""
         if not os.getenv("URL_BANCO_PROGRAMAS"):
             return {"status": "unhealthy"}
 

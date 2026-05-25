@@ -13,6 +13,7 @@ class TestProgramasService(TestCase):
     """Valida montagem das fases e o pipeline de extração/escrita."""
 
     def setUp(self) -> None:
+        """Inicializa o service com EOL mockado e truncate desativado."""
         self.mock_eol = MagicMock()
         self.service = EtlProgramasService(
             db_alias="programas_db",

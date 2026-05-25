@@ -1,4 +1,4 @@
-"""Modelos do app programas — banco destino PROGRAMAS_DB."""
+"""Modelos do domínio Programas."""
 
 from django.db import models
 

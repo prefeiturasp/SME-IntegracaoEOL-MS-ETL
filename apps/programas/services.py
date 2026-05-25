@@ -323,11 +323,11 @@ class EtlProgramasService(BaseEtlService):
         self._fases = self._init_fases()
 
     def _iter_chunks(self, sql: str) -> Iterator[list[tuple]]:
-        """Lê os dados brutos da origem (MSSQL) em chunks."""
+        """Itera resultados da query EOL em chunks."""
         return self.eol.iter_query(sql)
 
     def _init_fases(self) -> list[PhaseConfig]:
-        """Define as fases do domínio Programas em ordem de dependência."""
+        """Retorna as fases do domínio em ordem de dependência."""
         return [
             PhaseConfig(
                 nome="tipo_programa",

@@ -17,7 +17,7 @@ _TABELAS_UPSERT = frozenset(
 
 
 class Command(BaseEtlCommand):
-    """Execução do pipeline ETL de Programas via Celery."""
+    """Executa o pipeline ETL do domínio Programas."""
 
     help = "Executa pipeline ETL do domínio PROGRAMAS_DB (Sync ou Celery)"
     dominio = "programas"
@@ -26,5 +26,5 @@ class Command(BaseEtlCommand):
     orquestrador_class = EtlProgramasOrquestrador
 
     def get_modo_escrita(self, tabela: str) -> str:
-        """Determina o modo de escrita da tabela."""
+        """Retorna 'upsert' para tabelas incrementais e 'full_refresh' caso contrário."""
         return "upsert" if tabela in _TABELAS_UPSERT else "full_refresh"

@@ -26,11 +26,15 @@ class TipoProgramaEOL(IntEnum):
     def categoria_por_sigla(
         cls, sigla: str | None, descricao: str | None = None
     ) -> CategoriaPrograma:
-        """Deriva PAP/PAEE/OUTROS pela sigla/descrição do tipo_programa do EOL.
+        """Deriva a categoria do tipo_programa pela sigla ou descrição.
 
-        PAEE quando a sigla ou descrição contém "PAEE" ou "SRM";
-        PAP quando contém "PAP";
-        OUTROS caso contrário.
+        Args:
+            sigla: Sigla do tipo_programa no EOL.
+            descricao: Descrição opcional usada quando a sigla não basta.
+
+        Returns:
+            PAEE quando há "PAEE" ou "SRM", PAP quando há "PAP",
+            OUTROS caso contrário.
         """
         textos = " ".join(t.upper() for t in (sigla, descricao) if t)
         if "PAEE" in textos or "SRM" in textos:
@@ -41,7 +45,7 @@ class TipoProgramaEOL(IntEnum):
 
     @classmethod
     def codigos(cls) -> tuple[int, ...]:
-        """Retorna os códigos canônicos históricos."""
+        """Retorna os códigos canônicos históricos do enum."""
         return tuple(m.value for m in cls)
 
 
@@ -63,7 +67,7 @@ class ComponenteCurricularEOL(IntEnum):
 
     @classmethod
     def categoria(cls, codigo: int | str | None) -> CategoriaPrograma:
-        """Retorna (PAP/PAEE/OUTROS) a partir do cd_componente_curricular."""
+        """Retorna a categoria do componente curricular informado."""
         try:
             cod = int(codigo) if codigo is not None else None
         except (ValueError, TypeError):
@@ -77,7 +81,7 @@ class ComponenteCurricularEOL(IntEnum):
 
     @classmethod
     def vigente(cls, codigo: int | str | None) -> bool:
-        """Retorna True se o componente está vigente (não é legado)."""
+        """Verifica se o componente curricular está vigente."""
         try:
             cod = int(codigo) if codigo is not None else None
         except (ValueError, TypeError):
@@ -86,12 +90,12 @@ class ComponenteCurricularEOL(IntEnum):
 
     @classmethod
     def codigos(cls) -> tuple[int, ...]:
-        """Retorna todos os códigos do enum como tupla."""
+        """Retorna todos os códigos do enum."""
         return tuple(m.value for m in cls)
 
     @classmethod
     def codigos_pap_vigentes(cls) -> tuple[int, ...]:
-        """Retorna os códigos vigentes de PAP (sem PAEE, sem legado)."""
+        """Retorna os códigos vigentes de PAP, sem PAEE e sem legado."""
         return tuple(
             m.value
             for m in cls
