@@ -78,7 +78,6 @@ class AlunoInTest(SimpleTestCase):
             cpf="456",
             nome_mae=" Maria ",
             raca_cor=" Branca ",
-            nome_mae=" Maria ",
             cns="789",
             data_atualizacao_contato=date(2023, 1, 1),
             possui_deficiencia=True,

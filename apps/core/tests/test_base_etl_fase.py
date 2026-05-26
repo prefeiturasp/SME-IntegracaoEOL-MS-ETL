@@ -74,6 +74,7 @@ class TestBaseEtlFase(TestCase):
             None,
             None,
             None,
+            None,
             False,
         )
         pk, _, obj = transform(fake_row)
@@ -98,6 +99,7 @@ class TestBaseEtlFase(TestCase):
         fake_row = (
             1,
             "Teste",
+            None,
             None,
             None,
             None,

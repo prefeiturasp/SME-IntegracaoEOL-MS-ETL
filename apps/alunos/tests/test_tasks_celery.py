@@ -69,6 +69,7 @@ class TestProcessarChunkAlunos(TestCase):
                 None,
                 None,
                 None,
+                None,
                 False,
             ]
         ]
@@ -116,6 +117,7 @@ class TestProcessarChunkAlunos(TestCase):
             [
                 1,
                 "nome",
+                None,
                 None,
                 None,
                 None,
