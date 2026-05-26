@@ -11,7 +11,9 @@ from kombu.exceptions import OperationalError
 class ExecutarDominioCommandTestCase(TestCase):
     """Valida o roteamento do command executar_dominio."""
 
-    @patch("apps.controle_auditoria.management.commands.executar_dominio.call_command")
+    @patch(
+        "apps.controle_auditoria.management.commands.executar_dominio.call_command"
+    )
     def test_deve_executar_dominio_institucional(
         self, call_command_mock: MagicMock
     ) -> None:
@@ -35,22 +37,37 @@ class ExecutarDominioCommandTestCase(TestCase):
             "--continuar",
         )
 
-    @patch(
-        "apps.controle_auditoria.management.commands."
-        "executar_dominio.exibir_validacao_sinc_rec_db"
-    )
-    def test_deve_executar_dominio_sinc_rec_db(
-        self,
-        validacao_mock: MagicMock,
-    ) -> None:
-        """Executa validacao do dominio de controle."""
-        call_command("executar_dominio", "--dominio", "sinc_rec_db")
-        validacao_mock.assert_called_once_with()
-
     def test_deve_falhar_com_dominio_invalido(self) -> None:
         """Retorna erro quando dominio nao e reconhecido."""
         with self.assertRaises(CommandError):
             call_command("executar_dominio", "--dominio", "invalido")
+
+    def test_deve_falhar_com_sinc_rec_db(self) -> None:
+        """sinc_rec_db não é domínio executável."""
+        with self.assertRaises(CommandError):
+            call_command("executar_dominio", "--dominio", "sinc_rec_db")
+
+    def test_deve_falhar_com_ano_letivo_sem_suporte(self) -> None:
+        """Retorna erro quando domínio não aceita ano_letivo."""
+        with self.assertRaisesMessage(CommandError, "ano_letivo"):
+            call_command(
+                "executar_dominio",
+                "--dominio",
+                "programas",
+                "--ano-letivo",
+                "2025",
+            )
+
+    def test_deve_falhar_com_fases_sem_suporte(self) -> None:
+        """Retorna erro quando domínio não aceita fases."""
+        with self.assertRaisesMessage(CommandError, "fases"):
+            call_command(
+                "executar_dominio",
+                "--dominio",
+                "programas",
+                "--fases",
+                "turma",
+            )
 
 
 class AgendarDominioCommandTestCase(TestCase):
@@ -86,7 +103,9 @@ class AgendarDominioCommandTestCase(TestCase):
     @patch(
         "apps.controle_auditoria.management.commands.agendar_dominio.executar_dominio_task"
     )
-    def test_deve_agendar_task_com_data_hora(self, task_mock: MagicMock) -> None:
+    def test_deve_agendar_task_com_data_hora(
+        self, task_mock: MagicMock
+    ) -> None:
         """Com executar-em, usa apply_async com eta."""
         resultado = MagicMock()
         resultado.id = "task-agendada-1"
@@ -130,7 +149,7 @@ class AgendarDominioCommandTestCase(TestCase):
     def test_falha_broker_delay_nao_derruba_processo(
         self, task_mock: MagicMock
     ) -> None:
-        """OperationalError no broker vira CommandError, não exception fatal."""
+        """OperationalError no broker vira CommandError."""
         task_mock.delay.side_effect = OperationalError("broker indisponível")
 
         with self.assertRaises(CommandError):
@@ -143,7 +162,9 @@ class AgendarDominioCommandTestCase(TestCase):
         self, task_mock: MagicMock
     ) -> None:
         """OperationalError no broker ao agendar vira CommandError."""
-        task_mock.apply_async.side_effect = OperationalError("broker indisponível")
+        task_mock.apply_async.side_effect = OperationalError(
+            "broker indisponível"
+        )
 
         with self.assertRaises(CommandError):
             call_command(
@@ -158,20 +179,18 @@ class AgendarDominioCommandTestCase(TestCase):
 class ExecutarDominiosCommandTestCase(TestCase):
     """Valida command que executa o conjunto de domínios ativos."""
 
-    @patch("apps.controle_auditoria.management.commands.executar_dominios.call_command")
+    @patch(
+        "apps.controle_auditoria.management.commands.executar_dominios.call_command"
+    )
     def test_deve_executar_dominios_sem_continuar(
         self, call_command_mock: MagicMock
     ) -> None:
-        """Executa sinc_rec_db e institucional sem flag continuar."""
+        """Executa institucional sem flag continuar."""
         call_command("executar_dominios", "--volume", "200")
 
-        self.assertEqual(call_command_mock.call_count, 2)
+        self.assertEqual(call_command_mock.call_count, 1)
         self.assertEqual(
             call_command_mock.call_args_list[0].args,
-            ("executar_dominio", "--dominio", "sinc_rec_db"),
-        )
-        self.assertEqual(
-            call_command_mock.call_args_list[1].args,
             (
                 "executar_dominio",
                 "--dominio",
@@ -181,7 +200,9 @@ class ExecutarDominiosCommandTestCase(TestCase):
             ),
         )
 
-    @patch("apps.controle_auditoria.management.commands.executar_dominios.call_command")
+    @patch(
+        "apps.controle_auditoria.management.commands.executar_dominios.call_command"
+    )
     def test_deve_executar_dominios_com_continuar(
         self, call_command_mock: MagicMock
     ) -> None:
@@ -189,7 +210,7 @@ class ExecutarDominiosCommandTestCase(TestCase):
         call_command("executar_dominios", "--volume", "100", "--continuar")
 
         self.assertEqual(
-            call_command_mock.call_args_list[1].args,
+            call_command_mock.call_args_list[0].args,
             (
                 "executar_dominio",
                 "--dominio",
@@ -233,7 +254,9 @@ class ExecutarDominiosLoopCommandTestCase(TestCase):
         ]
         repositorio_cls_mock.return_value = repositorio
 
-        call_command("executar_dominios_loop", "--volume", "100", "--intervalo", "1")
+        call_command(
+            "executar_dominios_loop", "--volume", "100", "--intervalo", "1"
+        )
 
         call_command_mock.assert_called_once_with(
             "executar_dominios", "--volume", "100"
@@ -289,12 +312,12 @@ class ExecutarDominiosLoopCommandTestCase(TestCase):
         sleep_mock.assert_called_once_with(1)
 
     def test_deve_retornar_volume_restante_no_limite_linhas(self) -> None:
-        """Verifica cálculo do volume quando restam menos linhas que o volume total."""
-        from apps.controle_auditoria.management.commands.executar_dominios_loop import (
-            Command,
+        """Calcula volume quando restam menos linhas que o total."""
+        from apps.controle_auditoria.management.commands import (
+            executar_dominios_loop,
         )
 
-        cmd = Command()
+        cmd = executar_dominios_loop.Command()
         # limite 100, total 70 -> volume restante 30
         self.assertEqual(cmd._calcular_volume(100, 100, 70), 30)
 
@@ -345,7 +368,9 @@ class CancelarExecucoesCommandTestCase(TestCase):
 
         call_command("cancelar_execucoes", "--dominio", "institucional")
 
-        self.assertEqual(EtlExecucao.objects.filter(situacao="cancelado").count(), 1)
+        self.assertEqual(
+            EtlExecucao.objects.filter(situacao="cancelado").count(), 1
+        )
         self.assertEqual(
             EtlExecucao.objects.filter(
                 dominio="institucional", situacao="cancelado"

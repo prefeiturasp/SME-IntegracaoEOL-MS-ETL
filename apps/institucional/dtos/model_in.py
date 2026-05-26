@@ -1,8 +1,22 @@
 """DTOs de entrada para o domínio Institucional mapeados a partir do EOL."""
 
-from typing import Any
 from dataclasses import dataclass
+from datetime import datetime
+from typing import Any
+from zoneinfo import ZoneInfo
+
 from apps.core.libs.helpers import strip_str
+
+_SP = ZoneInfo("America/Sao_Paulo")
+
+
+def _make_aware(dt: datetime | None) -> datetime | None:
+    """Aplica America/Sao_Paulo em datetimes naive vindos do SQL Server."""
+    if dt is None:
+        return None
+    if dt.tzinfo is not None:
+        return dt
+    return dt.replace(tzinfo=_SP)
 
 
 @dataclass(slots=True)
@@ -12,13 +26,14 @@ class TipoEscolaIn:
     codigo_tipo_escola: int
     sigla: str | None
     descricao: str
+    data_atualizacao: datetime | None = None
 
     def to_domain(self) -> dict:
-        """Converte para dicionário de persistência no Model TipoEscola."""
         return {
             "codigo_tipo_escola": int(self.codigo_tipo_escola),
             "sigla": strip_str(self.sigla),
             "descricao": strip_str(self.descricao),
+            "data_atualizacao": _make_aware(self.data_atualizacao),
         }
 
 
@@ -31,7 +46,6 @@ class SubprefeituraIn:
     nome: str
 
     def to_domain(self) -> dict:
-        """Converte para dicionário de persistência no Model SubPrefeitura."""
         return {
             "codigo_sub_prefeitura": int(self.codigo_sub_prefeitura),
             "sigla": strip_str(self.sigla),
@@ -50,7 +64,6 @@ class DREIn:
     descricao_unidade_adm: str | None
 
     def to_domain(self) -> dict:
-        """Converte para dicionário de persistência no Model DRE."""
         return {
             "codigo_dre": str(self.codigo_dre),
             "nome": strip_str(self.nome),
@@ -66,13 +79,20 @@ class DREIn:
 
 @dataclass(slots=True)
 class UnidadeEducacionalIn:
-    """Dados de Unidade Educacional."""
+    """Dados de Unidade Educacional.
+
+    A ordem dos campos deve espelhar exatamente a ordem das colunas no
+    SQL_UNIDADE_EDUCACIONAL em services.py, pois o ETL instancia via
+    UnidadeEducacionalIn(*row) (posicional).
+    """
 
     codigo_ue: str
     nome: str
     nome_nao_oficial: str | None
     tipo_ue: str | None
+    codigo_tipo_unidade_educacao: int | None
     tipo_logradouro: str | None
+    codigo_logradouro: int | None
     logradouro: str | None
     numero: str | None
     bairro: str | None
@@ -85,6 +105,8 @@ class UnidadeEducacionalIn:
     ano_construcao: int | None
     propriedade: str | None
     organizacao_parceira: bool | int
+    eh_ceu: bool | int
+    data_atualizacao: datetime | None
     vagas_matutino: int | None
     vagas_vespertino: int | None
     vagas_noturno: int | None
@@ -96,12 +118,11 @@ class UnidadeEducacionalIn:
     status: str | None
     codigo_dre: str | None
     codigo_tipo_escola: int | None
+    codigo_tp_equipamento: int | None
     codigo_sub_prefeitura: int | None
     codigo_ue_integracao: str | None = None
 
     def to_domain(self) -> dict:
-        """Converte para dicionário de persistência no Model UnidadeEducacional."""
-
         def _int(val: Any, default: int | None = None) -> int | None:
             return int(val) if val is not None else default
 
@@ -111,6 +132,7 @@ class UnidadeEducacionalIn:
             "nome_nao_oficial": strip_str(self.nome_nao_oficial),
             "tipo_ue": strip_str(self.tipo_ue),
             "tipo_logradouro": strip_str(self.tipo_logradouro),
+            "codigo_logradouro": _int(self.codigo_logradouro),
             "logradouro": strip_str(self.logradouro),
             "numero": strip_str(self.numero),
             "bairro": strip_str(self.bairro),
@@ -123,19 +145,23 @@ class UnidadeEducacionalIn:
             "ano_construcao": _int(self.ano_construcao),
             "propriedade": strip_str(self.propriedade),
             "organizacao_parceira": bool(self.organizacao_parceira),
+            "eh_ceu": bool(self.eh_ceu),
+            "data_atualizacao": _make_aware(self.data_atualizacao),
             "vagas_matutino": _int(self.vagas_matutino, 0),
             "vagas_vespertino": _int(self.vagas_vespertino, 0),
             "vagas_noturno": _int(self.vagas_noturno, 0),
             "vagas_intermediario": _int(self.vagas_intermediario, 0),
             "vagas_integral": _int(self.vagas_integral, 0),
             "vagas_total": _int(self.vagas_total, 0),
-            "quantidade_funcionarios": _int(
-                self.quantidade_funcionarios, 0
-            ),
+            "quantidade_funcionarios": _int(self.quantidade_funcionarios, 0),
             "codigo_inep": _int(self.codigo_inep),
             "status": strip_str(self.status),
             "dre_id": str(self.codigo_dre) if self.codigo_dre else None,
             "tipo_escola_id": _int(self.codigo_tipo_escola),
+            "codigo_tp_equipamento": _int(self.codigo_tp_equipamento),
+            "codigo_tipo_unidade_educacao": _int(
+                self.codigo_tipo_unidade_educacao
+            ),
             "subprefeitura_id": _int(self.codigo_sub_prefeitura),
             "codigo_ue_integracao": self.codigo_ue_integracao,
         }

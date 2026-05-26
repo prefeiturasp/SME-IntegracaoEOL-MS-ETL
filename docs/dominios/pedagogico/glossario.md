@@ -16,10 +16,9 @@ No EOL, cada componente tem um `cd_componente_curricular` (inteiro). O nome fica
 
 **No ETL:**
 - A tabela `componente_curricular` é o catálogo base. Todos os outros modelos referenciam o código daqui.
-- Um componente pode ser de **regência**, de **território do saber**, ou nenhum dos dois.
-- Um componente pode ter um **componente pai** (ex: componentes de Arte têm o componente 512 como pai — ver `MAPA_COMPONENTE_PAI`).
-
-**Campo relevante:** `exibir_componente_eol` — ver seção dedicada ao campo nos Campos Técnicos.
+- Um componente pode ser de **regência**. Essa flag fica no catálogo `componente_curricular`.
+- Um componente pode fazer parte de **território do saber** em determinada turma; nesse caso, a informação aparece em `componente_turma.codigo_componente_territorio_saber`.
+- A relação pai/filho de componentes não é calculada no ETL principal. Ela fica na tabela local `componente_curricular_hierarquia`, usada pelo microsserviço de consumo quando necessário.
 
 ---
 
@@ -30,11 +29,11 @@ Modalidade de ensino em que **um único professor é responsável por todas ou v
 Típica do **Ensino Fundamental I** (1º ao 5º ano), onde o professor regente leciona Língua Portuguesa, Matemática, Ciências, História e Geografia para a mesma turma.
 
 **No ETL:**
-- A flag `regencia` em `componente_curricular_por_turma` indica que o componente é de regência.
+- A flag `regencia` em `componente_curricular` indica que o componente é de regência.
 - Determinada via lista hardcoded `_IDS_REGENCIA` em `queries.py` — 19 IDs fixos que representam os componentes de regência reconhecidos pelo sistema.
 - Não é derivada de nenhuma tabela dinâmica: se o `cd_componente_curricular` está na lista, `regencia = True`.
 
-**Atenção:** `regencia = True` não significa que o professor precisa planejar esse componente para essa turma específica. Para isso existe `planejamento_regencia`.
+**Atenção:** `regencia = True` não significa que o professor precisa planejar esse componente para uma turma específica. Para isso existe a configuração de planejamento de regência, mantida fora do ETL principal.
 
 ---
 
@@ -45,23 +44,10 @@ Refinamento de `regencia`: indica se o componente de regência **entra efetivame
 **Por que existe essa distinção?**
 Nem todo componente de regência se aplica a todas as séries e turnos. Por exemplo, um componente pode ser de regência apenas para turmas do 1º e 2º ano no turno da manhã. Para turmas do 5º ano ou de outro turno, o mesmo componente até existe, mas não entra no planejamento de regência.
 
-**Como é calculado:**
-1. A query `SQL_LOOKUP_PLANEJAMENTO_REGENCIA` consulta o EOL e retorna triplas `(id_componente, turno, ano)` — todas as combinações reais de turno e série onde o componente de regência aparece em turmas ativas.
-2. Essas triplas são indexadas em dois sets em memória:
-   - `exact`: `{(codigo, turno, ano), ...}` — combinações específicas
-   - `fallback`: `{codigo}` — componentes sem restrição de turno/ano (quando turno e ano eram `null` na origem)
-3. Na hora de gravar cada registro, a função `_planejamento_regencia(codigo, turno_turma, ano_turma, exact, fallback)` testa:
-   - Se `(codigo, turno_turma, ano_turma) in exact` → `True`
-   - Se `codigo in fallback` → `True`
-   - Caso contrário → `False`
-
-**No ETL atual aparece em:**
-
-| Campo | Modelo |
-|---|---|
-| `planejamento_regencia` | `ComponenteCurricularPorTurma` |
-
-O lookup A3 continua existindo, mas é usado apenas para enriquecer `ComponenteCurricularPorTurma`.
+**No desenho atual:**
+- O ETL não grava `planejamento_regencia` em `ComponenteTurma`.
+- A configuração fica na tabela local `componente_curricular_planejamento_regencia`.
+- A aplicação da regra é responsabilidade do microsserviço de consumo, que cruza componente, turno e ano escolar quando precisa montar a resposta de planejamento.
 
 ---
 
@@ -79,9 +65,9 @@ O código `cd_territorio_saber = 1` é um valor especial que significa "territó
 - Cada componente de território pertence a um `cd_territorio_saber` e pode ter um `cd_experiencia_pedagogica` associado.
 
 **No ETL:**
-- A flag `territorio_saber` em `componente_curricular_por_turma` indica que o componente é de território.
-- Derivada dinamicamente por `CASE` inline em `SQL_COMPONENTES_POR_TURMA`: se o componente existe em `turma_grade_territorio_experiencia`, `territorio_saber = True`.
-- Quando `True`, o campo `codigo_componente_territorio_saber` recebe o próprio código do componente (é a mesma chave, usada para indexação cruzada).
+- `ComponenteTurma` não guarda uma flag booleana `territorio_saber`.
+- `SQL_COMPONENTE_TURMA` faz `LEFT JOIN` com `turma_grade_territorio_experiencia`.
+- Quando o componente pertence a território, `codigo_componente_territorio_saber` recebe o próprio código do componente; caso contrário, fica `NULL`.
 
 ---
 
@@ -300,33 +286,6 @@ Compõe a chave de agrupamento junto com `cd_territorio_saber`.
 
 ---
 
-### `exibir_componente_eol`
-
-Flag que indica se o componente deve aparecer na listagem do EOL para o professor.
-
-**No C# legado** (`ComponenteCurricularService.cs:293`):
-
-```csharp
-ExibirComponenteEOL = !agrupaComponenteCurricular
-                   && !componenteCurricular.TemComponenteVigente(componentesApiEol)
-```
-
-`False` quando **ambas** as condições são verdadeiras:
-1. O componente **não** está em modo de agrupamento (`!agrupaComponenteCurricular`)
-2. O componente **tem** uma versão vigente em `componentecurricularpai` (`TemComponenteVigente`)
-
-A vigência é determinada pela tabela `componentecurricularpai` — não diretamente pelo ano letivo.
-
-**No ETL Python:** como `MAPA_COMPONENTE_PAI` é estático (congelado em 2021-12-31), a lógica implementada usa o ano letivo como proxy:
-
-```python
-exibir_componente_eol = not (ano_letivo <= 2021 and codigo in MAPA_COMPONENTE_PAI)
-```
-
-> **Divergência em relação ao C#:** o Python usa o ano letivo como proxy da vigência; o C# usa a vigência real da tabela `componentecurricularpai`. Para anos `> 2021` com componentes que tenham pai, o Python exibirá o filho quando o C# não exibiria — e vice-versa em cenários de vigência retroativa. Simplificação aceitável enquanto o mapeamento não mudar.
-
----
-
 ### `transferido_em`
 
 Timestamp de quando o registro foi escrito pelo ETL. Equivale ao `timezone.now()` no início da execução. Não é um dado do EOL — é metadado de auditoria do ETL.
@@ -343,7 +302,7 @@ O ETL faz o split desse CSV e popula `componente_curricular_agrupamento` com uma
 
 ### `codigo_componente_territorio_saber`
 
-Quando `territorio_saber = True`, esse campo recebe o próprio `codigo` do componente. É uma redundância intencional para indexação cruzada nos endpoints — permite filtrar componentes de território pelo seu código sem JOIN.
+Em `ComponenteTurma`, esse campo recebe o próprio código do componente quando ele existe em `turma_grade_territorio_experiencia`. É uma redundância intencional para indexação cruzada nos endpoints — permite identificar componentes de território sem JOIN adicional.
 
 ---
 
@@ -353,19 +312,7 @@ Alguns componentes são variações de um componente "pai" — ex: componentes f
 
 **No C# legado:** a relação pai-filho é consultada dinamicamente na tabela `componentecurricularpai` da `ApiEolConnection` (Postgres), via LEFT JOIN com ordenação por `Id DESC`. A lógica distingue `CodigoComponentePai` de `CodigoComponentePaiVigencia` — o par mais recente por ordem de inserção é o vigente.
 
-**No ETL Python:** o mapeamento é **hardcoded** em `MAPA_COMPONENTE_PAI` (`queries.py`), congelado com os dados de 2021-12-31:
-
-```
-512 → 512  (pai de si mesmo — componente raiz V40)
-513 → 512
-534 → 512
-535 → 512
-515 → 512  (V56)
-517 → 512
-518 → 512
-```
-
-> **Simplificação consciente:** o banco `ApiEolConnection` (Postgres legado) foi removido como dependência do ETL. O mapeamento foi extraído como constante estática no momento da migração. Se novos componentes com pai forem criados no EOL após 2021-12-31, o Python não os reconhecerá — `codigo_componente_curricular_pai` ficará `None` para eles. O glossário registra isso como dívida técnica conhecida.
+**No ETL Python:** essa regra não é mais aplicada em `ComponenteTurma`. A relação fica em `componente_curricular_hierarquia`, tabela local de apoio, e deve ser consultada pelo microsserviço de consumo quando precisar resolver pai/filho.
 
 ---
 
@@ -434,7 +381,8 @@ Código que explica por que uma atribuição foi encerrada:
 
 | Tabela | O que representa |
 |---|---|
-| `regenciacomponentecurricular` | Configuração global de quais componentes entram no planejamento de regência por turno e ano escolar. Triplas `(id_componente, turno, ano)` — quando `turno` e `ano` são `null`, o componente é genérico (fallback para qualquer turma). |
+| `componente_curricular_planejamento_regencia` | Configuração global de quais componentes entram no planejamento de regência por turno e ano escolar. Triplas `(id_componente_curricular, turno, ano)` — quando `turno` e `ano` são `null`, o componente é genérico para qualquer turma. |
+| `componente_curricular_hierarquia` | Relação entre componente filho e componente pai, com vigência. |
 | `componentecurricularpap` | Lista de IDs de componentes curriculares pertencentes ao PAP. Usada para identificar turmas e componentes do programa. |
 
 ---
@@ -444,19 +392,20 @@ Código que explica por que uma atribuição foi encerrada:
 ```
 ComponenteCurricular          ← catálogo base (fase 1)
         │
-        ├── ComponenteCurricularPorTurma         ← atribuição real por turma/professor (fase 2)
-        │       flags: regencia, planejamento_regencia, territorio_saber
+        ├── ComponenteTurma                      ← vínculo turma × componente (fase 2)
+        │       campo: codigo_componente_territorio_saber
         │
-        ├── ComponenteCurricularAgrupamento       ← detalhe do agrupamento, 1 linha por componente (fase 3)
+        ├── AtribuicaoComponente                 ← professor × turma × componente (fase 3)
+        │
+        ├── ComponenteCurricularAgrupamento       ← detalhe do agrupamento, 1 linha por componente (fase 4)
         │       └── referencia AgrupamentoAtribuicaoTerritorioSaber
         │
-        ├── AgrupamentoAtribuicaoTerritorioSaber  ← agrupamento de território como unidade (fase 3)
+        ├── AgrupamentoAtribuicaoTerritorioSaber  ← agrupamento de território como unidade (fase 4)
         │
-        ├── ComponenteInicioTurma                 ← data de início de aula por componente/turma (fase 4)
-        │
-        └── GradeCurricularSerie                  ← oferta de componentes por ano/modalidade (fase 5)
+        └── GradeComponenteCurricular             ← oferta de componentes por ano/modalidade (fase 5)
 
 Tabelas locais de apoio (fora do pipeline principal):
-        ├── RegenciaComponenteCurricular          ← referência histórica de configuração de regência
+        ├── ComponenteCurricularPlanejamentoRegencia ← configuração de planejamento de regência
+        ├── ComponenteCurricularHierarquia        ← relação componente pai/filho
         └── ComponenteCurricularPAP               ← lista local de componentes PAP
 ```

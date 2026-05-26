@@ -1,6 +1,7 @@
 """Tasks Celery genéricas para orquestração de ETL."""
 
 import logging
+import os
 from typing import Any
 from uuid import UUID
 
@@ -17,6 +18,12 @@ from apps.core.libs.thread_processor import ThreadPoolProcessor
 logger = logging.getLogger(__name__)
 
 
+def _resolver_rate_limit() -> str | None:
+    """Lê ETL_RATE_LIMIT do ambiente com fallback para '100/m'."""
+    val = os.getenv("ETL_RATE_LIMIT", "100/m")
+    return val if val else None
+
+
 @shared_task(
     bind=True,
     name="etl.core.processar_chunk",
@@ -24,7 +31,7 @@ logger = logging.getLogger(__name__)
     max_retries=3,
     acks_late=True,
     prefetch_multiplier=1,
-    rate_limit="30/m",
+    rate_limit=_resolver_rate_limit(),
 )
 
 def processar_chunk(
@@ -33,7 +40,6 @@ def processar_chunk(
     fase_meta_dict: dict[str, Any],
 ) -> tuple[int, int]:
     """Processa chunk do domínio, transformando e persistindo dados."""
-
     try:
         fase_meta = BaseEtlFase.from_dict(fase_meta_dict)
         transform = fase_meta.get_transformer()

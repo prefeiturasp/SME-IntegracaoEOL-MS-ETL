@@ -12,6 +12,9 @@ _TABELAS_UPSERT = frozenset(
         "necessidade_especial_aluno",
         "matricula",
         "matricula_turma",
+        "matricula_ano_letivo",
+        "matricula_componente_curricular_ano_letivo",
+        "dados_aluno_acompanhamento_escolar",
     }
 )
 
@@ -21,7 +24,7 @@ class Command(BaseEtlCommand):
 
     help = "Executa pipeline ETL do domínio ALUNOS_DB (Sync ou Celery)"
     dominio = "alunos"
-    fase_final = 6
+    fase_final = 9
     service_class = EtlAlunosService
     orquestrador_class = EtlAlunosOrquestrador
 

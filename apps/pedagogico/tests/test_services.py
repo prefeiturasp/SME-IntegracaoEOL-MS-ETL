@@ -9,18 +9,15 @@ from django.utils import timezone
 from apps.core.libs.base_etl_service import PhaseConfig, PipelineMetrics
 from apps.pedagogico.dtos.model_in import (
     AtribuicaoTerritorioSaberIn,
-    RegenciaComponenteCurricularIn,
 )
 from apps.pedagogico.models import AgrupamentoAtribuicaoTerritorioSaber
 from apps.pedagogico.services import (
     _AGRUPAMENTO_ID_INICIAL,
     EtlPedagogicoService,
     _agrupar,
-    _build_a3_index,
     _chave_grupo,
     _cod_agrupamento,
     _montar_indices_agr_existentes,
-    _planejamento_regencia,
 )
 
 
@@ -44,7 +41,6 @@ class TestPedagogicoService(TestCase):
             table_name="tb",
             model_class=None,
             dto_in=None,
-            dto_out=None,
             pk_field="id",
             update_fields=("f1",),
             unique_fields=("id",),
@@ -58,32 +54,13 @@ class TestPedagogicoService(TestCase):
             [fase.nome for fase in self.service._fases],
             [
                 "componente_curricular",
-                "componente_por_turma",
+                "componente_turma",
+                "atribuicao_componente",
                 "agrupamento_territorio_saber",
-                "componente_inicio_turma",
-                "grade_curricular_serie",
+                "grade_componente_curricular",
                 "turma",
             ],
         )
-
-    def test_build_a3_index_separa_exact_e_fallback(self) -> None:
-        exact, fallback = _build_a3_index(
-            [
-                RegenciaComponenteCurricularIn(100, 6, "7"),
-                RegenciaComponenteCurricularIn(200, None, None),
-            ]
-        )
-
-        self.assertIn((100, 6, "7"), exact)
-        self.assertIn(200, fallback)
-
-    def test_planejamento_regencia_considera_exact_e_fallback(self) -> None:
-        exact = {(100, 6, "7")}
-        fallback = {200}
-
-        self.assertTrue(_planejamento_regencia(100, 6, "7", exact, fallback))
-        self.assertTrue(_planejamento_regencia(200, 1, "1", exact, fallback))
-        self.assertFalse(_planejamento_regencia(300, 1, "1", exact, fallback))
 
     def test_criar_transform_componente_curricular_retorna_tripla(
         self,
@@ -91,47 +68,38 @@ class TestPedagogicoService(TestCase):
         config = self.service._fases[0]
         transform = self.service._criar_transform(config)
 
-        result = transform((100, " Arte "))
+        result = transform((100, " Arte ", 1))
         assert result is not None
         pk, hash_val, obj = result
 
         self.assertEqual(pk, "100")
         self.assertEqual(len(hash_val), 64)
         self.assertEqual(obj.descricao, "Arte")
+        self.assertTrue(obj.regencia)
 
-    def test_criar_transform_componente_por_turma_aplica_flags_do_sql(
+    def test_criar_transform_componente_turma_mapeia_vinculo_minimo(
         self,
     ) -> None:
-        self.service._exact = {(513, 6, "7")}
         config = self.service._fases[1]
         transform = self.service._criar_transform(config)
 
-        result = transform(
-            (513, " Inglês ", 1, 1, 1, 6, "7", 2025, "T1", "RF1", 0)
-        )
+        result = transform(("T1", 513, 1105))
         assert result is not None
         pk, _, obj = result
 
-        self.assertEqual(pk, "513-T1-RF1")
-        self.assertTrue(obj.regencia)
-        self.assertTrue(obj.territorio_saber)
-        self.assertTrue(obj.planejamento_regencia)
-        self.assertEqual(obj.codigo_componente_curricular_pai, 512)
+        self.assertEqual(pk, "T1-513")
+        self.assertEqual(obj.turma_codigo, "T1")
+        self.assertEqual(obj.componente_codigo, 513)
+        self.assertEqual(obj.codigo_componente_territorio_saber, 1105)
 
-    def test_criar_transform_comp_por_turma_pula_linha_sem_codigo_ou_turma(
+    def test_criar_transform_componente_turma_pula_linha_sem_codigo_ou_turma(
         self,
     ) -> None:
         config = self.service._fases[1]
         transform = self.service._criar_transform(config)
 
-        self.assertIsNone(
-            transform(
-                (None, " Inglês ", 1, 1, 1, 6, "7", 2025, "T1", "RF1", 0)
-            )
-        )
-        self.assertIsNone(
-            transform((513, " Inglês ", 1, 1, 1, 6, "7", 2025, None, "RF1", 0))
-        )
+        self.assertIsNone(transform((None, 513, 1105)))
+        self.assertIsNone(transform(("T1", None, 1105)))
 
     def test_criar_transform_turma_retorna_tripla_com_pk_codigo(
         self,
@@ -155,8 +123,11 @@ class TestPedagogicoService(TestCase):
             None,  # data_atualizacao
             None,  # data_status_turma_escola
             " 5o ano ",  # serie_ensino
+            50,  # codigo_serie_ensino
             " Fundamental ",  # modalidade
             5,  # codigo_modalidade
+            3,  # codigo_tipo_programa
+            5,  # codigo_modalidade_etapa
             0,  # semestre
             0,  # ensino_especial
         )
@@ -169,33 +140,11 @@ class TestPedagogicoService(TestCase):
         self.assertEqual(obj.codigo, 123456)
         self.assertEqual(obj.nome_turma, "5A Manhã")
         self.assertEqual(obj.serie_ensino, "5o ano")
+        self.assertEqual(obj.codigo_serie_ensino, 50)
         self.assertEqual(obj.modalidade, "Fundamental")
+        self.assertEqual(obj.codigo_tipo_programa, 3)
         self.assertFalse(obj.extinta)
         self.assertEqual(obj.semestre, 0)
-
-    def test_criar_transform_componente_inicio_turma_gera_pk_composta(
-        self,
-    ) -> None:
-        config = self.service._fases[3]
-        transform = self.service._criar_transform(config)
-
-        result = transform(
-            (
-                "100",
-                " Arte ",
-                "200",
-                "2025-03-10T08:00:00",
-                "300",
-                2025,
-                1,
-            )
-        )
-        assert result is not None
-        pk, _, obj = result
-
-        self.assertEqual(pk, "100-200")
-        self.assertEqual(obj.componente_codigo, "100")
-        self.assertTrue(timezone.is_aware(obj.data_inicio_turma))
 
     def test_criar_transform_comp_por_ano_letivo_ignora_registro_sem_chave(
         self,
@@ -206,6 +155,38 @@ class TestPedagogicoService(TestCase):
         self.assertIsNone(transform((None, "Desc", "1", "1 ano", 1, 5, 2025)))
         self.assertIsNone(transform((100, "Desc", "1", "1 ano", 1, 5, None)))
 
+    def test_criar_transform_grade_usa_serie_na_chave(self) -> None:
+        """Grade usa série na chave e ano turma como campo atualizável."""
+        config = self.service._fases[4]
+        transform = self.service._criar_transform(config)
+
+        result = transform((100, " Arte ", "1", "1 ano", 88, 5, 2024))
+        assert result is not None
+        pk, _, obj = result
+
+        self.assertEqual(pk, "100-2024-5-88")
+        self.assertEqual(obj.codigo_ano_turma, "1")
+        self.assertEqual(obj.codigo_serie_ensino, 88)
+        self.assertEqual(
+            config.pk_field,
+            [
+                "codigo_componente_curricular",
+                "ano_letivo",
+                "modalidade",
+                "codigo_serie_ensino",
+            ],
+        )
+        self.assertIn("codigo_ano_turma", config.update_fields)
+        self.assertEqual(
+            config.unique_fields,
+            (
+                "codigo_componente_curricular",
+                "ano_letivo",
+                "modalidade",
+                "codigo_serie_ensino",
+            ),
+        )
+
     @patch.object(EtlPedagogicoService, "sync_batch", return_value=(1, 1))
     def test_processar_batch_filtra_nones_antes_do_sync_batch(
         self, mock_sync: MagicMock
@@ -215,8 +196,8 @@ class TestPedagogicoService(TestCase):
         escritos, ignorados = self.service._processar_batch(
             config=config,
             chunk=[
-                (None, "Inválido", 0, 0, 1, 6, "7", 2025, "T1", "RF1", 0),
-                (513, " Inglês ", 1, 0, 1, 6, "7", 2025, "T1", "RF1", 0),
+                (None, 513, 1105),
+                ("T1", 513, 1105),
             ],
             transform=self.service._criar_transform(config),
             batch_num=0,
@@ -225,7 +206,7 @@ class TestPedagogicoService(TestCase):
         self.assertEqual((escritos, ignorados), (1, 1))
         processed_data = mock_sync.call_args.args[0]
         self.assertEqual(len(processed_data), 1)
-        self.assertEqual(processed_data[0][0], "513-T1-RF1")
+        self.assertEqual(processed_data[0][0], "T1-513")
 
     def test_anos_letivos_usa_cache_por_instancia(self) -> None:
         self.mock_eol.iter_query.return_value = [[(2024,), (2025,)]]
@@ -246,7 +227,7 @@ class TestPedagogicoService(TestCase):
     def test_executar_agrupamentos_escreve_duas_tabelas(
         self, mock_sync: MagicMock, _mock_indices: MagicMock
     ) -> None:
-        config = self.service._fases[2]
+        config = self.service._fases[3]
         self.mock_eol.iter_query.return_value = [
             [
                 (
@@ -320,9 +301,8 @@ class TestPedagogicoService(TestCase):
         self.assertEqual(agrupamentos, [])
         self.assertEqual(itens, [])
 
-    def test_executar_preenche_duas_chaves_na_fase_3(self) -> None:
+    def test_executar_preenche_duas_chaves_a_partir_da_fase_3(self) -> None:
         with (
-            patch.object(self.service, "_carregar_lookups") as mock_lookups,
             patch.object(self.service, "_executar_fase") as mock_fase,
             patch.object(self.service, "_registrar_auditoria_fase"),
         ):
@@ -331,12 +311,11 @@ class TestPedagogicoService(TestCase):
 
             resultado = self.service.executar(fase_inicial=3)
 
-        self.assertFalse(mock_lookups.called)
         self.assertEqual(
             resultado["agrupamento_atribuicao_territorio_saber"], 10
         )
         self.assertEqual(resultado["componente_curricular_agrupamento"], 7)
-        self.assertIn("componente_inicio_turma", resultado)
+        self.assertIn("grade_componente_curricular", resultado)
         self.assertIn("turma", resultado)
         self.assertEqual(mock_fase.call_count, 4)
 

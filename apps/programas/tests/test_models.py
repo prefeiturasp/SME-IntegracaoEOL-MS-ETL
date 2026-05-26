@@ -48,6 +48,33 @@ class TestTurmaProgramaStr(TestCase):
         self.assertIn("12345", resultado)
         self.assertIn("2025", resultado)
 
+    def test_descricao_grade_default_none(self) -> None:
+        t = TurmaPrograma(
+            codigo_turma=12345,
+            nome_turma="LA",
+            codigo_ue="000001",
+            codigo_dre="108900",
+            ano_letivo=2025,
+            situacao="O",
+            categoria="PAP",
+        )
+        self.assertIsNone(t.descricao_grade)
+
+    def test_descricao_grade_aceita_valor(self) -> None:
+        t = TurmaPrograma(
+            codigo_turma=12345,
+            nome_turma="LA",
+            codigo_ue="000001",
+            codigo_dre="108900",
+            ano_letivo=2025,
+            situacao="O",
+            categoria="PAP",
+            descricao_grade="PAP COLABORATIVO 3 / 4 E 5 ANO",
+        )
+        self.assertEqual(
+            t.descricao_grade, "PAP COLABORATIVO 3 / 4 E 5 ANO"
+        )
+
 
 class TestTurmaProgramaComponenteCurricularStr(TestCase):
     def test_str(self) -> None:

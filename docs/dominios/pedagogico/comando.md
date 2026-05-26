@@ -12,6 +12,7 @@ Herdados de `BaseEtlCommand`:
 - `--offset` — offset inicial
 - `--continuar` — retoma a partir do último checkpoint salvo
 - `--primeiro-run` — sinaliza primeiro run (sem filtro incremental)
+- `--ano-letivo` — processa apenas anos letivos a partir do valor informado
 
 ## Comportamento
 
@@ -28,24 +29,27 @@ Herdados de `BaseEtlCommand`:
 
 Documentação alvo do domínio:
 
-- Fases do pipeline: `5`
+- Fases do pipeline: `6`
 - Tabelas persistidas pelo ETL:
   - `componente_curricular`
-  - `componente_curricular_por_turma`
+  - `componente_turma`
+  - `atribuicao_componente`
   - `agrupamento_atribuicao_territorio_saber`
   - `componente_curricular_agrupamento`
-  - `componente_inicio_turma`
-  - `grade_curricular_serie`
+  - `grade_componente_curricular`
+  - `turma`
 
 Estado atual do código em `etl_pedagogico.py`:
 
 - `_TABELAS_UPSERT` ainda lista nomes antigos:
   - `componente_curricular_regencia`
   - `dados_aula_turma`
-  - `componente_curricular_por_ano_letivo`
+- `_TABELAS_UPSERT` ainda não lista explicitamente:
+  - `componente_turma`
+  - `atribuicao_componente`
 - `fase_final` ainda está em `6`
 
-Essa é uma divergência conhecida do código em relação ao pipeline atual documentado aqui.
+Essa é uma divergência conhecida apenas na classificação de modo de escrita do comando. O pipeline de serviço atual possui 6 fases.
 
 ## Exemplos
 

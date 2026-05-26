@@ -1,11 +1,13 @@
 """Testes para tasks Celery do domínio Alunos."""
 
+from typing import Any
 from unittest.mock import MagicMock, patch
-from django.test import TestCase
 from uuid import uuid4
 
+from django.test import TestCase
 
-def _fase_meta_dict(**kwargs: object) -> dict:
+
+def _fase_meta_dict(**kwargs: Any) -> dict[str, Any]:
     defaults = {
         "nome": "aluno",
         "sql": "SELECT 1",
@@ -55,7 +57,20 @@ class TestProcessarChunkAlunos(TestCase):
         mock_upsert_class.return_value = mock_upsert
 
         chunk = [
-            [1, "nome", None, None, None, None, None, None, None, None, None, False]
+            [
+                1,
+                "nome",
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                False,
+            ]
         ]
         resultado = processar_chunk.run(chunk, _fase_meta_dict())
 
@@ -70,7 +85,7 @@ class TestProcessarChunkAlunos(TestCase):
         mock_processor_class: MagicMock,
         mock_upsert_class: MagicMock,
     ) -> None:
-        """Valida que ThreadPoolProcessor é instanciado sem max_workers fixo."""
+        """Valida que ThreadPoolProcessor não recebe max_workers fixo."""
         from apps.core.tasks import processar_chunk
 
         mock_get_transformer.return_value = MagicMock()
@@ -92,12 +107,26 @@ class TestProcessarChunkAlunos(TestCase):
     ) -> None:
         """Valida que exceção no processamento lança retry do Celery."""
         from celery.exceptions import Retry
+
         from apps.core.tasks import processar_chunk
 
         mock_upsert_class.side_effect = RuntimeError("Falha")
 
         chunk = [
-            [1, "nome", None, None, None, None, None, None, None, None, None, False]
+            [
+                1,
+                "nome",
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                False,
+            ]
         ]
         with self.assertRaises((Retry, RuntimeError)):
             processar_chunk.run(chunk, _fase_meta_dict())
@@ -134,7 +163,7 @@ class TestFinalizarFase(TestCase):
         self,
         mock_repo_cls: MagicMock,
     ) -> None:
-        """Valida que a última fase finaliza a execução com situacao='concluido'."""
+        """Valida que a última fase finaliza com situacao='concluido'."""
         from apps.core.tasks import finalizar_fase
 
         mock_repo = mock_repo_cls.return_value
@@ -183,6 +212,38 @@ class TestFinalizarFase(TestCase):
         )
 
 
+class TestRateLimitConfiguravel(TestCase):
+    """Valida que _resolver_rate_limit lê ETL_RATE_LIMIT do ambiente."""
+
+    def test_padrao_retorna_100_por_minuto(self) -> None:
+        """Sem ETL_RATE_LIMIT, retorna '100/m'."""
+        import os
+
+        from apps.core.tasks import _resolver_rate_limit
+
+        env = {k: v for k, v in os.environ.items() if k != "ETL_RATE_LIMIT"}
+        with patch.dict(os.environ, env, clear=True):
+            self.assertEqual(_resolver_rate_limit(), "100/m")
+
+    def test_respeita_env_var(self) -> None:
+        """ETL_RATE_LIMIT='10/s' é retornado corretamente."""
+        import os
+
+        from apps.core.tasks import _resolver_rate_limit
+
+        with patch.dict(os.environ, {"ETL_RATE_LIMIT": "10/s"}):
+            self.assertEqual(_resolver_rate_limit(), "10/s")
+
+    def test_vazio_retorna_none(self) -> None:
+        """ETL_RATE_LIMIT='' desabilita o rate limit (retorna None)."""
+        import os
+
+        from apps.core.tasks import _resolver_rate_limit
+
+        with patch.dict(os.environ, {"ETL_RATE_LIMIT": ""}):
+            self.assertIsNone(_resolver_rate_limit())
+
+
 class TestBaseEtlChunkSemSleep(TestCase):
     """Valida que o produtor não bloqueia o processo Django."""
 
@@ -193,7 +254,6 @@ class TestBaseEtlChunkSemSleep(TestCase):
     ) -> None:
         """Valida que time.sleep não é invocado durante a criação do grupo."""
         from apps.core.libs.base_etl_chunck import BaseEtlChunk
-        from unittest.mock import MagicMock
 
         mock_eol = MagicMock()
         mock_eol.iter_query.return_value = [[(1,)], [(2,)]]

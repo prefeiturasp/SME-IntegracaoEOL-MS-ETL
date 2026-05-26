@@ -7,54 +7,76 @@ Estes modelos residem em `apps/pedagogico/models.py` e são persistidos no banco
 Catálogo de componentes curriculares ativos no EOL. Fonte de verdade para código e descrição.
 
 - **Tabela:** `componente_curricular`
+- **Fonte:** `SQL_COMPONENTES_NAO_CANCELADOS`, equivalente a `componente_curricular WHERE dt_cancelamento IS NULL`
 - **Unique:** `codigo` (Integer)
+- **Nota:** também armazena `regencia`, calculado no SQL pela lista `_IDS_REGENCIA`.
 - **Alimenta:** `GET /api/v1/componentes-curriculares`
 
-## 2. ComponenteCurricularPorTurma
+## 2. ComponenteTurma
 
-Atribuição real de componente a uma turma e professor. Inclui flags que classificam o componente: regência, território do saber e planejamento de regência.
+Estrutura turma × componente, sem professor. Mantém apenas o vínculo curricular real da turma e o código do componente quando ele pertence a território do saber.
 
-- **Tabela:** `componente_curricular_por_turma`
-- **Unique:** `(codigo, turma_codigo, professor)` com `nulls_distinct=False`
-- **Índices:** `turma_codigo`, `codigo`, `ano_letivo`, `(professor, ano_letivo)`
-- **Alimenta:** turmas, atribuições, validações PAP/UE
+- **Tabela:** `componente_turma`
+- **Fonte:** `SQL_COMPONENTE_TURMA`
+- **Unique:** `(turma_codigo, componente_codigo)`
+- **Índices:** `turma_codigo`, `componente_codigo`
+- **Branches da query:** turmas com série via `serie_turma_escola → serie_turma_grade → grade`; turmas de programa via `turma_escola_grade_programa`
+- **Filtro de situação:** `st_turma_escola IN ('O', 'A', 'C', 'E')`
+- **Alimenta:** consultas de componentes por turma
 
-## 3. AgrupamentoAtribuicaoTerritorioSaber
+## 3. AtribuicaoComponente
+
+Atribuição real de professor a uma turma e componente. Separa a existência do componente na turma da existência de professor atribuído.
+
+- **Tabela:** `atribuicao_componente`
+- **Fonte:** `SQL_ATRIBUICAO_COMPONENTE`
+- **Unique:** `(turma_codigo, componente_codigo, professor)` com `nulls_distinct=False`
+- **Índices:** `turma_codigo`, `componente_codigo`, `(professor, ano_letivo)`
+- **Branches da query:** SME ativo por série; SME ativo por programa explícito; SME ativo por programa via `escola_grade`; externo ativo por série; externo ativo por programa; SME liberado; externo liberado.
+- **Filtro de situação:** `st_turma_escola IN ('O', 'A', 'C', 'E')`
+- **Motivo de disponibilização:** exclui erro de cadastro (`26` no SME, `1` para externo) e mantém fim de ano letivo quando previsto na regra do legado.
+- **Externos:** limitados a `tp_escola IN (11, 12, 32, 33)`.
+- **Professor nulo:** não representa “componente sem professor”; ausência de linha indica que não há professor atribuído.
+- **Alimenta:** consultas por professor/turma/componente
+
+## 4. AgrupamentoAtribuicaoTerritorioSaber
 
 Agrupamento de componentes de território atribuídos a um professor numa mesma turma. `cod_agrupamento` é hash MD5 determinístico da chave natural.
 
 - **Tabela:** `agrupamento_atribuicao_territorio_saber`
+- **Fonte:** `SQL_ATRIBUICOES_TERRITORIO_SABER`
 - **Unique:** `cod_agrupamento` (BigIntegerField)
 - **Índices:** `cod_turma`, `rf_professor`, `ano_letivo`
+- **Branches da query:** SME (`atribuicao_aula + v_cargo_base_cotic + v_servidor_cotic`) e externo (`atribuicao_externo + contrato_externo + pessoa`).
+- **Território:** resolvido por `turma_grade_territorio_experiencia`.
+- **Filtro de situação:** `st_turma_escola IN ('O', 'A', 'C', 'E')`
 - **Alimenta:** `territorio-saber/agrupamentos-correlacionados`, `territorio-saber/agrupamentos`
 - **Nota:** `cod_componentes_curriculares` armazena os códigos como CSV; o ETL faz o split e popula `ComponenteCurricularAgrupamento`.
 
-## 4. ComponenteCurricularAgrupamento
+## 5. ComponenteCurricularAgrupamento
 
 Itens de um agrupamento de território do saber — uma linha por componente. Derivada do split do CSV de `AgrupamentoAtribuicaoTerritorioSaber`.
 
 - **Tabela:** `componente_curricular_agrupamento`
+- **Fonte:** derivada de `AgrupamentoAtribuicaoTerritorioSaber`; o ETL faz split do CSV `cod_componentes_curriculares`.
 - **Unique:** `(componente_codigo, turma_codigo, codigo_agrupamento)`
 - **Índices:** `turma_codigo`, `componente_codigo`
 - **Alimenta:** `codigosTerritoriosAgrupamento` nos endpoints de perfil e planejamento
 
-## 5. ComponenteInicioTurma
-
-Data de início e periodicidade de cada componente por turma. Campos `ue_codigo`, `ano_letivo` e `tipo_periodicidade` são desnormalizados para evitar JOIN no endpoint.
-
-- **Tabela:** `componente_inicio_turma`
-- **Unique:** `(componente_codigo, turma_codigo)`
-- **Índices:** `(ue_codigo, ano_letivo)`, `turma_codigo`
-- **Alimenta:** `GET /api/v1/componentes-curriculares/turmas/vigencia`
-
-## 6. GradeCurricularSerie
+## 6. GradeComponenteCurricular
 
 Catálogo de componentes previstos na grade por série e modalidade. Representa a oferta curricular possível — independente de haver atribuição real de professor ou turma.
 
-- **Tabela:** `grade_curricular_serie`
-- **Unique:** `(codigo_componente_curricular, ano_letivo, modalidade)` com `nulls_distinct=False`
+- **Tabela:** `grade_componente_curricular`
+- **Fonte:** `SQL_GRADE_COMPONENTE_CURRICULAR`
+- **Caminho principal:** `turma_escola → escola → grade`, com join em `unidade_administrativa` para DRE.
+- **Filtro de situação:** `st_turma_escola IN ('O', 'A', 'C')`; turmas extintas (`E`) não entram.
+- **Série válida:** exige `sg_resumida_serie IS NOT NULL`.
+- **Programas:** considera turmas de programa via `turma_escola_grade_programa`.
+- **Unique:** `(codigo_componente_curricular, ano_letivo, modalidade, codigo_serie_ensino)` com `nulls_distinct=False`
 - **Índices:** `(ano_letivo, modalidade)`, `codigo_ano_turma`
 - **`modalidade`:** calculado via CASE na query — `1=EI | 3=EJA | 4=CIEJA | 5=EF | 6=EM`
+- **`codigo_ano_turma`:** campo de exibição/classificação retornado ao consumidor. Não compõe a identidade porque pode variar para a mesma série de ensino no legado; a chave segura usa `codigo_serie_ensino`.
 - **Alimenta:** `ues/{ueId}/modalidades/{mod}/anos/{ano}`, `ues/{ueId}/modalidades/{mod}/anos/{ano}/turmas-programa`
 
 ## 7. Turma
@@ -62,32 +84,42 @@ Catálogo de componentes previstos na grade por série e modalidade. Representa 
 Dados cadastrais de turmas extraídos do EOL. Sincronizado por ano letivo a partir de `turma_escola`.
 
 - **Tabela:** `turma`
+- **Fonte:** `SQL_TURMAS`
 - **Unique:** `codigo` (BigIntegerField)
 - **Índices:** `(ue_codigo, ano_letivo)`, `tipo_turma`, `ano_letivo`
+- **Filtro de situação:** `st_turma_escola IN ('O', 'A', 'E', 'C')`
 - **Alimenta:** endpoints de turmas e planejamento pedagógico
-- **Nota:** `Extinta` é derivado via `CASE` na query (`st_turma_escola = 'E'`). `Modalidade` e `CodigoModalidade` são calculados via `CASE` sobre `cd_etapa_ensino`. `Semestre` é calculado para turmas EJA pelo mês de início.
+- **Campos calculados:** `Ano` usa o primeiro caractere numérico de `dc_turma_escola`, senão `0`; `Extinta` deriva de `st_turma_escola = 'E'`; `Modalidade` e `CodigoModalidade` derivam da etapa e do tipo de escola; `Semestre` é calculado para EJA pelo mês de início; `EnsinoEspecial` deriva de `cd_etapa_ensino = 13 AND cd_modalidade_ensino = 2`.
 
 ## 8. TurmaItinerarioEnsinoMedio
 
 Tabela local de apoio com os itinerários disponíveis para o Ensino Médio. Não requer query ao SQL Server — populada via fixture Django.
 
-- **Tabela:** `turmaitinerarioensinomedio`
+- **Tabela:** `turma_itinerario_ensino_medio`
 - **Origem:** `apps/pedagogico/fixtures/turma_itinerario_ensino_medio.json`
 - **Alimenta:** `GET /api/v1/itinerario/ensino-medio`
 
-## 9. RegenciaComponenteCurricular
+## 9. ComponenteCurricularPlanejamentoRegencia
 
-Tabela local de apoio. Armazena triplas `(id_componente, turno, ano)` que representam a configuração histórica de planejamento de regência por combinação de turno e série.
+Tabela local de apoio. Armazena triplas `(id_componente_curricular, turno, ano)` que representam quais componentes entram no planejamento de regência por combinação de turno e série.
 
-- **Tabela:** `regencia_componente_curricular`
+- **Tabela:** `componente_curricular_planejamento_regencia`
 - **Origem:** fixtures/migração local
-- **Uso atual:** referência histórica do domínio. O ETL principal calcula o lookup A3 diretamente do EOL via `SQL_LOOKUP_PLANEJAMENTO_REGENCIA`.
+- **Uso atual:** referência para o microsserviço de consumo. Não é fase do ETL e não enriquece `ComponenteTurma`.
 
-## 10. ComponenteCurricularPAP
+## 10. ComponenteCurricularHierarquia
+
+Tabela local de apoio para resolver componentes filhos e seus componentes curriculares pais.
+
+- **Tabela:** `componente_curricular_hierarquia`
+- **Campos principais:** `id_componente_curricular_pai`, `id_componente_curricular`, `vigencia`
+- **Uso atual:** referência para o microsserviço de consumo. Não é fase do ETL e não é gravada em `ComponenteTurma`.
+
+## 11. ComponenteCurricularPAP
 
 Tabela local de apoio com os IDs de componentes PAP (Programa de Apoio e Acompanhamento à Aprendizagem).
 
-- **Tabela:** `componentecurricularpap`
+- **Tabela:** `componente_curricular_pap`
 - **Unique:** `id_componente_curricular`
 - **Origem:** fixtures/migração local
 - **Alimenta:** validações e regras ligadas a PAP

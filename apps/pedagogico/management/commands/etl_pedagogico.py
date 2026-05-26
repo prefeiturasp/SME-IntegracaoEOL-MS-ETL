@@ -10,10 +10,9 @@ _TABELAS_UPSERT = frozenset(
     {
         "componente_curricular",
         "componente_curricular_agrupamento",
-        "componente_curricular_por_turma",
         "componente_curricular_regencia",
         "dados_aula_turma",
-        "componente_curricular_por_ano_letivo",
+        "grade_componente_curricular",
         "agrupamento_atribuicao_territorio_saber",
         "turma",
     }

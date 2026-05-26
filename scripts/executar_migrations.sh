@@ -24,7 +24,7 @@ echo "==> migrate pedagogico_db"
 python manage.py migrate --database=pedagogico_db
 
 echo "==> loaddata pedagogico_db"
-python manage.py loaddata componente_curricular_pap regencia_componente_curricular turma_itinerario_ensino_medio --database=pedagogico_db
+python manage.py loaddata componente_curricular_pap componente_curricular_planejamento_regencia turma_itinerario_ensino_medio componente_curricular_hierarquia --database=pedagogico_db
 
 echo "==> migrate programas_db"
 python manage.py migrate --database=programas_db

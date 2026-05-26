@@ -134,7 +134,9 @@ class TasksControleAuditoriaTestCase(TestCase):
         """Task de saude retorna ok."""
         self.assertEqual(verificar_saude(), "ok")
 
-    def test_executar_dominio_task_com_continuar_possui_max_retries(self) -> None:
+    def test_executar_dominio_task_com_continuar_possui_max_retries(
+        self,
+    ) -> None:
         """Task configurada para retry automático em falhas transientes."""
         self.assertEqual(executar_dominio_task.max_retries, 5)
 
@@ -224,6 +226,23 @@ class TasksControleAuditoriaTestCase(TestCase):
             "--continuar",
         )
 
+    @patch("apps.controle_auditoria.libs.tasks.call_command")
+    def test_executar_dominio_task_rejeita_parametro_sem_suporte(
+        self,
+        call_command_mock: Any,
+    ) -> None:
+        """Task rejeita parâmetros incompatíveis com o domínio."""
+        retorno = executar_dominio_task(
+            dominio="programas",
+            volume=100,
+            offset=0,
+            ano_letivo=2025,
+        )
+
+        self.assertIn("erro:", retorno)
+        self.assertIn("ano_letivo", retorno)
+        call_command_mock.assert_not_called()
+
 
 class CeleryBrokerResilienciaTestCase(TestCase):
     """Valida que a configuração do Celery tolera falhas no broker."""
@@ -233,9 +252,13 @@ class CeleryBrokerResilienciaTestCase(TestCase):
         self.assertTrue(aplicacao_celery.conf.broker_connection_retry)
 
     def test_broker_connection_retry_on_startup_habilitado(self) -> None:
-        """Worker não falha fatalmente se broker não estiver pronto na inicialização."""
-        self.assertTrue(aplicacao_celery.conf.broker_connection_retry_on_startup)
+        """Worker não falha se broker não estiver pronto."""
+        self.assertTrue(
+            aplicacao_celery.conf.broker_connection_retry_on_startup
+        )
 
     def test_broker_connection_max_retries_configurado(self) -> None:
-        """Limite de tentativas de reconexão definido para evitar loop infinito."""
-        self.assertEqual(aplicacao_celery.conf.broker_connection_max_retries, 10)
+        """Limite de reconexão evita loop infinito."""
+        self.assertEqual(
+            aplicacao_celery.conf.broker_connection_max_retries, 10
+        )

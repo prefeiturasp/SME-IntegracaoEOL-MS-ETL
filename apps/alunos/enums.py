@@ -34,7 +34,7 @@ class SituacaoMatricula(IntEnum):
         except (ValueError, TypeError):
             return "Fora do domínio liberado pela PRODAM"
 
-        mapeamento = {
+        mapeamento: dict[int, str] = {
             cls.ATIVO: "Ativo",
             cls.DESISTENTE: "Desistente",
             cls.TRANSFERIDO: "Transferido",

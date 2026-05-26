@@ -19,7 +19,7 @@ class IniciarExecucaoTest(TestCase):
     """Testes para o método iniciar_execucao do repositório."""
 
     def test_cria_registro_em_andamento(self) -> None:
-        """Verifica que iniciar_execucao cria um registro com situacao em_execucao."""
+        """Cria registro com situacao em_execucao."""
         repo = RepositorioAuditoriaPostgres()
         id_exec = repo.iniciar_execucao("professores")
 
@@ -44,7 +44,7 @@ class FinalizarExecucaoTest(TestCase):
         self.id_exec = self.repo.iniciar_execucao("professores")
 
     def test_finaliza_com_sucesso(self) -> None:
-        """Verifica que finalizar_execucao atualiza situacao e finalizado_em."""
+        """Atualiza situacao e finalizado_em."""
         self.repo.finalizar_execucao(self.id_exec, situacao="concluido")
         execucao = EtlExecucao.objects.get(id_execucao=self.id_exec)
         self.assertEqual(execucao.situacao, "concluido")
@@ -69,7 +69,7 @@ class RegistrarTabelaLidaTest(TestCase):
         self.id_exec = self.repo.iniciar_execucao("professores")
 
     def test_cria_registro_de_leitura(self) -> None:
-        """Verifica que registrar_tabela_lida cria o registro com os campos corretos."""
+        """Cria registro de leitura com os campos corretos."""
         self.repo.registrar_tabela_lida(
             id_execucao=self.id_exec,
             tabela_origem="professor",
@@ -91,27 +91,53 @@ class RegistrarTabelaEscritaTest(TestCase):
         self.id_exec = self.repo.iniciar_execucao("professores")
 
     def test_cria_registro_de_escrita_upsert(self) -> None:
-        """Verifica que registrar_tabela_escrita cria registro com modo upsert."""
+        """Cria registro de escrita com modo upsert."""
         self.repo.registrar_tabela_escrita(
             id_execucao=self.id_exec,
             tabela_destino="professor",
             linhas_escritas=100,
             modo_escrita="upsert",
         )
-        registro = EtlExecucaoTabelaEscrita.objects.get(id_execucao=self.id_exec)
+        registro = EtlExecucaoTabelaEscrita.objects.get(
+            id_execucao=self.id_exec
+        )
         self.assertEqual(registro.tabela_destino, "professor")
         self.assertEqual(registro.linhas_escritas, 100)
         self.assertEqual(registro.modo_escrita, "upsert")
 
     def test_modo_escrita_padrao_e_upsert(self) -> None:
-        """Verifica que o modo de escrita padrão é upsert quando não informado."""
+        """Usa upsert como modo de escrita padrão."""
         self.repo.registrar_tabela_escrita(
             id_execucao=self.id_exec,
             tabela_destino="cargo",
             linhas_escritas=16,
         )
-        registro = EtlExecucaoTabelaEscrita.objects.get(id_execucao=self.id_exec)
+        registro = EtlExecucaoTabelaEscrita.objects.get(
+            id_execucao=self.id_exec
+        )
         self.assertEqual(registro.modo_escrita, "upsert")
+
+    def test_atualiza_registro_existente_da_mesma_tabela(self) -> None:
+        """Evita duplicar escrita na mesma execução e tabela."""
+        self.repo.registrar_tabela_escrita(
+            id_execucao=self.id_exec,
+            tabela_destino="professor",
+            linhas_escritas=100,
+            modo_escrita="upsert",
+        )
+        self.repo.registrar_tabela_escrita(
+            id_execucao=self.id_exec,
+            tabela_destino="professor",
+            linhas_escritas=120,
+            modo_escrita="upsert",
+        )
+
+        registros = EtlExecucaoTabelaEscrita.objects.filter(
+            id_execucao=self.id_exec,
+            tabela_destino="professor",
+        )
+        self.assertEqual(registros.count(), 1)
+        self.assertEqual(registros.get().linhas_escritas, 120)
 
 
 class CheckpointDominioTest(TestCase):
@@ -128,7 +154,7 @@ class CheckpointDominioTest(TestCase):
         self.assertIsNone(resultado)
 
     def test_cria_checkpoint_novo(self) -> None:
-        """Verifica que atualizar_checkpoint_dominio cria um novo checkpoint."""
+        """Cria um novo checkpoint."""
         self.repo.atualizar_checkpoint_dominio(
             dominio="professores",
             ultimo_id_execucao=self.id_exec,
@@ -166,14 +192,15 @@ class CheckpointDominioTest(TestCase):
             sucesso=True,
         )
         self.assertEqual(
-            EtlCheckpointDominio.objects.filter(dominio="professores").count(), 1
+            EtlCheckpointDominio.objects.filter(dominio="professores").count(),
+            1,
         )
         checkpoint = EtlCheckpointDominio.objects.get(dominio="professores")
         self.assertEqual(checkpoint.ultima_pagina, 4)
         self.assertEqual(checkpoint.token_parada, "350")
 
     def test_obter_checkpoint_retorna_dict(self) -> None:
-        """obter_checkpoint_dominio retorna dicionário com dados do checkpoint."""
+        """Retorna dicionário com dados do checkpoint."""
         self.repo.atualizar_checkpoint_dominio(
             dominio="professores",
             ultimo_id_execucao=self.id_exec,
@@ -191,7 +218,7 @@ class CheckpointDominioTest(TestCase):
         self.assertEqual(resultado["ultima_situacao"], "erro")
 
     def test_checkpoint_erro_nao_atualiza_ultimo_sucesso(self) -> None:
-        """Verifica que um checkpoint com erro não atualiza ultimo_sucesso_em."""
+        """Checkpoint com erro não atualiza ultimo_sucesso_em."""
         self.repo.atualizar_checkpoint_dominio(
             dominio="professores",
             ultimo_id_execucao=self.id_exec,

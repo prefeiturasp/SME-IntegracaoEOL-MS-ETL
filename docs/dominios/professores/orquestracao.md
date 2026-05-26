@@ -46,7 +46,7 @@ A task `executar_dominio_task` executa em loop enquanto houver linhas alteradas
 python manage.py executar_dominios_loop --intervalo 300 --volume 200
 ```
 
-Executa `executar_dominios` em loop. **Nota:** `executar_dominios` roda `sinc_rec_db` e `escola`.
+Executa `executar_dominios` em loop. **Nota:** hoje o comando roda o domínio `institucional`.
 O domínio `professores` deve ser orquestrado separadamente (via Celery ou cron).
 
 ---

@@ -1,11 +1,15 @@
 """Testes dos DTOs de entrada do domínio Alunos."""
 
 from datetime import date, datetime
+from typing import Any
 
 from django.test import SimpleTestCase
 
 from apps.alunos.dtos.model_in import (
     AlunoIn,
+    DadosAlunoAcompanhamentoEscolarIn,
+    MatriculaAnoLetivoIn,
+    MatriculaComponenteCurricularAnoLetivoIn,
     MatriculaIn,
     MatriculaTurmaIn,
     NecessidadeEspecialAlunoIn,
@@ -72,9 +76,11 @@ class AlunoInTest(SimpleTestCase):
             nacionalidade=" Brasileira ",
             nis="123",
             cpf="456",
+            nome_mae=" Maria ",
             raca_cor=" Branca ",
             nome_mae=" Maria ",
             cns="789",
+            data_atualizacao_contato=date(2023, 1, 1),
             possui_deficiencia=True,
         )
         data = dto.to_domain()
@@ -99,7 +105,8 @@ class AlunoInTest(SimpleTestCase):
             raca_cor="",
             nome_mae="",
             cns="",
-            possui_deficiencia=None,
+            data_atualizacao_contato=None,
+            possui_deficiencia=False,
         )
         data = dto.to_domain()
         self.assertEqual(data["nome"], "NÃO INFORMADO")
@@ -113,7 +120,7 @@ class AlunoInTest(SimpleTestCase):
             codigo_aluno=1,
             nome="Teste",
             nome_social=None,
-            data_nascimento="2007-07-04T09:01:00",  # String com tempo
+            data_nascimento="2007-07-04T09:01:00",  # type: ignore[arg-type]
             sexo=1,
             nacionalidade="BR",
             nis=None,
@@ -121,6 +128,7 @@ class AlunoInTest(SimpleTestCase):
             raca_cor=None,
             nome_mae=None,
             cns=None,
+            data_atualizacao_contato=None,
             possui_deficiencia=False,
         )
         data = dto.to_domain()
@@ -260,3 +268,196 @@ class SituacaoMatriculaTest(SimpleTestCase):
             SituacaoMatricula.get_descricao(999),
             "Fora do domínio liberado pela PRODAM",
         )
+
+
+class MatriculaAnoLetivoInTest(SimpleTestCase):
+    """Testes de MatriculaAnoLetivoIn.to_domain()."""
+
+    def _make(self, **kwargs: Any) -> MatriculaAnoLetivoIn:
+        defaults: dict[str, Any] = {
+            "codigo_dre": "DRE01",
+            "codigo_ue": "UE01",
+            "tipo_escola": 1,
+            "ano_letivo": 2024,
+            "codigo_modalidade": 5,
+            "modalidade": "EF",
+            "ordem": 3,
+            "ano": "3A",
+            "turma": "Turma A",
+            "quantidade": 100,
+        }
+        defaults.update(kwargs)
+        return MatriculaAnoLetivoIn(**defaults)
+
+    def test_to_domain_completo(self) -> None:
+        data = self._make().to_domain()
+        self.assertEqual(data["codigo_dre"], "DRE01")
+        self.assertEqual(data["codigo_ue"], "UE01")
+        self.assertEqual(data["tipo_escola"], 1)
+        self.assertEqual(data["ano_letivo"], 2024)
+        self.assertEqual(data["codigo_modalidade"], 5)
+        self.assertEqual(data["modalidade"], "EF")
+        self.assertEqual(data["ordem"], 3)
+        self.assertEqual(data["ano"], "3A")
+        self.assertEqual(data["turma"], "Turma A")
+        self.assertEqual(data["quantidade"], 100)
+
+    def test_to_domain_campos_opcionais_nulos(self) -> None:
+        data = self._make(
+            codigo_modalidade=None,
+            modalidade=None,
+            ordem=None,
+            ano=None,
+            turma=None,
+        ).to_domain()
+        self.assertIsNone(data["codigo_modalidade"])
+        self.assertIsNone(data["modalidade"])
+        self.assertIsNone(data["ordem"])
+        self.assertIsNone(data["ano"])
+        self.assertIsNone(data["turma"])
+
+    def test_strip_em_strings(self) -> None:
+        data = self._make(
+            codigo_dre=" DRE01 ",
+            codigo_ue=" UE01 ",
+            ano=" 3A ",
+            turma=" Turma A ",
+        ).to_domain()
+        self.assertEqual(data["codigo_dre"], "DRE01")
+        self.assertEqual(data["codigo_ue"], "UE01")
+        self.assertEqual(data["ano"], "3A")
+        self.assertEqual(data["turma"], "Turma A")
+
+
+class MatriculaComponenteCurricularAnoLetivoInTest(SimpleTestCase):
+    """Testes de MatriculaComponenteCurricularAnoLetivoIn.to_domain()."""
+
+    def _make(self, **kwargs: Any) -> MatriculaComponenteCurricularAnoLetivoIn:
+        defaults: dict[str, Any] = {
+            "codigo_ue": "UE01",
+            "codigo_dre": "DRE01",
+            "ano_letivo": 2024,
+            "modalidade": "EF",
+            "ordem": 3,
+            "componente_curricular_id": 100,
+            "ano": "3A",
+            "turma": "Turma A",
+            "quantidade": 50,
+        }
+        defaults.update(kwargs)
+        return MatriculaComponenteCurricularAnoLetivoIn(**defaults)
+
+    def test_to_domain_completo(self) -> None:
+        data = self._make().to_domain()
+        self.assertEqual(data["codigo_ue"], "UE01")
+        self.assertEqual(data["codigo_dre"], "DRE01")
+        self.assertEqual(data["ano_letivo"], 2024)
+        self.assertEqual(data["modalidade"], "EF")
+        self.assertEqual(data["ordem"], 3)
+        self.assertEqual(data["componente_curricular_id"], 100)
+        self.assertEqual(data["ano"], "3A")
+        self.assertEqual(data["turma"], "Turma A")
+        self.assertEqual(data["quantidade"], 50)
+
+    def test_to_domain_modalidade_nula(self) -> None:
+        data = self._make(
+            modalidade=None, ordem=None, ano=None, turma=None
+        ).to_domain()
+        self.assertIsNone(data["modalidade"])
+        self.assertIsNone(data["ordem"])
+        self.assertIsNone(data["ano"])
+        self.assertIsNone(data["turma"])
+
+    def test_strip_em_strings(self) -> None:
+        data = self._make(
+            codigo_ue=" UE01 ",
+            codigo_dre=" DRE01 ",
+            ano=" 3A ",
+            turma=" Turma A ",
+        ).to_domain()
+        self.assertEqual(data["codigo_ue"], "UE01")
+        self.assertEqual(data["codigo_dre"], "DRE01")
+        self.assertEqual(data["ano"], "3A")
+        self.assertEqual(data["turma"], "Turma A")
+
+
+class DadosAlunoAcompanhamentoEscolarInTest(SimpleTestCase):
+    """Testes de DadosAlunoAcompanhamentoEscolarIn.to_domain()."""
+
+    def _make(self, **kwargs: Any) -> DadosAlunoAcompanhamentoEscolarIn:
+        defaults = {
+            "codigo_aluno": 1001,
+            "nome": "JOAO SILVA",
+            "nome_social": None,
+            "nome_responsavel": "MARIA SILVA",
+            "cpf_responsavel": "12345678900",
+            "data_nascimento": date(2010, 5, 20),
+            "descricao_tipo_escola": "EMEF",
+            "tipo_responsavel": 1,
+            "codigo_dre": "DRE01",
+            "sigla_dre": "DRE-NORTE",
+            "codigo_ue": "UE01",
+            "unidade_educacional": "EMEF TESTE",
+            "codigo_turma": 555,
+            "turma": "Turma A",
+            "codigo_tipo_escola": 1,
+            "situacao_matricula": "Ativo",
+            "data_situacao_matricula": date(2024, 2, 1),
+            "codigo_etapa_ensino": 5,
+            "codigo_ciclo_ensino": 2,
+            "serie_resumida": "5A",
+            "codigo_modalidade_turma": 5,
+        }
+        defaults.update(kwargs)
+        return DadosAlunoAcompanhamentoEscolarIn(**defaults)
+
+    def test_to_domain_completo(self) -> None:
+        data = self._make().to_domain()
+        self.assertEqual(data["codigo_aluno"], 1001)
+        self.assertEqual(data["nome"], "JOAO SILVA")
+        self.assertEqual(data["nome_responsavel"], "MARIA SILVA")
+        self.assertEqual(data["cpf_responsavel"], "12345678900")
+        self.assertEqual(data["data_nascimento"], date(2010, 5, 20))
+        self.assertEqual(data["descricao_tipo_escola"], "EMEF")
+        self.assertEqual(data["tipo_responsavel"], 1)
+        self.assertEqual(data["codigo_dre"], "DRE01")
+        self.assertEqual(data["codigo_ue"], "UE01")
+        self.assertEqual(data["codigo_turma"], 555)
+        self.assertEqual(data["situacao_matricula"], "Ativo")
+        self.assertEqual(data["codigo_etapa_ensino"], 5)
+        self.assertEqual(data["serie_resumida"], "5A")
+
+    def test_to_domain_campos_opcionais_nulos(self) -> None:
+        data = self._make(
+            nome_social=None,
+            nome_responsavel=None,
+            cpf_responsavel=None,
+            data_nascimento=None,
+            tipo_responsavel=None,
+            sigla_dre=None,
+            data_situacao_matricula=None,
+            codigo_etapa_ensino=None,
+            codigo_ciclo_ensino=None,
+            serie_resumida=None,
+            codigo_modalidade_turma=None,
+        ).to_domain()
+        self.assertIsNone(data["nome_social"])
+        self.assertIsNone(data["nome_responsavel"])
+        self.assertIsNone(data["cpf_responsavel"])
+        self.assertIsNone(data["data_nascimento"])
+        self.assertIsNone(data["tipo_responsavel"])
+        self.assertIsNone(data["sigla_dre"])
+        self.assertIsNone(data["codigo_etapa_ensino"])
+        self.assertIsNone(data["serie_resumida"])
+
+    def test_strip_em_strings(self) -> None:
+        data = self._make(
+            nome=" JOAO ",
+            codigo_dre=" DRE01 ",
+            codigo_ue=" UE01 ",
+            turma=" Turma A ",
+        ).to_domain()
+        self.assertEqual(data["nome"], "JOAO")
+        self.assertEqual(data["codigo_dre"], "DRE01")
+        self.assertEqual(data["codigo_ue"], "UE01")
+        self.assertEqual(data["turma"], "Turma A")

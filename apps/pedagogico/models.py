@@ -4,16 +4,11 @@ from apps.core.models import ModeloBase
 
 
 class ComponenteCurricular(ModeloBase):
-    """Catálogo de componentes curriculares ativos no EOL.
-
-    É a fonte de verdade para código e descrição de cada componente.
-    Todas as outras tabelas do domínio referenciam o código daqui.
-
-    Alimenta: GET /componentes-curriculares
-    """
+    """Catálogo de componentes curriculares."""
 
     codigo = models.IntegerField(unique=True)
     descricao = models.CharField(max_length=300)
+    regencia = models.BooleanField(default=False)
 
     class Meta:
         db_table = "componente_curricular"
@@ -24,87 +19,100 @@ class ComponenteCurricular(ModeloBase):
         return f"{self.codigo} - {self.descricao}"
 
 
-class ComponenteCurricularPorTurma(ModeloBase):
-    """Atribuição real de componente a uma turma e professor.
+class ComponenteTurma(ModeloBase):
+    """Vínculo curricular entre turma e componente."""
 
-    Registra quais componentes curriculares um professor leciona em
-    cada turma. Inclui flags que classificam o componente: se é de
-    regência, se é território do saber e se entra no planejamento.
+    turma_codigo = models.CharField(max_length=20)
+    componente_codigo = models.IntegerField()
+    codigo_componente_territorio_saber = models.IntegerField(
+        null=True,
+        blank=True,
+    )
 
-    Componentes com `territorio_saber=True` também aparecem em
-    ComponenteCurricularAgrupamento quando fazem parte de um
-    agrupamento (professor atribuído a mais de um componente de
-    território na mesma turma).
+    class Meta:
+        db_table = "componente_turma"
+        verbose_name = "componente turma"
+        verbose_name_plural = "componentes turma"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["turma_codigo", "componente_codigo"],
+                name="uq_componente_turma",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["turma_codigo"], name="idx_ct_turma_codigo"),
+            models.Index(
+                fields=["componente_codigo"], name="idx_ct_componente_codigo"
+            ),
+        ]
 
-    Alimenta:
-    - funcionarios/{login}?codigoTurma=...
-    - turmas (codigoTurmas[])
-    - turmas/brutos
-    - ues/{ueId}/turmas
+    def __str__(self) -> str:
+        return f"{self.componente_codigo} turma={self.turma_codigo}"
 
-    Upsert: (codigo, turma_codigo, professor) com nulls_distinct=False.
-    """
 
-    codigo = models.IntegerField()
-    codigo_componente_territorio_saber = models.IntegerField(null=True, blank=True)  # NOSONAR  # noqa: E501  # fmt: skip
-    codigo_componente_curricular_pai = models.IntegerField(null=True, blank=True)  # NOSONAR  # noqa: E501  # fmt: skip
-    descricao = models.CharField(max_length=300)
-    regencia = models.BooleanField()
-    planejamento_regencia = models.BooleanField()
-    territorio_saber = models.BooleanField()
-    turma_codigo = models.CharField(
-        max_length=20, null=True, blank=True
-    )  # NOSONAR
-    exibir_componente_eol = models.BooleanField()
+class AtribuicaoComponente(ModeloBase):
+    """Atribuição de professor a turma e componente curricular."""
+
+    turma_codigo = models.CharField(max_length=20)
+    componente_codigo = models.IntegerField()
     professor = models.CharField(
         max_length=20, null=True, blank=True
     )  # NOSONAR
+    atribuicao_externa = models.BooleanField(default=False)
     ano_letivo = models.IntegerField()
+    id_atribuicao_origem = models.BigIntegerField(null=True, blank=True)
+    dt_atribuicao = models.DateTimeField(null=True, blank=True)
+    dt_cancelamento = models.DateTimeField(null=True, blank=True)
+    dt_disponibilizacao = models.DateTimeField(null=True, blank=True)
+    cd_motivo_disponibilizacao = models.IntegerField(null=True, blank=True)
 
     class Meta:
-        db_table = "componente_curricular_por_turma"
-        verbose_name = "componente curricular por turma"
-        verbose_name_plural = "componentes curriculares por turma"
+        db_table = "atribuicao_componente"
+        verbose_name = "atribuição componente"
+        verbose_name_plural = "atribuições componente"
         constraints = [
             models.UniqueConstraint(
-                fields=["codigo", "turma_codigo", "professor"],
-                name="uq_componente_por_turma",
+                fields=["turma_codigo", "componente_codigo", "professor"],
+                name="uq_atribuicao_componente",
                 nulls_distinct=False,
             ),
         ]
         indexes = [
+            models.Index(fields=["turma_codigo"], name="idx_ac_turma_codigo"),
             models.Index(
-                fields=["turma_codigo"], name="idx_ccpt_turma_codigo"
+                fields=["componente_codigo"], name="idx_ac_componente_codigo"
             ),
-            models.Index(fields=["codigo"], name="idx_ccpt_codigo"),
-            models.Index(fields=["ano_letivo"], name="idx_ccpt_ano_letivo"),
             models.Index(
-                fields=["professor", "ano_letivo"], name="idx_ccpt_prof_ano"
+                fields=["professor", "ano_letivo"], name="idx_ac_prof_ano"
+            ),
+            models.Index(
+                fields=["professor", "ano_letivo"],
+                name="idx_ac_prof_ano_vigente",
+                condition=models.Q(
+                    dt_cancelamento__isnull=True,
+                    dt_disponibilizacao__isnull=True,
+                ),
+            ),
+            models.Index(
+                fields=[
+                    "turma_codigo",
+                    "professor",
+                    "componente_codigo",
+                    "ano_letivo",
+                ],
+                name="idx_ac_turma_prof_comp_ano",
             ),
         ]
 
     def __str__(self) -> str:
         return (
-            f"{self.codigo} turma={self.turma_codigo}"
+            f"{self.componente_codigo} turma={self.turma_codigo}"
             f" professor={self.professor}"
         )
 
 
 class ComponenteCurricularAgrupamento(ModeloBase):
-    """Itens de um agrupamento de território do saber.
-
-    Quando um professor é atribuído a múltiplos componentes de
-    território numa mesma turma, esses componentes são agrupados.
-    Esta tabela detalha cada componente do agrupamento — uma linha
-    por componente.
-
-    Derivada do split do CSV `cod_componentes_curriculares` de
-    AgrupamentoAtribuicaoTerritorioSaber, que registra o agrupamento
-    como um todo.
-
-    Alimenta o array `codigosTerritoriosAgrupamento` retornado por:
-    - funcionarios/{login}?codigoTurma=...
-    """
+    """Item de componente em agrupamento de território do saber."""
 
     componente_codigo = models.IntegerField()
     turma_codigo = models.CharField(max_length=20)
@@ -143,100 +151,48 @@ class ComponenteCurricularAgrupamento(ModeloBase):
         )
 
 
-class ComponenteInicioTurma(ModeloBase):
-    """Vigência de cada componente curricular numa turma concreta.
-
-    Registra quando cada componente começa a ser ministrado em cada turma
-    e qual a periodicidade da turma. Os campos de filtro são desnormalizados
-    para evitar JOINs em tempo de consulta:
-    - `componente_codigo` → chave natural da tabela
-    - `ue_codigo` → de te.cd_escola
-    - `ano_letivo` → de te.an_letivo
-    - `tipo_periodicidade` → de te.cd_tipo_periodicidade
-      (semestre para EJA/CIEJA)
-
-    Alimenta: GET /api/v1/componentes-curriculares/turmas/vigencia
-    """
-
-    componente_codigo = models.CharField(max_length=20)
-    componente_descricao = models.CharField(max_length=300)
-    turma_codigo = models.CharField(max_length=20)
-    data_inicio_turma = models.DateTimeField(null=True, blank=True)
-    ue_codigo = models.CharField(
-        max_length=10, null=True, blank=True
-    )  # NOSONAR
-    ano_letivo = models.IntegerField(null=True, blank=True)
-    tipo_periodicidade = models.IntegerField(null=True, blank=True)
-
-    class Meta:
-        db_table = "componente_inicio_turma"
-        verbose_name = "componente início turma"
-        verbose_name_plural = "componentes início turma"
-        constraints = [
-            models.UniqueConstraint(
-                fields=["componente_codigo", "turma_codigo"],
-                name="uq_componente_inicio_turma",
-            ),
-        ]
-        indexes = [
-            models.Index(
-                fields=["ue_codigo", "ano_letivo"],
-                name="idx_dat_ue_ano_letivo",
-            ),
-            models.Index(fields=["turma_codigo"], name="idx_dat_turma_codigo"),
-        ]
-
-    def __str__(self) -> str:
-        return f"{self.componente_codigo} turma={self.turma_codigo}"
-
-
-class GradeCurricularSerie(ModeloBase):
-    """Catálogo de componentes previstos na grade por série e modalidade.
-
-    Representa o que a grade curricular prevê para cada série/modalidade
-    num dado ano letivo — independente de haver atribuição de professor
-    ou turma. Diferente de ComponenteCurricularPorTurma, que registra
-    atribuições reais, esta tabela é um catálogo de oferta curricular.
-
-    `modalidade` via CASE na query: 1=EI | 3=EJA | 4=CIEJA | 5=EF | 6=EM.
-
-    Alimenta:
-    - GET ues/{ueId}/modalidades/{mod}/anos/{ano}
-    - GET ues/{ueId}/modalidades/{mod}/anos/{ano}/turmas-programa
-    Upsert: (codigo_componente_curricular, ano_letivo, modalidade)
-            com nulls_distinct=False.
-    """
+class GradeComponenteCurricular(ModeloBase):
+    """Catálogo de componentes previstos na grade curricular."""
 
     codigo_componente_curricular = models.IntegerField()
     descricao_componente_curricular = models.CharField(max_length=300)
-    codigo_ano_turma = models.CharField(max_length=10, null=True, blank=True)  # NOSONAR  # noqa: E501  # fmt: skip
-    descricao_serie_ensino = models.CharField(max_length=200, null=True, blank=True)  # NOSONAR  # noqa: E501  # fmt: skip
+    codigo_ano_turma = models.CharField(
+        max_length=10,
+        null=True,
+        blank=True,
+    )
+    descricao_serie_ensino = models.CharField(
+        max_length=200,
+        null=True,
+        blank=True,
+    )
     codigo_serie_ensino = models.IntegerField(null=True, blank=True)
     modalidade = models.IntegerField(null=True, blank=True)
     ano_letivo = models.IntegerField()
 
     class Meta:
-        db_table = "grade_curricular_serie"
-        verbose_name = "grade curricular série"
-        verbose_name_plural = "grades curriculares série"
+        db_table = "grade_componente_curricular"
+        verbose_name = "grade componente curricular"
+        verbose_name_plural = "grades componente curricular"
         constraints = [
             models.UniqueConstraint(
                 fields=[
                     "codigo_componente_curricular",
                     "ano_letivo",
                     "modalidade",
+                    "codigo_serie_ensino",
                 ],
-                name="uq_grade_curricular_serie",
+                name="uq_grade_componente_curricular",
                 nulls_distinct=False,
             ),
         ]
         indexes = [
             models.Index(
                 fields=["ano_letivo", "modalidade"],
-                name="idx_gcs_ano_letivo_modalidade",
+                name="idx_gcc_ano_letivo_modalidade",
             ),
             models.Index(
-                fields=["codigo_ano_turma"], name="idx_gcs_codigo_ano_turma"
+                fields=["codigo_ano_turma"], name="idx_gcc_codigo_ano_turma"
             ),
         ]
 
@@ -249,21 +205,7 @@ class GradeCurricularSerie(ModeloBase):
 
 
 class AgrupamentoAtribuicaoTerritorioSaber(ModeloBase):
-    """Agrupamento de componentes de território atribuídos a um professor.
-
-    Quando um professor é atribuído a múltiplos componentes de território
-    do saber na mesma turma, o conjunto forma um agrupamento identificado
-    por `cod_agrupamento` (hash MD5 determinístico da chave natural).
-
-    `cod_componentes_curriculares` armazena os códigos como CSV. O ETL
-    faz o split e popula ComponenteCurricularAgrupamento com uma linha
-    por componente.
-
-    Alimenta:
-    - GET  territorio-saber/agrupamentos-correlacionados
-    - POST territorio-saber/agrupamentos-correlacionados
-    - POST territorio-saber/agrupamentos
-    """
+    """Agrupamento de atribuições de território do saber."""
 
     cod_agrupamento = models.BigIntegerField(unique=True)
     cod_territorio_saber = models.IntegerField()
@@ -278,12 +220,27 @@ class AgrupamentoAtribuicaoTerritorioSaber(ModeloBase):
     cod_turma = models.CharField(
         max_length=20, null=True, blank=True
     )  # NOSONAR
-    cod_componentes_curriculares = models.CharField(max_length=500, null=True, blank=True)  # NOSONAR  # noqa: E501  # fmt: skip
+    cod_componentes_curriculares = models.CharField(
+        max_length=500,
+        null=True,
+        blank=True,
+    )
     ano_letivo = models.IntegerField()
     cod_motivo_disponibilizacao = models.IntegerField(null=True, blank=True)
-    desc_territorio_saber = models.CharField(max_length=200, null=True, blank=True)  # NOSONAR  # noqa: E501  # fmt: skip
-    desc_experiencia_pedagogica = models.CharField(max_length=200, null=True, blank=True)  # NOSONAR  # noqa: E501  # fmt: skip
-    encerramento_atribuicao_agrupamento_atualizado = models.BooleanField(null=True, blank=True)  # NOSONAR  # noqa: E501  # fmt: skip
+    desc_territorio_saber = models.CharField(
+        max_length=200,
+        null=True,
+        blank=True,
+    )
+    desc_experiencia_pedagogica = models.CharField(
+        max_length=200,
+        null=True,
+        blank=True,
+    )
+    encerramento_atribuicao_agrupamento_atualizado = models.BooleanField(
+        null=True,
+        blank=True,
+    )
 
     class Meta:
         db_table = "agrupamento_atribuicao_territorio_saber"
@@ -306,18 +263,7 @@ class AgrupamentoAtribuicaoTerritorioSaber(ModeloBase):
 
 
 class Turma(ModeloBase):
-    """Dados cadastrais de uma turma no EOL.
-
-    Alimenta:
-    - POST turmas-regulares       (tipo_turma=1)
-    - POST turmas-programa        (tipo_turma=3)
-    - POST listar-turmas
-    - GET  {codigoTurma}/dados
-    - GET  ue/{ue}/sincronizacoes-institucionais/anosLetivos
-    - GET  /api/ues/{ue}/turmas/{cod}/sincronizacoes-institucionais
-
-    Upsert: codigo (unique).
-    """
+    """Dados cadastrais de turma do EOL."""
 
     codigo = models.BigIntegerField(unique=True)
     ano_letivo = models.IntegerField()
@@ -333,9 +279,12 @@ class Turma(ModeloBase):
     ue_codigo = models.CharField(max_length=20)
     modalidade = models.CharField(max_length=50, null=True, blank=True)
     codigo_modalidade = models.IntegerField(null=True, blank=True)
+    codigo_tipo_programa = models.IntegerField(null=True, blank=True)
     semestre = models.IntegerField(null=True, blank=True, default=0)
     ensino_especial = models.BooleanField(default=False)
+    codigo_modalidade_etapa = models.IntegerField(null=True, blank=True)
     serie_ensino = models.CharField(max_length=200, null=True, blank=True)
+    codigo_serie_ensino = models.IntegerField(null=True, blank=True)
     data_atualizacao = models.DateTimeField(null=True, blank=True)
     data_status_turma_escola = models.DateTimeField(null=True, blank=True)
 
@@ -347,6 +296,23 @@ class Turma(ModeloBase):
             models.Index(
                 fields=["ue_codigo", "ano_letivo"], name="idx_turma_ue_ano"
             ),
+            models.Index(
+                fields=[
+                    "ue_codigo",
+                    "ano_letivo",
+                    "codigo_modalidade_etapa",
+                    "codigo",
+                ],
+                name="idx_turma_ue_ano_mod_codigo",
+            ),
+            models.Index(
+                fields=[
+                    "ue_codigo",
+                    "ano_letivo",
+                    "codigo_tipo_programa",
+                ],
+                name="idx_turma_ue_ano_programa",
+            ),
             models.Index(fields=["tipo_turma"], name="idx_turma_tipo"),
             models.Index(fields=["ano_letivo"], name="idx_turma_ano_letivo"),
         ]
@@ -356,11 +322,7 @@ class Turma(ModeloBase):
 
 
 class TurmaItinerarioEnsinoMedio(models.Model):
-    """Fixture estática de itinerários do Ensino Médio.
-
-    Não requer query ao SQL Server — populada via fixture Django.
-    Alimenta: GET itinerario/ensino-medio
-    """
+    """Itinerário estático do Ensino Médio."""
 
     nome = models.CharField(max_length=100)
     serie = models.CharField(max_length=10, null=True, blank=True)
@@ -369,24 +331,45 @@ class TurmaItinerarioEnsinoMedio(models.Model):
         return str(self.nome)
 
     class Meta:
-        db_table = "turmaitinerarioensinomedio"
+        db_table = "turma_itinerario_ensino_medio"
 
 
-class RegenciaComponenteCurricular(models.Model):
-    """Alimenta: GET anos/{anoTurma}/regencia."""
+class ComponenteCurricularPlanejamentoRegencia(models.Model):
+    """Componente curricular aplicável ao planejamento de regência."""
 
     id_componente_curricular = models.IntegerField()
     turno = models.IntegerField(null=True, blank=True)
     ano = models.IntegerField(null=True, blank=True)
 
     class Meta:
-        db_table = "regenciacomponentecurricular"
+        db_table = "componente_curricular_planejamento_regencia"
+
+
+class ComponenteCurricularHierarquia(models.Model):
+    """Mapeia componentes filhos para seus componentes curriculares pais."""
+
+    id_componente_curricular_pai = models.IntegerField(
+        db_column="idcomponentecurricularpai"
+    )
+    id_componente_curricular = models.IntegerField(
+        db_column="idcomponentecurricular"
+    )
+    vigencia = models.DateTimeField()
+
+    class Meta:
+        db_table = "componente_curricular_hierarquia"
+        indexes = [
+            models.Index(
+                fields=["id_componente_curricular", "-vigencia"],
+                name="idx_cch_comp_vigencia",
+            ),
+        ]
 
 
 class ComponenteCurricularPAP(models.Model):
-    """Alimenta: turmas/{codigoTurma}/funcionarios/{login}/validar/pap."""
+    """Componente curricular reconhecido como PAP."""
 
     id_componente_curricular = models.IntegerField(unique=True)
 
     class Meta:
-        db_table = "componentecurricularpap"
+        db_table = "componente_curricular_pap"
