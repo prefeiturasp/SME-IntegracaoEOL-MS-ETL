@@ -62,7 +62,20 @@ class TestBaseEtlFase(TestCase):
         transform = meta.get_transformer()
         self.assertTrue(callable(transform))
         
-        fake_row = (1, "Teste", None, None, None, None, None, None, None)
+        fake_row = (
+            1,
+            "Teste",
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            False,
+        )
         pk, _, obj = transform(fake_row)
         
         self.assertEqual(pk, "1")
@@ -82,6 +95,19 @@ class TestBaseEtlFase(TestCase):
         meta.pk_field = ["codigo_aluno", "nome"]
         transform = meta.get_transformer()
         
-        fake_row = (1, "Teste", None, None, None, None, None, None, None)
+        fake_row = (
+            1,
+            "Teste",
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            False,
+        )
         pk, _, _ = transform(fake_row)
         self.assertEqual(pk, "1-Teste")

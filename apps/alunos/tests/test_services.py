@@ -1,11 +1,13 @@
 from datetime import date
-from queue import Empty
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 from django.test import TestCase
 
-from apps.alunos.dtos.model_in import MatriculaTurmaIn, NecessidadeEspecialAlunoIn
+from apps.alunos.dtos.model_in import (
+    MatriculaTurmaIn,
+    NecessidadeEspecialAlunoIn,
+)
 from apps.alunos.services import EtlAlunosService, PhaseConfig
 from apps.core.libs.base_etl_service import PipelineMetrics
 
@@ -21,7 +23,7 @@ class TestAlunosService(TestCase):
             eol=self.mock_eol,
             id_execucao=uuid4(),
         )
-        # Mock _truncar_tabela para evitar erro de psycopg UndefinedTable em testes SimpleTestCase/TestCase
+        # Evita UndefinedTable em testes SimpleTestCase/TestCase.
         self.service._truncar_tabela = MagicMock()
 
     def test_phase_config_e_imutavel(self) -> None:
@@ -74,7 +76,7 @@ class TestAlunosService(TestCase):
         config = self.service._fases[-1]
         transform = self.service._criar_transform(config)
 
-        row = (123, 456, "01", None)
+        row = (123, 456, "01", None, None, 1, 1, None)
         pk, _, _ = transform(row)
 
         self.assertEqual(pk, "123-456")
@@ -142,7 +144,7 @@ class TestAlunosService(TestCase):
 
         self.service._executar_fase(config)
 
-        # Parâmetro batch_num foi removido do _sync_batch por recomendação do Sonar
+        # Parâmetro batch_num foi removido do _sync_batch.
         # O teste agora apenas valida que a chamada ocorreu
         self.assertTrue(mock_sync.called)
 
@@ -171,18 +173,21 @@ class TestAlunosService(TestCase):
         )
         self.assertEqual(fase_meta["modo_escrita"], config.modo_escrita)
 
-    def test_nee_aluno_dto_in_aceita_5_campos(self) -> None:
-        """Valida que NecessidadeEspecialAlunoIn recebe os 5 campos do SQL."""
+    def test_nee_aluno_dto_in_aceita_campos_recurso(self) -> None:
+        """Valida que NecessidadeEspecialAlunoIn recebe recurso do SQL."""
         dto = NecessidadeEspecialAlunoIn(
             codigo_necessidade_especial_aluno=1,
             codigo_aluno=100,
             codigo_necessidade_especial=5,
             dt_inicio=date(2020, 1, 1),
             dt_fim=None,
+            codigo_tipo_recurso=10,
+            descricao_tipo_recurso="NENHUM",
         )
         self.assertEqual(dto.codigo_necessidade_especial_aluno, 1)
         self.assertEqual(dto.dt_inicio, date(2020, 1, 1))
         self.assertIsNone(dto.dt_fim)
+        self.assertEqual(dto.codigo_tipo_recurso, 10)
 
     def test_primeiro_run_repassado_ao_base(self) -> None:
         """Valida que primeiro_run=True chega ao BaseEtlService."""
@@ -216,6 +221,10 @@ class TestAlunosService(TestCase):
             codigo_turma=101,
             numero_chamada="05",
             data_situacao=None,
+            data_situacao_data_hora=None,
+            codigo_situacao_aluno=None,
+            codigo_tipo_turma=None,
+            data_atualizacao_tabela=None,
         )
         domain = dto.to_domain()
         self.assertIsNone(domain["codigo_matricula"])
