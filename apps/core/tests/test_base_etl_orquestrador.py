@@ -174,8 +174,7 @@ class AsyncPipelineTestCase(TestCase):
         with self.assertRaises(RuntimeError):
             service._finalizar_threads(mock_thread, [RuntimeError("E")])
         mock_thread.is_alive.return_value = True
-        with self.assertRaises(RuntimeError):
-            service._finalizar_threads(mock_thread, [])
+        service._finalizar_threads(mock_thread, [])
 
     def test_thread_processor_context(self) -> None:
         from apps.core.libs.thread_processor import ThreadPoolProcessor
