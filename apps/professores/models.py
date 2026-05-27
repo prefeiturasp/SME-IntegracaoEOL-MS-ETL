@@ -1,11 +1,18 @@
 """Modelos do app professores - banco destino PROFESSORES_DB."""
 
+import datetime
+
 from django.db import models
 
 _HELP_UE = "ID da unidade educacional — ref. domínio institucional."
 _HELP_GRADE = "ID da escola_grade — ref. domínio pedagógico."
 _HELP_COMP = "ID do componente curricular — ref. domínio curricular."
 _HELP_TURMA = "ID da turma escolar — ref. domínio pedagógico."
+
+
+def _data_chave_padrao() -> datetime.datetime:
+    """Retorna data sentinela para chaves sem data informada."""
+    return datetime.datetime(1900, 1, 1, tzinfo=datetime.UTC)
 
 
 class Professor(models.Model):
@@ -392,14 +399,11 @@ class FuncionarioUnidadeEducacional(models.Model):
         blank=True,
     )
     codigo_ue = models.CharField(max_length=20)
-    data_inicio = models.DateTimeField(null=True, blank=True)
+    data_inicio = models.DateTimeField(default=_data_chave_padrao)
     data_fim = models.DateTimeField(null=True, blank=True)
-    codigo_cargo = models.CharField(max_length=20, null=True, blank=True)
+    codigo_cargo = models.IntegerField(null=True, blank=True)
     cargo = models.CharField(max_length=100, null=True, blank=True)
-    codigo_tipo_funcao_atividade = models.IntegerField(
-        null=True,
-        blank=True,
-    )
+    codigo_tipo_funcao_atividade = models.IntegerField(default=0)
     eh_professor = models.BooleanField(default=False)
     esta_afastado = models.BooleanField(default=False)
     funcao_externo = models.IntegerField(default=0)
@@ -424,7 +428,17 @@ class FuncionarioUnidadeEducacional(models.Model):
         ]
         constraints = [
             models.UniqueConstraint(
-                fields=["codigo_rf", "codigo_ue"],
-                name="uq_funcionario_rf_ue",
+                fields=[
+                    "codigo_rf",
+                    "codigo_ue",
+                    "codigo_cargo",
+                    "codigo_tipo_funcao_atividade",
+                    "data_inicio",
+                    "data_fim",
+                    "funcao_externo",
+                    "tipo_funcao_externo",
+                ],
+                name="uq_funcionario_rf_ue_cargo_funcao_vinculo",
+                nulls_distinct=False,
             ),
         ]
