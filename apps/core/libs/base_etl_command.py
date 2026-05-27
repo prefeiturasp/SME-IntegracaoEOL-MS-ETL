@@ -61,8 +61,7 @@ class BaseEtlCommand(BaseCommand):
             type=int,
             default=0,
             help=(
-                "Forçar início a partir desta fase "
-                "(ignora checkpoint se > 0)."
+                "Forçar início a partir desta fase (ignora checkpoint se > 0)."
             ),
         )
         parser.add_argument(
@@ -133,9 +132,17 @@ class BaseEtlCommand(BaseCommand):
         orquestrador_class = getattr(
             self, "orquestrador_class", GenericEtlOrquestrador
         )
+        fases = options.get("fases")
+        servico = self.service_class(
+            db_alias=f"{self.dominio}_db",
+            id_execucao=id_execucao,
+            primeiro_run=options.get("carga_inicial", False),
+            **({"fases": fases} if fases else {}),
+            **self._extra_service_kwargs(**options),
+        )
         orquestrador = orquestrador_class(
             dominio=self.dominio,
-            service_class=self.service_class,
+            service_class=servico,
             db_alias=f"{self.dominio}_db",
             id_execucao=id_execucao,
             primeiro_run=options.get("carga_inicial", False),

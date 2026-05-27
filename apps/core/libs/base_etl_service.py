@@ -495,30 +495,44 @@ class BaseEtlService:
         trans = self._criar_transform(config)
         bn, start = 0, time.perf_counter()
 
-        with ThreadPoolProcessor(
-            max_workers=self._max_workers, prefixo_log=self._dominio
-        ) as tp:
-            self._thread_processor = tp
+        erro_execucao: BaseException | None = None
+        try:
+            with ThreadPoolProcessor(
+                max_workers=self._max_workers, prefixo_log=self._dominio
+            ) as tp:
+                self._thread_processor = tp
+                try:
+                    while True:
+                        chunk = self._get_next_chunk(queue, thread, erros)
+                        if chunk is None:
+                            break
+
+                        esc, ign = self._processar_batch(
+                            batch_num=bn,
+                            chunk=chunk,
+                            transform=trans,
+                            config=config,
+                        )
+                        self._atualizar_metricas(metrics, len(chunk), esc, ign)
+                        bn += 1
+                        self._log_progresso(bn, metrics, start, config)
+                        queue.task_done()
+                finally:
+                    self._thread_processor = None
+        except BaseException as exc:
+            erro_execucao = exc
+            raise
+        finally:
             try:
-                while True:
-                    chunk = self._get_next_chunk(queue)
-                    if chunk is None:
-                        break
+                self._finalizar_threads(thread, erros)
+            except Exception:
+                if erro_execucao is None:
+                    raise
+                logger.exception(
+                    "[%s] Erro adicional ao finalizar Producer",
+                    self._dominio,
+                )
 
-                    esc, ign = self._processar_batch(
-                        batch_num=bn,
-                        chunk=chunk,
-                        transform=trans,
-                        config=config,
-                    )
-                    self._atualizar_metricas(metrics, len(chunk), esc, ign)
-                    bn += 1
-                    self._log_progresso(bn, metrics, start, config)
-                    queue.task_done()
-            finally:
-                self._thread_processor = None
-
-        self._finalizar_threads(thread, erros)
         self._registrar_auditoria_fase(
             config,
             metrics,
@@ -544,14 +558,43 @@ class BaseEtlService:
         thread.start()
         return thread
 
-    def _get_next_chunk(self, queue: Queue) -> list[Any] | None:
-        try:
-            chunk: list | None = queue.get(
-                timeout=getattr(settings, "THREAD_POOL_CHUNK_TIMEOUT", 30)
-            )
-            return chunk
-        except Empty as err:
-            raise RuntimeError("Timeout waiting for Producer") from err
+    def _get_next_chunk(
+        self,
+        queue: Queue,
+        producer_thread: Thread | None = None,
+        erros: list[Exception] | None = None,
+    ) -> list[Any] | None:
+        timeout = getattr(settings, "THREAD_POOL_CHUNK_TIMEOUT", 30)
+        if timeout is None or timeout <= 0:
+            return queue.get()
+
+        max_espera = getattr(settings, "PRODUCER_MAX_WAIT_SECONDS", 600)
+        tempo_espera = 0.0
+        while True:
+            try:
+                chunk: list | None = queue.get(timeout=timeout)
+                return chunk
+            except Empty as err:
+                if erros:
+                    raise erros[0] from err
+                if (
+                    producer_thread is not None
+                    and not producer_thread.is_alive()
+                ):
+                    raise RuntimeError(
+                        "Producer thread finished without signaling completion"
+                    ) from err
+                tempo_espera += timeout
+                logger.warning(
+                    "[%s] Aguardando Producer ha %.0fs sem novo chunk",
+                    self._dominio,
+                    tempo_espera,
+                )
+                if max_espera > 0 and tempo_espera >= max_espera:
+                    raise TimeoutError(
+                        f"[{self._dominio}] Producer não produziu chunk"
+                        f" após {tempo_espera:.0f}s — abortando fase"
+                    ) from err
 
     def _atualizar_metricas(
         self, metrics: PipelineMetrics, lidos: int, esc: int, ign: int
@@ -607,7 +650,11 @@ class BaseEtlService:
     def _finalizar_threads(self, thread: Thread, erros: list) -> None:
         thread.join(timeout=30)
         if thread.is_alive():
-            raise RuntimeError("Producer thread did not terminate")
+            logger.warning(
+                "[%s] Producer thread não finalizou após 30s"
+                " (possivelmente bloqueada em I/O de rede)",
+                self._dominio,
+            )
         if erros:
             raise erros[0]
 

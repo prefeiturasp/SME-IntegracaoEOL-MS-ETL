@@ -7,6 +7,7 @@ from uuid import UUID
 from django.test import TestCase
 
 from apps.controle_auditoria.libs.celery_app import aplicacao_celery
+from apps.controle_auditoria.libs.dominios import validar_parametros_dominio
 from apps.controle_auditoria.libs.repositorio_auditoria import (
     RepositorioAuditoriaPostgres,
 )
@@ -127,6 +128,16 @@ class ServicoSincRecDbTestCase(TestCase):
         self.assertGreaterEqual(print_mock.call_count, 3)
 
 
+class DominiosTestCase(TestCase):
+    """Valida regras de parâmetros por domínio."""
+
+    def test_alunos_aceita_ano_letivo(self) -> None:
+        """Domínio alunos aceita filtro de ano letivo."""
+        self.assertIsNone(
+            validar_parametros_dominio("alunos", ano_letivo=2024)
+        )
+
+
 class TasksControleAuditoriaTestCase(TestCase):
     """Valida tasks celery do dominio."""
 
@@ -224,6 +235,41 @@ class TasksControleAuditoriaTestCase(TestCase):
             "--offset",
             "0",
             "--continuar",
+        )
+
+    @patch("apps.controle_auditoria.libs.tasks.call_command")
+    @patch("apps.controle_auditoria.libs.tasks.RepositorioAuditoriaPostgres")
+    def test_executar_dominio_task_repassa_ano_letivo_alunos(
+        self,
+        repositorio_cls_mock: Any,
+        call_command_mock: Any,
+    ) -> None:
+        """Task repassa ano_letivo aceito pelo domínio alunos."""
+        repositorio = MagicMock()
+        repositorio.obter_checkpoint_dominio.side_effect = [
+            {"token_parada": "0"},
+            {"token_parada": "10", "ultima_situacao": "concluido"},
+        ]
+        repositorio_cls_mock.return_value = repositorio
+
+        retorno = executar_dominio_task(
+            dominio="alunos",
+            volume=100,
+            offset=0,
+            ano_letivo=2024,
+        )
+
+        self.assertEqual(retorno, "ok:10")
+        call_command_mock.assert_called_once_with(
+            "executar_dominio",
+            "--dominio",
+            "alunos",
+            "--volume",
+            "100",
+            "--offset",
+            "0",
+            "--ano-letivo",
+            "2024",
         )
 
     @patch("apps.controle_auditoria.libs.tasks.call_command")
