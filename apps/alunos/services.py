@@ -40,6 +40,21 @@ from apps.alunos.queries import (
 from apps.core.libs.base_etl_service import BaseEtlService, PhaseConfig
 from apps.eol_connection.libs.servico_eol import EOLService
 
+_FILTROS_ANO_VAZIOS = {
+    "/*FILTRO_ANO_LETIVO_ALUNO*/": "",
+    "/*FILTRO_ANO_LETIVO_RESPONSAVEL*/": "",
+    "/*FILTRO_ANO_LETIVO_NEE*/": "",
+    "/*FILTRO_ANO_LETIVO_MATRICULA_ATUAL*/": "",
+    "/*FILTRO_ANO_LETIVO_MATRICULA_HISTORICA*/": "",
+    "/*FILTRO_ANO_LETIVO_MATRICULA_TURMA_ATUAL*/": "",
+    "/*FILTRO_ANO_LETIVO_MATRICULA_TURMA_HISTORICA*/": "",
+    "/*FILTRO_ANO_LETIVO_MATRICULA_ANO*/": "",
+    "/*FILTRO_ANO_LETIVO_MATRICULA_COMPONENTE*/": "",
+    "/*FILTRO_ANO_LETIVO_ACOMPANHAMENTO*/": (
+        "and an_letivo = year(getdate())"
+    ),
+}
+
 
 class EtlAlunosService(BaseEtlService):
     """Pipeline ETL de Alunos."""
@@ -53,19 +68,108 @@ class EtlAlunosService(BaseEtlService):
         repositorio_auditoria: Any | None = None,
         eol: EOLService | None = None,
         primeiro_run: bool = False,
+        ano_letivo: int | None = None,
+        fases: list[str] | None = None,
     ) -> None:
         super().__init__(
             db_alias=db_alias,
             id_execucao=id_execucao,
             repositorio_auditoria=repositorio_auditoria,
             primeiro_run=primeiro_run,
+            fases=fases,
         )
         self.eol = eol or EOLService()
+        self._ano_letivo = ano_letivo
         self._fases = self._init_fases()
 
     def _iter_chunks(self, sql: str) -> Iterator[list[tuple]]:
         """Lê os dados brutos da origem em chunks."""
         return self.eol.iter_query(sql)
+
+    def _where_alunos_por_ano(self, coluna_codigo_aluno: str) -> str:
+        """Monta filtro que limita entidades aos alunos dos anos filtrados."""
+        ano = int(self._ano_letivo or 0)
+        return f"""
+WHERE (
+    EXISTS (
+        SELECT 1
+        FROM v_matricula_cotic filtro_matricula_atual
+        WHERE filtro_matricula_atual.cd_aluno = {coluna_codigo_aluno}
+          AND filtro_matricula_atual.an_letivo >= {ano}
+    )
+    OR EXISTS (
+        SELECT 1
+        FROM v_historico_matricula_cotic filtro_matricula_historica
+        WHERE filtro_matricula_historica.cd_aluno = {coluna_codigo_aluno}
+          AND filtro_matricula_historica.an_letivo >= {ano}
+    )
+)
+"""
+
+    def _and_matriculas_por_ano(self, coluna_codigo_matricula: str) -> str:
+        """Monta filtro que limita vínculos aos anos filtrados."""
+        ano = int(self._ano_letivo or 0)
+        return f"""
+AND (
+    EXISTS (
+        SELECT 1
+        FROM v_matricula_cotic filtro_matricula_atual
+        WHERE filtro_matricula_atual.cd_matricula = {coluna_codigo_matricula}
+          AND filtro_matricula_atual.an_letivo >= {ano}
+    )
+    OR EXISTS (
+        SELECT 1
+        FROM v_historico_matricula_cotic filtro_matricula_historica
+        WHERE filtro_matricula_historica.cd_matricula =
+              {coluna_codigo_matricula}
+          AND filtro_matricula_historica.an_letivo >= {ano}
+    )
+)
+"""
+
+    def _sql_com_filtro_ano_letivo(self, sql: str) -> str:
+        """Aplica filtro de ano letivo aos SQLs de alunos quando informado."""
+        filtros = dict(_FILTROS_ANO_VAZIOS)
+        if self._ano_letivo is not None:
+            ano = int(self._ano_letivo)
+            filtros.update(
+                {
+                    "/*FILTRO_ANO_LETIVO_ALUNO*/": (
+                        self._where_alunos_por_ano("a.cd_aluno")
+                    ),
+                    "/*FILTRO_ANO_LETIVO_RESPONSAVEL*/": (
+                        self._where_alunos_por_ano("ra.cd_aluno")
+                    ),
+                    "/*FILTRO_ANO_LETIVO_NEE*/": (
+                        self._where_alunos_por_ano("nea.cd_aluno")
+                    ),
+                    "/*FILTRO_ANO_LETIVO_MATRICULA_ATUAL*/": (
+                        f"AND an_letivo >= {ano}"
+                    ),
+                    "/*FILTRO_ANO_LETIVO_MATRICULA_HISTORICA*/": (
+                        f"AND an_letivo >= {ano}"
+                    ),
+                    "/*FILTRO_ANO_LETIVO_MATRICULA_TURMA_ATUAL*/": (
+                        self._and_matriculas_por_ano("mt.cd_matricula")
+                    ),
+                    "/*FILTRO_ANO_LETIVO_MATRICULA_TURMA_HISTORICA*/": (
+                        self._and_matriculas_por_ano("mt.cd_matricula")
+                    ),
+                    "/*FILTRO_ANO_LETIVO_MATRICULA_ANO*/": (
+                        f"AND VMC.an_letivo >= {ano}"
+                    ),
+                    "/*FILTRO_ANO_LETIVO_MATRICULA_COMPONENTE*/": (
+                        f"AND VMC.an_letivo >= {ano}"
+                    ),
+                    "/*FILTRO_ANO_LETIVO_ACOMPANHAMENTO*/": (
+                        f"and an_letivo >= {ano}"
+                    ),
+                }
+            )
+
+        for marcador, filtro in filtros.items():
+            sql = sql.replace(marcador, filtro)
+        return sql
 
     def _init_fases(self) -> list[PhaseConfig]:
         """Define as fases do domínio Alunos."""
@@ -90,7 +194,7 @@ class EtlAlunosService(BaseEtlService):
             ),
             PhaseConfig(
                 nome="aluno",
-                sql=SQL_ALUNO,
+                sql=self._sql_com_filtro_ano_letivo(SQL_ALUNO),
                 table_name="aluno",
                 source_table="aluno",
                 model_class=Aluno,
@@ -115,7 +219,7 @@ class EtlAlunosService(BaseEtlService):
             ),
             PhaseConfig(
                 nome="responsavel_aluno",
-                sql=SQL_RESPONSAVEL,
+                sql=self._sql_com_filtro_ano_letivo(SQL_RESPONSAVEL),
                 table_name="responsavel_aluno",
                 source_table="responsavel_aluno",
                 model_class=ResponsavelAluno,
@@ -146,7 +250,7 @@ class EtlAlunosService(BaseEtlService):
             ),
             PhaseConfig(
                 nome="nee_aluno",
-                sql=SQL_NEE_ALUNO,
+                sql=self._sql_com_filtro_ano_letivo(SQL_NEE_ALUNO),
                 table_name="necessidade_especial_aluno",
                 source_table="necessidade_especial_aluno",
                 model_class=NecessidadeEspecialAluno,
@@ -165,7 +269,7 @@ class EtlAlunosService(BaseEtlService):
             ),
             PhaseConfig(
                 nome="matricula",
-                sql=SQL_MATRICULA,
+                sql=self._sql_com_filtro_ano_letivo(SQL_MATRICULA),
                 table_name="matricula",
                 source_table="v_matricula_cotic",
                 model_class=Matricula,
@@ -185,7 +289,7 @@ class EtlAlunosService(BaseEtlService):
             ),
             PhaseConfig(
                 nome="matricula_turma",
-                sql=SQL_MATRICULA_TURMA,
+                sql=self._sql_com_filtro_ano_letivo(SQL_MATRICULA_TURMA),
                 table_name="matricula_turma",
                 source_table="matricula_turma_escola",
                 model_class=MatriculaTurma,
@@ -204,7 +308,7 @@ class EtlAlunosService(BaseEtlService):
             ),
             PhaseConfig(
                 nome="matricula_ano_letivo",
-                sql=SQL_MATRICULA_ANO_LETIVO,
+                sql=self._sql_com_filtro_ano_letivo(SQL_MATRICULA_ANO_LETIVO),
                 table_name="matricula_ano_letivo",
                 source_table="v_matricula_cotic",
                 model_class=MatriculaAnoLetivo,
@@ -228,11 +332,13 @@ class EtlAlunosService(BaseEtlService):
                     "ano",
                     "turma",
                 ),
-                suporta_bulk_insert=True
+                suporta_bulk_insert=True,
             ),
             PhaseConfig(
                 nome="matricula_componente_curricular_ano_letivo",
-                sql=SQL_MATRICULA_COMPONENTE_CURRICULAR_ANO_LETIVO,
+                sql=self._sql_com_filtro_ano_letivo(
+                    SQL_MATRICULA_COMPONENTE_CURRICULAR_ANO_LETIVO
+                ),
                 table_name=("matricula_componente_curricular_ano_letivo"),
                 source_table="v_matricula_cotic",
                 model_class=MatriculaComponenteCurricularAnoLetivo,
@@ -254,11 +360,13 @@ class EtlAlunosService(BaseEtlService):
                     "componente_curricular_id",
                     "ano",
                 ),
-                suporta_bulk_insert=True
+                suporta_bulk_insert=True,
             ),
             PhaseConfig(
                 nome="dados_aluno_acompanhamento_escolar",
-                sql=SQL_DADOS_ALUNO_ACOMPANHAMENTO_ESCOLAR,
+                sql=self._sql_com_filtro_ano_letivo(
+                    SQL_DADOS_ALUNO_ACOMPANHAMENTO_ESCOLAR
+                ),
                 table_name="dados_aluno_acompanhamento_escolar",
                 source_table="v_aluno_cotic",
                 model_class=DadosAlunoAcompanhamentoEscolar,
@@ -293,6 +401,6 @@ class EtlAlunosService(BaseEtlService):
                     "codigo_turma",
                     "tipo_responsavel",
                 ),
-                suporta_bulk_insert=True
+                suporta_bulk_insert=True,
             ),
         ]

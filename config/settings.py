@@ -18,6 +18,7 @@ _POOL_OPTIONS = {
 
 THREAD_POOL_MAX_WORKERS = int(os.getenv("THREAD_POOL_MAX_WORKERS", "4"))
 THREAD_POOL_CHUNK_TIMEOUT = int(os.getenv("THREAD_POOL_CHUNK_TIMEOUT", "120"))
+PRODUCER_MAX_WAIT_SECONDS = int(os.getenv("PRODUCER_MAX_WAIT_SECONDS", "600"))
 
 
 def _parse_db_url(url: Any) -> dict:
@@ -59,7 +60,7 @@ if not SECRET_KEY:
         raise ImproperlyConfigured(
             "A variável DJANGO_SECRET_KEY é obrigatória em produção."
         )
-    # Fallback para desenvolvimento baseado no ambiente para não deixar chave exposta
+    # Fallback para desenvolvimento baseado no ambiente para não expor chave.
     SECRET_KEY = os.getenv("HOSTNAME")
 DEBUG = os.getenv("DJANGO_DEBUG", "1") == "1"
 ALLOWED_HOSTS = [

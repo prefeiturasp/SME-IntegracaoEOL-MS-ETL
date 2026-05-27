@@ -218,8 +218,7 @@ class ExecutarDominioView(APIView):
                         "type": "string",
                         "format": "date-time",
                         "description": (
-                            "Agenda a execução para esta "
-                            "data/hora (ISO 8601)."
+                            "Agenda a execução para esta data/hora (ISO 8601)."
                         ),
                     },
                     "ano_letivo": {
@@ -229,7 +228,7 @@ class ExecutarDominioView(APIView):
                         "description": (
                             "Opcional. Quando informado, processa apenas "
                             "anos letivos a partir deste valor (inclusive)."
-                            " Aplicável ao domínio pedagógico."
+                            " Aplicável aos domínios alunos e pedagógico."
                         ),
                         "example": None,
                     },
@@ -343,8 +342,7 @@ class MonitoramentoExecucoesView(APIView):
                 "situacao",
                 str,
                 description=(
-                    "Situação da execução "
-                    "(ex: concluido, erro, em_andamento)"
+                    "Situação da execução (ex: concluido, erro, em_andamento)"
                 ),
             ),
         ],

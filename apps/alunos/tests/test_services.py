@@ -13,6 +13,13 @@ from apps.alunos.models import (
     MatriculaAnoLetivo,
     MatriculaComponenteCurricularAnoLetivo,
 )
+from apps.alunos.queries import (
+    SQL_ALUNO,
+    SQL_MATRICULA,
+    SQL_MATRICULA_TURMA,
+    SQL_NEE_ALUNO,
+    SQL_RESPONSAVEL,
+)
 from apps.alunos.services import EtlAlunosService, PhaseConfig
 from apps.core.libs.base_etl_service import PipelineMetrics
 
@@ -90,6 +97,135 @@ class TestAlunosService(TestCase):
         pk, _, _ = transform(row)
 
         self.assertEqual(pk, "123-456")
+
+    def test_sql_aluno_expoe_cns_antes_de_data_atualizacao(self) -> None:
+        """Valida que a query segue a ordem esperada pelo AlunoIn."""
+        self.assertIn("cns.nr_cns AS cns", SQL_ALUNO)
+        self.assertIn("OUTER APPLY", SQL_ALUNO)
+        self.assertIn("WHERE nee.cd_aluno = a.cd_aluno", SQL_ALUNO)
+        self.assertLess(
+            SQL_ALUNO.index("cns.nr_cns AS cns"),
+            SQL_ALUNO.index("data_atualizacao_contato"),
+        )
+
+    def test_sqls_expoem_campos_complementares_dos_dtos(self) -> None:
+        """Valida campos esperados pelos DTOs nas fases principais."""
+        self.assertIn("e.ci_endereco AS endereco_id", SQL_RESPONSAVEL)
+        self.assertIn(
+            "ra.dt_atualizacao_tabela AS data_atualizacao_tabela",
+            SQL_RESPONSAVEL,
+        )
+        self.assertIn("NULL AS codigo_tipo_recurso", SQL_NEE_ALUNO)
+        self.assertIn("data_situacao_matricula_data_hora", SQL_MATRICULA)
+        self.assertIn("CAST(1 AS bit) AS origem_atual", SQL_MATRICULA)
+        self.assertIn("ROW_NUMBER() OVER", SQL_MATRICULA)
+        self.assertIn(
+            "te.cd_tipo_turma AS codigo_tipo_turma",
+            SQL_MATRICULA_TURMA,
+        )
+        self.assertIn(
+            "mt.dt_atlz_tab AS data_atualizacao_tabela",
+            SQL_MATRICULA_TURMA,
+        )
+
+    def test_sem_ano_letivo_remove_marcadores_e_preserva_padrao(self) -> None:
+        """Valida SQLs sem marcador quando ano_letivo não é informado."""
+        fases = {fase.nome: fase for fase in self.service._fases}
+
+        for fase in fases.values():
+            self.assertNotIn("/*FILTRO_ANO_LETIVO", fase.sql)
+
+        self.assertIn(
+            "and an_letivo = year(getdate())",
+            fases["dados_aluno_acompanhamento_escolar"].sql,
+        )
+
+    def test_ano_letivo_aplica_filtro_nas_fases_de_alunos(self) -> None:
+        """Valida filtro de ano letivo nas consultas do domínio."""
+        service = EtlAlunosService(
+            db_alias="default",
+            eol=self.mock_eol,
+            id_execucao=uuid4(),
+            ano_letivo=2024,
+        )
+        fases = {fase.nome: fase for fase in service._fases}
+
+        for fase in fases.values():
+            self.assertNotIn("/*FILTRO_ANO_LETIVO", fase.sql)
+
+        self.assertIn(
+            "filtro_matricula_atual.cd_aluno = a.cd_aluno",
+            fases["aluno"].sql,
+        )
+        self.assertIn(
+            "filtro_matricula_atual.cd_aluno = ra.cd_aluno",
+            fases["responsavel_aluno"].sql,
+        )
+        self.assertIn(
+            "filtro_matricula_atual.cd_aluno = nea.cd_aluno",
+            fases["nee_aluno"].sql,
+        )
+        self.assertIn("AND an_letivo >= 2024", fases["matricula"].sql)
+        self.assertIn(
+            "filtro_matricula_atual.cd_matricula = mt.cd_matricula",
+            fases["matricula_turma"].sql,
+        )
+        self.assertIn(
+            "AND VMC.an_letivo >= 2024",
+            fases["matricula_ano_letivo"].sql,
+        )
+        self.assertIn(
+            "AND VMC.an_letivo >= 2024",
+            fases["matricula_componente_curricular_ano_letivo"].sql,
+        )
+        self.assertIn(
+            "and an_letivo >= 2024",
+            fases["dados_aluno_acompanhamento_escolar"].sql,
+        )
+        self.assertNotIn(
+            "year(getdate())",
+            fases["dados_aluno_acompanhamento_escolar"].sql,
+        )
+
+    def test_fases_selecionadas_sao_repassadas_para_base(self) -> None:
+        """Valida que o service respeita execução parcial por nome de fase."""
+        service = EtlAlunosService(
+            db_alias="default",
+            eol=self.mock_eol,
+            id_execucao=uuid4(),
+            fases=["aluno"],
+        )
+
+        self.assertEqual(service._fases_selecionadas, ["aluno"])
+
+    def test_criar_transform_aluno_mapeia_cns_e_possui_deficiencia(
+        self,
+    ) -> None:
+        """Valida linha completa da query de aluno."""
+        config = self.service._fases[1]
+        transform = self.service._criar_transform(config)
+
+        row = (
+            1,
+            "Aluno",
+            None,
+            date(2010, 1, 1),
+            1,
+            "BR",
+            "123",
+            "456",
+            "Mae",
+            "Branca",
+            "789",
+            date(2023, 1, 1),
+            1,
+        )
+
+        pk, _, obj = transform(row)
+
+        self.assertEqual(pk, "1")
+        self.assertEqual(obj.cns, "789")
+        self.assertTrue(obj.possui_deficiencia)
 
     @patch.object(EtlAlunosService, "sync_batch")
     def test_executar_fase_chama_sync_batch_por_chunk(
@@ -209,9 +345,7 @@ class TestAlunosService(TestCase):
         self.assertTrue(service.primeiro_run)
 
     @patch.object(EtlAlunosService, "sync_batch")
-    def test_executar_fase_loga_throughput(
-        self, mock_sync: MagicMock
-    ) -> None:
+    def test_executar_fase_loga_throughput(self, mock_sync: MagicMock) -> None:
         """Valida que o log de cada lote inclui throughput em reg/s."""
         config = self.service._fases[0]
         self.mock_eol.iter_query.return_value = [[(1, "A", 1, None)]]
@@ -284,16 +418,12 @@ class TestAlunosService(TestCase):
 
     def test_executar_pula_fases_1_a_6(self) -> None:
         """Valida que executar(fase_inicial=7) retorna exatamente 3 chaves."""
-        with patch.object(
-            EtlAlunosService, "_executar_fase"
-        ) as mock_fase:
+        with patch.object(EtlAlunosService, "_executar_fase") as mock_fase:
             mock_fase.return_value = PipelineMetrics(total_escritos=1)
             res = self.service.executar(fase_inicial=7)
             self.assertEqual(len(res), 3)
             self.assertIn("matricula_ano_letivo", res)
-            self.assertIn(
-                "matricula_componente_curricular_ano_letivo", res
-            )
+            self.assertIn("matricula_componente_curricular_ano_letivo", res)
             self.assertIn("dados_aluno_acompanhamento_escolar", res)
             self.assertEqual(mock_fase.call_count, 3)
 
@@ -342,10 +472,27 @@ class TestAlunosService(TestCase):
         config = self.service._fases[8]
         transform = self.service._criar_transform(config)
         row = (
-            1001, "JOAO", None, "MARIA", "123", None,
-            "EMEF", 1, "DRE01", "DRE-N", "UE01",
-            "EMEF TESTE", 555, "T A", 1,
-            "Ativo", None, 5, 2, "5A", 5,
+            1001,
+            "JOAO",
+            None,
+            "MARIA",
+            "123",
+            None,
+            "EMEF",
+            1,
+            "DRE01",
+            "DRE-N",
+            "UE01",
+            "EMEF TESTE",
+            555,
+            "T A",
+            1,
+            "Ativo",
+            None,
+            5,
+            2,
+            "5A",
+            5,
         )
         pk, h, _ = transform(row)
         self.assertEqual(pk, "1001-555-1")
@@ -358,10 +505,27 @@ class TestAlunosService(TestCase):
         """Valida 2 chunks sync_batch chamado 2 vezes para fase 9."""
         config = self.service._fases[8]
         row = (
-            1001, "JOAO", None, "MARIA", "123", None,
-            "EMEF", 1, "DRE01", "DRE-N", "UE01",
-            "EMEF TESTE", 555, "T A", 1,
-            "Ativo", None, 5, 2, "5A", 5,
+            1001,
+            "JOAO",
+            None,
+            "MARIA",
+            "123",
+            None,
+            "EMEF",
+            1,
+            "DRE01",
+            "DRE-N",
+            "UE01",
+            "EMEF TESTE",
+            555,
+            "T A",
+            1,
+            "Ativo",
+            None,
+            5,
+            2,
+            "5A",
+            5,
         )
         self.mock_eol.iter_query.return_value = [[row], [row]]
         mock_sync.return_value = (1, 0)

@@ -181,6 +181,36 @@ class ViewsApiControleAuditoriaTestCase(TestCase):
         tarefa_mock.apply_async.assert_not_called()
 
     @patch("apps.controle_auditoria.api.views.executar_dominio_task")
+    def test_deve_enfileirar_alunos_com_ano_letivo(
+        self,
+        tarefa_mock: Any,
+    ) -> None:
+        """POST em alunos aceita ano_letivo e repassa para a task."""
+        tarefa_mock.apply_async.return_value = type(
+            "Result", (), {"id": "task-alunos"}
+        )()
+
+        resposta = self.client.post(
+            "/api/v1/dominios/alunos/executar/",
+            data={"ano_letivo": 2024},
+            format="json",
+            **self.headers,
+        )
+
+        self.assertEqual(resposta.status_code, 202)
+        self.assertEqual(resposta.json()["task_id"], "task-alunos")
+        tarefa_mock.apply_async.assert_called_once_with(
+            kwargs={
+                "dominio": "alunos",
+                "volume": 100,
+                "offset": 0,
+                "continuar": False,
+                "ano_letivo": 2024,
+            },
+            priority=5,
+        )
+
+    @patch("apps.controle_auditoria.api.views.executar_dominio_task")
     def test_deve_rejeitar_fases_em_dominio_sem_suporte(
         self,
         tarefa_mock: Any,

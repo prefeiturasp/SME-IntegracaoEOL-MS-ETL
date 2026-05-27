@@ -83,7 +83,6 @@ class PhaseConfigTest(SimpleTestCase):
         self.assertEqual(config.source_table, "")
 
 
-
 class RegistrarAuditoriaFaseTest(SimpleTestCase):
     """Valida _registrar_auditoria_fase."""
 
@@ -140,9 +139,7 @@ class BuscarHashesPorCopyTest(SimpleTestCase, BaseEtlMockMixin):
 
         svc = _make_service()
         with self._patch_infra(cursor):
-            resultado = svc._buscar_hashes_por_copy(
-                ["aluno:001", "aluno:002"]
-            )
+            resultado = svc._buscar_hashes_por_copy(["aluno:001", "aluno:002"])
 
         self.assertEqual(resultado, {"aluno:001": "aaa", "aluno:002": "bbb"})
 
@@ -199,9 +196,7 @@ class ChunkedHashesTest(SimpleTestCase, BaseEtlMockMixin):
     def test_lista_menor_que_chunk_faz_um_sub_lote(self) -> None:
         engine = self._engine()
         with (
-            patch(
-                "apps.core.libs.base_etl_service._CHUNK_SIZE", 10
-            ),
+            patch("apps.core.libs.base_etl_service._CHUNK_SIZE", 10),
             patch.object(
                 engine,
                 "_buscar_sub_lote",
@@ -289,18 +284,14 @@ class ProcessarBatchFullSyncTest(TestCase, BaseEtlMockMixin):
     """
 
     def _make_svc(self, **kwargs) -> BaseEtlService:
-        return BaseEtlService(
-            db_alias="default", primeiro_run=True, **kwargs
-        )
+        return BaseEtlService(db_alias="default", primeiro_run=True, **kwargs)
 
     def _make_obj(self) -> MagicMock:
         obj = MagicMock()
         obj.campo_a = "v"
         return obj
 
-    def _batch_data(
-        self, n: int = 2
-    ) -> list[tuple[str, str, MagicMock]]:
+    def _batch_data(self, n: int = 2) -> list[tuple[str, str, MagicMock]]:
         return [(str(i), f"hash{i}", self._make_obj()) for i in range(n)]
 
     def test_full_sync_usa_bulk_create_sem_update_conflicts(
@@ -331,9 +322,7 @@ class ProcessarBatchFullSyncTest(TestCase, BaseEtlMockMixin):
                 dto_in=MagicMock(),
             )
             svc._processar_batch(
-                config=meta,
-                chunk=self._batch_data(),
-                batch_num=0
+                config=meta, chunk=self._batch_data(), batch_num=0
             )
 
         mock_qs.bulk_create.assert_called_once()
@@ -370,9 +359,7 @@ class ProcessarBatchFullSyncTest(TestCase, BaseEtlMockMixin):
                 suporta_bulk_insert=False,
             )
             svc._processar_batch(
-                config=meta,
-                chunk=self._batch_data(),
-                batch_num=0
+                config=meta, chunk=self._batch_data(), batch_num=0
             )
 
         mock_qs.bulk_create.assert_called_once()
@@ -390,9 +377,7 @@ class ProcessarBatchFullSyncTest(TestCase, BaseEtlMockMixin):
 
         with (
             self._patch_infra() as (mock_atomic, _),
-            patch.object(
-                svc.pg_engine, "buscar_hashes", return_value={}
-            ),
+            patch.object(svc.pg_engine, "buscar_hashes", return_value={}),
             patch.object(svc.pg_engine, "upsert_bulk"),
         ):
             meta = PhaseConfig(
@@ -406,9 +391,7 @@ class ProcessarBatchFullSyncTest(TestCase, BaseEtlMockMixin):
                 dto_in=MagicMock(),
             )
             svc._processar_batch(
-                config=meta,
-                chunk=self._batch_data(),
-                batch_num=0
+                config=meta, chunk=self._batch_data(), batch_num=0
             )
 
         mock_qs.bulk_create.assert_called_once()
@@ -439,9 +422,7 @@ class ProcessarBatchFullSyncTest(TestCase, BaseEtlMockMixin):
                 dto_in=MagicMock(),
             )
             svc._processar_batch(
-                config=meta,
-                chunk=self._batch_data(2),
-                batch_num=0
+                config=meta, chunk=self._batch_data(2), batch_num=0
             )
 
         mock_upsert.assert_called_once()
@@ -473,10 +454,7 @@ class ProcessarBatchFullSyncTest(TestCase, BaseEtlMockMixin):
                 dto_in=MagicMock(),
             )
             escritos, ignorados = svc._processar_batch(
-                config=meta,
-                chunk=data,
-                batch_num=0,
-                transform=lambda x: x
+                config=meta, chunk=data, batch_num=0, transform=lambda x: x
             )
 
         self.assertEqual(escritos, 1)
@@ -550,6 +528,7 @@ class FlushDiferidoHashesTest(TestCase):
 
         self.assertEqual(mock_batch.call_count, 2)
 
+
 class MockService(BaseEtlService):
     """Subclasse para testar implementação abstrata."""
 
@@ -608,13 +587,11 @@ class BaseEtlServiceCoverageTest(TestCase, BaseEtlMockMixin):
         with self._patch_infra() as (_, mock_conns):
             self.svc._truncar_tabela("minha_tabela")
             conn = mock_conns.__getitem__.return_value
-            mock_cursor = (
-                conn.cursor.return_value.__enter__.return_value
-            )
+            mock_cursor = conn.cursor.return_value.__enter__.return_value
             args, _ = mock_cursor.execute.call_args
             self.assertEqual(
                 args[0].as_string(None),
-                'TRUNCATE TABLE "minha_tabela" CASCADE'
+                'TRUNCATE TABLE "minha_tabela" CASCADE',
             )
 
     def test_criar_transform_caminho_adapter(self) -> None:
@@ -679,7 +656,6 @@ class BaseEtlServiceCoverageTest(TestCase, BaseEtlMockMixin):
             self.assertEqual(res["f2"], 5)
             self.assertEqual(self.svc.ultima_fase_concluida, 2)
 
-
     def test_thread_processor_context_manager(self) -> None:
         """Força cobertura do context manager do ThreadPoolProcessor."""
         from apps.core.libs.thread_processor import ThreadPoolProcessor
@@ -688,11 +664,10 @@ class BaseEtlServiceCoverageTest(TestCase, BaseEtlMockMixin):
             self.assertIsNotNone(p)
             self.assertTrue(p.max_workers == 1)
 
-
-
     def test_fmt_num_casos_grandes(self) -> None:
         """Cobre branches de formatação de números 1M e 1k."""
         from apps.core.libs.base_etl_service import _fmt_num
+
         self.assertEqual(_fmt_num(2_500_000), "2.5M")
         self.assertEqual(_fmt_num(10_000), "10k")
         self.assertEqual(_fmt_num(500), "500")
@@ -700,6 +675,7 @@ class BaseEtlServiceCoverageTest(TestCase, BaseEtlMockMixin):
     def test_retry_deadlock_falha_exaurida(self) -> None:
         """Garante re-lançamento da exceção ao esgotar tentativas de retry."""
         from apps.core.libs.base_etl_service import retry_deadlock
+
         mock = MagicMock(side_effect=OperationalError("deadlock", "deadlock"))
         decorated = retry_deadlock(max_retries=2, backoff=0.01)(mock)
         with self.assertRaises(OperationalError):
@@ -709,15 +685,14 @@ class BaseEtlServiceCoverageTest(TestCase, BaseEtlMockMixin):
     def test_stage_timer_stop(self) -> None:
         """Verifica que stop registra o tempo de término no StageTimer."""
         from apps.core.libs.base_etl_service import StageTimer
+
         t = StageTimer("teste")
         time.sleep(0.01)
         t.stop()
         self.assertGreater(t.end, 0)
 
-
-
-    def test_executar_fase_producer_timeout(self) -> None:
-        """Garante RuntimeError quando producer ultrapassa o timeout."""
+    def test_executar_fase_aguarda_producer_lento(self) -> None:
+        """Garante que producer lento nao falha antes de devolver chunk."""
         svc = MockService(db_alias="default")
         config = PhaseConfig(
             nome="f",
@@ -729,20 +704,52 @@ class BaseEtlServiceCoverageTest(TestCase, BaseEtlMockMixin):
             update_fields=("f",),
             unique_fields=("id",),
         )
+
+        def iter_lento(_: str) -> object:
+            time.sleep(0.2)
+            return iter([])
+
         with (
-            patch.object(
-                svc,
-                "_iter_chunks",
-                side_effect=lambda x: time.sleep(2),
-            ),
-            patch(
-                "apps.core.libs.base_etl_service.settings"
-            ) as mock_settings,
-            self.assertRaises(RuntimeError),
+            patch.object(svc, "_iter_chunks", side_effect=iter_lento),
+            patch("apps.core.libs.base_etl_service.settings") as mock_settings,
         ):
-            mock_settings.THREAD_POOL_CHUNK_TIMEOUT = 0.1
+            mock_settings.THREAD_POOL_CHUNK_TIMEOUT = 0.05
             mock_settings.THREAD_POOL_MAX_WORKERS = 1
+            mock_settings.PRODUCER_MAX_WAIT_SECONDS = 1
+            metrics = svc._executar_fase(config)
+
+        self.assertEqual(metrics.total_lidos, 0)
+
+    def test_executar_fase_timeout_finaliza_producer(self) -> None:
+        """Garante limpeza da thread quando producer fica preso em I/O."""
+        svc = MockService(db_alias="default")
+        config = PhaseConfig(
+            nome="f",
+            sql="s",
+            table_name="t",
+            model_class=MagicMock(),
+            dto_in=MagicMock(),
+            pk_field="id",
+            update_fields=("f",),
+            unique_fields=("id",),
+        )
+
+        def iter_preso(_: str) -> object:
+            time.sleep(0.3)
+            return iter([])
+
+        with (
+            patch.object(svc, "_iter_chunks", side_effect=iter_preso),
+            patch.object(svc, "_finalizar_threads") as mock_finalizar,
+            patch("apps.core.libs.base_etl_service.settings") as mock_settings,
+            self.assertRaises(TimeoutError),
+        ):
+            mock_settings.THREAD_POOL_CHUNK_TIMEOUT = 0.05
+            mock_settings.THREAD_POOL_MAX_WORKERS = 1
+            mock_settings.PRODUCER_MAX_WAIT_SECONDS = 0.1
             svc._executar_fase(config)
+
+        mock_finalizar.assert_called_once()
 
     def test_executar_fase_producer_bubble_error(self) -> None:
         """Garante que exceção do producer é propagada ao consumidor."""
@@ -818,6 +825,7 @@ class BaseEtlServiceCoverageTest(TestCase, BaseEtlMockMixin):
     def test_calcular_hash_casos_bordas(self) -> None:
         """Cobre gaps do calcular_hash."""
         from apps.core.libs.thread_processor import calcular_hash
+
         # Vazio (292-293)
         self.assertIsNotNone(calcular_hash({}, []))
         # Int fields (296-297)
@@ -826,11 +834,12 @@ class BaseEtlServiceCoverageTest(TestCase, BaseEtlMockMixin):
         self.assertIsNotNone(calcular_hash({"a": 1}, ["a"]))
         # TypeError (313)
         with self.assertRaises(TypeError):
-            calcular_hash((1,), [0, "a"]) # type: ignore
+            calcular_hash((1,), [0, "a"])  # type: ignore
 
     def test_decorar_para_hash_modos(self) -> None:
         """Cobre branches Tupla SQL e Objeto do decorar_para_hash."""
         from apps.core.libs.thread_processor import decorar_para_hash
+
         # Modo SQL (352-356): tabela + 3 args
         res_sql = decorar_para_hash("t", 0, [1], (123, "valor"))
         self.assertEqual(res_sql[0], "t:123")
@@ -842,32 +851,28 @@ class BaseEtlServiceCoverageTest(TestCase, BaseEtlMockMixin):
     def test_decorar_para_hash_invalido(self) -> None:
         """Garante TypeError ao chamar decorar_para_hash com muitos args."""
         from apps.core.libs.thread_processor import decorar_para_hash
+
         with self.assertRaises(TypeError):
             decorar_para_hash("t", 1, 2, 3, 4, 5)
 
     def test_postgres_upsert_engine_real_call(self) -> None:
         """Verifica que upsert_bulk executa múltiplas chamadas ao cursor."""
         from apps.core.libs.base_etl_service import PostgresUpsertEngine
+
         engine = PostgresUpsertEngine()
         with self._patch_infra() as (_, mock_conns):
             conn = mock_conns.__getitem__.return_value
-            mock_cursor = (
-                conn.cursor.return_value.__enter__.return_value
-            )
+            mock_cursor = conn.cursor.return_value.__enter__.return_value
             engine.upsert_bulk("t", [("id", "hash")], "batch")
             self.assertGreater(mock_cursor.execute.call_count, 1)
 
     def test_sync_batch_usa_pg_engine_sem_auditor(self) -> None:
         """Garante que pg_engine.upsert_bulk é chamado sem auditor."""
-        svc = BaseEtlService(
-            db_alias="default", repositorio_auditoria=None
-        )
+        svc = BaseEtlService(db_alias="default", repositorio_auditoria=None)
         obj = MagicMock()
         data = [("1", "h", obj)]
         with (
-            patch.object(
-                svc.pg_engine, "upsert_bulk"
-            ) as mock_upsert,
+            patch.object(svc.pg_engine, "upsert_bulk") as mock_upsert,
             patch("apps.core.libs.base_etl_service.transaction.atomic"),
             patch("apps.core.libs.base_etl_service.connections"),
         ):
@@ -877,7 +882,6 @@ class BaseEtlServiceCoverageTest(TestCase, BaseEtlMockMixin):
                 transform=lambda x: x,
             )
             mock_upsert.assert_called_once()
-
 
     def test_processar_batch_usa_thread_processor_quando_definido(
         self,
@@ -933,9 +937,7 @@ class BaseEtlServiceCoverageTest(TestCase, BaseEtlMockMixin):
         )
         with (
             patch.object(svc, "_truncar_tabela") as mock_trunc,
-            patch.object(
-                svc, "_iter_chunks", return_value=iter([[(1,)]])
-            ),
+            patch.object(svc, "_iter_chunks", return_value=iter([[(1,)]])),
             patch("apps.core.libs.base_etl_service.transaction.atomic"),
             patch("apps.core.libs.base_etl_service.connections"),
         ):
@@ -945,6 +947,7 @@ class BaseEtlServiceCoverageTest(TestCase, BaseEtlMockMixin):
     def test_retry_deadlock_decorator_raise_outros_erros(self) -> None:
         """Erros não relacionados a deadlock são re-lançados imediatamente."""
         from apps.core.libs.base_etl_service import retry_deadlock
+
         mock = MagicMock(side_effect=ValueError("Erro Comum"))
         decorated = retry_deadlock()(mock)
         with self.assertRaises(ValueError):
@@ -1026,9 +1029,16 @@ class BaseEtlServiceCoverageTest(TestCase, BaseEtlMockMixin):
         with (
             patch.object(svc, "_iter_chunks", return_value=iter([])),
             patch("threading.Thread.is_alive", return_value=True),
-            self.assertRaises(RuntimeError),
+            self.assertLogs(
+                "apps.core.libs.base_etl_service",
+                level="WARNING",
+            ) as cm,
         ):
             svc._executar_fase(config)
+
+        self.assertTrue(
+            any("Producer thread não finalizou" in msg for msg in cm.output)
+        )
 
     def test_mock_service_iter_chunks_retorna_chunks(self) -> None:
         """Verifica que _iter_chunks retorna os chunks configurados."""
@@ -1065,12 +1075,14 @@ class AlunosFixesTest(TestCase):
 
     def _make_service(self, **kwargs):
         from apps.core.libs.base_etl_service import BaseEtlService
+
         return BaseEtlService(
             db_alias=kwargs.pop("db_alias", "default"), **kwargs
         )
 
     def _make_phase(self, **kwargs):
         from apps.core.libs.base_etl_service import PhaseConfig
+
         return PhaseConfig(
             nome=kwargs.get("nome", "fase"),
             sql=kwargs.get("sql", "SELECT 1"),
@@ -1097,11 +1109,13 @@ class AlunosFixesTest(TestCase):
         """Garante registro da tabela escrita na auditoria."""
         mock_auditor = MagicMock()
         from uuid import uuid4
+
         svc = self._make_service(
             repositorio_auditoria=mock_auditor, id_execucao=uuid4()
         )
         config = self._make_phase(table_name="tabela_dest")
         from apps.core.libs.base_etl_service import PipelineMetrics
+
         metrics = PipelineMetrics(total_lidos=100, total_escritos=50)
 
         svc._registrar_auditoria_fase(config, metrics)
@@ -1123,12 +1137,12 @@ class AlunosFixesTest(TestCase):
             "modo_escrita": "full_refresh",
             "model_class": mock_model,
             "update_fields": ["f"],
-            "unique_fields": ["id"]
+            "unique_fields": ["id"],
         }
 
         with (
             patch.object(svc.pg_engine, "_persistir") as mock_persist,
-            patch("django.db.transaction.atomic", return_value=MagicMock())
+            patch("django.db.transaction.atomic", return_value=MagicMock()),
         ):
             svc.sync_batch(processed_data, meta)
 
@@ -1137,7 +1151,7 @@ class AlunosFixesTest(TestCase):
         # Reset mock_persist and check search_hashes
         with (
             patch.object(svc.pg_engine, "buscar_hashes") as mock_hashes,
-            patch("django.db.transaction.atomic", return_value=MagicMock())
+            patch("django.db.transaction.atomic", return_value=MagicMock()),
         ):
             svc.sync_batch(processed_data, meta)
             mock_hashes.assert_not_called()
@@ -1147,6 +1161,7 @@ class AlunosFixesTest(TestCase):
         import inspect
 
         from apps.core.libs.base_etl_service import BaseEtlService
+
         sig = inspect.signature(BaseEtlService.__init__)
         self.assertNotIn("lote_delay", sig.parameters)
 
@@ -1158,6 +1173,7 @@ class AuditoriaParcialTest(TestCase):
     def setUp(self) -> None:
         from unittest.mock import MagicMock
         from uuid import uuid4
+
         self.mock_auditor = MagicMock()
         self.svc = MockService(
             db_alias="default",
@@ -1169,9 +1185,7 @@ class AuditoriaParcialTest(TestCase):
     def test_log_progresso_chama_auditoria_parcial(self) -> None:
         """Deve chamar atualizar_checkpoint_dominio ao atingir intervalo."""
         with (
-            patch(
-                "apps.core.libs.base_etl_service.settings"
-            ) as mock_settings,
+            patch("apps.core.libs.base_etl_service.settings") as mock_settings,
             patch("apps.core.libs.base_etl_service.connections"),
             patch("apps.core.libs.base_etl_service.transaction.atomic"),
         ):
@@ -1240,8 +1254,10 @@ class AuditoriaParcialTest(TestCase):
 
     def test_get_helper_acessa_objeto(self) -> None:
         """_get_attr retorna atributo de objeto via getattr."""
+
         class Obj:
             x = 42
+
         self.assertEqual(_get_attr(Obj(), "x"), 42)
 
     def test_get_helper_default_quando_ausente(self) -> None:
@@ -1309,9 +1325,7 @@ class AuditoriaParcialTest(TestCase):
         with (
             patch.object(engine, "buscar_hashes") as mock_bh,
             patch.object(engine, "_persistir"),
-            patch(
-                "apps.core.libs.base_etl_service.transaction.atomic"
-            ),
+            patch("apps.core.libs.base_etl_service.transaction.atomic"),
             patch("apps.core.libs.base_etl_service.connections"),
         ):
             engine.sincronizar_lote([("1", "h", obj)], fase_meta)
@@ -1335,9 +1349,7 @@ class AuditoriaParcialTest(TestCase):
         with (
             patch.object(engine, "buscar_hashes", return_value={}) as mock_bh,
             patch.object(engine, "_persistir"),
-            patch(
-                "apps.core.libs.base_etl_service.transaction.atomic"
-            ),
+            patch("apps.core.libs.base_etl_service.transaction.atomic"),
             patch("apps.core.libs.base_etl_service.connections"),
         ):
             engine.sincronizar_lote([("1", "h", obj)], fase_meta)
