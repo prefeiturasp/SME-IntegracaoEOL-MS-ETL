@@ -564,8 +564,8 @@ class BaseEtlService:
         producer_thread: Thread | None = None,
         erros: list[Exception] | None = None,
     ) -> list[Any] | None:
-        timeout = getattr(settings, "THREAD_POOL_CHUNK_TIMEOUT", 30)
-        if timeout is None or timeout <= 0:
+        timeout = getattr(settings, "THREAD_POOL_CHUNK_TIMEOUT", 30) or 0
+        if timeout <= 0:
             return queue.get()
 
         max_espera = getattr(settings, "PRODUCER_MAX_WAIT_SECONDS", 600)
