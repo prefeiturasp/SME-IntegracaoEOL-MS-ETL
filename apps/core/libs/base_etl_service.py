@@ -575,26 +575,46 @@ class BaseEtlService:
                 chunk: list | None = queue.get(timeout=timeout)
                 return chunk
             except Empty as err:
-                if erros:
-                    raise erros[0] from err
-                if (
-                    producer_thread is not None
-                    and not producer_thread.is_alive()
-                ):
-                    raise RuntimeError(
-                        "Producer thread finished without signaling completion"
-                    ) from err
+                self._validar_estado_producer(producer_thread, erros, err)
                 tempo_espera += timeout
-                logger.warning(
-                    "[%s] Aguardando Producer ha %.0fs sem novo chunk",
-                    self._dominio,
-                    tempo_espera,
-                )
-                if max_espera > 0 and tempo_espera >= max_espera:
-                    raise TimeoutError(
-                        f"[{self._dominio}] Producer não produziu chunk"
-                        f" após {tempo_espera:.0f}s — abortando fase"
-                    ) from err
+                self._log_espera_producer(tempo_espera)
+                self._validar_timeout_producer(max_espera, tempo_espera, err)
+
+    def _validar_estado_producer(
+        self,
+        producer_thread: Thread | None,
+        erros: list[Exception] | None,
+        causa: Empty,
+    ) -> None:
+        """Propaga erro ou encerramento inesperado do Producer."""
+        if erros:
+            raise erros[0] from causa
+        if producer_thread is not None and not producer_thread.is_alive():
+            raise RuntimeError(
+                "Producer thread finished without signaling completion"
+            ) from causa
+
+    def _log_espera_producer(self, tempo_espera: float) -> None:
+        """Registra espera por novo chunk do Producer."""
+        logger.warning(
+            "[%s] Aguardando Producer ha %.0fs sem novo chunk",
+            self._dominio,
+            tempo_espera,
+        )
+
+    def _validar_timeout_producer(
+        self,
+        max_espera: float,
+        tempo_espera: float,
+        causa: Empty,
+    ) -> None:
+        """Aborta a fase quando o Producer fica tempo demais sem resposta."""
+        if max_espera <= 0 or tempo_espera < max_espera:
+            return
+        raise TimeoutError(
+            f"[{self._dominio}] Producer não produziu chunk"
+            f" após {tempo_espera:.0f}s — abortando fase"
+        ) from causa
 
     def _atualizar_metricas(
         self, metrics: PipelineMetrics, lidos: int, esc: int, ign: int
