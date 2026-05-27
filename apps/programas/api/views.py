@@ -1,4 +1,4 @@
-""" Views DRF para controle e auditoria de execuções ETL do Domínio Programas."""
+"""Views da API de Programas."""
 
 import os
 
@@ -10,8 +10,9 @@ from rest_framework.views import APIView
 
 from apps.core.api.serializers import HealthStatusSerializer
 
+
 class HealthProgramasView(APIView):
-    """Health do dominio Programas."""
+    """Verifica a saúde do domínio Programas."""
 
     serializer_class = HealthStatusSerializer
 
@@ -19,7 +20,6 @@ class HealthProgramasView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request: Request) -> Response:
-        """Retorna o status de saude do dominio Programas."""
         resultado = self._check_database()
 
         status_http = 200 if resultado["status"] == "healthy" else 503
@@ -27,6 +27,7 @@ class HealthProgramasView(APIView):
         return Response(serializer.data, status=status_http)
 
     def _check_database(self) -> dict[str, str]:
+        """Verifica se o banco PROGRAMAS_DB responde a um SELECT 1."""
         if not os.getenv("URL_BANCO_PROGRAMAS"):
             return {"status": "unhealthy"}
 

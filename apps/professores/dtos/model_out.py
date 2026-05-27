@@ -1,9 +1,12 @@
 """DTOs para o domínio Professores."""
 
+import datetime
 from dataclasses import dataclass
 from typing import Any
 
 from apps.core.libs.helpers import make_aware
+
+_DATA_CHAVE_PADRAO = datetime.datetime(1900, 1, 1)
 
 
 @dataclass(slots=True)
@@ -312,6 +315,11 @@ def _normalizar_datetime(valor: Any) -> Any:
     return make_aware(valor)
 
 
+def _normalizar_data_chave_funcionario(valor: Any) -> Any:
+    """Normaliza data usada na chave natural."""
+    return _normalizar_datetime(valor or _DATA_CHAVE_PADRAO)
+
+
 @dataclass(slots=True)
 class FuncionarioUnidadeEducacionalOut:
     """Estrutura para o model ``FuncionarioUnidadeEducacional``."""
@@ -323,7 +331,7 @@ class FuncionarioUnidadeEducacionalOut:
     codigo_ue: str
     data_inicio: Any
     data_fim: Any
-    codigo_cargo: str | None
+    codigo_cargo: int | None
     cargo: str | None
     codigo_tipo_funcao_atividade: int | None
     eh_professor: Any
@@ -338,17 +346,19 @@ class FuncionarioUnidadeEducacionalOut:
         self.cpf = _normalizar_texto_opcional(self.cpf)
         self.codigo_rf = _normalizar_texto(self.codigo_rf)
         self.codigo_ue = _normalizar_texto(self.codigo_ue)
-        self.data_inicio = _normalizar_datetime(self.data_inicio)
+        self.data_inicio = _normalizar_data_chave_funcionario(
+            self.data_inicio
+        )
         self.data_fim = _normalizar_datetime(self.data_fim)
-        self.codigo_cargo = _normalizar_texto_opcional(self.codigo_cargo)
+        self.codigo_cargo = _normalizar_int_opcional(self.codigo_cargo)
         self.cargo = _normalizar_texto_opcional(self.cargo)
         self.codigo_tipo_funcao_atividade = _normalizar_int_opcional(
             self.codigo_tipo_funcao_atividade
         )
         self.eh_professor = _normalizar_bool(self.eh_professor)
         self.esta_afastado = _normalizar_bool(self.esta_afastado)
-        self.funcao_externo = _normalizar_int(self.funcao_externo)
-        self.tipo_funcao_externo = _normalizar_int(
+        self.funcao_externo = _normalizar_int_opcional(self.funcao_externo)
+        self.tipo_funcao_externo = _normalizar_int_opcional(
             self.tipo_funcao_externo
         )
 
@@ -369,10 +379,12 @@ class FuncionarioUnidadeEducacionalOut:
             "codigo_cargo": self.codigo_cargo,
             "cargo": self.cargo,
             "codigo_tipo_funcao_atividade": (
-                self.codigo_tipo_funcao_atividade
+                _normalizar_int(self.codigo_tipo_funcao_atividade)
             ),
             "eh_professor": self.eh_professor,
             "esta_afastado": self.esta_afastado,
-            "funcao_externo": self.funcao_externo,
-            "tipo_funcao_externo": self.tipo_funcao_externo,
+            "funcao_externo": _normalizar_int(self.funcao_externo),
+            "tipo_funcao_externo": _normalizar_int(
+                self.tipo_funcao_externo
+            ),
         }

@@ -1,4 +1,4 @@
-"""Testes para EtlProgramasOrquestrador."""
+"""Valida o disparo de chord e o estado do orquestrador de Programas."""
 
 from typing import Any
 from unittest.mock import MagicMock, patch
@@ -22,6 +22,7 @@ class TestEtlProgramasOrquestradorLancamento(TestCase):
     databases = {"default", "eol_db", "programas_db"}
 
     def _make_orquestrador(self, **kwargs: Any) -> EtlProgramasOrquestrador:
+        """Cria uma instância de orquestrador com EOL mockado."""
         kwargs.setdefault("id_execucao", uuid4())
         return EtlProgramasOrquestrador(
             db_alias="programas_db",
@@ -61,14 +62,14 @@ class TestEtlProgramasOrquestradorLancamento(TestCase):
         _mock_proc: MagicMock,
         mock_finalizar: MagicMock,
     ) -> None:
-        """Valida que todas as 6 fases são passadas ao callback do chord."""
+        """Valida que todas as 8 fases são passadas ao callback do chord."""
         self._configurar_leitor(mock_leitor_cls, ["task1"])
 
         self._make_orquestrador().lancar()
 
         self.assertTrue(mock_finalizar.s.called)
         meta_dict = mock_finalizar.s.call_args.args[0]
-        self.assertEqual(meta_dict["total_fases"], 6)
+        self.assertEqual(meta_dict["total_fases"], 8)
 
     def test_sem_chunks_nao_lanca_chord(
         self,
@@ -93,6 +94,7 @@ class TestEtlProgramasOrquestradorEstado(TestCase):
     databases = {"default", "eol_db", "programas_db"}
 
     def _make_orquestrador(self, **kwargs: Any) -> EtlProgramasOrquestrador:
+        """Cria uma instância de orquestrador com EOL mockado."""
         kwargs.setdefault("id_execucao", uuid4())
         return EtlProgramasOrquestrador(
             db_alias="programas_db",

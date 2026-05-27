@@ -1,11 +1,14 @@
 """Testes de _row_to_*, _full_refresh e EtlProfessoresService."""
 
 import datetime
+from typing import Any, cast
 from unittest.mock import MagicMock, patch
 
+from django.db.models.query import QuerySet
 from django.test import TestCase
 from django.utils import timezone
 
+from apps.professores.dtos.model_in import FuncionarioUnidadeEducacionalIn
 from apps.professores.models import FuncionarioUnidadeEducacional, Professor
 from apps.professores.queries import (
     CARGOS_PROFESSOR,
@@ -28,6 +31,39 @@ from apps.professores.services import (
     _row_to_professor,
     _upsert_incremental,
 )
+
+_BulkCreateChamadas = list[
+    tuple[list[FuncionarioUnidadeEducacional], dict[str, object]]
+]
+
+
+def _capturar_bulk_create_funcionario() -> tuple[_BulkCreateChamadas, Any]:
+    """Captura bulk_create de funcionario e preserva hashes reais."""
+    original_bulk_create = QuerySet.bulk_create
+    chamadas: _BulkCreateChamadas = []
+
+    def fake_bulk_create(
+        queryset: QuerySet,
+        objs: list[object],
+        *args: object,
+        **kwargs: object,
+    ) -> list[object]:
+        if isinstance(objs[0], FuncionarioUnidadeEducacional):
+            chamadas.append(
+                (cast(list[FuncionarioUnidadeEducacional], objs), kwargs)
+            )
+            return []
+        return cast(
+            list[object],
+            original_bulk_create(queryset, objs, *args, **kwargs),
+        )
+
+    return chamadas, patch.object(
+        QuerySet,
+        "bulk_create",
+        autospec=True,
+        side_effect=fake_bulk_create,
+    )
 
 
 class RowToProfessorTest(TestCase):
@@ -239,6 +275,29 @@ class RowToAtribuicaoExternoTest(TestCase):
 class RowToFuncionarioTest(TestCase):
     """Testes para a funcao _row_to_funcionario."""
 
+    def test_model_in_permite_campos_nulos(self) -> None:
+        """Permite que o DTO de entrada propague nulos da origem."""
+        dto = FuncionarioUnidadeEducacionalIn(
+            "ANA",
+            None,
+            None,
+            "7506988",
+            "019372",
+            timezone.now(),
+            None,
+            None,
+            None,
+            None,
+            0,
+            0,
+            None,
+            None,
+        ).to_domain()
+
+        self.assertIsNone(dto.data_fim)
+        self.assertIsNone(dto.codigo_cargo)
+        self.assertIsNone(dto.codigo_tipo_funcao_atividade)
+
     def test_campos_normalizados_e_hash(self) -> None:
         """Verifica normalizacao, defaults e chave SHA-256."""
         dt = datetime.datetime(2026, 2, 1, 7, 30)
@@ -269,9 +328,9 @@ class RowToFuncionarioTest(TestCase):
         self.assertEqual(r["codigo_ue"], "019372")
         self.assertTrue(timezone.is_aware(r["data_inicio"]))
         self.assertIsNone(r["data_fim"])
-        self.assertEqual(r["codigo_cargo"], "3239")
+        self.assertEqual(r["codigo_cargo"], 3239)
         self.assertEqual(r["cargo"], "PROFESSOR")
-        self.assertIsNone(r["codigo_tipo_funcao_atividade"])
+        self.assertEqual(r["codigo_tipo_funcao_atividade"], 0)
         self.assertTrue(r["eh_professor"])
         self.assertFalse(r["esta_afastado"])
         self.assertEqual(r["funcao_externo"], 0)
@@ -300,6 +359,8 @@ class RowToFuncionarioTest(TestCase):
         r = _row_to_funcionario(row)
 
         self.assertIs(r["data_inicio"], dt)
+        self.assertIsNone(r["data_fim"])
+        self.assertIsNone(r["codigo_cargo"])
         self.assertTrue(r["eh_professor"])
         self.assertFalse(r["esta_afastado"])
 
@@ -410,7 +471,9 @@ class UpsertIncrementalTest(TestCase):
         mock_manager: MagicMock,
         mock_hash_bulk_create: MagicMock,
     ) -> None:
-        """Permite o mesmo RF em UEs distintas no upsert."""
+        """Permite o mesmo RF e UE com cargos distintos no upsert."""
+        dt = timezone.now()
+        dt_fim = dt + datetime.timedelta(days=1)
         mock_manager.using.return_value.bulk_create.return_value = None
         mock_filter = MagicMock()
         mock_filter.values_list.return_value = []
@@ -423,60 +486,245 @@ class UpsertIncrementalTest(TestCase):
                 {
                     "codigo_rf": "7506988",
                     "codigo_ue": "019372",
+                    "codigo_cargo": 3239,
+                    "codigo_tipo_funcao_atividade": 0,
+                    "data_inicio": dt,
+                    "data_fim": dt_fim,
+                    "funcao_externo": 0,
+                    "tipo_funcao_externo": 0,
                     "nome": "ANA",
                 },
                 {
                     "codigo_rf": "7506988",
-                    "codigo_ue": "019373",
+                    "codigo_ue": "019372",
+                    "codigo_cargo": 3247,
+                    "codigo_tipo_funcao_atividade": 0,
+                    "data_inicio": dt,
+                    "data_fim": dt_fim,
+                    "funcao_externo": 0,
+                    "tipo_funcao_externo": 0,
                     "nome": "ANA",
                 },
             ],
-            ["codigo_rf", "codigo_ue", "nome"],
-            ["codigo_rf", "codigo_ue"],
+            [
+                "codigo_rf",
+                "codigo_ue",
+                "codigo_cargo",
+                "codigo_tipo_funcao_atividade",
+                "data_inicio",
+                "data_fim",
+                "funcao_externo",
+                "tipo_funcao_externo",
+                "nome",
+            ],
+            [
+                "codigo_rf",
+                "codigo_ue",
+                "codigo_cargo",
+                "codigo_tipo_funcao_atividade",
+                "data_inicio",
+                "data_fim",
+                "funcao_externo",
+                "tipo_funcao_externo",
+            ],
         )
 
         self.assertEqual(total, 2)
         _, kwargs = mock_manager.using.return_value.bulk_create.call_args
-        self.assertEqual(kwargs["unique_fields"], ["codigo_rf", "codigo_ue"])
+        self.assertEqual(
+            kwargs["unique_fields"],
+            [
+                "codigo_rf",
+                "codigo_ue",
+                "codigo_cargo",
+                "codigo_tipo_funcao_atividade",
+                "data_inicio",
+                "data_fim",
+                "funcao_externo",
+                "tipo_funcao_externo",
+            ],
+        )
         self.assertEqual(kwargs["update_fields"], ["nome"])
         mock_hash_bulk_create.assert_called_once()
 
     def test_reinsere_chave_composta_quando_destino_sumiu(self) -> None:
         """Reinsere registro quando hash existe mas destino foi removido."""
+        dt = timezone.now()
         row = {
             "codigo_rf": "7506988",
             "codigo_ue": "019372",
+            "codigo_cargo": 3239,
+            "codigo_tipo_funcao_atividade": 0,
+            "data_inicio": dt,
+            "data_fim": None,
+            "funcao_externo": 0,
+            "tipo_funcao_externo": 0,
             "nome": "ANA",
         }
-        update_fields = ["codigo_rf", "codigo_ue", "nome"]
-        unique_fields = ["codigo_rf", "codigo_ue"]
+        update_fields = [
+            "codigo_rf",
+            "codigo_ue",
+            "codigo_cargo",
+            "codigo_tipo_funcao_atividade",
+            "data_inicio",
+            "data_fim",
+            "funcao_externo",
+            "tipo_funcao_externo",
+            "nome",
+        ]
+        unique_fields = [
+            "codigo_rf",
+            "codigo_ue",
+            "codigo_cargo",
+            "codigo_tipo_funcao_atividade",
+            "data_inicio",
+            "data_fim",
+            "funcao_externo",
+            "tipo_funcao_externo",
+        ]
 
-        _upsert_incremental(
-            FuncionarioUnidadeEducacional,
-            "funcionario_unidade_educacional",
-            [row],
-            update_fields,
-            unique_fields,
-        )
-        FuncionarioUnidadeEducacional.objects.using(
-            "professores_db"
-        ).all().delete()
+        chamadas_bulk, mock_bulk_create = _capturar_bulk_create_funcionario()
+        with mock_bulk_create:
+            queryset = FuncionarioUnidadeEducacional.objects.using(
+                "professores_db"
+            )
+            queryset.all().delete()
 
-        total = _upsert_incremental(
-            FuncionarioUnidadeEducacional,
-            "funcionario_unidade_educacional",
-            [row],
-            update_fields,
-            unique_fields,
-        )
+            _upsert_incremental(
+                FuncionarioUnidadeEducacional,
+                "funcionario_unidade_educacional",
+                [row],
+                update_fields,
+                unique_fields,
+            )
+
+            total = _upsert_incremental(
+                FuncionarioUnidadeEducacional,
+                "funcionario_unidade_educacional",
+                [row],
+                update_fields,
+                unique_fields,
+            )
 
         self.assertEqual(total, 1)
-        self.assertEqual(
-            FuncionarioUnidadeEducacional.objects.using(
-                "professores_db"
-            ).count(),
-            1,
-        )
+        self.assertEqual(len(chamadas_bulk), 2)
+        obj_reinserido = chamadas_bulk[-1][0][0]
+        self.assertEqual(obj_reinserido.codigo_rf, row["codigo_rf"])
+        self.assertEqual(obj_reinserido.data_fim, row["data_fim"])
+
+    def test_mantem_funcoes_distintas_na_mesma_ue_e_cargo(self) -> None:
+        """Persiste duas funcoes para o mesmo funcionario, UE e cargo."""
+        base = {
+            "codigo_rf": "7506988",
+            "codigo_ue": "019372",
+            "codigo_cargo": 3239,
+            "data_inicio": timezone.now(),
+            "data_fim": timezone.now(),
+            "funcao_externo": 0,
+            "tipo_funcao_externo": 0,
+            "nome": "ANA",
+        }
+        rows = [
+            {
+                **base,
+                "codigo_tipo_funcao_atividade": 0,
+                "cargo": "PROFESSOR",
+            },
+            {
+                **base,
+                "codigo_tipo_funcao_atividade": 10,
+                "cargo": "PROFESSOR",
+            },
+        ]
+        update_fields = [
+            "codigo_rf",
+            "codigo_ue",
+            "codigo_cargo",
+            "codigo_tipo_funcao_atividade",
+            "data_inicio",
+            "data_fim",
+            "funcao_externo",
+            "tipo_funcao_externo",
+            "nome",
+            "cargo",
+        ]
+
+        unique_fields = [
+            "codigo_rf",
+            "codigo_ue",
+            "codigo_cargo",
+            "codigo_tipo_funcao_atividade",
+            "data_inicio",
+            "data_fim",
+            "funcao_externo",
+            "tipo_funcao_externo",
+        ]
+
+        chamadas_bulk, mock_bulk_create = _capturar_bulk_create_funcionario()
+        with mock_bulk_create:
+            total = _upsert_incremental(
+                FuncionarioUnidadeEducacional,
+                "funcionario_unidade_educacional",
+                rows,
+                update_fields,
+                unique_fields,
+            )
+
+        self.assertEqual(total, 2)
+        objs, kwargs = chamadas_bulk[-1]
+        funcoes = {obj.codigo_tipo_funcao_atividade for obj in objs}
+        self.assertEqual(funcoes, {0, 10})
+        self.assertEqual(kwargs["unique_fields"], unique_fields)
+
+    def test_mantem_funcoes_externas_distintas_na_mesma_ue(self) -> None:
+        """Persiste funcoes externas distintas para o mesmo CPF e UE."""
+        base = {
+            "codigo_rf": "12345678900",
+            "codigo_ue": "019372",
+            "codigo_cargo": None,
+            "codigo_tipo_funcao_atividade": 0,
+            "data_inicio": timezone.now(),
+            "data_fim": None,
+            "nome": "ANA",
+        }
+        rows = [
+            {
+                **base,
+                "funcao_externo": 101,
+                "tipo_funcao_externo": 1,
+            },
+            {
+                **base,
+                "funcao_externo": 102,
+                "tipo_funcao_externo": 1,
+            },
+        ]
+        campos_chave = [
+            "codigo_rf",
+            "codigo_ue",
+            "codigo_cargo",
+            "codigo_tipo_funcao_atividade",
+            "data_inicio",
+            "data_fim",
+            "funcao_externo",
+            "tipo_funcao_externo",
+        ]
+
+        chamadas_bulk, mock_bulk_create = _capturar_bulk_create_funcionario()
+        with mock_bulk_create:
+            total = _upsert_incremental(
+                FuncionarioUnidadeEducacional,
+                "funcionario_unidade_educacional",
+                rows,
+                [*campos_chave, "nome"],
+                campos_chave,
+            )
+
+        self.assertEqual(total, 2)
+        objs, kwargs = chamadas_bulk[-1]
+        funcoes = {obj.funcao_externo for obj in objs}
+        self.assertEqual(funcoes, {101, 102})
+        self.assertEqual(kwargs["unique_fields"], campos_chave)
 
 
 _EOL_PATCH = "apps.professores.services.EOLService"
@@ -705,7 +953,17 @@ class EtlProfessoresServiceFase4Test(TestCase):
             "funcionario_unidade_educacional",
         )
         self.assertEqual(
-            mock_upsert.call_args.args[4], ["codigo_rf", "codigo_ue"]
+            mock_upsert.call_args.args[4],
+            [
+                "codigo_rf",
+                "codigo_ue",
+                "codigo_cargo",
+                "codigo_tipo_funcao_atividade",
+                "data_inicio",
+                "data_fim",
+                "funcao_externo",
+                "tipo_funcao_externo",
+            ],
         )
 
 

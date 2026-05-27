@@ -35,11 +35,25 @@ class ProfessoresModelsTest(TestCase):
         self.assertEqual(meta.db_table, "funcionario_unidade_educacional")
         self.assertEqual(meta.pk.name, "id")
         self.assertEqual(meta.get_field("codigo_rf").max_length, 20)
-        self.assertTrue(meta.get_field("codigo_tipo_funcao_atividade").null)
+        self.assertFalse(meta.get_field("data_inicio").null)
+        self.assertTrue(meta.get_field("data_fim").null)
+        self.assertFalse(meta.get_field("codigo_tipo_funcao_atividade").null)
+        self.assertTrue(meta.get_field("codigo_cargo").null)
         nomes_indices = {indice.name for indice in meta.indexes}
         self.assertIn("idx_funcionario_ue", nomes_indices)
         self.assertIn("idx_funcionario_cargo", nomes_indices)
         self.assertIn("idx_funcionario_rf", nomes_indices)
         self.assertIn("idx_funcionario_ue_cargo", nomes_indices)
-        nomes_constraints = {constraint.name for constraint in meta.constraints}
-        self.assertIn("uq_funcionario_rf_ue", nomes_constraints)
+        nomes_constraints = {
+            constraint.name for constraint in meta.constraints
+        }
+        self.assertIn(
+            "uq_funcionario_rf_ue_cargo_funcao_vinculo",
+            nomes_constraints,
+        )
+        constraint = next(
+            constraint
+            for constraint in meta.constraints
+            if constraint.name == "uq_funcionario_rf_ue_cargo_funcao_vinculo"
+        )
+        self.assertFalse(constraint.nulls_distinct)
