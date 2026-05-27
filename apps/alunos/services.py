@@ -54,7 +54,6 @@ class EtlAlunosService(BaseEtlService):
         eol: EOLService | None = None,
         primeiro_run: bool = False,
     ) -> None:
-        """Inicializa o serviço de alunos conectando ao EOL."""
         super().__init__(
             db_alias=db_alias,
             id_execucao=id_execucao,
@@ -65,7 +64,7 @@ class EtlAlunosService(BaseEtlService):
         self._fases = self._init_fases()
 
     def _iter_chunks(self, sql: str) -> Iterator[list[tuple]]:
-        """Lê os dados brutos da origem (MSSQL) em chunks."""
+        """Lê os dados brutos da origem em chunks."""
         return self.eol.iter_query(sql)
 
     def _init_fases(self) -> list[PhaseConfig]:
@@ -107,6 +106,7 @@ class EtlAlunosService(BaseEtlService):
                     "cpf",
                     "nome_mae",
                     "raca_cor",
+                    "cns",
                     "data_atualizacao_contato",
                     "possui_deficiencia",
                 ),
@@ -129,8 +129,16 @@ class EtlAlunosService(BaseEtlService):
                     "numero_celular",
                     "email",
                     "autoriza_sms",
+                    "endereco_id",
+                    "numero_endereco",
+                    "complemento",
+                    "bairro",
                     "logradouro",
                     "cep",
+                    "nome_municipio",
+                    "sigla_uf",
+                    "tipo_logradouro",
+                    "data_atualizacao_tabela",
                     "data_fim_vinculo",
                 ),
                 unique_fields=("codigo_responsavel",),
@@ -149,6 +157,8 @@ class EtlAlunosService(BaseEtlService):
                     "necessidade_especial_id",
                     "data_inicio",
                     "data_fim",
+                    "codigo_tipo_recurso",
+                    "descricao_tipo_recurso",
                 ),
                 unique_fields=("codigo_necessidade_especial_aluno",),
                 suporta_bulk_insert=True,
@@ -165,8 +175,10 @@ class EtlAlunosService(BaseEtlService):
                     "codigo_ue",
                     "ano_letivo",
                     "data_situacao_matricula",
+                    "data_situacao_matricula_data_hora",
                     "codigo_situacao_matricula",
                     "situacao_matricula",
+                    "origem_atual",
                 ),
                 unique_fields=("codigo_matricula",),
                 suporta_bulk_insert=False,
@@ -179,7 +191,14 @@ class EtlAlunosService(BaseEtlService):
                 model_class=MatriculaTurma,
                 dto_in=MatriculaTurmaIn,
                 pk_field=["codigo_matricula", "codigo_turma"],
-                update_fields=("numero_chamada", "data_situacao_aluno"),
+                update_fields=(
+                    "numero_chamada",
+                    "data_situacao_aluno",
+                    "data_situacao_aluno_data_hora",
+                    "codigo_situacao_aluno",
+                    "codigo_tipo_turma",
+                    "data_atualizacao_tabela",
+                ),
                 unique_fields=("codigo_matricula", "codigo_turma"),
                 suporta_bulk_insert=False,
             ),

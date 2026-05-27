@@ -69,7 +69,8 @@ class TestProcessarChunkAlunos(TestCase):
                 None,
                 None,
                 None,
-                0,
+                None,
+                False,
             ]
         ]
         resultado = processar_chunk.run(chunk, _fase_meta_dict())
@@ -125,7 +126,8 @@ class TestProcessarChunkAlunos(TestCase):
                 None,
                 None,
                 None,
-                0,
+                None,
+                False,
             ]
         ]
         with self.assertRaises((Retry, RuntimeError)):

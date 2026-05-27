@@ -36,6 +36,7 @@ class Aluno(models.Model):
     nis = models.CharField(max_length=20, null=True, blank=True)
     raca_cor = models.CharField(max_length=50, null=True, blank=True)
     data_atualizacao_contato = models.DateField(null=True, blank=True)
+    cns = models.CharField(max_length=20, null=True, blank=True)
     possui_deficiencia = models.BooleanField(default=False)
 
     class Meta:
@@ -68,8 +69,16 @@ class ResponsavelAluno(models.Model):
     numero_celular = models.CharField(max_length=20, null=True, blank=True)
     email = models.EmailField(max_length=200, null=True, blank=True)
     autoriza_sms = models.CharField(max_length=1, null=True, blank=True)
+    endereco_id = models.BigIntegerField(null=True, blank=True)
+    numero_endereco = models.CharField(max_length=20, null=True, blank=True)
+    complemento = models.CharField(max_length=100, null=True, blank=True)
+    bairro = models.CharField(max_length=100, null=True, blank=True)
     logradouro = models.CharField(max_length=255, null=True, blank=True)
     cep = models.IntegerField(null=True, blank=True)
+    nome_municipio = models.CharField(max_length=100, null=True, blank=True)
+    sigla_uf = models.CharField(max_length=2, null=True, blank=True)
+    tipo_logradouro = models.CharField(max_length=50, null=True, blank=True)
+    data_atualizacao_tabela = models.DateTimeField(null=True, blank=True)
     data_fim_vinculo = models.DateField(null=True, blank=True)
 
     class Meta:
@@ -101,6 +110,12 @@ class NecessidadeEspecialAluno(models.Model):
     )
     data_inicio = models.DateField(null=True, blank=True)
     data_fim = models.DateField(null=True, blank=True)
+    codigo_tipo_recurso = models.SmallIntegerField(null=True, blank=True)
+    descricao_tipo_recurso = models.CharField(
+        max_length=100,
+        null=True,
+        blank=True,
+    )
 
     class Meta:
         app_label = "alunos"
@@ -123,8 +138,13 @@ class Matricula(models.Model):
     codigo_ue = models.CharField(max_length=20)
     ano_letivo = models.SmallIntegerField()
     data_situacao_matricula = models.DateField(null=True, blank=True)
+    data_situacao_matricula_data_hora = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
     codigo_situacao_matricula = models.SmallIntegerField()
     situacao_matricula = models.CharField(max_length=100)
+    origem_atual = models.BooleanField(default=True)
 
     class Meta:
         app_label = "alunos"
@@ -154,6 +174,13 @@ class MatriculaTurma(models.Model):
     codigo_turma = models.BigIntegerField()
     numero_chamada = models.CharField(max_length=5, null=True, blank=True)
     data_situacao_aluno = models.DateField(null=True, blank=True)
+    data_situacao_aluno_data_hora = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+    codigo_situacao_aluno = models.SmallIntegerField(null=True, blank=True)
+    codigo_tipo_turma = models.SmallIntegerField(null=True, blank=True)
+    data_atualizacao_tabela = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         app_label = "alunos"
