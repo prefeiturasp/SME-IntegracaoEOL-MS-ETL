@@ -1,24 +1,42 @@
-"""Testes para o pipeline assíncrono (Orquestrador, TaskPublisher, Chunks e Tasks)."""
+"""Testes para o pipeline assíncrono.
 
+Cobre Orquestrador, TaskPublisher, Chunks e Tasks.
+"""
+
+from datetime import date, datetime
+from decimal import Decimal
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 from django.test import TestCase
-from celery.result import EagerResult
 
-from apps.core.libs.base_etl_orquestrador import GenericEtlOrquestrador
-from apps.core.libs.task_publisher import TaskPublisher, serializar_chunk, EtlJsonEncoder
 from apps.core.libs.base_etl_chunck import BaseEtlChunk
 from apps.core.libs.base_etl_fase import BaseEtlFase
-from apps.core.tasks import processar_chunk, finalizar_fase, _lancar_fase_seguinte
-from datetime import date, datetime
-from decimal import Decimal
+from apps.core.libs.base_etl_orquestrador import GenericEtlOrquestrador
+from apps.core.libs.task_publisher import (
+    EtlJsonEncoder,
+    TaskPublisher,
+    serializar_chunk,
+)
+from apps.core.tasks import (
+    _lancar_fase_seguinte,
+    finalizar_fase,
+    processar_chunk,
+)
+
 
 class AsyncPipelineTestCase(TestCase):
     """Cobre as classes e funções do fluxo assíncrono via Celery."""
+
     databases = {"default", "eol_db", "alunos_db"}
 
-    def _get_fase_meta(self, nome="fase1", sql="SELECT 1", n=1, total=1) -> BaseEtlFase:
+    def _get_fase_meta(
+        self,
+        nome="fase1",
+        sql="SELECT 1",
+        n=1,
+        total=1,
+    ) -> BaseEtlFase:
         return BaseEtlFase(
             nome=nome,
             sql=sql,
@@ -37,21 +55,34 @@ class AsyncPipelineTestCase(TestCase):
             total_fases=total,
             dominio="teste",
             task_processamento_path="apps.core.tasks.processar_chunk",
-            task_callback_path="apps.core.tasks.finalizar_fase"
+            task_callback_path="apps.core.tasks.finalizar_fase",
         )
 
     def test_etl_json_encoder(self) -> None:
         encoder = EtlJsonEncoder()
         self.assertEqual(encoder.default(date(2023, 1, 1)), "2023-01-01")
-        self.assertEqual(encoder.default(datetime(2023, 1, 1, 12, 0)), "2023-01-01T12:00:00")
+        self.assertEqual(
+            encoder.default(datetime(2023, 1, 1, 12, 0)),
+            "2023-01-01T12:00:00",
+        )
         self.assertEqual(encoder.default(Decimal("10.5")), "10.5")
         with self.assertRaises(TypeError):
             encoder.default(object())
 
     def test_serializar_chunk_converte_tipos(self) -> None:
-        chunk = [(1, date(2023, 1, 1), Decimal("100"), datetime(2023, 1, 1, 10, 0, 0))]
+        chunk = [
+            (
+                1,
+                date(2023, 1, 1),
+                Decimal("100"),
+                datetime(2023, 1, 1, 10, 0, 0),
+            )
+        ]
         res = serializar_chunk(chunk)
-        self.assertEqual(res, [[1, "2023-01-01", "100", "2023-01-01T10:00:00"]])
+        self.assertEqual(
+            res,
+            [[1, "2023-01-01", "100", "2023-01-01T10:00:00"]],
+        )
 
     def test_task_publisher_cria_assinatura(self) -> None:
         mock_task = MagicMock()
@@ -71,21 +102,35 @@ class AsyncPipelineTestCase(TestCase):
 
     @patch("apps.core.libs.base_etl_orquestrador.chord")
     @patch("apps.core.libs.base_etl_orquestrador.group")
-    def test_generic_orquestrador_lanca_chord(self, mock_group, mock_chord) -> None:
+    def test_generic_orquestrador_lanca_chord(
+        self,
+        mock_group,
+        mock_chord,
+    ) -> None:
         mock_service = MagicMock()
         mock_fase_config = MagicMock()
         mock_fase_config.to_meta.return_value = self._get_fase_meta()
         mock_service._fases = [mock_fase_config]
         mock_eol = MagicMock()
         mock_eol.iter_query.return_value = [[(1,)]]
-        orquestrador = GenericEtlOrquestrador(mock_service, dominio="teste", id_execucao=uuid4(), eol=mock_eol)
+        orquestrador = GenericEtlOrquestrador(
+            mock_service,
+            dominio="teste",
+            id_execucao=uuid4(),
+            eol=mock_eol,
+        )
         orquestrador.lancar(fase_inicial=1)
         self.assertTrue(mock_chord.called)
 
     @patch("apps.core.libs.base_etl_orquestrador.chord")
     @patch("apps.core.libs.base_etl_orquestrador.group")
     @patch("apps.core.libs.base_etl_orquestrador.logger")
-    def test_orquestrador_fase_sem_chunks(self, mock_logger, mock_group, mock_chord) -> None:
+    def test_orquestrador_fase_sem_chunks(
+        self,
+        mock_logger,
+        mock_group,
+        mock_chord,
+    ) -> None:
         mock_service = MagicMock()
         mock_fase_config = MagicMock()
         mock_fase_config.to_meta.return_value = self._get_fase_meta()
@@ -94,8 +139,11 @@ class AsyncPipelineTestCase(TestCase):
         mock_eol = MagicMock()
         mock_eol.iter_query.return_value = []
         orquestrador = GenericEtlOrquestrador(
-            mock_service, dominio="teste", id_execucao=uuid4(), 
-            task_callback=mock_callback, eol=mock_eol
+            mock_service,
+            dominio="teste",
+            id_execucao=uuid4(),
+            task_callback=mock_callback,
+            eol=mock_eol,
         )
         orquestrador.lancar(fase_inicial=1)
         mock_callback.apply_async.assert_called_once()
@@ -103,7 +151,12 @@ class AsyncPipelineTestCase(TestCase):
     @patch("apps.core.tasks.BaseEtlFase.from_dict")
     @patch("apps.core.tasks.PostgresUpsertEngine")
     @patch("apps.core.tasks.ThreadPoolProcessor")
-    def test_task_processar_chunk_sucesso(self, mock_tp, mock_upsert, mock_fase_from_dict) -> None:
+    def test_task_processar_chunk_sucesso(
+        self,
+        mock_tp,
+        mock_upsert,
+        mock_fase_from_dict,
+    ) -> None:
         mock_fase = MagicMock()
         mock_fase_from_dict.return_value = mock_fase
         mock_fase.get_transformer.return_value = lambda x: x
@@ -116,7 +169,12 @@ class AsyncPipelineTestCase(TestCase):
     @patch("apps.core.tasks.BaseEtlFase.from_dict")
     @patch("apps.core.tasks.RepositorioAuditoriaPostgres")
     @patch("apps.core.tasks._lancar_fase_seguinte")
-    def test_task_finalizar_fase(self, mock_lancar, mock_repo, mock_fase_from_dict) -> None:
+    def test_task_finalizar_fase(
+        self,
+        mock_lancar,
+        mock_repo,
+        mock_fase_from_dict,
+    ) -> None:
         fase = self._get_fase_meta(n=1, total=2)
         mock_fase_from_dict.return_value = fase
         finalizar_fase.apply(args=[[(1, 0)], fase.to_dict(), [{}, {}]]).get()
@@ -124,17 +182,28 @@ class AsyncPipelineTestCase(TestCase):
 
     @patch("apps.core.tasks.BaseEtlFase.from_dict")
     @patch("apps.core.tasks._lancar_fase_seguinte")
-    def test_task_finalizar_fase_final(self, mock_lancar, mock_fase_from_dict) -> None:
+    def test_task_finalizar_fase_final(
+        self,
+        mock_lancar,
+        mock_fase_from_dict,
+    ) -> None:
         fase = self._get_fase_meta(n=1, total=1)
         mock_fase_from_dict.return_value = fase
-        with patch("apps.core.tasks.RepositorioAuditoriaPostgres") as mock_repo:
+        with patch(
+            "apps.core.tasks.RepositorioAuditoriaPostgres"
+        ) as mock_repo:
             finalizar_fase.apply(args=[[(1, 0)], fase.to_dict(), [{}]]).get()
             mock_repo.return_value.finalizar_execucao.assert_called_once()
 
     @patch("apps.core.tasks.BaseEtlFase.from_dict")
     @patch("apps.core.tasks.BaseEtlChunk")
     @patch("apps.core.tasks.chord")
-    def test_lancar_fase_seguinte_sucesso(self, mock_chord, mock_leitor_cls, mock_fase_from_dict) -> None:
+    def test_lancar_fase_seguinte_sucesso(
+        self,
+        mock_chord,
+        mock_leitor_cls,
+        mock_fase_from_dict,
+    ) -> None:
         fase_atual = self._get_fase_meta(n=1, total=2)
         proxima = self._get_fase_meta(n=2, total=2)
         mock_fase_from_dict.return_value = proxima
@@ -148,22 +217,36 @@ class AsyncPipelineTestCase(TestCase):
         proxima = self._get_fase_meta(n=2, total=2)
         mock_fase_from_dict.return_value = proxima
         mock_callback = MagicMock()
-        with patch.object(proxima, "resolver_task_callback", return_value=mock_callback):
-            with patch("apps.core.tasks.BaseEtlChunk") as mock_leitor_cls:
-                mock_leitor_cls.return_value.criar_grupo.return_value = []
-                _lancar_fase_seguinte(fase_atual, [{}, {}])
-                mock_callback.apply_async.assert_called_once()
+        with (
+            patch.object(
+                proxima,
+                "resolver_task_callback",
+                return_value=mock_callback,
+            ),
+            patch("apps.core.tasks.BaseEtlChunk") as mock_leitor_cls,
+        ):
+            mock_leitor_cls.return_value.criar_grupo.return_value = []
+            _lancar_fase_seguinte(fase_atual, [{}, {}])
+            mock_callback.apply_async.assert_called_once()
 
     @patch("apps.core.tasks.BaseEtlFase.from_dict")
-    def test_lancar_fase_seguinte_erro_resolucao(self, mock_fase_from_dict) -> None:
+    def test_lancar_fase_seguinte_erro_resolucao(
+        self,
+        mock_fase_from_dict,
+    ) -> None:
         fase_atual = self._get_fase_meta(n=1, total=2)
         proxima = self._get_fase_meta(n=2, total=2)
         mock_fase_from_dict.return_value = proxima
-        with patch.object(proxima, "resolver_task_processamento", return_value=None):
+        with patch.object(
+            proxima,
+            "resolver_task_processamento",
+            return_value=None,
+        ):
             _lancar_fase_seguinte(fase_atual, [{}, {}])
 
     def test_base_etl_service_misc(self) -> None:
         from apps.core.libs.base_etl_service import BaseEtlService
+
         service = BaseEtlService("default")
         with self.assertRaises(NotImplementedError):
             service._iter_chunks("SQL")
@@ -178,6 +261,7 @@ class AsyncPipelineTestCase(TestCase):
 
     def test_thread_processor_context(self) -> None:
         from apps.core.libs.thread_processor import ThreadPoolProcessor
+
         with ThreadPoolProcessor(max_workers=2) as processor:
             res = processor.processar([1], lambda x: x)
             self.assertEqual(res, [1])
@@ -191,5 +275,5 @@ class AsyncPipelineTestCase(TestCase):
         mock_fase.get_transformer.side_effect = RuntimeError("falha")
         mock_from_dict.return_value = mock_fase
 
-        with self.assertRaises(Exception):
+        with self.assertRaises(RuntimeError):
             processar_chunk.apply(args=[[(1,)], {"dominio": "teste"}]).get()
