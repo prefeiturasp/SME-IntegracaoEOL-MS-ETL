@@ -115,7 +115,11 @@ class TestAlunosService(TestCase):
             "ra.dt_atualizacao_tabela AS data_atualizacao_tabela",
             SQL_RESPONSAVEL,
         )
-        self.assertIn("NULL AS codigo_tipo_recurso", SQL_NEE_ALUNO)
+        self.assertIn("ra.cd_tipo_recurso AS codigo_tipo_recurso", SQL_NEE_ALUNO)
+        self.assertIn("tra.dc_tipo_recurso AS descricao_tipo_recurso", SQL_NEE_ALUNO)
+        self.assertIn("OUTER APPLY", SQL_NEE_ALUNO)
+        self.assertIn("recurso_aluno", SQL_NEE_ALUNO)
+        self.assertIn("tipo_recurso_aluno", SQL_NEE_ALUNO)
         self.assertIn("data_situacao_matricula_data_hora", SQL_MATRICULA)
         self.assertIn("CAST(1 AS bit) AS origem_atual", SQL_MATRICULA)
         self.assertIn("ROW_NUMBER() OVER", SQL_MATRICULA)
