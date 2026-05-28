@@ -80,7 +80,6 @@ SQL_UNIDADE_EDUCACIONAL = """
         ) AS sequencia
     FROM dispositivo_comunicacao_unidade dcu
     WHERE tp_dispositivo_comunicacao IN (1, 9)
-      AND dt_fim IS NULL
 ),
 capacidadeVaga AS (
     SELECT
@@ -100,19 +99,120 @@ capacidadeVaga AS (
     GROUP BY t.cd_escola, grade.cd_tipo_turno
 ),
 funcionarios AS (
-    SELECT
-        dre.cd_unidade_educacao AS CodigoUnidade
-      , COUNT(DISTINCT servidor.cd_registro_funcional) AS quantidade
-    FROM v_servidor_cotic servidor
-    INNER JOIN v_cargo_base_cotic AS cargoServidor
-        ON cargoServidor.CD_SERVIDOR = servidor.cd_servidor
-    INNER JOIN lotacao_servidor AS lotacao_servidor
-        ON cargoServidor.cd_cargo_base_servidor
-        = lotacao_servidor.cd_cargo_base_servidor
-    INNER JOIN v_cadastro_unidade_educacao dre
-        ON lotacao_servidor.cd_unidade_educacao = dre.cd_unidade_educacao
-    WHERE lotacao_servidor.dt_fim IS NULL
-    GROUP BY dre.cd_unidade_educacao
+    SELECT COUNT(DISTINCT CodigoRF) AS quantidade, CodigoUnidade
+    FROM (
+        SELECT DISTINCT
+            servidor.cd_registro_funcional AS CodigoRF
+          , dre.cd_unidade_educacao        AS CodigoUnidade
+        FROM v_servidor_cotic servidor
+        INNER JOIN v_cargo_base_cotic AS cargoServidor
+            ON cargoServidor.CD_SERVIDOR = servidor.cd_servidor
+        INNER JOIN cargo AS cargo
+            ON cargoServidor.cd_cargo = cargo.cd_cargo
+        LEFT JOIN lotacao_servidor AS lotacao_servidor
+            ON cargoServidor.cd_cargo_base_servidor
+            = lotacao_servidor.cd_cargo_base_servidor
+        LEFT JOIN funcao_atividade_cargo_servidor funcao
+            ON cargoServidor.cd_cargo_base_servidor
+            = funcao.cd_cargo_base_servidor
+            AND funcao.dt_fim_funcao_atividade IS NULL
+        INNER JOIN v_cadastro_unidade_educacao dre
+            ON lotacao_servidor.cd_unidade_educacao = dre.cd_unidade_educacao
+        WHERE lotacao_servidor.dt_fim IS NULL
+
+        UNION
+
+        SELECT DISTINCT
+            servidor.cd_registro_funcional AS CodigoRF
+          , dre.cd_unidade_educacao        AS CodigoUnidade
+        FROM v_servidor_cotic servidor
+        INNER JOIN v_cargo_base_cotic AS cargoServidor
+            ON cargoServidor.CD_SERVIDOR = servidor.cd_servidor
+        LEFT JOIN lotacao_servidor AS lotacao_servidor
+            ON cargoServidor.cd_cargo_base_servidor
+            = lotacao_servidor.cd_cargo_base_servidor
+        LEFT JOIN funcao_atividade_cargo_servidor funcao
+            ON cargoServidor.cd_cargo_base_servidor
+            = funcao.cd_cargo_base_servidor
+            AND funcao.dt_fim_funcao_atividade IS NULL
+        INNER JOIN cargo_sobreposto_servidor AS cargo_sobreposto_servidor
+            ON cargo_sobreposto_servidor.cd_cargo_base_servidor
+            = cargoServidor.cd_cargo_base_servidor
+            AND (
+                cargo_sobreposto_servidor.dt_fim_cargo_sobreposto IS NULL
+                OR cargo_sobreposto_servidor.dt_fim_cargo_sobreposto
+                > GETDATE()
+            )
+        INNER JOIN cargo AS cargo
+            ON cargo_sobreposto_servidor.cd_cargo = cargo.cd_cargo
+        INNER JOIN v_cadastro_unidade_educacao dre
+            ON cargo_sobreposto_servidor.cd_unidade_local_servico
+            = dre.cd_unidade_educacao
+        WHERE lotacao_servidor.dt_fim IS NULL
+          AND cargoServidor.dt_fim_nomeacao IS NULL
+
+        UNION
+
+        SELECT DISTINCT
+            servidor.cd_registro_funcional AS CodigoRF
+          , dre.cd_unidade_educacao        AS CodigoUnidade
+        FROM v_servidor_cotic servidor
+        INNER JOIN v_cargo_base_cotic AS cargoServidor
+            ON cargoServidor.CD_SERVIDOR = servidor.cd_servidor
+        LEFT JOIN funcao_atividade_cargo_servidor funcao
+            ON cargoServidor.cd_cargo_base_servidor
+            = funcao.cd_cargo_base_servidor
+            AND funcao.dt_fim_funcao_atividade IS NULL
+        INNER JOIN cargo AS cargo
+            ON cargoServidor.cd_cargo = cargo.cd_cargo
+        INNER JOIN atribuicao_aula atribuicao
+            ON atribuicao.cd_cargo_base_servidor
+            = cargoServidor.cd_cargo_base_servidor
+        INNER JOIN v_cadastro_unidade_educacao dre
+            ON atribuicao.cd_unidade_educacao = dre.cd_unidade_educacao
+        WHERE atribuicao.dt_cancelamento IS NULL
+          AND cargoServidor.dt_fim_nomeacao IS NULL
+          AND atribuicao.dt_disponibilizacao_aulas IS NULL
+          AND YEAR(atribuicao.dt_atribuicao_aula) = YEAR(GETDATE())
+
+        UNION
+
+        SELECT DISTINCT
+            servidor.cd_registro_funcional AS CodigoRF
+          , dre.cd_unidade_educacao        AS CodigoUnidade
+        FROM v_servidor_cotic servidor
+        INNER JOIN v_cargo_base_cotic AS cargoServidor
+            ON cargoServidor.CD_SERVIDOR = servidor.cd_servidor
+        LEFT JOIN funcao_atividade_cargo_servidor funcao
+            ON cargoServidor.cd_cargo_base_servidor
+            = funcao.cd_cargo_base_servidor
+            AND funcao.dt_fim_funcao_atividade IS NULL
+        INNER JOIN cargo AS cargo
+            ON cargoServidor.cd_cargo = cargo.cd_cargo
+        INNER JOIN funcao_atividade_cargo_servidor atividade
+            ON atividade.cd_cargo_base_servidor
+            = cargoServidor.cd_cargo_base_servidor
+        INNER JOIN v_cadastro_unidade_educacao dre
+            ON atividade.cd_unidade_local_servico = dre.cd_unidade_educacao
+        WHERE atividade.dt_fim_funcao_atividade IS NULL
+          AND cargoServidor.dt_fim_nomeacao IS NULL
+
+        UNION
+
+        SELECT DISTINCT
+            p.cd_cpf_pessoa   AS CodigoRF
+          , dre.cd_unidade_educacao AS CodigoUnidade
+        FROM contrato_externo ce
+        INNER JOIN pessoa p
+            ON ce.cd_pessoa = p.cd_pessoa
+        INNER JOIN funcao_funcionario_externo ffe
+            ON ce.cd_tipo_funcao_funcionario_externo
+            = ffe.cd_tipo_funcao_funcionario_externo
+        INNER JOIN v_cadastro_unidade_educacao dre
+            ON dre.cd_unidade_educacao = ce.cd_unidade_educacao
+        WHERE ce.dt_cancelamento IS NULL
+    ) func
+    GROUP BY CodigoUnidade
 )
 SELECT
     vcue.cd_unidade_educacao AS codigo_ue
