@@ -78,9 +78,19 @@ SELECT
   , nea.tp_necessidade_especial AS codigo_necessidade_especial
   , nea.dt_inicio
   , nea.dt_fim
-  , NULL AS codigo_tipo_recurso
-  , NULL AS descricao_tipo_recurso
+  , ra.cd_tipo_recurso AS codigo_tipo_recurso
+  , tra.dc_tipo_recurso AS descricao_tipo_recurso
 FROM necessidade_especial_aluno nea
+OUTER APPLY (
+    SELECT TOP 1 r.cd_tipo_recurso
+    FROM recurso_aluno r
+    WHERE r.cd_aluno = nea.cd_aluno
+      AND (r.dt_fim IS NULL OR r.dt_fim >= GETDATE())
+    ORDER BY r.dt_inicio DESC
+) ra
+LEFT JOIN tipo_recurso_aluno tra
+    ON tra.cd_tipo_recurso = ra.cd_tipo_recurso
+    AND tra.dt_cancelamento IS NULL
 /*FILTRO_ANO_LETIVO_NEE*/
 """
 
