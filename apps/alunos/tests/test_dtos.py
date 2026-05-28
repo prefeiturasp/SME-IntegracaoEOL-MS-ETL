@@ -276,6 +276,7 @@ class MatriculaAnoLetivoInTest(SimpleTestCase):
     """Testes de MatriculaAnoLetivoIn.to_domain()."""
 
     def _make(self, **kwargs: Any) -> MatriculaAnoLetivoIn:
+        """Cria instância com campos padrão sobrescrevíveis via kwargs."""
         defaults: dict[str, Any] = {
             "codigo_dre": "DRE01",
             "codigo_ue": "UE01",
@@ -335,6 +336,7 @@ class MatriculaComponenteCurricularAnoLetivoInTest(SimpleTestCase):
     """Testes de MatriculaComponenteCurricularAnoLetivoIn.to_domain()."""
 
     def _make(self, **kwargs: Any) -> MatriculaComponenteCurricularAnoLetivoIn:
+        """Cria instância com campos padrão sobrescrevíveis via kwargs."""
         defaults: dict[str, Any] = {
             "codigo_ue": "UE01",
             "codigo_dre": "DRE01",
@@ -387,6 +389,7 @@ class DadosAlunoAcompanhamentoEscolarInTest(SimpleTestCase):
     """Testes de DadosAlunoAcompanhamentoEscolarIn.to_domain()."""
 
     def _make(self, **kwargs: Any) -> DadosAlunoAcompanhamentoEscolarIn:
+        """Cria instância com campos padrão sobrescrevíveis via kwargs."""
         defaults = {
             "codigo_aluno": 1001,
             "nome": "JOAO SILVA",

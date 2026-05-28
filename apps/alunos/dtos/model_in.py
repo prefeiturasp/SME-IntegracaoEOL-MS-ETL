@@ -9,6 +9,15 @@ from apps.core.libs.helpers import parse_date, strip_str
 
 
 def _aware(dt: datetime | date | None) -> datetime | None:
+    """Normaliza valor de data/hora do MSSQL para datetime timezone-aware.
+
+    Args:
+        dt: Valor a normalizar; objetos ``date`` puros são convertidos
+            para meia-noite antes da aplicação do timezone.
+
+    Returns:
+        Datetime com timezone aplicado, ou ``None`` se a entrada for ``None``.
+    """
     if isinstance(dt, datetime) and is_naive(dt):
         return make_aware(dt)
     if isinstance(dt, datetime):
