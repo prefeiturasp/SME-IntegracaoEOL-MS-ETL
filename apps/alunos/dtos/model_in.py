@@ -1,30 +1,9 @@
 """DTOs de entrada para o domínio Alunos."""
 
 from dataclasses import dataclass
-from datetime import date, datetime, time
+from datetime import date, datetime
 
-from django.utils.timezone import is_naive, make_aware
-
-from apps.core.libs.helpers import parse_date, strip_str
-
-
-def _aware(dt: datetime | date | None) -> datetime | None:
-    """Normaliza valor de data/hora do MSSQL para datetime timezone-aware.
-
-    Args:
-        dt: Valor a normalizar; objetos ``date`` puros são convertidos
-            para meia-noite antes da aplicação do timezone.
-
-    Returns:
-        Datetime com timezone aplicado, ou ``None`` se a entrada for ``None``.
-    """
-    if isinstance(dt, datetime) and is_naive(dt):
-        return make_aware(dt)
-    if isinstance(dt, datetime):
-        return dt
-    if isinstance(dt, date):
-        return make_aware(datetime.combine(dt, time.min))
-    return None
+from apps.core.libs.helpers import aware_or_none, parse_date, strip_str
 
 
 @dataclass(slots=True)
@@ -129,7 +108,7 @@ class ResponsavelAlunoIn:
             "nome_municipio": strip_str(self.nome_municipio),
             "sigla_uf": strip_str(self.sigla_uf),
             "tipo_logradouro": strip_str(self.tipo_logradouro),
-            "data_atualizacao_tabela": _aware(self.data_atualizacao_tabela),
+            "data_atualizacao_tabela": aware_or_none(self.data_atualizacao_tabela),
             "data_fim_vinculo": parse_date(self.data_fim_vinculo_aluno),
         }
 
@@ -183,7 +162,7 @@ class MatriculaIn:
             "data_situacao_matricula": parse_date(
                 self.data_situacao_matricula
             ),
-            "data_situacao_matricula_data_hora": _aware(
+            "data_situacao_matricula_data_hora": aware_or_none(
                 self.data_situacao_matricula_data_hora
             ),
             "ano_letivo": self.ano_letivo,
@@ -214,12 +193,12 @@ class MatriculaTurmaIn:
             "codigo_turma": self.codigo_turma,
             "numero_chamada": strip_str(self.numero_chamada),
             "data_situacao_aluno": parse_date(self.data_situacao),
-            "data_situacao_aluno_data_hora": _aware(
+            "data_situacao_aluno_data_hora": aware_or_none(
                 self.data_situacao_data_hora
             ),
             "codigo_situacao_aluno": self.codigo_situacao_aluno,
             "codigo_tipo_turma": self.codigo_tipo_turma,
-            "data_atualizacao_tabela": _aware(self.data_atualizacao_tabela),
+            "data_atualizacao_tabela": aware_or_none(self.data_atualizacao_tabela),
         }
 
 
