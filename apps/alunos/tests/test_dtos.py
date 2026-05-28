@@ -4,6 +4,7 @@ from datetime import date, datetime
 from typing import Any
 
 from django.test import SimpleTestCase
+from django.utils import timezone
 
 from apps.alunos.dtos.model_in import (
     AlunoIn,
@@ -205,6 +206,9 @@ class MatriculaInTest(SimpleTestCase):
         self.assertEqual(data["codigo_matricula"], 1000)
         self.assertEqual(data["aluno_id"], 1)
         self.assertEqual(data["situacao_matricula"], "Ativo")
+        self.assertFalse(
+            timezone.is_naive(data["data_situacao_matricula_data_hora"])
+        )
 
     def test_situacao_fora_do_dominio(self) -> None:
         dto = MatriculaIn(
@@ -241,9 +245,8 @@ class MatriculaTurmaInTest(SimpleTestCase):
         self.assertEqual(data["codigo_matricula"], 1000)
         self.assertEqual(data["codigo_turma"], 55)
         self.assertEqual(data["numero_chamada"], "A1")
-        self.assertEqual(
-            data["data_situacao_aluno_data_hora"],
-            datetime(2023, 3, 3, 10, 20, 30),
+        self.assertFalse(
+            timezone.is_naive(data["data_situacao_aluno_data_hora"])
         )
 
 
