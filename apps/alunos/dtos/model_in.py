@@ -1,9 +1,30 @@
 """DTOs de entrada para o domínio Alunos."""
 
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, time
+
+from django.utils.timezone import is_naive, make_aware
 
 from apps.core.libs.helpers import parse_date, strip_str
+
+
+def _aware(dt: datetime | date | None) -> datetime | None:
+    """Normaliza valor de data/hora do MSSQL para datetime timezone-aware.
+
+    Args:
+        dt: Valor a normalizar; objetos ``date`` puros são convertidos
+            para meia-noite antes da aplicação do timezone.
+
+    Returns:
+        Datetime com timezone aplicado, ou ``None`` se a entrada for ``None``.
+    """
+    if isinstance(dt, datetime) and is_naive(dt):
+        return make_aware(dt)
+    if isinstance(dt, datetime):
+        return dt
+    if isinstance(dt, date):
+        return make_aware(datetime.combine(dt, time.min))
+    return None
 
 
 @dataclass(slots=True)
@@ -85,7 +106,7 @@ class ResponsavelAlunoIn:
     nome_municipio: str | None
     sigla_uf: str | None
     tipo_logradouro: str | None
-    data_atualizacao_tabela: date | None
+    data_atualizacao_tabela: datetime | None
     data_fim_vinculo_aluno: date | None
 
     def to_domain(self) -> dict:
@@ -108,7 +129,7 @@ class ResponsavelAlunoIn:
             "nome_municipio": strip_str(self.nome_municipio),
             "sigla_uf": strip_str(self.sigla_uf),
             "tipo_logradouro": strip_str(self.tipo_logradouro),
-            "data_atualizacao_tabela": self.data_atualizacao_tabela,
+            "data_atualizacao_tabela": _aware(self.data_atualizacao_tabela),
             "data_fim_vinculo": parse_date(self.data_fim_vinculo_aluno),
         }
 
@@ -147,7 +168,7 @@ class MatriculaIn:
     codigo_aluno: int
     codigo_ue: str
     data_situacao_matricula: date | None
-    data_situacao_matricula_data_hora: date | datetime | None
+    data_situacao_matricula_data_hora: datetime | None
     ano_letivo: int
     codigo_situacao_matricula: int
     origem_atual: bool
@@ -162,7 +183,7 @@ class MatriculaIn:
             "data_situacao_matricula": parse_date(
                 self.data_situacao_matricula
             ),
-            "data_situacao_matricula_data_hora": (
+            "data_situacao_matricula_data_hora": _aware(
                 self.data_situacao_matricula_data_hora
             ),
             "ano_letivo": self.ano_letivo,
@@ -182,10 +203,10 @@ class MatriculaTurmaIn:
     codigo_turma: int
     numero_chamada: str | None
     data_situacao: date | None
-    data_situacao_data_hora: date | datetime | None
+    data_situacao_data_hora: datetime | None
     codigo_situacao_aluno: int | None
     codigo_tipo_turma: int | None
-    data_atualizacao_tabela: date | None
+    data_atualizacao_tabela: datetime | None
 
     def to_domain(self) -> dict:
         return {
@@ -193,10 +214,12 @@ class MatriculaTurmaIn:
             "codigo_turma": self.codigo_turma,
             "numero_chamada": strip_str(self.numero_chamada),
             "data_situacao_aluno": parse_date(self.data_situacao),
-            "data_situacao_aluno_data_hora": self.data_situacao_data_hora,
+            "data_situacao_aluno_data_hora": _aware(
+                self.data_situacao_data_hora
+            ),
             "codigo_situacao_aluno": self.codigo_situacao_aluno,
             "codigo_tipo_turma": self.codigo_tipo_turma,
-            "data_atualizacao_tabela": self.data_atualizacao_tabela,
+            "data_atualizacao_tabela": _aware(self.data_atualizacao_tabela),
         }
 
 
