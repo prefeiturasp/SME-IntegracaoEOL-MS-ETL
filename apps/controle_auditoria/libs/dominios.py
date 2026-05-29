@@ -18,7 +18,16 @@ def validar_parametros_dominio(
     ano_letivo: int | None = None,
     fases: list[str] | None = None,
 ) -> str | None:
-    """Retorna mensagem de erro quando o domínio não aceita parâmetros."""
+    """Valida os parâmetros de execução para o domínio informado.
+
+    Args:
+        dominio: Nome do domínio ETL a executar.
+        ano_letivo: Filtro de ano letivo; aceito apenas pelo domínio pedagógico.
+        fases: Fases a executar; aceito pelos domínios alunos e pedagógico.
+
+    Returns:
+        Mensagem de erro se algum parâmetro for inválido, ``None`` se tudo ok.
+    """
     if dominio not in DOMINIOS_VALIDOS:
         return f"Domínio inválido. Use: {', '.join(DOMINIOS_VALIDOS)}"
 
