@@ -85,7 +85,14 @@ class EtlAlunosService(BaseEtlService):
         return self.eol.iter_query(sql)
 
     def _sql_com_filtro_ano_letivo(self, sql: str) -> str:
-        """Substitui marcadores de filtro pelos valores padrão (sem ano)."""
+        """Substitui os marcadores de filtro de ano pelos valores padrão.
+
+        Args:
+            sql: SQL com marcadores de filtro a substituir.
+
+        Returns:
+            SQL com os marcadores substituídos pelos valores padrão.
+        """
         for marcador, filtro in _FILTROS_ANO_VAZIOS.items():
             sql = sql.replace(marcador, filtro)
         return sql
