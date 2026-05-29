@@ -181,34 +181,20 @@ class ViewsApiControleAuditoriaTestCase(TestCase):
         tarefa_mock.apply_async.assert_not_called()
 
     @patch("apps.controle_auditoria.api.views.executar_dominio_task")
-    def test_deve_enfileirar_alunos_com_ano_letivo(
+    def test_deve_rejeitar_ano_letivo_em_alunos(
         self,
         tarefa_mock: Any,
     ) -> None:
-        """POST em alunos aceita ano_letivo e repassa para a task."""
-        tarefa_mock.apply_async.return_value = type(
-            "Result", (), {"id": "task-alunos"}
-        )()
-
+        """Retorna 400 quando domínio alunos recebe ano_letivo."""
         resposta = self.client.post(
             "/api/v1/dominios/alunos/executar/",
             data={"ano_letivo": 2024},
             format="json",
             **self.headers,
         )
-
-        self.assertEqual(resposta.status_code, 202)
-        self.assertEqual(resposta.json()["task_id"], "task-alunos")
-        tarefa_mock.apply_async.assert_called_once_with(
-            kwargs={
-                "dominio": "alunos",
-                "volume": 100,
-                "offset": 0,
-                "continuar": False,
-                "ano_letivo": 2024,
-            },
-            priority=5,
-        )
+        self.assertEqual(resposta.status_code, 400)
+        self.assertIn("ano_letivo", resposta.json()["erro"])
+        tarefa_mock.apply_async.assert_not_called()
 
     @patch("apps.controle_auditoria.api.views.executar_dominio_task")
     def test_deve_rejeitar_fases_em_dominio_sem_suporte(
@@ -278,6 +264,52 @@ class ViewsApiControleAuditoriaTestCase(TestCase):
     def test_deve_retornar_404_para_execucao_inexistente(self) -> None:
         """Retorna 404 quando id_execucao não existe."""
         resposta = self.client.get(
+            f"/api/v1/execucoes/{uuid4()}/", **self.headers
+        )
+        self.assertEqual(resposta.status_code, 404)
+        self.assertIn("erro", resposta.json())
+
+    def test_deve_cancelar_execucao_em_andamento(self) -> None:
+        """DELETE marca execução em_execucao como cancelado."""
+        exec_id = uuid4()
+        EtlExecucao.objects.create(
+            id_execucao=exec_id,
+            dominio="alunos",
+            situacao="em_execucao",
+            iniciado_em=timezone.now(),
+        )
+
+        resposta = self.client.delete(
+            f"/api/v1/execucoes/{exec_id}/", **self.headers
+        )
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertEqual(resposta.json()["cancelado"], str(exec_id))
+        execucao = EtlExecucao.objects.get(id_execucao=exec_id)
+        self.assertEqual(execucao.situacao, "cancelado")
+        self.assertIsNotNone(execucao.finalizado_em)
+
+    def test_deve_retornar_409_ao_cancelar_execucao_finalizada(self) -> None:
+        """DELETE retorna 409 quando execução já está finalizada."""
+        exec_id = uuid4()
+        EtlExecucao.objects.create(
+            id_execucao=exec_id,
+            dominio="alunos",
+            situacao="sucesso",
+            iniciado_em=timezone.now(),
+            finalizado_em=timezone.now(),
+        )
+
+        resposta = self.client.delete(
+            f"/api/v1/execucoes/{exec_id}/", **self.headers
+        )
+
+        self.assertEqual(resposta.status_code, 409)
+        self.assertIn("erro", resposta.json())
+
+    def test_deve_retornar_404_ao_cancelar_execucao_inexistente(self) -> None:
+        """DELETE retorna 404 quando id_execucao não existe."""
+        resposta = self.client.delete(
             f"/api/v1/execucoes/{uuid4()}/", **self.headers
         )
         self.assertEqual(resposta.status_code, 404)

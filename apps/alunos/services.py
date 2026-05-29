@@ -68,7 +68,6 @@ class EtlAlunosService(BaseEtlService):
         repositorio_auditoria: Any | None = None,
         eol: EOLService | None = None,
         primeiro_run: bool = False,
-        ano_letivo: int | None = None,
         fases: list[str] | None = None,
     ) -> None:
         super().__init__(
@@ -79,95 +78,22 @@ class EtlAlunosService(BaseEtlService):
             fases=fases,
         )
         self.eol = eol or EOLService()
-        self._ano_letivo = ano_letivo
         self._fases = self._init_fases()
 
     def _iter_chunks(self, sql: str) -> Iterator[list[tuple]]:
         """Lê os dados brutos da origem em chunks."""
         return self.eol.iter_query(sql)
 
-    def _where_alunos_por_ano(self, coluna_codigo_aluno: str) -> str:
-        """Monta filtro que limita entidades aos alunos dos anos filtrados."""
-        ano = int(self._ano_letivo or 0)
-        return f"""
-WHERE (
-    EXISTS (
-        SELECT 1
-        FROM v_matricula_cotic filtro_matricula_atual
-        WHERE filtro_matricula_atual.cd_aluno = {coluna_codigo_aluno}
-          AND filtro_matricula_atual.an_letivo >= {ano}
-    )
-    OR EXISTS (
-        SELECT 1
-        FROM v_historico_matricula_cotic filtro_matricula_historica
-        WHERE filtro_matricula_historica.cd_aluno = {coluna_codigo_aluno}
-          AND filtro_matricula_historica.an_letivo >= {ano}
-    )
-)
-"""
-
-    def _and_matriculas_por_ano(self, coluna_codigo_matricula: str) -> str:
-        """Monta filtro que limita vínculos aos anos filtrados."""
-        ano = int(self._ano_letivo or 0)
-        return f"""
-AND (
-    EXISTS (
-        SELECT 1
-        FROM v_matricula_cotic filtro_matricula_atual
-        WHERE filtro_matricula_atual.cd_matricula = {coluna_codigo_matricula}
-          AND filtro_matricula_atual.an_letivo >= {ano}
-    )
-    OR EXISTS (
-        SELECT 1
-        FROM v_historico_matricula_cotic filtro_matricula_historica
-        WHERE filtro_matricula_historica.cd_matricula =
-              {coluna_codigo_matricula}
-          AND filtro_matricula_historica.an_letivo >= {ano}
-    )
-)
-"""
-
     def _sql_com_filtro_ano_letivo(self, sql: str) -> str:
-        """Aplica filtro de ano letivo aos SQLs de alunos quando informado."""
-        filtros = dict(_FILTROS_ANO_VAZIOS)
-        if self._ano_letivo is not None:
-            ano = int(self._ano_letivo)
-            filtros.update(
-                {
-                    "/*FILTRO_ANO_LETIVO_ALUNO*/": (
-                        self._where_alunos_por_ano("a.cd_aluno")
-                    ),
-                    "/*FILTRO_ANO_LETIVO_RESPONSAVEL*/": (
-                        self._where_alunos_por_ano("ra.cd_aluno")
-                    ),
-                    "/*FILTRO_ANO_LETIVO_NEE*/": (
-                        self._where_alunos_por_ano("nea.cd_aluno")
-                    ),
-                    "/*FILTRO_ANO_LETIVO_MATRICULA_ATUAL*/": (
-                        f"AND an_letivo >= {ano}"
-                    ),
-                    "/*FILTRO_ANO_LETIVO_MATRICULA_HISTORICA*/": (
-                        f"AND an_letivo >= {ano}"
-                    ),
-                    "/*FILTRO_ANO_LETIVO_MATRICULA_TURMA_ATUAL*/": (
-                        self._and_matriculas_por_ano("mt.cd_matricula")
-                    ),
-                    "/*FILTRO_ANO_LETIVO_MATRICULA_TURMA_HISTORICA*/": (
-                        self._and_matriculas_por_ano("mt.cd_matricula")
-                    ),
-                    "/*FILTRO_ANO_LETIVO_MATRICULA_ANO*/": (
-                        f"AND VMC.an_letivo >= {ano}"
-                    ),
-                    "/*FILTRO_ANO_LETIVO_MATRICULA_COMPONENTE*/": (
-                        f"AND VMC.an_letivo >= {ano}"
-                    ),
-                    "/*FILTRO_ANO_LETIVO_ACOMPANHAMENTO*/": (
-                        f"and an_letivo >= {ano}"
-                    ),
-                }
-            )
+        """Substitui os marcadores de filtro de ano pelos valores padrão.
 
-        for marcador, filtro in filtros.items():
+        Args:
+            sql: SQL com marcadores de filtro a substituir.
+
+        Returns:
+            SQL com os marcadores substituídos pelos valores padrão.
+        """
+        for marcador, filtro in _FILTROS_ANO_VAZIOS.items():
             sql = sql.replace(marcador, filtro)
         return sql
 

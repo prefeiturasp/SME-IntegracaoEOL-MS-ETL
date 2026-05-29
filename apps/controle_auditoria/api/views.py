@@ -7,6 +7,7 @@ from django.db import connections
 from django.db.models import OuterRef, QuerySet, Subquery
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
+from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from django.views import View
 from drf_spectacular.utils import OpenApiParameter, extend_schema
@@ -136,6 +137,43 @@ class ExecucaoDetalheView(APIView):
         serializer = EtlExecucaoDetalheSerializer(execucao)
         return Response(serializer.data)
 
+    @extend_schema(
+        summary="Cancelar execução",
+        description=(
+            "Marca uma execução como cancelada. Útil para desbloquear "
+            "execuções presas em 'em_execucao'. Retorna 409 se a execução "
+            "já estiver finalizada (sucesso, erro ou cancelado)."
+        ),
+        responses={
+            200: {"type": "object", "properties": {"cancelado": {"type": "string"}}},
+            404: None,
+            409: {"type": "object", "properties": {"erro": {"type": "string"}}},
+        },
+    )
+    def delete(self, request: Request, id_execucao: str) -> Response:
+        """Cancela execução em andamento pelo id_execucao."""
+        try:
+            execucao = EtlExecucao.objects.get(id_execucao=id_execucao)
+        except EtlExecucao.DoesNotExist:
+            return Response(
+                {"erro": "execução não encontrada"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if execucao.situacao != "em_execucao":
+            return Response(
+                {"erro": f"execução já finalizada com situação '{execucao.situacao}'"},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        execucao.situacao = "cancelado"
+        execucao.finalizado_em = timezone.now()
+        execucao.mensagem_erro = "Cancelado manualmente via API"
+        execucao.save(
+            update_fields=["situacao", "finalizado_em", "mensagem_erro"]
+        )
+        return Response({"cancelado": str(execucao.id_execucao)})
+
 
 @extend_schema(tags=["Execuções"])
 class ExecucoesTabelaLidaView(APIView):
@@ -228,7 +266,7 @@ class ExecutarDominioView(APIView):
                         "description": (
                             "Opcional. Quando informado, processa apenas "
                             "anos letivos a partir deste valor (inclusive)."
-                            " Aplicável aos domínios alunos e pedagógico."
+                            " Aplicável ao domínio pedagógico."
                         ),
                         "example": None,
                     },
@@ -239,10 +277,16 @@ class ExecutarDominioView(APIView):
                         "x-nullable": True,
                         "description": (
                             "Opcional. Lista de nomes de fases a executar. "
-                            "Os nomes variam por domínio. Quando omitido, "
-                            "todas as fases são executadas."
+                            "Quando omitido, todas as fases são executadas. "
+                            "Aplicável aos domínios alunos e pedagógico. "
+                            "Fases disponíveis para alunos: "
+                            "tipo_necessidade_especial, aluno, "
+                            "responsavel_aluno, nee_aluno, matricula, "
+                            "matricula_turma, matricula_ano_letivo, "
+                            "matricula_componente_curricular_ano_letivo, "
+                            "dados_aluno_acompanhamento_escolar."
                         ),
-                        "example": None,
+                        "example": ["aluno", "matricula"],
                     },
                 },
             }

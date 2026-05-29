@@ -58,30 +58,6 @@ class ExecutarDominioCommandTestCase(TestCase):
                 "2025",
             )
 
-    @patch(
-        "apps.controle_auditoria.management.commands.executar_dominio.call_command"
-    )
-    def test_deve_repassar_ano_letivo_para_alunos(
-        self, call_command_mock: MagicMock
-    ) -> None:
-        """Encaminha ano_letivo para o comando de alunos."""
-        call_command(
-            "executar_dominio",
-            "--dominio",
-            "alunos",
-            "--ano-letivo",
-            "2024",
-        )
-        call_command_mock.assert_called_once_with(
-            "etl_alunos",
-            "--volume",
-            "100",
-            "--offset",
-            "0",
-            "--ano-letivo",
-            "2024",
-        )
-
     def test_deve_falhar_com_fases_sem_suporte(self) -> None:
         """Retorna erro quando domínio não aceita fases."""
         with self.assertRaisesMessage(CommandError, "fases"):
