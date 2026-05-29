@@ -9,8 +9,8 @@ COMANDOS_POR_DOMINIO: dict[str, str] = {
 }
 
 DOMINIOS_VALIDOS = [*COMANDOS_POR_DOMINIO.keys()]
-DOMINIOS_COM_ANO_LETIVO = frozenset({"alunos", "pedagogico"})
-DOMINIOS_COM_FASES = frozenset({"pedagogico"})
+DOMINIOS_COM_ANO_LETIVO = frozenset({"pedagogico"})
+DOMINIOS_COM_FASES = frozenset({"alunos", "pedagogico"})
 
 
 def validar_parametros_dominio(

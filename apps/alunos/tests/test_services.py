@@ -144,53 +144,6 @@ class TestAlunosService(TestCase):
             fases["dados_aluno_acompanhamento_escolar"].sql,
         )
 
-    def test_ano_letivo_aplica_filtro_nas_fases_de_alunos(self) -> None:
-        """Valida filtro de ano letivo nas consultas do domínio."""
-        service = EtlAlunosService(
-            db_alias="default",
-            eol=self.mock_eol,
-            id_execucao=uuid4(),
-            ano_letivo=2024,
-        )
-        fases = {fase.nome: fase for fase in service._fases}
-
-        for fase in fases.values():
-            self.assertNotIn("/*FILTRO_ANO_LETIVO", fase.sql)
-
-        self.assertIn(
-            "filtro_matricula_atual.cd_aluno = a.cd_aluno",
-            fases["aluno"].sql,
-        )
-        self.assertIn(
-            "filtro_matricula_atual.cd_aluno = ra.cd_aluno",
-            fases["responsavel_aluno"].sql,
-        )
-        self.assertIn(
-            "filtro_matricula_atual.cd_aluno = nea.cd_aluno",
-            fases["nee_aluno"].sql,
-        )
-        self.assertIn("AND an_letivo >= 2024", fases["matricula"].sql)
-        self.assertIn(
-            "filtro_matricula_atual.cd_matricula = mt.cd_matricula",
-            fases["matricula_turma"].sql,
-        )
-        self.assertIn(
-            "AND VMC.an_letivo >= 2024",
-            fases["matricula_ano_letivo"].sql,
-        )
-        self.assertIn(
-            "AND VMC.an_letivo >= 2024",
-            fases["matricula_componente_curricular_ano_letivo"].sql,
-        )
-        self.assertIn(
-            "and an_letivo >= 2024",
-            fases["dados_aluno_acompanhamento_escolar"].sql,
-        )
-        self.assertNotIn(
-            "year(getdate())",
-            fases["dados_aluno_acompanhamento_escolar"].sql,
-        )
-
     def test_fases_selecionadas_sao_repassadas_para_base(self) -> None:
         """Valida que o service respeita execução parcial por nome de fase."""
         service = EtlAlunosService(

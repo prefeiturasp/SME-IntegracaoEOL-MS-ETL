@@ -44,16 +44,6 @@ class EtlAlunosCommandTest(TestCase):
             "upsert",
         )
 
-    def test_extra_service_kwargs_com_ano_letivo(self) -> None:
-        """Valida que --ano-letivo é repassado ao service."""
-        cmd = Command()
-
-        self.assertEqual(
-            cmd._extra_service_kwargs(ano_letivo=2024),
-            {"ano_letivo": 2024},
-        )
-        self.assertEqual(cmd._extra_service_kwargs(), {})
-
     @patch(
         "apps.alunos.management.commands.etl_alunos"
         ".EtlAlunosOrquestrador.lancar"
@@ -88,30 +78,6 @@ class EtlAlunosCommandTest(TestCase):
 
         _, kwargs = mock_init.call_args
         self.assertTrue(kwargs["primeiro_run"])
-
-    @patch(
-        "apps.alunos.management.commands.etl_alunos"
-        ".EtlAlunosOrquestrador.lancar"
-    )
-    @patch("apps.core.libs.base_etl_command.RepositorioAuditoriaPostgres")
-    @patch(
-        "apps.alunos.management.commands.etl_alunos"
-        ".EtlAlunosOrquestrador.__init__"
-    )
-    def test_command_celery_repassa_ano_letivo_para_service(
-        self,
-        mock_init: MagicMock,
-        _mock_repo: MagicMock,
-        _mock_lancar: MagicMock,
-    ) -> None:
-        """Valida que o caminho Celery monta service com ano_letivo."""
-        mock_init.return_value = None
-
-        call_command("etl_alunos", "--ano-letivo", "2024", "--celery")
-
-        _, kwargs = mock_init.call_args
-        servico = kwargs["service_class"]
-        self.assertEqual(servico._ano_letivo, 2024)
 
     @patch(
         "apps.alunos.management.commands.etl_alunos"
