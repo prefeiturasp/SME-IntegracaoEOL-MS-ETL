@@ -3,6 +3,7 @@
 import datetime
 
 from django.test import TestCase
+from django.utils import timezone
 
 from apps.programas.dtos.model_in import (
     AlunoPapAnoLetivoIn,
@@ -304,7 +305,9 @@ class TestMatriculaTurmaProgramaIn(TestCase):
         self.assertEqual(d["codigo_turma"], 12345)
         self.assertEqual(d["codigo_componente_curricular"], 1322)
         self.assertEqual(d["categoria"], CategoriaPrograma.PAP)
-        self.assertEqual(d["data_matricula"], _DATA_MATRICULA)
+        self.assertEqual(
+            d["data_matricula"], timezone.make_aware(_DATA_MATRICULA)
+        )
         self.assertEqual(
             d["descricao_situacao_matricula"],
             SituacaoMatricula.get_descricao(1),

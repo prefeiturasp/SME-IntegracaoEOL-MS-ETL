@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Any
 
+from django.utils import timezone
+
 from apps.programas.enums import (
     CategoriaPrograma,
     ComponenteCurricularEOL,
@@ -20,6 +22,26 @@ def _strip(val: Any) -> str:
 def _int_opt(val: Any) -> int | None:
     """Converte valor opcional para inteiro, preservando None."""
     return int(val) if val is not None else None
+
+
+def _aware(val: Any) -> Any:
+    """Torna um datetime consciente do fuso configurado.
+
+    Evita warnings do Django ao persistir datetimes sem timezone.
+
+    Args:
+        val: Valor a normalizar; datetimes naive são interpretados no
+            fuso ``TIME_ZONE``.
+
+    Returns:
+        Valor consciente do fuso quando aplicável; caso contrário, o valor
+        original inalterado.
+    """
+    # O EOL entrega datetimes sem timezone; com USE_TZ=True o Django emite
+    # warning ao persistir, então normalizamos para o fuso configurado.
+    if isinstance(val, datetime) and timezone.is_naive(val):
+        return timezone.make_aware(val)
+    return val
 
 
 @dataclass(slots=True)
@@ -171,7 +193,7 @@ class MatriculaTurmaProgramaIn:
             "descricao_situacao_matricula": SituacaoMatricula.get_descricao(
                 self.codigo_situacao_matricula
             ),
-            "data_matricula": self.data_matricula,
+            "data_matricula": _aware(self.data_matricula),
             "data_situacao": self.data_situacao,
             "ano_letivo": int(self.ano_letivo),
             "codigo_ue": str(self.codigo_ue),
