@@ -196,13 +196,12 @@ SELECT
     AND te.st_turma_escola IN ('O', 'A', 'C', 'E')
     AND tegp.dt_fim IS NULL
     AND cc.dt_cancelamento IS NULL
-    AND m.cd_situacao_aluno IN (1, 5, 6, 10, 13)
-  ORDER BY vm.cd_aluno, te.cd_turma_escola
+OPTION (FAST 1)
 """
 
 
 SQL_MATRICULA_TURMA_PROGRAMA_HISTORICO = """
-SELECT DISTINCT
+SELECT
       vm.cd_aluno
     , m.cd_turma_escola
     , gcc.cd_componente_curricular
@@ -230,10 +229,9 @@ SELECT DISTINCT
       ON cc.cd_componente_curricular = gcc.cd_componente_curricular
   WHERE te.cd_tipo_turma = 3
     AND te.st_turma_escola IN ('O', 'A', 'C')
-    AND vm.st_matricula IN ('1', '5')
     AND tegp.dt_fim IS NULL
     AND cc.dt_cancelamento IS NULL
-  ORDER BY vm.cd_aluno, m.cd_turma_escola
+OPTION (FAST 1)
 """
 
 SQL_ALUNO_PAP_ANO_LETIVO = f"""
