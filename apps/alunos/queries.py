@@ -172,10 +172,18 @@ WITH CteMatriculaTurma AS (
       , mt.cd_situacao_aluno AS codigo_situacao_aluno
       , te.cd_tipo_turma AS codigo_tipo_turma
       , mt.dt_atlz_tab AS data_atualizacao_tabela
-    FROM historico_matricula_turma_escola mt
+    FROM (
+        SELECT *
+             , ROW_NUMBER() OVER (
+                   PARTITION BY cd_matricula, cd_turma_escola
+                   ORDER BY dt_situacao_aluno DESC
+               ) AS rn
+        FROM historico_matricula_turma_escola
+    ) mt
     INNER JOIN turma_escola te
         ON te.cd_turma_escola = mt.cd_turma_escola
-    WHERE NOT EXISTS (
+    WHERE mt.rn = 1
+      AND NOT EXISTS (
         SELECT 1
         FROM matricula_turma_escola c
         WHERE c.cd_matricula = mt.cd_matricula
