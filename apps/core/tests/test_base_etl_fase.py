@@ -74,7 +74,8 @@ class TestBaseEtlFase(TestCase):
             None,
             None,
             None,
-            0,
+            None,
+            False,
         )
         pk, _, obj = transform(fake_row)
         
@@ -107,7 +108,8 @@ class TestBaseEtlFase(TestCase):
             None,
             None,
             None,
-            0,
+            None,
+            False,
         )
         pk, _, _ = transform(fake_row)
         self.assertEqual(pk, "1-Teste")

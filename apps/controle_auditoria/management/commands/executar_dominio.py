@@ -28,7 +28,7 @@ class Command(BaseCommand):
             type=int,
             default=None,
             help=(
-                "(pedagogico) Processa apenas anos letivos "
+                "(alunos/pedagogico) Processa apenas anos letivos "
                 "a partir deste valor."
             ),
         )

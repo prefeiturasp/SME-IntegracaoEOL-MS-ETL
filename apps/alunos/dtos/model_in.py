@@ -1,9 +1,9 @@
 """DTOs de entrada para o domínio Alunos."""
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 
-from apps.core.libs.helpers import parse_date, strip_str
+from apps.core.libs.helpers import aware_or_none, parse_date, strip_str
 
 
 @dataclass(slots=True)
@@ -39,6 +39,7 @@ class AlunoIn:
     cpf: str | None
     nome_mae: str | None
     raca_cor: str | None
+    cns: str | None
     data_atualizacao_contato: date | None
     possui_deficiencia: bool
 
@@ -54,6 +55,7 @@ class AlunoIn:
             "cpf": strip_str(self.cpf),
             "nome_mae": strip_str(self.nome_mae),
             "raca_cor": strip_str(self.raca_cor) or "NÃO INFORMADA",
+            "cns": strip_str(self.cns),
             "data_atualizacao_contato": parse_date(
                 self.data_atualizacao_contato
             ),
@@ -74,8 +76,16 @@ class ResponsavelAlunoIn:
     ddd_celular: str | None
     numero_celular: str | None
     autoriza_sms: int | None
+    endereco_id: int | None
+    numero_endereco: str | None
+    complemento: str | None
+    bairro: str | None
     logradouro: str | None
     cep: int | None
+    nome_municipio: str | None
+    sigla_uf: str | None
+    tipo_logradouro: str | None
+    data_atualizacao_tabela: datetime | None
     data_fim_vinculo_aluno: date | None
 
     def to_domain(self) -> dict:
@@ -89,8 +99,16 @@ class ResponsavelAlunoIn:
             "ddd_celular": strip_str(self.ddd_celular),
             "numero_celular": strip_str(self.numero_celular),
             "autoriza_sms": self.autoriza_sms,
+            "endereco_id": self.endereco_id,
+            "numero_endereco": strip_str(self.numero_endereco),
+            "complemento": strip_str(self.complemento),
+            "bairro": strip_str(self.bairro),
             "logradouro": strip_str(self.logradouro),
             "cep": self.cep,
+            "nome_municipio": strip_str(self.nome_municipio),
+            "sigla_uf": strip_str(self.sigla_uf),
+            "tipo_logradouro": strip_str(self.tipo_logradouro),
+            "data_atualizacao_tabela": aware_or_none(self.data_atualizacao_tabela),
             "data_fim_vinculo": parse_date(self.data_fim_vinculo_aluno),
         }
 
@@ -104,6 +122,8 @@ class NecessidadeEspecialAlunoIn:
     codigo_necessidade_especial: int
     dt_inicio: date | None
     dt_fim: date | None
+    codigo_tipo_recurso: int | None
+    descricao_tipo_recurso: str | None
 
     def to_domain(self) -> dict:
         return {
@@ -114,6 +134,8 @@ class NecessidadeEspecialAlunoIn:
             "necessidade_especial_id": self.codigo_necessidade_especial,
             "data_inicio": parse_date(self.dt_inicio),
             "data_fim": parse_date(self.dt_fim),
+            "codigo_tipo_recurso": self.codigo_tipo_recurso,
+            "descricao_tipo_recurso": strip_str(self.descricao_tipo_recurso),
         }
 
 
@@ -125,8 +147,10 @@ class MatriculaIn:
     codigo_aluno: int
     codigo_ue: str
     data_situacao_matricula: date | None
+    data_situacao_matricula_data_hora: datetime | None
     ano_letivo: int
     codigo_situacao_matricula: int
+    origem_atual: bool
 
     def to_domain(self) -> dict:
         from apps.alunos.enums import SituacaoMatricula
@@ -138,11 +162,15 @@ class MatriculaIn:
             "data_situacao_matricula": parse_date(
                 self.data_situacao_matricula
             ),
+            "data_situacao_matricula_data_hora": aware_or_none(
+                self.data_situacao_matricula_data_hora
+            ),
             "ano_letivo": self.ano_letivo,
             "codigo_situacao_matricula": self.codigo_situacao_matricula,
             "situacao_matricula": SituacaoMatricula.get_descricao(
                 self.codigo_situacao_matricula
             ),
+            "origem_atual": self.origem_atual,
         }
 
 
@@ -154,6 +182,10 @@ class MatriculaTurmaIn:
     codigo_turma: int
     numero_chamada: str | None
     data_situacao: date | None
+    data_situacao_data_hora: datetime | None
+    codigo_situacao_aluno: int | None
+    codigo_tipo_turma: int | None
+    data_atualizacao_tabela: datetime | None
 
     def to_domain(self) -> dict:
         return {
@@ -161,6 +193,12 @@ class MatriculaTurmaIn:
             "codigo_turma": self.codigo_turma,
             "numero_chamada": strip_str(self.numero_chamada),
             "data_situacao_aluno": parse_date(self.data_situacao),
+            "data_situacao_aluno_data_hora": aware_or_none(
+                self.data_situacao_data_hora
+            ),
+            "codigo_situacao_aluno": self.codigo_situacao_aluno,
+            "codigo_tipo_turma": self.codigo_tipo_turma,
+            "data_atualizacao_tabela": aware_or_none(self.data_atualizacao_tabela),
         }
 
 

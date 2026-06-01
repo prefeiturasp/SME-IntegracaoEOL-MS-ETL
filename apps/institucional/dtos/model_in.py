@@ -142,7 +142,7 @@ class UnidadeEducacionalIn:
             "email": strip_str(self.email),
             "telefone_1": strip_str(self.telefone_1),
             "telefone_2": strip_str(self.telefone_2),
-            "ano_construcao": _int(self.ano_construcao),
+            "ano_construcao": _int(self.ano_construcao, 0),
             "propriedade": strip_str(self.propriedade),
             "organizacao_parceira": bool(self.organizacao_parceira),
             "eh_ceu": bool(self.eh_ceu),

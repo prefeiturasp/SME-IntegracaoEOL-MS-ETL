@@ -299,7 +299,9 @@ class FuncionarioUnidadeEducacionalIn:
         Returns:
             Dados normalizados do funcionario.
         """
-        from apps.professores.dtos.model_out import FuncionarioUnidadeEducacionalOut
+        from apps.professores.dtos.model_out import (
+            FuncionarioUnidadeEducacionalOut,
+        )
 
         return FuncionarioUnidadeEducacionalOut(
             nome=self.nome or "",
@@ -309,11 +311,7 @@ class FuncionarioUnidadeEducacionalIn:
             codigo_ue=str(self.codigo_ue).strip(),
             data_inicio=self.data_inicio,
             data_fim=self.data_fim,
-            codigo_cargo=(
-                str(self.cd_cargo).strip()
-                if self.cd_cargo
-                else None
-            ),
+            codigo_cargo=self.cd_cargo,
             cargo=self.cargo or None,
             codigo_tipo_funcao_atividade=self.cd_tipo_funcao_atividade,
             eh_professor=self.eh_professor,

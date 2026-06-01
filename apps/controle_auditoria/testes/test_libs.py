@@ -7,6 +7,7 @@ from uuid import UUID
 from django.test import TestCase
 
 from apps.controle_auditoria.libs.celery_app import aplicacao_celery
+from apps.controle_auditoria.libs.dominios import validar_parametros_dominio
 from apps.controle_auditoria.libs.repositorio_auditoria import (
     RepositorioAuditoriaPostgres,
 )
@@ -125,6 +126,16 @@ class ServicoSincRecDbTestCase(TestCase):
 
         exibir_validacao_sinc_rec_db()
         self.assertGreaterEqual(print_mock.call_count, 3)
+
+
+class DominiosTestCase(TestCase):
+    """Valida regras de parâmetros por domínio."""
+
+    def test_alunos_rejeita_ano_letivo(self) -> None:
+        """Domínio alunos não aceita filtro de ano letivo."""
+        self.assertIsNotNone(
+            validar_parametros_dominio("alunos", ano_letivo=2024)
+        )
 
 
 class TasksControleAuditoriaTestCase(TestCase):

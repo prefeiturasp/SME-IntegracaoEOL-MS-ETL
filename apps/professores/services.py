@@ -171,21 +171,21 @@ def _calcular_hash(campos: dict[str, Any]) -> str:
 def _reinsere_se_ausente(
     model_class: Any,
     unique_fields: list[str],
-    chaves: list[tuple[str, ...]],
-    map_linha: dict[tuple[str, ...], tuple[str, str, dict[str, Any]]],
+    chaves: list[tuple[Any, ...]],
+    map_linha: dict[tuple[Any, ...], tuple[str, str, dict[str, Any]]],
     objs: list[Any],
     hashes: dict[str, str],
 ) -> None:
     """Força reinserção se o hash não mudou mas o registro sumiu do destino."""
     if not chaves:
         return
-    existentes: set[tuple[str, ...]] = set()
+    existentes: set[tuple[Any, ...]] = set()
     for i in range(0, len(chaves), _HASH_LOOKUP_BATCH):
         lote = chaves[i : i + _HASH_LOOKUP_BATCH]
         if len(unique_fields) == 1:
             campo = unique_fields[0]
             existentes.update(
-                (str(valor),)
+                (valor,)
                 for valor in model_class.objects.using("professores_db")
                 .filter(**{f"{campo}__in": [chave[0] for chave in lote]})
                 .values_list(campo, flat=True)
@@ -196,7 +196,7 @@ def _reinsere_se_ausente(
         for chave in lote:
             filtro |= Q(**dict(zip(unique_fields, chave, strict=True)))
         existentes.update(
-            tuple(str(valor) for valor in valores)
+            tuple(valores)
             for valores in model_class.objects.using("professores_db")
             .filter(filtro)
             .values_list(*unique_fields)
@@ -229,8 +229,9 @@ def _upsert_incremental(
 
     linhas: list[tuple[str, str, dict[str, Any]]] = []
     for row_dict in rows:
-        chave = tuple(str(row_dict[campo]) for campo in campos_unique)
-        id_destino = f"{tabela}:{'|'.join(chave)}"
+        chave = tuple(row_dict[campo] for campo in campos_unique)
+        chave_serializada = tuple(str(valor) for valor in chave)
+        id_destino = f"{tabela}:{'|'.join(chave_serializada)}"
         valores_hash = {k: row_dict.get(k) for k in campos_hash}
         linhas.append((id_destino, _calcular_hash(valores_hash), row_dict))
 
@@ -246,12 +247,12 @@ def _upsert_incremental(
 
     objs_para_salvar: list[Any] = []
     novos_hashes: dict[str, str] = {}
-    chaves_hash_inalterado: list[tuple[str, ...]] = []
+    chaves_hash_inalterado: list[tuple[Any, ...]] = []
     map_chave_para_linha: dict[
-        tuple[str, ...], tuple[str, str, dict[str, Any]]
+        tuple[Any, ...], tuple[str, str, dict[str, Any]]
     ] = {}
     for id_destino, novo_hash, row_dict in linhas:
-        chave = tuple(str(row_dict[campo]) for campo in campos_unique)
+        chave = tuple(row_dict[campo] for campo in campos_unique)
         if hashes_existentes.get(id_destino) != novo_hash:
             objs_para_salvar.append(model_class(**row_dict))
             novos_hashes[id_destino] = novo_hash
@@ -603,7 +604,16 @@ class EtlProfessoresService:
                         "funcao_externo",
                         "tipo_funcao_externo",
                     ],
-                    ["codigo_rf", "codigo_ue"],
+                    [
+                        "codigo_rf",
+                        "codigo_ue",
+                        "codigo_cargo",
+                        "codigo_tipo_funcao_atividade",
+                        "data_inicio",
+                        "data_fim",
+                        "funcao_externo",
+                        "tipo_funcao_externo",
+                    ],
                 )
         return total
 

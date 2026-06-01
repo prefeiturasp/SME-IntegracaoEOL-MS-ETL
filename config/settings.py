@@ -18,6 +18,7 @@ _POOL_OPTIONS = {
 
 THREAD_POOL_MAX_WORKERS = int(os.getenv("THREAD_POOL_MAX_WORKERS", "4"))
 THREAD_POOL_CHUNK_TIMEOUT = int(os.getenv("THREAD_POOL_CHUNK_TIMEOUT", "120"))
+PRODUCER_MAX_WAIT_SECONDS = int(os.getenv("PRODUCER_MAX_WAIT_SECONDS", "600"))
 
 
 def _parse_db_url(url: Any) -> dict:
@@ -59,7 +60,7 @@ if not SECRET_KEY:
         raise ImproperlyConfigured(
             "A variável DJANGO_SECRET_KEY é obrigatória em produção."
         )
-    # Fallback para desenvolvimento baseado no ambiente para não deixar chave exposta
+    # Fallback para desenvolvimento baseado no ambiente para não expor chave.
     SECRET_KEY = os.getenv("HOSTNAME")
 DEBUG = os.getenv("DJANGO_DEBUG", "1") == "1"
 ALLOWED_HOSTS = [
@@ -282,7 +283,8 @@ LOGGING = {
     "handlers": _logging_handlers,
     "loggers": {
         "etl_apps": {
-            "handlers": ["console"] + (["rabbitmq"] if ENABLE_RABBITMQ_LOGGING else []),
+            "handlers": ["console"]
+            + (["rabbitmq"] if ENABLE_RABBITMQ_LOGGING else []),
             "level": NIVEL_LOG,
             "propagate": False,
         },
@@ -300,11 +302,19 @@ ELASTIC_APM = {
     "ENVIRONMENT": os.getenv("ELASTIC_APM_ENVIRONMENT", AMBIENTE_APLICACAO),
     "ENABLED": os.getenv("ELASTIC_APM_ENABLED", "0") == "1",
     "CAPTURE_HEADERS": os.getenv("ELASTIC_APM_CAPTURE_HEADERS", "1") == "1",
-    "TRANSACTION_SAMPLE_RATE": float(os.getenv("ELASTIC_APM_TRANSACTION_SAMPLE_RATE", "0.3")),
+    "TRANSACTION_SAMPLE_RATE": float(
+        os.getenv("ELASTIC_APM_TRANSACTION_SAMPLE_RATE", "0.3")
+    ),
     "METRICS_INTERVAL": os.getenv("ELASTIC_APM_METRICS_INTERVAL", "10s"),
     "FLUSH_INTERVAL": os.getenv("ELASTIC_APM_FLUSH_INTERVAL", "10s"),
-    "MAX_BATCH_EVENT_COUNT": int(os.getenv("ELASTIC_APM_MAX_BATCH_EVENT_COUNT", "1000")),
-    "MAX_QUEUE_EVENT_COUNT": int(os.getenv("ELASTIC_APM_MAX_QUEUE_EVENT_COUNT", "1000")),
-    "TRANSACTION_MAX_SPANS": int(os.getenv("ELASTIC_APM_TRANSACTION_MAX_SPANS", "500")),
+    "MAX_BATCH_EVENT_COUNT": int(
+        os.getenv("ELASTIC_APM_MAX_BATCH_EVENT_COUNT", "1000")
+    ),
+    "MAX_QUEUE_EVENT_COUNT": int(
+        os.getenv("ELASTIC_APM_MAX_QUEUE_EVENT_COUNT", "1000")
+    ),
+    "TRANSACTION_MAX_SPANS": int(
+        os.getenv("ELASTIC_APM_TRANSACTION_MAX_SPANS", "500")
+    ),
     "LOG_LEVEL": os.getenv("ELASTIC_APM_LOG_LEVEL", "INFO"),
 }

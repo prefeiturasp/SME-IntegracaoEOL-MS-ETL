@@ -1,9 +1,10 @@
 """Testes dos DTOs de entrada do domínio Alunos."""
 
-from datetime import date
+from datetime import date, datetime
 from typing import Any
 
 from django.test import SimpleTestCase
+from django.utils import timezone
 
 from apps.alunos.dtos.model_in import (
     AlunoIn,
@@ -78,14 +79,18 @@ class AlunoInTest(SimpleTestCase):
             cpf="456",
             nome_mae=" Maria ",
             raca_cor=" Branca ",
+            cns="789",
             data_atualizacao_contato=date(2023, 1, 1),
-            possui_deficiencia=False,
+            possui_deficiencia=True,
         )
         data = dto.to_domain()
         self.assertEqual(data["nome"], "João")
         self.assertEqual(data["nacionalidade"], "Brasileira")
         self.assertEqual(data["raca_cor"], "Branca")
         self.assertEqual(data["sexo"], 1)
+        self.assertEqual(data["nome_mae"], "Maria")
+        self.assertEqual(data["cns"], "789")
+        self.assertTrue(data["possui_deficiencia"])
 
     def test_defaults_quando_campos_vazios(self) -> None:
         dto = AlunoIn(
@@ -99,6 +104,7 @@ class AlunoInTest(SimpleTestCase):
             cpf="",
             raca_cor="",
             nome_mae="",
+            cns="",
             data_atualizacao_contato=None,
             possui_deficiencia=False,
         )
@@ -121,6 +127,7 @@ class AlunoInTest(SimpleTestCase):
             cpf=None,
             raca_cor=None,
             nome_mae=None,
+            cns=None,
             data_atualizacao_contato=None,
             possui_deficiencia=False,
         )
@@ -143,8 +150,16 @@ class ResponsavelAlunoInTest(SimpleTestCase):
             ddd_celular="11",
             numero_celular="999",
             autoriza_sms=1,
+            endereco_id=10,
+            numero_endereco="100",
+            complemento="AP",
+            bairro="Centro",
             logradouro="Rua X",
             cep=12345,
+            nome_municipio="SP",
+            sigla_uf="SP",
+            tipo_logradouro="Rua",
+            data_atualizacao_tabela=None,
             data_fim_vinculo_aluno=None,
         )
         data = dto.to_domain()
@@ -163,11 +178,14 @@ class NecessidadeEspecialAlunoInTest(SimpleTestCase):
             codigo_necessidade_especial=10,
             dt_inicio=date(2020, 1, 1),
             dt_fim=None,
+            codigo_tipo_recurso=10,
+            descricao_tipo_recurso="NENHUM",
         )
         data = dto.to_domain()
         self.assertEqual(data["codigo_necessidade_especial_aluno"], 500)
         self.assertEqual(data["aluno_id"], 1)
         self.assertEqual(data["necessidade_especial_id"], 10)
+        self.assertEqual(data["codigo_tipo_recurso"], 10)
 
 
 class MatriculaInTest(SimpleTestCase):
@@ -179,13 +197,18 @@ class MatriculaInTest(SimpleTestCase):
             codigo_aluno=1,
             codigo_ue="UE123",
             data_situacao_matricula=date(2023, 2, 2),
+            data_situacao_matricula_data_hora=datetime(2023, 2, 2, 10, 20, 30),
             ano_letivo=2023,
             codigo_situacao_matricula=1,
+            origem_atual=True,
         )
         data = dto.to_domain()
         self.assertEqual(data["codigo_matricula"], 1000)
         self.assertEqual(data["aluno_id"], 1)
         self.assertEqual(data["situacao_matricula"], "Ativo")
+        self.assertFalse(
+            timezone.is_naive(data["data_situacao_matricula_data_hora"])
+        )
 
     def test_situacao_fora_do_dominio(self) -> None:
         dto = MatriculaIn(
@@ -193,8 +216,10 @@ class MatriculaInTest(SimpleTestCase):
             codigo_aluno=2,
             codigo_ue="UE123",
             data_situacao_matricula=None,
+            data_situacao_matricula_data_hora=None,
             ano_letivo=2023,
             codigo_situacao_matricula=99,
+            origem_atual=False,
         )
         data = dto.to_domain()
         self.assertEqual(
@@ -211,12 +236,18 @@ class MatriculaTurmaInTest(SimpleTestCase):
             codigo_turma=55,
             numero_chamada=" A1 ",
             data_situacao=date(2023, 3, 3),
+            data_situacao_data_hora=datetime(2023, 3, 3, 10, 20, 30),
+            codigo_situacao_aluno=1,
+            codigo_tipo_turma=1,
+            data_atualizacao_tabela=None,
         )
         data = dto.to_domain()
         self.assertEqual(data["codigo_matricula"], 1000)
         self.assertEqual(data["codigo_turma"], 55)
         self.assertEqual(data["numero_chamada"], "A1")
-        self.assertEqual(data["data_situacao_aluno"], date(2023, 3, 3))
+        self.assertFalse(
+            timezone.is_naive(data["data_situacao_aluno_data_hora"])
+        )
 
 
 class SituacaoMatriculaTest(SimpleTestCase):
@@ -224,7 +255,8 @@ class SituacaoMatriculaTest(SimpleTestCase):
 
     def test_get_descricao_nulo(self) -> None:
         self.assertEqual(
-            SituacaoMatricula.get_descricao(None), "Não Informada"
+            SituacaoMatricula.get_descricao(None),
+            "Não Informada",
         )
 
     def test_get_descricao_invalido(self) -> None:
@@ -244,6 +276,7 @@ class MatriculaAnoLetivoInTest(SimpleTestCase):
     """Testes de MatriculaAnoLetivoIn.to_domain()."""
 
     def _make(self, **kwargs: Any) -> MatriculaAnoLetivoIn:
+        """Cria instância com campos padrão sobrescrevíveis via kwargs."""
         defaults: dict[str, Any] = {
             "codigo_dre": "DRE01",
             "codigo_ue": "UE01",
@@ -303,6 +336,7 @@ class MatriculaComponenteCurricularAnoLetivoInTest(SimpleTestCase):
     """Testes de MatriculaComponenteCurricularAnoLetivoIn.to_domain()."""
 
     def _make(self, **kwargs: Any) -> MatriculaComponenteCurricularAnoLetivoIn:
+        """Cria instância com campos padrão sobrescrevíveis via kwargs."""
         defaults: dict[str, Any] = {
             "codigo_ue": "UE01",
             "codigo_dre": "DRE01",
@@ -355,6 +389,7 @@ class DadosAlunoAcompanhamentoEscolarInTest(SimpleTestCase):
     """Testes de DadosAlunoAcompanhamentoEscolarIn.to_domain()."""
 
     def _make(self, **kwargs: Any) -> DadosAlunoAcompanhamentoEscolarIn:
+        """Cria instância com campos padrão sobrescrevíveis via kwargs."""
         defaults = {
             "codigo_aluno": 1001,
             "nome": "JOAO SILVA",

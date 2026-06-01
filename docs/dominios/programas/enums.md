@@ -2,28 +2,36 @@
 
 Arquivo: `apps/programas/enums.py`
 
-Centraliza os valores do EOL usados pelo domínio, eliminando constantes hardcoded nas SQLs e no mapeamento In/Out. É a **fonte única de verdade** para: categorias PAP/PAEE, `cd_tipo_programa`, `cd_componente_curricular`, situação de turma e situação de matrícula.
+Centraliza os valores do EOL usados pelo domínio, eliminando constantes hardcoded nas SQLs e no mapeamento DTO → modelo. É a **fonte única de verdade** para: categorias PAP/PAEE/OUTROS, `cd_tipo_programa`, `cd_componente_curricular`, situação de turma e situação de matrícula.
 
 ---
 
 ## `CategoriaPrograma`
 
 ```python
-class CategoriaPrograma(StrEnum):
-    PAP = "PAP"
-    PAEE = "PAEE"
+class CategoriaPrograma(models.TextChoices):
+    PAP = "PAP", "PAP"
+    PAEE = "PAEE", "PAEE"
+    OUTROS = "OUTROS", "Outros"
 ```
 
-Usado no campo `categoria` de `TipoPrograma`, `ComponenteCurricularPrograma`, `TurmaPrograma` e `MatriculaTurmaPrograma`.
+Usado no campo `categoria` de `TipoPrograma`, `ComponenteCurricularPrograma`,
+`TurmaPrograma`, `MatriculaTurmaPrograma` e `MatriculaTurmaProgramaHistorico`.
+
+> `OUTROS` foi adicionado para acomodar tipos de programa do EOL referenciados
+> por turmas com `cd_tipo_turma = 3` que não pertencem a PAP nem PAEE.
 
 ---
 
 ## `TipoProgramaEOL`
 
-`cd_tipo_programa` do EOL para turmas com `cd_tipo_turma = 3`.
+Subset histórico de `cd_tipo_programa` do EOL — usado para retrocompatibilidade.
+Hoje o ETL **não filtra** turmas por essa lista; carrega qualquer `cd_tipo_programa`
+referenciado por turmas com `cd_tipo_turma = 3`, e a categoria é derivada da sigla
+ou descrição do tipo.
 
-| Membro | Valor | Categoria |
-|--------|-------|-----------|
+| Membro | Valor | Categoria histórica |
+|--------|-------|---------------------|
 | `PAP_RECUPERACAO` | 649 | PAP |
 | `PAP_COLABORATIVO` | 650 | PAP |
 | `PAEE_SRM` | 656 | PAEE |
@@ -32,8 +40,15 @@ Usado no campo `categoria` de `TipoPrograma`, `ComponenteCurricularPrograma`, `T
 
 ### Métodos
 
-- `TipoProgramaEOL.categoria(codigo) → CategoriaPrograma` — resolve PAP/PAEE a partir do `cd_tipo_programa`. Retorna `PAP` como default para códigos desconhecidos.
-- `TipoProgramaEOL.codigos() → tuple[int, ...]` — usado no `services.py` para montar os filtros `IN (...)` das SQLs da Fase 1, 3, 4 e 5.
+- `TipoProgramaEOL.categoria_por_sigla(sigla, descricao) → CategoriaPrograma` —
+  resolve PAP/PAEE/OUTROS a partir do conteúdo de `sg_tipo_programa` e
+  `dc_tipo_programa`:
+  - contém `"PAEE"` ou `"SRM"` → `PAEE`
+  - contém `"PAP"` → `PAP`
+  - caso contrário → `OUTROS`
+- `TipoProgramaEOL.codigos() → tuple[int, ...]` — retorna os códigos históricos
+  canônicos. Usado em testes; **não** é referenciado pela SQL atual (a SQL não
+  filtra por `IN (...)` no `tipo_programa`).
 
 ---
 
@@ -56,11 +71,22 @@ Usado no campo `categoria` de `TipoPrograma`, `ComponenteCurricularPrograma`, `T
 
 ### Métodos
 
-- `ComponenteCurricularEOL.categoria(codigo) → CategoriaPrograma`
-- `ComponenteCurricularEOL.vigente(codigo) → bool` — `True` para componentes ativos; `False` para legados (PAP antigos de 2014-2019)
-- `ComponenteCurricularEOL.codigos() → tuple[int, ...]` — usado nos filtros `IN (...)` das SQLs das Fases 2, 4 e 5
+- `ComponenteCurricularEOL.categoria(codigo) → CategoriaPrograma` — retorna `PAEE`,
+  `PAP` ou `OUTROS` para qualquer `cd_componente_curricular` (códigos
+  desconhecidos retornam `OUTROS`).
+- `ComponenteCurricularEOL.vigente(codigo) → bool` — `True` para componentes
+  ativos; `False` para legados (PAP antigos de 2014-2019) e códigos desconhecidos.
+- `ComponenteCurricularEOL.codigos() → tuple[int, ...]` — todos os códigos do
+  enum como tupla.
+- `ComponenteCurricularEOL.codigos_pap_vigentes() → tuple[int, ...]` —
+  apenas códigos vigentes de PAP (exclui PAEE e legados). Usado pelas
+  Fases 7 e 8 (`SQL_ALUNO_PAP_ANO_LETIVO` / `_HISTORICO`) para filtrar a query
+  agregada.
 
 > O flag `vigente` é persistido no modelo `ComponenteCurricularPrograma` e substitui a constante `IDS_COMPONENTES_CURRICULARES_PAP_NOVO` do Pedagogico-API legado.
+
+> O `SQL_TURMA_PROGRAMA` também usa `_COMPONENTES_PAP_CONHECIDOS` (privado a `enums.py`)
+> e `PAEE_SALA_RECURSOS_MULTIFUNCIONAIS` para o `CASE WHEN` que deriva a categoria da turma.
 
 ---
 
@@ -81,7 +107,7 @@ Valores de `st_turma_escola` do EOL (campo `situacao` em `TurmaPrograma`).
 
 ## `SituacaoMatricula`
 
-Valores de `cd_situacao_aluno` / `st_matricula` do EOL (campo `codigo_situacao_matricula` em `MatriculaTurmaPrograma`).
+Valores de `cd_situacao_aluno` / `st_matricula` do EOL (campo `codigo_situacao_matricula` em `MatriculaTurmaPrograma` e `MatriculaTurmaProgramaHistorico`).
 
 | Código | Membro | Descrição |
 |--------|--------|-----------|
@@ -108,13 +134,13 @@ Valores de `cd_situacao_aluno` / `st_matricula` do EOL (campo `codigo_situacao_m
 
 Espelha `apps.alunos.enums.SituacaoMatricula`. Foi replicado (e não importado) para preservar independência entre domínios.
 
-> **Impacto no ETL:** o `MatriculaTurmaProgramaOut.from_in()` usa `SituacaoMatricula.get_descricao()` para derivar `descricao_situacao_matricula` em Python. Antes do refactor, essa tradução vinha de um bloco `CASE WHEN ... END` de 17 linhas dentro do `SQL_MATRICULA_TURMA_PROGRAMA`. Agora o SQL é mais simples e a regra vive em um único lugar.
+> **Impacto no ETL:** o `MatriculaTurmaProgramaIn.to_domain()` usa `SituacaoMatricula.get_descricao()` para derivar `descricao_situacao_matricula` em Python. A SQL não contém `CASE WHEN` para tradução de situação — a regra vive em um único lugar (`enums.py`).
 
 ---
 
 ## Por que enums (e não constantes soltas)
 
-1. **Fonte única de verdade** — adicionar um novo tipo de programa ou componente é uma linha no enum; os filtros SQL (`TipoProgramaEOL.codigos()`, `ComponenteCurricularEOL.codigos()`) montam o `IN (...)` automaticamente.
-2. **Simplifica o SQL** — o `CASE WHEN` de situação de matrícula saiu do SQL e virou Python puro.
+1. **Fonte única de verdade** — adicionar um novo componente é uma linha no enum; o `SQL_TURMA_PROGRAMA` e os filtros `IN (...)` das Fases 7/8 se ajustam automaticamente via `_COMPONENTES_PAP_CONHECIDOS` e `ComponenteCurricularEOL.codigos_pap_vigentes()`.
+2. **Simplifica o SQL** — o `CASE WHEN` de situação de matrícula virou Python puro.
 3. **Reaproveitável na API** — quando o DRF expor endpoints de leitura, os enums já dão validação e serialização prontas.
-4. **Testável isoladamente** — `tests/test_dtos.py` tem classes dedicadas (`TestTipoProgramaEOLEnum`, `TestComponenteCurricularEOLEnum`, `TestSituacaoTurmaEnum`, `TestSituacaoMatriculaEnum`) cobrindo cada `.categoria()`, `.vigente()`, `.get_descricao()`.
+4. **Testável isoladamente** — `tests/test_dtos.py` cobre `categoria_por_sigla`, `categoria`, `vigente`, `codigos_pap_vigentes`, `get_descricao`.

@@ -4,43 +4,29 @@
 
 ```
 API (POST /executar/)
-    └── Task Celery
+    └── Task Celery (despachada via EtlProgramasOrquestrador)
             └── management command etl_programas
                     └── EtlProgramasService.executar()
-                            ├── Fase 1: popular_tipos_programa()
-                            ├── Fase 2: popular_componentes_curriculares()
-                            ├── Fase 3: popular_turmas_programa()
-                            ├── Fase 4: popular_turmas_programa_componentes()
-                            └── Fase 5: popular_matriculas_turma_programa()
+                            ├── Fase 1: tipo_programa
+                            ├── Fase 2: componente_curricular_programa
+                            ├── Fase 3: turma_programa
+                            ├── Fase 4: turma_programa_componente_curricular
+                            ├── Fase 5: matricula_turma_programa
+                            ├── Fase 6: matricula_turma_programa_historico
+                            ├── Fase 7: aluno_pap_ano_letivo
+                            └── Fase 8: aluno_pap_ano_letivo_historico
 ```
 
 ## EtlProgramasService
 
-Classe: `apps.programas.services.EtlProgramasService`
+Classe: `apps.programas.services.EtlProgramasService` — herda de
+`apps.core.libs.base_etl_service.BaseEtlService`.
 
-### Método `executar(fase_inicial=1)`
-
-Executa as fases em sequência a partir de `fase_inicial`. Retorna um dicionário
-`{tabela: total_alterado}` com o número de linhas escritas em cada fase.
-
-```python
-resultados = service.executar(fase_inicial=1)
-# → {"tipo_programa": 5, "componente_curricular_programa": 10,
-#    "turma_programa": 320, "turma_programa_componente_curricular": 640,
-#    "matricula_turma_programa": 1800}
-```
-
-O atributo `ultima_fase_concluida` é atualizado ao final de cada fase — usado pelo
-comando para registrar o checkpoint de retomada.
-
-### Assinatura e injeção de dependência
-
-A assinatura do `__init__` espelha `BaseEtlService` para compatibilizar com
-`BaseEtlCommand._handle_sync`, mas o service é síncrono próprio (não herda).
+### Construção e injeção de dependência
 
 ```python
 EtlProgramasService(
-    db_alias: str = "programas_db",
+    db_alias: str,
     id_execucao: UUID | None = None,
     repositorio_auditoria: Any | None = None,
     primeiro_run: bool = False,
@@ -48,7 +34,10 @@ EtlProgramasService(
 )
 ```
 
-Exemplos:
+A assinatura espelha `BaseEtlService` e adiciona `eol`. O service injeta um
+`EOLService` real por padrão — testes passam um mock.
+
+Exemplo:
 
 ```python
 # Produção — via BaseEtlCommand._handle_sync
@@ -60,14 +49,56 @@ service = EtlProgramasService(
 )
 
 # Testes
-service = EtlProgramasService(eol=EOLServiceMock())
+service = EtlProgramasService(db_alias="programas_db", eol=EOLServiceMock())
 ```
 
-Atributos expostos para o contrato com `BaseEtlCommand`:
+### Fases (`_init_fases`)
 
-- `ultima_fase_concluida: int` — atualizado ao fim de cada fase
-- `ultimo_token: str | None` — inicializado em `None`
-- `_fases: list[_FaseInfo]` — 5 posições com `.table_name` para o finalizador da auditoria
+Retorna uma lista de `PhaseConfig` ordenada — cada entrada declara:
+
+- `nome`, `sql`, `table_name`, `source_table`
+- `model_class`, `dto_in`
+- `pk_field`, `unique_fields`, `update_fields`
+- `modo_escrita="upsert"`
+
+A execução por fase é tratada pelo `BaseEtlService.executar()` — ele
+itera as `PhaseConfig`, lê chunks via `_iter_chunks(sql)` (que internamente chama
+`self.eol.iter_query(sql)`), aplica `dto_in.to_domain()` e chama
+`_upsert_incremental` com a configuração da fase.
+
+### Chunks da origem
+
+```python
+def _iter_chunks(self, sql: str) -> Iterator[list[tuple]]:
+    return self.eol.iter_query(sql)
+```
+
+A leitura é feita em lotes pelo `EOLService` (cursor pyodbc).
+
+## EtlProgramasOrquestrador
+
+Classe: `apps.programas.orquestrador.EtlProgramasOrquestrador` — herda de
+`apps.core.libs.base_etl_orquestrador.GenericEtlOrquestrador`. É a forma assíncrona
+do pipeline:
+
+```python
+class EtlProgramasOrquestrador(GenericEtlOrquestrador):
+    def __init__(self, **kwargs):
+        kwargs.setdefault("dominio", "programas")
+        kwargs.setdefault("service_class", EtlProgramasService)
+        super().__init__(**kwargs)
+```
+
+As tasks Celery genéricas reaproveitadas:
+
+```python
+processar_chunk_programas = processar_chunk
+finalizar_fase_programas = finalizar_fase
+```
+
+São aliases de `apps.core.tasks.processar_chunk` e `apps.core.tasks.finalizar_fase`
+— expostos com nome de domínio para facilitar o roteamento via filas Celery por
+domínio.
 
 ## Controle incremental por hash
 
@@ -88,8 +119,7 @@ O comando `etl_programas` (via `BaseEtlCommand`) registra:
 - `EtlExecucao` — início, fim, status e total de linhas alteradas.
 - `EtlExecucaoTabelaLeitura` — linhas lidas por tabela do EOL.
 - `EtlExecucaoTabelaEscrita` — linhas escritas por tabela destino,
-  com `modo_escrita="upsert"` para todas as tabelas do domínio (todas estão em
-  `_TABELAS_UPSERT` no `etl_programas.py`).
+  com `modo_escrita` definido por `Command.get_modo_escrita()`.
 - `EtlCheckpoint` — fase atual para suporte a retomada.
 
 ## Exemplo de execução via API
@@ -105,7 +135,7 @@ curl -X POST http://localhost:8068/api/v1/dominios/programas/executar/ \
 curl -X POST http://localhost:8068/api/v1/dominios/programas/executar/ \
   -H "X-API-Key: sua_chave" \
   -H "Content-Type: application/json" \
-  -d '{"executar_em": "2026-04-09T02:00:00-03:00"}'
+  -d '{"executar_em": "2026-06-09T02:00:00-03:00"}'
 ```
 
 ## Exemplo de execução direta (dev)
