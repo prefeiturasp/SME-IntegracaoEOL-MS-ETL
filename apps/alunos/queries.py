@@ -51,6 +51,8 @@ SELECT
    , ra.nm_responsavel AS nome
    , ra.cd_cpf_responsavel AS cpf
    , ra.email_responsavel AS email
+   , ra.dt_nascimento_mae_responsavel AS data_nascimento
+   , ra.nm_mae_responsavel AS nome_mae
    , ra.cd_ddd_celular_responsavel AS ddd_celular
    , ra.nr_celular_responsavel AS numero_celular
    , ra.in_autoriza_envio_sms AS autoriza_sms

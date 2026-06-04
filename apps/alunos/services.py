@@ -158,6 +158,8 @@ class EtlAlunosService(BaseEtlService):
                     "ddd_celular",
                     "numero_celular",
                     "email",
+                    "data_nascimento",
+                    "nome_mae",
                     "autoriza_sms",
                     "endereco_id",
                     "numero_endereco",

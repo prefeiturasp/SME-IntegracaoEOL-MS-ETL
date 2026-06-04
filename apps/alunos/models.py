@@ -68,6 +68,8 @@ class ResponsavelAluno(models.Model):
     ddd_celular = models.CharField(max_length=4, null=True, blank=True)
     numero_celular = models.CharField(max_length=20, null=True, blank=True)
     email = models.EmailField(max_length=200, null=True, blank=True)
+    data_nascimento = models.DateField(null=True, blank=True)
+    nome_mae = models.CharField(max_length=200, null=True, blank=True)
     autoriza_sms = models.CharField(max_length=1, null=True, blank=True)
     endereco_id = models.BigIntegerField(null=True, blank=True)
     numero_endereco = models.CharField(max_length=20, null=True, blank=True)
