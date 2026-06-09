@@ -130,6 +130,8 @@ class TestPedagogicoService(TestCase):
             5,  # codigo_modalidade_etapa
             0,  # semestre
             0,  # ensino_especial
+            5,  # codigo_etapa_ensino
+            3,  # codigo_ciclo_ensino
         )
         result = transform(row)
         assert result is not None

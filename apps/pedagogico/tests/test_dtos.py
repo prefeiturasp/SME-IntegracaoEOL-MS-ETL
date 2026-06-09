@@ -109,6 +109,8 @@ def _turma_in_completa(**overrides: object) -> TurmaIn:
         "codigo_modalidade_etapa": 5,
         "semestre": 0,
         "ensino_especial": 0,
+        "codigo_etapa_ensino": 5,
+        "codigo_ciclo_ensino": 3,
     }
     defaults.update(overrides)
     return TurmaIn(**defaults)
@@ -137,6 +139,8 @@ class TurmaInTest(SimpleTestCase):
         self.assertEqual(data["codigo_tipo_programa"], 3)
         self.assertEqual(data["semestre"], 0)
         self.assertFalse(data["ensino_especial"])
+        self.assertEqual(data["codigo_etapa_ensino"], 5)
+        self.assertEqual(data["codigo_ciclo_ensino"], 3)
         self.assertEqual(data["transferido_em"], "agora")
 
     def test_data_inicio_turma_aware(self) -> None:

@@ -178,6 +178,8 @@ class TurmaIn:
     codigo_modalidade_etapa: Any
     semestre: Any
     ensino_especial: Any
+    codigo_etapa_ensino: Any
+    codigo_ciclo_ensino: Any
 
     def to_domain(self, transferido_em: Any) -> dict:
         return {
@@ -207,6 +209,8 @@ class TurmaIn:
             ),
             "semestre": int_or_none(self.semestre) or 0,
             "ensino_especial": bool(self.ensino_especial),
+            "codigo_etapa_ensino": int_or_none(self.codigo_etapa_ensino),
+            "codigo_ciclo_ensino": int_or_none(self.codigo_ciclo_ensino),
             "transferido_em": transferido_em,
         }
 

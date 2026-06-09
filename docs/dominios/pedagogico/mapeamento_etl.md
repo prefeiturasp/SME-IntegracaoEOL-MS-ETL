@@ -150,7 +150,9 @@ Origem: `turma_escola` (NOLOCK) com joins em `escola`, `serie_turma_escola`, `se
 | CASE sobre `cd_etapa_ensino` | `modalidade` | `str()` (`'EJA'`, `'Fundamental'`, `'Médio'`, `'Infantil'`) ou `None` |
 | CASE sobre `cd_etapa_ensino` + `tp_escola` | `codigo_modalidade` | `int()` (1=EI, 3=EJA, 4=CIEJA, 5=EF, 6=EM) |
 | `cd_tipo_programa` | `codigo_tipo_programa` | `int()` ou `None` |
-| `cd_etapa_ensino` | `codigo_modalidade_etapa` | `int()` ou `None` |
+| CASE sobre `COALESCE(cd_etapa_ensino, etapa do programa)` + `tp_escola` | `codigo_modalidade_etapa` | `int()` — **bucket derivado** (1/3/4/5/6), NÃO o `cd_etapa_ensino` cru |
+| `ee.cd_etapa_ensino` (cru) | `codigo_etapa_ensino` | `int_or_none()` — código de etapa do EOL (1–17), paridade com `EtapaEnsino` do legado |
+| `se.cd_ciclo_ensino` | `codigo_ciclo_ensino` | `int_or_none()` — paridade com `CicloEnsino` do legado |
 | CASE EJA pelo mês de `dt_inicio_turma` | `semestre` | `int()` (1 ou 2 para EJA; 0 demais) |
 | `cd_etapa_ensino = 13` e `cd_modalidade_ensino = 2` | `ensino_especial` | `bool()` |
 | — | `transferido_em` | `timezone.now()` |
