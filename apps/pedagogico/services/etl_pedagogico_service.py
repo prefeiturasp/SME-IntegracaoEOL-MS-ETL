@@ -514,6 +514,8 @@ class EtlPedagogicoService(BaseEtlService):
                     "codigo_modalidade_etapa",
                     "semestre",
                     "ensino_especial",
+                    "codigo_etapa_ensino",
+                    "codigo_ciclo_ensino",
                     "transferido_em",
                 ),
                 unique_fields=("codigo",),

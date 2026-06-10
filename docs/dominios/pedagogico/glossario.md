@@ -155,7 +155,15 @@ Subdivisão formal do sistema educacional, definida pelo MEC. Exemplos: Anos Ini
 
 No EOL: tabela `etapa_ensino`, campo `cd_etapa_ensino`. Cada `serie_ensino` pertence a uma etapa.
 
-A etapa não aparece diretamente na turma — o caminho é: `turma_escola → serie_turma_grade → grade → serie_ensino → etapa_ensino`.
+O caminho de origem é: `turma_escola → serie_turma_grade → grade → serie_ensino → etapa_ensino`. Desde a migration `0011`, o ETL **materializa o código cru de etapa na turma** como `codigo_etapa_ensino` (1–17), para paridade com o `EtapaEnsino` do legado. Não confundir com `codigo_modalidade_etapa`, que é *bucket* derivado (ver [Modalidade de Ensino](#modalidade-de-ensino)).
+
+---
+
+### Ciclo de Ensino
+
+Agrupamento pedagógico de séries dentro de uma etapa (ex.: Ciclo de Alfabetização, Ciclo Interdisciplinar, Autoral).
+
+No EOL: campo `cd_ciclo_ensino` na tabela `serie_ensino` (descrição em `dc_ciclo_ensino`, tabela `ciclo_ensino`). Desde a migration `0011`, o ETL materializa o código cru na turma como `codigo_ciclo_ensino` (via `se.cd_ciclo_ensino` na `SQL_TURMAS`), para paridade com o `CicloEnsino` do legado. A **descrição** (`dc_ciclo_ensino`) ainda não é materializada.
 
 ---
 
