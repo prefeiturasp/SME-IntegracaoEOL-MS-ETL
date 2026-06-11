@@ -80,7 +80,7 @@ class AlunoInTest(SimpleTestCase):
             nome_mae=" Maria ",
             raca_cor=" Branca ",
             cns="789",
-            data_atualizacao_contato=date(2023, 1, 1),
+            data_atualizacao_contato=datetime(2023, 1, 1, 14, 46, 50),
             possui_deficiencia=True,
         )
         data = dto.to_domain()
@@ -91,6 +91,12 @@ class AlunoInTest(SimpleTestCase):
         self.assertEqual(data["nome_mae"], "Maria")
         self.assertEqual(data["cns"], "789")
         self.assertTrue(data["possui_deficiencia"])
+        contato = data["data_atualizacao_contato"]
+        self.assertIsInstance(contato, datetime)
+        self.assertFalse(timezone.is_naive(contato))
+        self.assertEqual(
+            contato.replace(tzinfo=None), datetime(2023, 1, 1, 14, 46, 50)
+        )
 
     def test_defaults_quando_campos_vazios(self) -> None:
         dto = AlunoIn(

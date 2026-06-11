@@ -40,7 +40,7 @@ class AlunoIn:
     nome_mae: str | None
     raca_cor: str | None
     cns: str | None
-    data_atualizacao_contato: date | None
+    data_atualizacao_contato: datetime | None
     possui_deficiencia: bool
 
     def to_domain(self) -> dict:
@@ -56,7 +56,7 @@ class AlunoIn:
             "nome_mae": strip_str(self.nome_mae),
             "raca_cor": strip_str(self.raca_cor) or "NÃO INFORMADA",
             "cns": strip_str(self.cns),
-            "data_atualizacao_contato": parse_date(
+            "data_atualizacao_contato": aware_or_none(
                 self.data_atualizacao_contato
             ),
             "possui_deficiencia": bool(self.possui_deficiencia),

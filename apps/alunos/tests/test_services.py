@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
@@ -174,7 +174,7 @@ class TestAlunosService(TestCase):
             "Mae",
             "Branca",
             "789",
-            date(2023, 1, 1),
+            datetime(2023, 1, 1, 14, 46, 50),
             1,
         )
 
@@ -183,6 +183,10 @@ class TestAlunosService(TestCase):
         self.assertEqual(pk, "1")
         self.assertEqual(obj.cns, "789")
         self.assertTrue(obj.possui_deficiencia)
+        self.assertEqual(
+            obj.data_atualizacao_contato.replace(tzinfo=None),
+            datetime(2023, 1, 1, 14, 46, 50),
+        )
 
     @patch.object(EtlAlunosService, "sync_batch")
     def test_executar_fase_chama_sync_batch_por_chunk(
