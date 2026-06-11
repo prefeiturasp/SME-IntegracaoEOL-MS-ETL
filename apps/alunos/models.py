@@ -35,7 +35,7 @@ class Aluno(models.Model):
     nacionalidade = models.CharField(max_length=100, null=True, blank=True)
     nis = models.CharField(max_length=20, null=True, blank=True)
     raca_cor = models.CharField(max_length=50, null=True, blank=True)
-    data_atualizacao_contato = models.DateField(null=True, blank=True)
+    data_atualizacao_contato = models.DateTimeField(null=True, blank=True)
     cns = models.CharField(max_length=20, null=True, blank=True)
     possui_deficiencia = models.BooleanField(default=False)
 
