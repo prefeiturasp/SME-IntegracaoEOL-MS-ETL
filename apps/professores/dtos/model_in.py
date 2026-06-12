@@ -294,7 +294,7 @@ class FuncionarioUnidadeEducacionalIn:
     tipo_funcao_externo: Any
 
     def to_domain(self) -> "FuncionarioUnidadeEducacionalOut":
-        """Converta a linha de origem em DTO de destino.
+        """Converte a linha de origem em DTO de destino.
 
         Returns:
             Dados normalizados do funcionario.

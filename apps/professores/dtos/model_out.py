@@ -243,6 +243,7 @@ def _normalizar_texto(valor: Any, default: str = "") -> str:
     Args:
         valor: Valor recebido da origem.
         default: Valor usado quando a origem vier nula.
+
     Returns:
         Texto normalizado.
     """
@@ -256,6 +257,7 @@ def _normalizar_texto_opcional(valor: Any) -> str | None:
 
     Args:
         valor: Valor recebido da origem.
+
     Returns:
         Texto normalizado ou `None`.
     """
@@ -264,10 +266,11 @@ def _normalizar_texto_opcional(valor: Any) -> str | None:
 
 
 def _normalizar_int(valor: Any) -> int:
-    """Converta nulo e vazio para zero.
+    """Normaliza nulo e vazio para zero.
 
     Args:
         valor: Valor recebido da origem.
+
     Returns:
         Valor inteiro normalizado.
     """
@@ -277,10 +280,11 @@ def _normalizar_int(valor: Any) -> int:
 
 
 def _normalizar_int_opcional(valor: Any) -> int | None:
-    """Converta nulo e vazio para None.
+    """Normaliza nulo e vazio para None.
 
     Args:
         valor: Valor recebido da origem.
+
     Returns:
         Valor inteiro normalizado ou `None`.
     """
@@ -290,10 +294,11 @@ def _normalizar_int_opcional(valor: Any) -> int | None:
 
 
 def _normalizar_bool(valor: Any) -> bool:
-    """Converta indicadores SQL para booleano.
+    """Converte indicadores SQL para booleano.
 
     Args:
         valor: Valor recebido da origem.
+
     Returns:
         Indicador convertido para booleano.
     """
@@ -303,10 +308,11 @@ def _normalizar_bool(valor: Any) -> bool:
 
 
 def _normalizar_datetime(valor: Any) -> Any:
-    """Converta datetime naive para aware.
+    """Converte datetime naive para aware.
 
     Args:
         valor: Valor de data/hora recebido da origem.
+
     Returns:
         Data/hora pronta para persistencia no Django.
     """
@@ -363,7 +369,7 @@ class FuncionarioUnidadeEducacionalOut:
         )
 
     def to_dict(self) -> dict[str, Any]:
-        """Converta para dicionario de persistencia.
+        """Converte para dicionario de persistencia.
 
         Returns:
             Campos compatíveis com o model `FuncionarioUnidadeEducacional`.
