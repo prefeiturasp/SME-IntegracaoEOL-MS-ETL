@@ -104,10 +104,11 @@ def _row_to_atribuicao_externo(row: tuple) -> dict:
 
 
 def _row_to_funcionario(row: tuple) -> dict:
-    """Converta linha de funcionario para dicionario de destino.
+    """Converte linha de funcionario para dicionario de destino.
 
     Args:
         row: Linha retornada pela query consolidada.
+
     Returns:
         Dados prontos para persistencia no destino.
     """
@@ -118,14 +119,10 @@ def _full_refresh_por_lote(
     model_class: Any,
     lotes: Iterator[list[Any]],
 ) -> int:
-    """Delete-all uma vez + bulk_create a cada lote.
-
-    Estratégia:
-        1. Remove todos os registros da tabela destino.
-        2. Para cada lote recebido do EOL: bulk_create imediato.
-    Não usa transação global — a tabela fica temporariamente vazia
-    durante a carga, comportamento idêntico ao full-refresh original.
-    """
+    """Recarrega a tabela destino removendo tudo e inserindo por lote."""
+    # Remove todos os registros e faz bulk_create imediato a cada lote do
+    # EOL. Sem transação global: a tabela fica vazia durante a carga,
+    # comportamento idêntico ao full-refresh original.
     model_class.objects.using("professores_db").all().delete()
     total = 0
     for objs in lotes:
@@ -138,10 +135,7 @@ def _full_refresh_por_lote(
 
 
 def _full_refresh(model_class: Any, objs: list[Any]) -> int:
-    """Full refresh a partir de uma lista de objetos já instanciados.
-
-    Wrapper sobre _full_refresh_por_lote para uso com listas simples.
-    """
+    """Recarrega a tabela destino a partir de uma lista de objetos."""
     return _full_refresh_por_lote(model_class, iter([objs]))
 
 
@@ -150,6 +144,7 @@ def _params_cargo(repeticoes: int = 1) -> list[int]:
 
     Args:
         repeticoes: Quantidade de grupos de placeholders na consulta.
+
     Returns:
         Lista de parametros para filtros de cargo.
     """
@@ -160,10 +155,8 @@ _HASH_LOOKUP_BATCH = 1000
 
 
 def _calcular_hash(campos: dict[str, Any]) -> str:
-    """SHA-256 dos campos relevantes para controle incremental de mudança.
-
-    Serializa pares chave=valor em ordem alfabética e calcula o digest hex.
-    """
+    """Calcula o SHA-256 dos campos para controle incremental de mudança."""
+    # Serializa pares chave=valor em ordem alfabética antes do digest hex.
     conteudo = "|".join(f"{k}={v!r}" for k, v in sorted(campos.items()))
     return hashlib.sha256(conteudo.encode("utf-8")).hexdigest()
 

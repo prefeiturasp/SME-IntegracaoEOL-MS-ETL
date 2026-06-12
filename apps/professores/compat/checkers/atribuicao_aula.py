@@ -77,8 +77,9 @@ _SQL_PERFIL_SERVIDOR = """
     ORDER BY turma_escola.cd_turma_escola
 """
 
+
 class VerificadorAtribuicaoAula(VerificadorBase):
-    """Valida AtribuicaoAula (servidor) — BuscaProfessoresAsync."""
+    """Valida AtribuicaoAula de servidor efetivo."""
 
     nome = "ProfessorRepository"
     nome_consulta = "BuscaProfessoresAsync"
@@ -135,7 +136,7 @@ class VerificadorAtribuicaoAula(VerificadorBase):
         ]
 
     def chave_comparacao(self, linha: dict[str, Any]) -> tuple:
-        """Chave: id + rf + serie_grade + componente + ano."""
+        """Retorna a chave de comparação da atribuição."""
         return (
             linha["id"],
             linha["codigo_rf"],
@@ -146,12 +147,7 @@ class VerificadorAtribuicaoAula(VerificadorBase):
 
 
 class VerificadorTitularServidor(VerificadorBase):
-    """Valida atribuições titulares (sem disponibilização).
-
-    BuscarProfessorTitularPorDisciplinaAsync /
-    BuscarProfessoresTitularesPorTurmas.
-    Chave: (id, codigo_rf, codigo_serie_grade, codigo_componente).
-    """
+    """Valida atribuições titulares de servidor efetivo."""
 
     nome = "ProfessorRepository"
     nome_consulta = "BuscarProfessorTitularPorDisciplinaAsync"
@@ -202,7 +198,7 @@ class VerificadorTitularServidor(VerificadorBase):
         ]
 
     def chave_comparacao(self, linha: dict[str, Any]) -> tuple:
-        """Chave: id + rf + serie_grade + componente."""
+        """Retorna a chave de comparação da atribuição titular."""
         return (
             linha["id"],
             linha["codigo_rf"],
@@ -212,15 +208,7 @@ class VerificadorTitularServidor(VerificadorBase):
 
 
 class VerificadorPerfilProfServidor(VerificadorBase):
-    """Valida cadeia AtribuicaoAula → SerieTurmaGrade → TurmaEscola.
-
-    BuscarInformacoesPerfilProfAsync (servidor efetivo).
-    Verifica que a cadeia de JOINs internos no professores_db reproduz
-    os mesmos pares (codigo_rf, codigo_escola, codigo_turma, ano_letivo)
-    que a consulta original produz no EolConnection.
-
-    Chave: (codigo_rf, codigo_escola, codigo_turma, ano_letivo).
-    """
+    """Valida o perfil de professor de servidor efetivo."""
 
     nome = "PerfilSGPRepository"
     nome_consulta = "BuscarInformacoesPerfilProfAsync_servidor"
@@ -272,7 +260,7 @@ class VerificadorPerfilProfServidor(VerificadorBase):
         ]
 
     def chave_comparacao(self, linha: dict[str, Any]) -> tuple:
-        """Chave: rf + escola + turma + ano."""
+        """Retorna a chave de comparação do perfil."""
         return (
             linha["codigo_rf"],
             linha["codigo_escola"],
