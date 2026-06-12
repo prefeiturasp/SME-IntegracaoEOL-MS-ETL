@@ -5,7 +5,7 @@ from django.db import migrations, models
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("alunos", "0007_add_unique_constraint_matricula_turma"),
+        ("alunos", "0009_add_unique_constraints_chaves_primarias"),
     ]
 
     operations = [
