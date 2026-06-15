@@ -51,6 +51,8 @@ SELECT
    , ra.nm_responsavel AS nome
    , ra.cd_cpf_responsavel AS cpf
    , ra.email_responsavel AS email
+   , ra.dt_nascimento_mae_responsavel AS data_nascimento
+   , ra.nm_mae_responsavel AS nome_mae
    , ra.cd_ddd_celular_responsavel AS ddd_celular
    , ra.nr_celular_responsavel AS numero_celular
    , ra.in_autoriza_envio_sms AS autoriza_sms
@@ -147,7 +149,21 @@ WHERE rn = 1
 """
 
 SQL_MATRICULA_TURMA = """
-WITH CteMatriculaTurma AS (
+WITH EtapaPorTurma AS (
+    SELECT ste.cd_turma_escola
+         , MIN(se.cd_etapa_ensino) AS cd_etapa_ensino
+    FROM serie_turma_escola ste
+    INNER JOIN serie_turma_grade stg
+        ON stg.cd_turma_escola = ste.cd_turma_escola
+    INNER JOIN escola_grade eg
+        ON stg.cd_escola_grade = eg.cd_escola_grade
+    INNER JOIN grade g
+        ON eg.cd_grade = g.cd_grade
+    INNER JOIN serie_ensino se
+        ON g.cd_serie_ensino = se.cd_serie_ensino
+    GROUP BY ste.cd_turma_escola
+),
+CteMatriculaTurma AS (
     SELECT
         mt.cd_matricula
       , mt.cd_turma_escola AS codigo_turma
@@ -157,9 +173,13 @@ WITH CteMatriculaTurma AS (
       , mt.cd_situacao_aluno AS codigo_situacao_aluno
       , te.cd_tipo_turma AS codigo_tipo_turma
       , mt.dt_atlz_tab AS data_atualizacao_tabela
+      , te.dc_turma_escola AS nome_turma
+      , etapa.cd_etapa_ensino AS codigo_etapa_ensino
     FROM matricula_turma_escola mt
     INNER JOIN turma_escola te
         ON te.cd_turma_escola = mt.cd_turma_escola
+    LEFT JOIN EtapaPorTurma etapa
+        ON etapa.cd_turma_escola = te.cd_turma_escola
     WHERE 1 = 1
     /*FILTRO_ANO_LETIVO_MATRICULA_TURMA_ATUAL*/
     UNION ALL
@@ -172,6 +192,8 @@ WITH CteMatriculaTurma AS (
       , mt.cd_situacao_aluno AS codigo_situacao_aluno
       , te.cd_tipo_turma AS codigo_tipo_turma
       , mt.dt_atlz_tab AS data_atualizacao_tabela
+      , te.dc_turma_escola AS nome_turma
+      , etapa.cd_etapa_ensino AS codigo_etapa_ensino
     FROM (
         SELECT *
              , ROW_NUMBER() OVER (
@@ -182,6 +204,8 @@ WITH CteMatriculaTurma AS (
     ) mt
     INNER JOIN turma_escola te
         ON te.cd_turma_escola = mt.cd_turma_escola
+    LEFT JOIN EtapaPorTurma etapa
+        ON etapa.cd_turma_escola = te.cd_turma_escola
     WHERE mt.rn = 1
       AND NOT EXISTS (
         SELECT 1
@@ -200,6 +224,8 @@ SELECT
   , mt.codigo_situacao_aluno
   , mt.codigo_tipo_turma
   , mt.data_atualizacao_tabela
+  , mt.nome_turma
+  , mt.codigo_etapa_ensino
 FROM CteMatriculaTurma mt
 """
 

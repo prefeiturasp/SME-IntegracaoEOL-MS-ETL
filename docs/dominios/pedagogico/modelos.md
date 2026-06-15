@@ -90,6 +90,7 @@ Dados cadastrais de turmas extraídos do EOL. Sincronizado por ano letivo a part
 - **Filtro de situação:** `st_turma_escola IN ('O', 'A', 'E', 'C')`
 - **Alimenta:** endpoints de turmas e planejamento pedagógico
 - **Campos calculados:** `Ano` usa o primeiro caractere numérico de `dc_turma_escola`, senão `0`; `Extinta` deriva de `st_turma_escola = 'E'`; `Modalidade` e `CodigoModalidade` derivam da etapa e do tipo de escola; `Semestre` é calculado para EJA pelo mês de início; `EnsinoEspecial` deriva de `cd_etapa_ensino = 13 AND cd_modalidade_ensino = 2`.
+- **Etapa e ciclo (códigos crus):** `codigo_etapa_ensino` ← `ee.cd_etapa_ensino` (1–17) e `codigo_ciclo_ensino` ← `se.cd_ciclo_ensino`, materializados para paridade com `EtapaEnsino`/`CicloEnsino` do legado (Pedagogico-API). Os joins `ee`/`se` já existiam na `SQL_TURMAS` (sem join novo). ⚠️ **Não confundir com `codigo_modalidade_etapa`**, que é *bucket* derivado por `CASE` (1/3/4/5/6, com `COALESCE` da etapa do programa) — equivalente a um segundo `codigo_modalidade`, e **não** o `cd_etapa_ensino` cru. Adicionados na migration `0011`.
 
 ## 8. TurmaItinerarioEnsinoMedio
 

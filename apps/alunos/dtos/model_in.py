@@ -40,7 +40,7 @@ class AlunoIn:
     nome_mae: str | None
     raca_cor: str | None
     cns: str | None
-    data_atualizacao_contato: date | None
+    data_atualizacao_contato: datetime | None
     possui_deficiencia: bool
 
     def to_domain(self) -> dict:
@@ -56,7 +56,7 @@ class AlunoIn:
             "nome_mae": strip_str(self.nome_mae),
             "raca_cor": strip_str(self.raca_cor) or "NÃO INFORMADA",
             "cns": strip_str(self.cns),
-            "data_atualizacao_contato": parse_date(
+            "data_atualizacao_contato": aware_or_none(
                 self.data_atualizacao_contato
             ),
             "possui_deficiencia": bool(self.possui_deficiencia),
@@ -73,6 +73,8 @@ class ResponsavelAlunoIn:
     nome: str
     cpf: str | None
     email: str | None
+    data_nascimento: date | None
+    nome_mae: str | None
     ddd_celular: str | None
     numero_celular: str | None
     autoriza_sms: int | None
@@ -99,6 +101,8 @@ class ResponsavelAlunoIn:
             "ddd_celular": strip_str(self.ddd_celular),
             "numero_celular": strip_str(self.numero_celular),
             "autoriza_sms": self.autoriza_sms,
+            "data_nascimento": parse_date(self.data_nascimento),
+            "nome_mae": strip_str(self.nome_mae),
             "endereco_id": self.endereco_id,
             "numero_endereco": strip_str(self.numero_endereco),
             "complemento": strip_str(self.complemento),
@@ -108,7 +112,9 @@ class ResponsavelAlunoIn:
             "nome_municipio": strip_str(self.nome_municipio),
             "sigla_uf": strip_str(self.sigla_uf),
             "tipo_logradouro": strip_str(self.tipo_logradouro),
-            "data_atualizacao_tabela": aware_or_none(self.data_atualizacao_tabela),
+            "data_atualizacao_tabela": aware_or_none(
+                self.data_atualizacao_tabela
+            ),
             "data_fim_vinculo": parse_date(self.data_fim_vinculo_aluno),
         }
 
@@ -186,6 +192,8 @@ class MatriculaTurmaIn:
     codigo_situacao_aluno: int | None
     codigo_tipo_turma: int | None
     data_atualizacao_tabela: datetime | None
+    nome_turma: str | None
+    codigo_etapa_ensino: int | None
 
     def to_domain(self) -> dict:
         return {
@@ -198,7 +206,11 @@ class MatriculaTurmaIn:
             ),
             "codigo_situacao_aluno": self.codigo_situacao_aluno,
             "codigo_tipo_turma": self.codigo_tipo_turma,
-            "data_atualizacao_tabela": aware_or_none(self.data_atualizacao_tabela),
+            "data_atualizacao_tabela": aware_or_none(
+                self.data_atualizacao_tabela
+            ),
+            "nome_turma": strip_str(self.nome_turma),
+            "codigo_etapa_ensino": self.codigo_etapa_ensino,
         }
 
 

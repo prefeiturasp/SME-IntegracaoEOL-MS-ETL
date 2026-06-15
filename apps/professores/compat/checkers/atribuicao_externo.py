@@ -73,12 +73,9 @@ _SQL_PERFIL_EXTERNO = """
     ORDER BY turma_escola.cd_turma_escola
 """
 
-class VerificadorAtribuicaoExterno(VerificadorBase):
-    """Valida AtribuicaoExterno — BuscaProfessoresAsync (UNION externo).
 
-    Chave: (id, cpf_pessoa, codigo_serie_grade, codigo_componente,
-            ano_atribuicao).
-    """
+class VerificadorAtribuicaoExterno(VerificadorBase):
+    """Valida AtribuicaoExterno de professor externo."""
 
     nome = "ProfessorRepository"
     nome_consulta = "BuscaProfessoresAsync_externo"
@@ -135,7 +132,7 @@ class VerificadorAtribuicaoExterno(VerificadorBase):
         ]
 
     def chave_comparacao(self, linha: dict[str, Any]) -> tuple:
-        """Chave: id + cpf + serie_grade + componente + ano."""
+        """Retorna a chave de comparação da atribuição externa."""
         return (
             linha["id"],
             linha["cpf_pessoa"],
@@ -146,11 +143,7 @@ class VerificadorAtribuicaoExterno(VerificadorBase):
 
 
 class VerificadorTitularExterno(VerificadorBase):
-    """Valida titulares externos (sem disponibilização).
-
-    BuscarProfessorTitularPorDisciplinaAsync (externo).
-    Chave: (id, cpf_pessoa, codigo_serie_grade, codigo_componente).
-    """
+    """Valida titulares de professor externo."""
 
     nome = "ProfessorRepository"
     nome_consulta = "BuscarProfessorTitularPorDisciplinaAsync_externo"
@@ -201,7 +194,7 @@ class VerificadorTitularExterno(VerificadorBase):
         ]
 
     def chave_comparacao(self, linha: dict[str, Any]) -> tuple:
-        """Chave: id + cpf + serie_grade + componente."""
+        """Retorna a chave de comparação do titular externo."""
         return (
             linha["id"],
             linha["cpf_pessoa"],
@@ -211,11 +204,7 @@ class VerificadorTitularExterno(VerificadorBase):
 
 
 class VerificadorPerfilProfExterno(VerificadorBase):
-    """Valida cadeia AtribuicaoExterno → TurmaEscola (externo/CPF).
-
-    BuscarInformacoesPerfilProf (externo/CPF).
-    Chave: (cpf_pessoa, codigo_escola, codigo_turma, ano_letivo).
-    """
+    """Valida o perfil de professor externo por CPF."""
 
     nome = "PerfilSGPRepository"
     nome_consulta = "BuscarInformacoesPerfilProf_externo"
@@ -267,7 +256,7 @@ class VerificadorPerfilProfExterno(VerificadorBase):
         ]
 
     def chave_comparacao(self, linha: dict[str, Any]) -> tuple:
-        """Chave: cpf + escola + turma + ano."""
+        """Retorna a chave de comparação do perfil externo."""
         return (
             linha["cpf_pessoa"],
             linha["codigo_escola"],

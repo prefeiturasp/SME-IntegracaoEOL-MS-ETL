@@ -285,6 +285,8 @@ class Turma(ModeloBase):
     codigo_modalidade_etapa = models.IntegerField(null=True, blank=True)
     serie_ensino = models.CharField(max_length=200, null=True, blank=True)
     codigo_serie_ensino = models.IntegerField(null=True, blank=True)
+    codigo_etapa_ensino = models.IntegerField(null=True, blank=True)
+    codigo_ciclo_ensino = models.IntegerField(null=True, blank=True)
     data_atualizacao = models.DateTimeField(null=True, blank=True)
     data_status_turma_escola = models.DateTimeField(null=True, blank=True)
 

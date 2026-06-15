@@ -35,7 +35,7 @@ class Aluno(models.Model):
     nacionalidade = models.CharField(max_length=100, null=True, blank=True)
     nis = models.CharField(max_length=20, null=True, blank=True)
     raca_cor = models.CharField(max_length=50, null=True, blank=True)
-    data_atualizacao_contato = models.DateField(null=True, blank=True)
+    data_atualizacao_contato = models.DateTimeField(null=True, blank=True)
     cns = models.CharField(max_length=20, null=True, blank=True)
     possui_deficiencia = models.BooleanField(default=False)
 
@@ -68,6 +68,8 @@ class ResponsavelAluno(models.Model):
     ddd_celular = models.CharField(max_length=4, null=True, blank=True)
     numero_celular = models.CharField(max_length=20, null=True, blank=True)
     email = models.EmailField(max_length=200, null=True, blank=True)
+    data_nascimento = models.DateField(null=True, blank=True)
+    nome_mae = models.CharField(max_length=200, null=True, blank=True)
     autoriza_sms = models.CharField(max_length=1, null=True, blank=True)
     endereco_id = models.BigIntegerField(null=True, blank=True)
     numero_endereco = models.CharField(max_length=20, null=True, blank=True)
@@ -181,6 +183,8 @@ class MatriculaTurma(models.Model):
     codigo_situacao_aluno = models.SmallIntegerField(null=True, blank=True)
     codigo_tipo_turma = models.SmallIntegerField(null=True, blank=True)
     data_atualizacao_tabela = models.DateTimeField(null=True, blank=True)
+    nome_turma = models.CharField(max_length=80, null=True, blank=True)
+    codigo_etapa_ensino = models.SmallIntegerField(null=True, blank=True)
 
     class Meta:
         app_label = "alunos"

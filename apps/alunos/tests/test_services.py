@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
@@ -93,7 +93,7 @@ class TestAlunosService(TestCase):
         config = self.service._fases[5]
         transform = self.service._criar_transform(config)
 
-        row = (123, 456, "01", None, None, 1, 1, None)
+        row = (123, 456, "01", None, None, 1, 1, None, "5A", 5)
         pk, _, _ = transform(row)
 
         self.assertEqual(pk, "123-456")
@@ -115,8 +115,12 @@ class TestAlunosService(TestCase):
             "ra.dt_atualizacao_tabela AS data_atualizacao_tabela",
             SQL_RESPONSAVEL,
         )
-        self.assertIn("ra.cd_tipo_recurso AS codigo_tipo_recurso", SQL_NEE_ALUNO)
-        self.assertIn("tra.dc_tipo_recurso AS descricao_tipo_recurso", SQL_NEE_ALUNO)
+        self.assertIn(
+            "ra.cd_tipo_recurso AS codigo_tipo_recurso", SQL_NEE_ALUNO
+        )
+        self.assertIn(
+            "tra.dc_tipo_recurso AS descricao_tipo_recurso", SQL_NEE_ALUNO
+        )
         self.assertIn("OUTER APPLY", SQL_NEE_ALUNO)
         self.assertIn("recurso_aluno", SQL_NEE_ALUNO)
         self.assertIn("tipo_recurso_aluno", SQL_NEE_ALUNO)
@@ -174,7 +178,7 @@ class TestAlunosService(TestCase):
             "Mae",
             "Branca",
             "789",
-            date(2023, 1, 1),
+            datetime(2023, 1, 1, 14, 46, 50),
             1,
         )
 
@@ -183,6 +187,10 @@ class TestAlunosService(TestCase):
         self.assertEqual(pk, "1")
         self.assertEqual(obj.cns, "789")
         self.assertTrue(obj.possui_deficiencia)
+        self.assertEqual(
+            obj.data_atualizacao_contato.replace(tzinfo=None),
+            datetime(2023, 1, 1, 14, 46, 50),
+        )
 
     @patch.object(EtlAlunosService, "sync_batch")
     def test_executar_fase_chama_sync_batch_por_chunk(
@@ -326,6 +334,8 @@ class TestAlunosService(TestCase):
             codigo_situacao_aluno=None,
             codigo_tipo_turma=None,
             data_atualizacao_tabela=None,
+            nome_turma=None,
+            codigo_etapa_ensino=None,
         )
         domain = dto.to_domain()
         self.assertIsNone(domain["codigo_matricula"])

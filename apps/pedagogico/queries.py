@@ -376,7 +376,9 @@ SELECT DISTINCT
             THEN IIF(DATEPART(MONTH, tur.dt_inicio_turma) > 6, 2, 1)
         ELSE 0
     END                                                                        AS Semestre,
-    IIF((se.cd_etapa_ensino = 13) AND (se.cd_modalidade_ensino = 2), 1, 0)    AS EnsinoEspecial
+    IIF((se.cd_etapa_ensino = 13) AND (se.cd_modalidade_ensino = 2), 1, 0)    AS EnsinoEspecial,
+    ee.cd_etapa_ensino                                                         AS CodigoEtapaEnsino,
+    se.cd_ciclo_ensino                                                         AS CodigoCicloEnsino
 
 FROM turma_escola (NOLOCK) tur
 INNER JOIN escola (NOLOCK) esc

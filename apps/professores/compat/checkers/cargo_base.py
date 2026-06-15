@@ -65,11 +65,9 @@ _SQL_VALIDADE = f"""
     ORDER BY cba.cd_cargo_base_servidor
 """
 
-class VerificadorCargoBaseAtivo(VerificadorBase):
-    """Valida CargoBaseServidor — BuscaFuncionarioPorRfAsync.
 
-    Chave: (id_cargo_base, codigo_rf, codigo_cargo, dt_posse).
-    """
+class VerificadorCargoBaseAtivo(VerificadorBase):
+    """Valida cargos base de servidor ativos."""
 
     nome = "FuncionarioRepository"
     nome_consulta = "BuscaFuncionarioPorRfAsync"
@@ -120,7 +118,7 @@ class VerificadorCargoBaseAtivo(VerificadorBase):
         ]
 
     def chave_comparacao(self, linha: dict[str, Any]) -> tuple:
-        """Chave: id_cargo_base + codigo_rf + codigo_cargo + dt_posse."""
+        """Retorna a chave de comparação do cargo base."""
         return (
             linha["id_cargo_base"],
             linha["codigo_rf"],
@@ -130,14 +128,7 @@ class VerificadorCargoBaseAtivo(VerificadorBase):
 
 
 class VerificadorValidadeProf(VerificadorBase):
-    """Valida campos de bloqueio de elegibilidade.
-
-    VerificarValidadeProfessorAsync — verifica que:
-      - situacao_funcional está armazenado corretamente.
-      - A ausência de laudo_medico no destino é consistente com a origem.
-
-    Chave: (id_cargo_base, situacao_funcional, sem_laudo).
-    """
+    """Valida os campos de bloqueio de elegibilidade do professor."""
 
     nome = "ProfessorRepository"
     nome_consulta = "VerificarValidadeProfessorAsync"
@@ -182,7 +173,7 @@ class VerificadorValidadeProf(VerificadorBase):
         ]
 
     def chave_comparacao(self, linha: dict[str, Any]) -> tuple:
-        """Chave: id_cargo_base + situacao_funcional + sem_laudo."""
+        """Retorna a chave de comparação da validade do professor."""
         return (
             linha["id_cargo_base"],
             linha["situacao_funcional"],

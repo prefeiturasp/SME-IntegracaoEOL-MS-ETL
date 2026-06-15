@@ -80,7 +80,7 @@ class AlunoInTest(SimpleTestCase):
             nome_mae=" Maria ",
             raca_cor=" Branca ",
             cns="789",
-            data_atualizacao_contato=date(2023, 1, 1),
+            data_atualizacao_contato=datetime(2023, 1, 1, 14, 46, 50),
             possui_deficiencia=True,
         )
         data = dto.to_domain()
@@ -91,6 +91,12 @@ class AlunoInTest(SimpleTestCase):
         self.assertEqual(data["nome_mae"], "Maria")
         self.assertEqual(data["cns"], "789")
         self.assertTrue(data["possui_deficiencia"])
+        contato = data["data_atualizacao_contato"]
+        self.assertIsInstance(contato, datetime)
+        self.assertFalse(timezone.is_naive(contato))
+        self.assertEqual(
+            contato.replace(tzinfo=None), datetime(2023, 1, 1, 14, 46, 50)
+        )
 
     def test_defaults_quando_campos_vazios(self) -> None:
         dto = AlunoIn(
@@ -150,6 +156,8 @@ class ResponsavelAlunoInTest(SimpleTestCase):
             ddd_celular="11",
             numero_celular="999",
             autoriza_sms=1,
+            data_nascimento=date(1980, 5, 20),
+            nome_mae="Mae do Responsavel",
             endereco_id=10,
             numero_endereco="100",
             complemento="AP",
@@ -166,6 +174,41 @@ class ResponsavelAlunoInTest(SimpleTestCase):
         self.assertEqual(data["codigo_responsavel"], 100)
         self.assertEqual(data["aluno_id"], 1)
         self.assertEqual(data["email"], "pai@email.com")
+        self.assertEqual(data["data_nascimento"], date(1980, 5, 20))
+        self.assertEqual(data["nome_mae"], "Mae do Responsavel")
+
+    def test_mapeamento_posicional_compatibilidade_query(self) -> None:
+        dto = ResponsavelAlunoIn(
+            100,
+            1,
+            1,
+            "Pai",
+            "111",
+            "pai@email.com",
+            date(1980, 5, 20),
+            "Mae do Responsavel",
+            "11",
+            "999",
+            1,
+            10,
+            "100",
+            "AP",
+            "Centro",
+            "Rua X",
+            12345,
+            "SP",
+            "SP",
+            "Rua",
+            None,
+            None,
+        )
+
+        data = dto.to_domain()
+
+        self.assertEqual(data["ddd_celular"], "11")
+        self.assertEqual(data["numero_celular"], "999")
+        self.assertEqual(data["data_nascimento"], date(1980, 5, 20))
+        self.assertEqual(data["nome_mae"], "Mae do Responsavel")
 
 
 class NecessidadeEspecialAlunoInTest(SimpleTestCase):
@@ -240,11 +283,15 @@ class MatriculaTurmaInTest(SimpleTestCase):
             codigo_situacao_aluno=1,
             codigo_tipo_turma=1,
             data_atualizacao_tabela=None,
+            nome_turma=" 5A ",
+            codigo_etapa_ensino=5,
         )
         data = dto.to_domain()
         self.assertEqual(data["codigo_matricula"], 1000)
         self.assertEqual(data["codigo_turma"], 55)
         self.assertEqual(data["numero_chamada"], "A1")
+        self.assertEqual(data["nome_turma"], "5A")
+        self.assertEqual(data["codigo_etapa_ensino"], 5)
         self.assertFalse(
             timezone.is_naive(data["data_situacao_aluno_data_hora"])
         )
