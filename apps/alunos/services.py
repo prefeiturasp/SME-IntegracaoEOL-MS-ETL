@@ -230,6 +230,8 @@ class EtlAlunosService(BaseEtlService):
                     "codigo_situacao_aluno",
                     "codigo_tipo_turma",
                     "data_atualizacao_tabela",
+                    "nome_turma",
+                    "codigo_etapa_ensino",
                 ),
                 unique_fields=("codigo_matricula", "codigo_turma"),
                 suporta_bulk_insert=False,

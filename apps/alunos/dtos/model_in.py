@@ -192,6 +192,8 @@ class MatriculaTurmaIn:
     codigo_situacao_aluno: int | None
     codigo_tipo_turma: int | None
     data_atualizacao_tabela: datetime | None
+    nome_turma: str | None
+    codigo_etapa_ensino: int | None
 
     def to_domain(self) -> dict:
         return {
@@ -207,6 +209,8 @@ class MatriculaTurmaIn:
             "data_atualizacao_tabela": aware_or_none(
                 self.data_atualizacao_tabela
             ),
+            "nome_turma": strip_str(self.nome_turma),
+            "codigo_etapa_ensino": self.codigo_etapa_ensino,
         }
 
 

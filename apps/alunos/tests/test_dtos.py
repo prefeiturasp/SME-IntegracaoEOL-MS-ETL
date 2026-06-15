@@ -283,11 +283,15 @@ class MatriculaTurmaInTest(SimpleTestCase):
             codigo_situacao_aluno=1,
             codigo_tipo_turma=1,
             data_atualizacao_tabela=None,
+            nome_turma=" 5A ",
+            codigo_etapa_ensino=5,
         )
         data = dto.to_domain()
         self.assertEqual(data["codigo_matricula"], 1000)
         self.assertEqual(data["codigo_turma"], 55)
         self.assertEqual(data["numero_chamada"], "A1")
+        self.assertEqual(data["nome_turma"], "5A")
+        self.assertEqual(data["codigo_etapa_ensino"], 5)
         self.assertFalse(
             timezone.is_naive(data["data_situacao_aluno_data_hora"])
         )
