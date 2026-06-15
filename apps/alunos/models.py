@@ -183,6 +183,8 @@ class MatriculaTurma(models.Model):
     codigo_situacao_aluno = models.SmallIntegerField(null=True, blank=True)
     codigo_tipo_turma = models.SmallIntegerField(null=True, blank=True)
     data_atualizacao_tabela = models.DateTimeField(null=True, blank=True)
+    nome_turma = models.CharField(max_length=80, null=True, blank=True)
+    codigo_etapa_ensino = models.SmallIntegerField(null=True, blank=True)
 
     class Meta:
         app_label = "alunos"
