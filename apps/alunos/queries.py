@@ -102,7 +102,7 @@ WITH Combined AS (
         cd_matricula
       , cd_aluno
       , vmc.cd_escola AS codigo_ue
-      , vue.cd_unidade_administrativa_referencia AS codigo_dre 
+      , vue.cd_unidade_administrativa_referencia AS codigo_dre
       , dt_status_matricula AS data_situacao_matricula
       , dt_status_matricula AS data_situacao_matricula_data_hora
       , an_letivo AS ano_letivo
@@ -110,7 +110,8 @@ WITH Combined AS (
       , CAST(1 AS bit) AS origem_atual
       , 0 AS prioridade
     FROM v_matricula_cotic vmc
-    INNER JOIN v_cadastro_unidade_educacao vue ON vue.cd_unidade_educacao = vmc.cd_escola 
+    INNER JOIN v_cadastro_unidade_educacao vue
+        ON vue.cd_unidade_educacao = vmc.cd_escola
     WHERE 1 = 1
     /*FILTRO_ANO_LETIVO_MATRICULA_ATUAL*/
     UNION ALL
@@ -118,7 +119,7 @@ WITH Combined AS (
         cd_matricula
       , cd_aluno
       , vhmc.cd_escola AS codigo_ue
-      , vue.cd_unidade_administrativa_referencia AS codigo_dre 
+      , vue.cd_unidade_administrativa_referencia AS codigo_dre
       , dt_status_matricula AS data_situacao_matricula
       , dt_status_matricula AS data_situacao_matricula_data_hora
       , an_letivo AS ano_letivo
@@ -126,7 +127,8 @@ WITH Combined AS (
       , CAST(0 AS bit) AS origem_atual
       , 1 AS prioridade
     FROM v_historico_matricula_cotic vhmc
-    INNER JOIN v_cadastro_unidade_educacao vue ON vue.cd_unidade_educacao = vhmc.cd_escola 
+    INNER JOIN v_cadastro_unidade_educacao vue
+        ON vue.cd_unidade_educacao = vhmc.cd_escola
     WHERE 1 = 1
     /*FILTRO_ANO_LETIVO_MATRICULA_HISTORICA*/
 ),

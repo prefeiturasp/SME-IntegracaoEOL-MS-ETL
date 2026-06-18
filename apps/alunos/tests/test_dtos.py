@@ -260,7 +260,7 @@ class MatriculaInTest(SimpleTestCase):
             codigo_matricula=1001,
             codigo_aluno=2,
             codigo_ue="UE123",
-            codigo_dre=None,
+            codigo_dre="DRE02",
             data_situacao_matricula=None,
             data_situacao_matricula_data_hora=None,
             ano_letivo=2023,
@@ -268,7 +268,7 @@ class MatriculaInTest(SimpleTestCase):
             origem_atual=False,
         )
         data = dto.to_domain()
-        self.assertEqual(data["codigo_dre"], "000000")
+        self.assertEqual(data["codigo_dre"], "DRE02")
         self.assertEqual(
             data["situacao_matricula"], "Fora do domínio liberado pela PRODAM"
         )

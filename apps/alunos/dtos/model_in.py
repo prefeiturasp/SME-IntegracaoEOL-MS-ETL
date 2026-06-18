@@ -166,7 +166,7 @@ class MatriculaIn:
             "codigo_matricula": self.codigo_matricula,
             "aluno_id": self.codigo_aluno,
             "codigo_ue": strip_str(self.codigo_ue),
-            "codigo_dre": strip_str(self.codigo_dre) or "000000",
+            "codigo_dre": strip_str(self.codigo_dre),
             "data_situacao_matricula": parse_date(
                 self.data_situacao_matricula
             ),
@@ -313,8 +313,7 @@ class DadosAlunoAcompanhamentoEscolarIn:
             "cpf_responsavel": strip_str(self.cpf_responsavel),
             "data_nascimento": parse_date(self.data_nascimento),
             "descricao_tipo_escola": (
-                strip_str(self.descricao_tipo_escola)
-                or _texto_nao_informado
+                strip_str(self.descricao_tipo_escola) or _texto_nao_informado
             ),
             "tipo_responsavel": self.tipo_responsavel,
             "codigo_dre": strip_str(self.codigo_dre),
