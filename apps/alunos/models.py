@@ -138,6 +138,7 @@ class Matricula(models.Model):
         related_name="matriculas",
     )
     codigo_ue = models.CharField(max_length=20)
+    codigo_dre = models.CharField(max_length=20, default="000000")
     ano_letivo = models.SmallIntegerField()
     data_situacao_matricula = models.DateField(null=True, blank=True)
     data_situacao_matricula_data_hora = models.DateTimeField(
@@ -157,6 +158,9 @@ class Matricula(models.Model):
             models.Index(fields=["codigo_ue"], name="idx_matricula_codigo_ue"),
             models.Index(
                 fields=["ano_letivo"], name="idx_matricula_ano_letivo"
+            ),
+            models.Index(
+                fields=["codigo_dre"], name="idx_matricula_codigo_dre"
             ),
         ]
 
@@ -185,11 +189,19 @@ class MatriculaTurma(models.Model):
     data_atualizacao_tabela = models.DateTimeField(null=True, blank=True)
     nome_turma = models.CharField(max_length=80, null=True, blank=True)
     codigo_etapa_ensino = models.SmallIntegerField(null=True, blank=True)
+    sequencia = models.IntegerField(default=1)
 
     class Meta:
         app_label = "alunos"
         db_table = "matricula_turma"
-        unique_together = [("codigo_matricula", "codigo_turma")]
+        unique_together = [
+            (
+                "codigo_matricula",
+                "codigo_turma",
+                "codigo_situacao_aluno",
+                "sequencia",
+            )
+        ]
         indexes = [
             models.Index(
                 fields=["codigo_turma"], name="idx_matricula_turma_codigo"

@@ -152,6 +152,7 @@ class MatriculaIn:
     codigo_matricula: int
     codigo_aluno: int
     codigo_ue: str
+    codigo_dre: str
     data_situacao_matricula: date | None
     data_situacao_matricula_data_hora: datetime | None
     ano_letivo: int
@@ -165,6 +166,7 @@ class MatriculaIn:
             "codigo_matricula": self.codigo_matricula,
             "aluno_id": self.codigo_aluno,
             "codigo_ue": strip_str(self.codigo_ue),
+            "codigo_dre": strip_str(self.codigo_dre) or "000000",
             "data_situacao_matricula": parse_date(
                 self.data_situacao_matricula
             ),
@@ -194,6 +196,7 @@ class MatriculaTurmaIn:
     data_atualizacao_tabela: datetime | None
     nome_turma: str | None
     codigo_etapa_ensino: int | None
+    sequencia: int
 
     def to_domain(self) -> dict:
         return {
@@ -211,6 +214,7 @@ class MatriculaTurmaIn:
             ),
             "nome_turma": strip_str(self.nome_turma),
             "codigo_etapa_ensino": self.codigo_etapa_ensino,
+            "sequencia": self.sequencia,
         }
 
 
