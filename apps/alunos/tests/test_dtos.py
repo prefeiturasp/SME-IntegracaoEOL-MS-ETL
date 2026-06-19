@@ -239,6 +239,7 @@ class MatriculaInTest(SimpleTestCase):
             codigo_matricula=1000,
             codigo_aluno=1,
             codigo_ue="UE123",
+            codigo_dre=" DRE01 ",
             data_situacao_matricula=date(2023, 2, 2),
             data_situacao_matricula_data_hora=datetime(2023, 2, 2, 10, 20, 30),
             ano_letivo=2023,
@@ -248,6 +249,7 @@ class MatriculaInTest(SimpleTestCase):
         data = dto.to_domain()
         self.assertEqual(data["codigo_matricula"], 1000)
         self.assertEqual(data["aluno_id"], 1)
+        self.assertEqual(data["codigo_dre"], "DRE01")
         self.assertEqual(data["situacao_matricula"], "Ativo")
         self.assertFalse(
             timezone.is_naive(data["data_situacao_matricula_data_hora"])
@@ -258,6 +260,7 @@ class MatriculaInTest(SimpleTestCase):
             codigo_matricula=1001,
             codigo_aluno=2,
             codigo_ue="UE123",
+            codigo_dre="DRE02",
             data_situacao_matricula=None,
             data_situacao_matricula_data_hora=None,
             ano_letivo=2023,
@@ -265,6 +268,7 @@ class MatriculaInTest(SimpleTestCase):
             origem_atual=False,
         )
         data = dto.to_domain()
+        self.assertEqual(data["codigo_dre"], "DRE02")
         self.assertEqual(
             data["situacao_matricula"], "Fora do domínio liberado pela PRODAM"
         )
@@ -285,6 +289,7 @@ class MatriculaTurmaInTest(SimpleTestCase):
             data_atualizacao_tabela=None,
             nome_turma=" 5A ",
             codigo_etapa_ensino=5,
+            sequencia=2,
         )
         data = dto.to_domain()
         self.assertEqual(data["codigo_matricula"], 1000)
@@ -292,6 +297,7 @@ class MatriculaTurmaInTest(SimpleTestCase):
         self.assertEqual(data["numero_chamada"], "A1")
         self.assertEqual(data["nome_turma"], "5A")
         self.assertEqual(data["codigo_etapa_ensino"], 5)
+        self.assertEqual(data["sequencia"], 2)
         self.assertFalse(
             timezone.is_naive(data["data_situacao_aluno_data_hora"])
         )

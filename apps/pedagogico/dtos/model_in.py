@@ -180,6 +180,9 @@ class TurmaIn:
     ensino_especial: Any
     codigo_etapa_ensino: Any
     codigo_ciclo_ensino: Any
+    tipo_escola: Any
+    codigo_grade_programa: Any
+    descricao_grade_programa: Any
 
     def to_domain(self, transferido_em: Any) -> dict:
         return {
@@ -211,6 +214,13 @@ class TurmaIn:
             "ensino_especial": bool(self.ensino_especial),
             "codigo_etapa_ensino": int_or_none(self.codigo_etapa_ensino),
             "codigo_ciclo_ensino": int_or_none(self.codigo_ciclo_ensino),
+            "tipo_escola": int_or_none(self.tipo_escola) or 0,
+            "codigo_grade_programa": (
+                int_or_none(self.codigo_grade_programa) or 0
+            ),
+            "descricao_grade_programa": (
+                strip_or_none(self.descricao_grade_programa) or "NAO INFORMADA"
+            ),
             "transferido_em": transferido_em,
         }
 

@@ -89,14 +89,14 @@ class TestAlunosService(TestCase):
         self.assertEqual(obj.descricao, "Desc")
 
     def test_criar_transform_pk_composta(self) -> None:
-        """Valida geração de PK composta (Matricula-Turma)."""
+        """Valida PK composta (Matricula-Turma-Situacao-Sequencia)."""
         config = self.service._fases[5]
         transform = self.service._criar_transform(config)
 
-        row = (123, 456, "01", None, None, 1, 1, None, "5A", 5)
+        row = (123, 456, "01", None, None, 7, 1, None, "5A", 5, 1)
         pk, _, _ = transform(row)
 
-        self.assertEqual(pk, "123-456")
+        self.assertEqual(pk, "123-456-7-1")
 
     def test_sql_aluno_expoe_cns_antes_de_data_atualizacao(self) -> None:
         """Valida que a query segue a ordem esperada pelo AlunoIn."""
@@ -336,10 +336,42 @@ class TestAlunosService(TestCase):
             data_atualizacao_tabela=None,
             nome_turma=None,
             codigo_etapa_ensino=None,
+            sequencia=1,
         )
         domain = dto.to_domain()
         self.assertIsNone(domain["codigo_matricula"])
         self.assertEqual(domain["codigo_turma"], 101)
+        self.assertEqual(domain["sequencia"], 1)
+
+    def test_fase_matricula_turma_chave_inclui_sequencia(self) -> None:
+        """Valida chave e update_fields da fase matricula_turma."""
+        fase = self.service._fases[5]
+        self.assertEqual(fase.nome, "matricula_turma")
+        self.assertEqual(
+            fase.pk_field,
+            [
+                "codigo_matricula",
+                "codigo_turma",
+                "codigo_situacao_aluno",
+                "sequencia",
+            ],
+        )
+        self.assertEqual(
+            fase.unique_fields,
+            (
+                "codigo_matricula",
+                "codigo_turma",
+                "codigo_situacao_aluno",
+                "sequencia",
+            ),
+        )
+        self.assertIn("sequencia", fase.update_fields)
+
+    def test_fase_matricula_inclui_codigo_dre_em_update_fields(self) -> None:
+        """Valida que a fase matricula atualiza codigo_dre."""
+        fase = self.service._fases[4]
+        self.assertEqual(fase.nome, "matricula")
+        self.assertIn("codigo_dre", fase.update_fields)
 
     def test_fase_7_nome_e_model_corretos(self) -> None:
         """Valida nome e model_class da fase 7."""

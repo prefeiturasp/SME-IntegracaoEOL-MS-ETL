@@ -57,6 +57,19 @@ class PedagogicoModelsTest(TestCase):
         )
         self.assertEqual(str(obj), "123456 - 5A Manhã")
 
+    def test_turma_campos_grade_programa_default(self) -> None:
+        """Campos NOT NULL de grade de programa têm default zero/vazio."""
+        obj = Turma(
+            codigo=123456,
+            nome_turma="5A Manhã",
+            tipo_turma=1,
+            ano_letivo=2025,
+            ue_codigo="001234",
+        )
+        self.assertEqual(obj.tipo_escola, 0)
+        self.assertEqual(obj.codigo_grade_programa, 0)
+        self.assertEqual(obj.descricao_grade_programa, "NAO INFORMADA")
+
     def test_turma_itinerario_ensino_medio_str(self) -> None:
         obj = TurmaItinerarioEnsinoMedio(nome="Itinerário A", serie="3")
         self.assertEqual(str(obj), "Itinerário A")

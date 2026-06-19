@@ -287,6 +287,11 @@ class Turma(ModeloBase):
     codigo_serie_ensino = models.IntegerField(null=True, blank=True)
     codigo_etapa_ensino = models.IntegerField(null=True, blank=True)
     codigo_ciclo_ensino = models.IntegerField(null=True, blank=True)
+    tipo_escola = models.IntegerField(default=0)
+    codigo_grade_programa = models.IntegerField(default=0)
+    descricao_grade_programa = models.CharField(
+        max_length=200, default="NAO INFORMADA"
+    )
     data_atualizacao = models.DateTimeField(null=True, blank=True)
     data_status_turma_escola = models.DateTimeField(null=True, blank=True)
 
