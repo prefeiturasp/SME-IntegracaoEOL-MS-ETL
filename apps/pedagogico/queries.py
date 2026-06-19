@@ -378,8 +378,10 @@ SELECT DISTINCT
     END                                                                        AS Semestre,
     IIF((se.cd_etapa_ensino = 13) AND (se.cd_modalidade_ensino = 2), 1, 0)    AS EnsinoEspecial,
     ee.cd_etapa_ensino                                                         AS CodigoEtapaEnsino,
-    se.cd_ciclo_ensino                                                         AS CodigoCicloEnsino
-
+    se.cd_ciclo_ensino                                                         AS CodigoCicloEnsino,
+    esc.tp_escola                                                              AS TipoEscola,
+    tur_prog_grade.cd_grade                                                    AS CodigoGradePrograma,
+    tur_prog_grade.dc_grade                                                    AS DescricaoGradePrograma
 FROM turma_escola (NOLOCK) tur
 INNER JOIN escola (NOLOCK) esc
     ON esc.cd_escola = tur.cd_escola
@@ -398,7 +400,22 @@ LEFT JOIN (
     INNER JOIN serie_ensino (NOLOCK) se_p ON se_p.cd_serie_ensino = gr_p.cd_serie_ensino
     GROUP BY tegp.cd_turma_escola
 ) prog_etapa ON prog_etapa.cd_turma_escola = tur.cd_turma_escola
-
+LEFT JOIN (
+    SELECT tur.cd_turma_escola,
+           g.dc_grade,
+           g.cd_grade
+    FROM turma_escola (NOLOCK) tur
+    LEFT JOIN serie_turma_escola(nolock) ste
+        ON ste.cd_turma_escola = tur.cd_turma_escola
+    LEFT JOIN serie_turma_grade(nolock) stg
+        ON stg.cd_turma_escola = ste.cd_turma_escola and stg.dt_fim is null
+    LEFT JOIN turma_escola_grade_programa(nolock) tegp
+        ON tegp.cd_turma_escola = tur.cd_turma_escola and tegp.dt_fim is null
+    LEFT JOIN escola_grade (NOLOCK) eg_p
+        ON eg_p.cd_escola_grade = COALESCE(stg.cd_escola_grade, tegp.cd_escola_grade)
+    LEFT JOIN grade (NOLOCK) g ON g.cd_grade = eg_p.cd_grade
+    GROUP BY tur.cd_turma_escola, g.dc_grade, g.cd_grade
+) tur_prog_grade ON tur_prog_grade.cd_turma_escola = tur.cd_turma_escola
 WHERE tur.an_letivo = ?
   AND tur.st_turma_escola IN ('O', 'A', 'E', 'C')
 """

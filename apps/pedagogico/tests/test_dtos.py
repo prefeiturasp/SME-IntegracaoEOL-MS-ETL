@@ -111,6 +111,9 @@ def _turma_in_completa(**overrides: object) -> TurmaIn:
         "ensino_especial": 0,
         "codigo_etapa_ensino": 5,
         "codigo_ciclo_ensino": 3,
+        "tipo_escola": 1,
+        "codigo_grade_programa": 42,
+        "descricao_grade_programa": " Programa Mais Educação ",
     }
     defaults.update(overrides)
     return TurmaIn(**defaults)
@@ -141,6 +144,11 @@ class TurmaInTest(SimpleTestCase):
         self.assertFalse(data["ensino_especial"])
         self.assertEqual(data["codigo_etapa_ensino"], 5)
         self.assertEqual(data["codigo_ciclo_ensino"], 3)
+        self.assertEqual(data["tipo_escola"], 1)
+        self.assertEqual(data["codigo_grade_programa"], 42)
+        self.assertEqual(
+            data["descricao_grade_programa"], "Programa Mais Educação"
+        )
         self.assertEqual(data["transferido_em"], "agora")
 
     def test_data_inicio_turma_aware(self) -> None:
@@ -210,3 +218,62 @@ class TurmaInTest(SimpleTestCase):
             data_fim=datetime(2025, 12, 20, 0, 0, 0)
         ).to_domain("agora")
         self.assertTrue(timezone.is_aware(data["data_fim"]))
+
+    def test_grade_programa_nulos_viram_default(self) -> None:
+        """Campos NOT NULL recebem default quando a origem é nula."""
+        data = _turma_in_completa(
+            tipo_escola=None,
+            codigo_grade_programa=None,
+            descricao_grade_programa=None,
+        ).to_domain("agora")
+
+        self.assertEqual(data["tipo_escola"], 0)
+        self.assertEqual(data["codigo_grade_programa"], 0)
+        self.assertEqual(data["descricao_grade_programa"], "NAO INFORMADA")
+
+    def test_descricao_grade_programa_vazia_vira_default(self) -> None:
+        data = _turma_in_completa(descricao_grade_programa="   ").to_domain(
+            "agora"
+        )
+        self.assertEqual(data["descricao_grade_programa"], "NAO INFORMADA")
+
+    def test_ordem_posicional_alinha_com_select(self) -> None:
+        """As 3 últimas colunas do SELECT mapeiam os campos corretos."""
+        row = (
+            123456,
+            2025,
+            "5",
+            1,
+            " 5A Manhã ",
+            5,
+            2,
+            datetime(2025, 2, 5, 8, 0, 0),
+            None,
+            0,
+            "O",
+            "001234",
+            datetime(2025, 1, 10, 0, 0, 0),
+            None,
+            " 5o ano ",
+            50,
+            " Fundamental ",
+            5,
+            3,
+            5,
+            0,
+            0,
+            5,
+            3,
+            7,
+            42,
+            " Programa Mais Educação ",
+        )
+
+        dto = TurmaIn(*row)
+        data = dto.to_domain("agora")
+
+        self.assertEqual(data["tipo_escola"], 7)
+        self.assertEqual(data["codigo_grade_programa"], 42)
+        self.assertEqual(
+            data["descricao_grade_programa"], "Programa Mais Educação"
+        )

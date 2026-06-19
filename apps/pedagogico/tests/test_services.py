@@ -132,6 +132,9 @@ class TestPedagogicoService(TestCase):
             0,  # ensino_especial
             5,  # codigo_etapa_ensino
             3,  # codigo_ciclo_ensino
+            7,  # tipo_escola
+            42,  # codigo_grade_programa
+            " Programa Mais Educação ",  # descricao_grade_programa
         )
         result = transform(row)
         assert result is not None
@@ -147,6 +150,11 @@ class TestPedagogicoService(TestCase):
         self.assertEqual(obj.codigo_tipo_programa, 3)
         self.assertFalse(obj.extinta)
         self.assertEqual(obj.semestre, 0)
+        self.assertEqual(obj.tipo_escola, 7)
+        self.assertEqual(obj.codigo_grade_programa, 42)
+        self.assertEqual(
+            obj.descricao_grade_programa, "Programa Mais Educação"
+        )
 
     def test_criar_transform_comp_por_ano_letivo_ignora_registro_sem_chave(
         self,
@@ -188,6 +196,16 @@ class TestPedagogicoService(TestCase):
                 "codigo_serie_ensino",
             ),
         )
+
+    def test_fase_turma_inclui_campos_grade_programa(self) -> None:
+        """Campos de grade de programa entram na dedup da fase turma."""
+        config = next(
+            fase for fase in self.service._fases if fase.nome == "turma"
+        )
+
+        self.assertIn("tipo_escola", config.update_fields)
+        self.assertIn("codigo_grade_programa", config.update_fields)
+        self.assertIn("descricao_grade_programa", config.update_fields)
 
     @patch.object(EtlPedagogicoService, "sync_batch", return_value=(1, 1))
     def test_processar_batch_filtra_nones_antes_do_sync_batch(
