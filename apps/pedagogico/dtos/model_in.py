@@ -183,6 +183,7 @@ class TurmaIn:
     tipo_escola: Any
     codigo_grade_programa: Any
     descricao_grade_programa: Any
+    tipo_grade_programa: Any
 
     def to_domain(self, transferido_em: Any) -> dict:
         return {
@@ -220,6 +221,9 @@ class TurmaIn:
             ),
             "descricao_grade_programa": (
                 strip_or_none(self.descricao_grade_programa) or "NAO INFORMADA"
+            ),
+            "tipo_grade_programa": (
+                int_or_none(self.tipo_grade_programa) or 0
             ),
             "transferido_em": transferido_em,
         }

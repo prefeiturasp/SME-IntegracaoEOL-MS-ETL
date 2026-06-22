@@ -292,6 +292,7 @@ class Turma(ModeloBase):
     descricao_grade_programa = models.CharField(
         max_length=200, default="NAO INFORMADA"
     )
+    tipo_grade_programa = models.IntegerField(default=0)
     data_atualizacao = models.DateTimeField(null=True, blank=True)
     data_status_turma_escola = models.DateTimeField(null=True, blank=True)
 

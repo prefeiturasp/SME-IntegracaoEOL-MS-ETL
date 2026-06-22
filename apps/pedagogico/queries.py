@@ -333,7 +333,7 @@ SELECT DISTINCT
     END                                                                        AS Ano,
     tur.cd_tipo_turma                                                          AS TipoTurma,
     tur.dc_turma_escola                                                        AS NomeTurma,
-    tur.cd_duracao                                                             AS DuracaoTurno,
+    dtt.qt_hora_duracao                                                        AS DuracaoTurno,
     tur.cd_tipo_turno                                                          AS TipoTurno,
     tur.dt_inicio_turma                                                        AS DataInicioTurma,
     tur.dt_fim                                                                 AS DataFim,
@@ -357,6 +357,7 @@ SELECT DISTINCT
             OR (tur.cd_tipo_turma <> 1 AND esc.tp_escola IN (2,17,28,30,31))  THEN 1
         WHEN ee.cd_etapa_ensino IN (2, 3, 7, 11)                              THEN 3
         WHEN ee.cd_etapa_ensino IN (4, 5, 12, 13)                             THEN 5
+        WHEN tur.cd_tipo_turma = 3 AND esc.tp_escola IN(1, 3, 4, 16) 		  THEN 5
         WHEN ee.cd_etapa_ensino IN (6, 7, 8, 14, 17)                         THEN 6
         WHEN tur.cd_tipo_turma = 7                                            THEN 6
         WHEN esc.tp_escola = 13                                               THEN 4
@@ -381,7 +382,8 @@ SELECT DISTINCT
     se.cd_ciclo_ensino                                                         AS CodigoCicloEnsino,
     esc.tp_escola                                                              AS TipoEscola,
     tur_prog_grade.cd_grade                                                    AS CodigoGradePrograma,
-    tur_prog_grade.dc_grade                                                    AS DescricaoGradePrograma
+    tur_prog_grade.dc_grade                                                    AS DescricaoGradePrograma,
+    tur_prog_grade.cd_tipo_grade                                               AS TipoGradePrograma
 FROM turma_escola (NOLOCK) tur
 INNER JOIN escola (NOLOCK) esc
     ON esc.cd_escola = tur.cd_escola
@@ -391,6 +393,9 @@ LEFT JOIN serie_ensino (NOLOCK) se
     ON se.cd_serie_ensino = ste.cd_serie_ensino
 LEFT JOIN etapa_ensino (NOLOCK) ee
     ON ee.cd_etapa_ensino = se.cd_etapa_ensino
+LEFT JOIN duracao_tipo_turno dtt
+    ON tur.cd_tipo_turno = dtt.cd_tipo_turno
+    AND tur.cd_duracao = dtt.cd_duracao
 LEFT JOIN (
     SELECT tegp.cd_turma_escola,
            MIN(se_p.cd_etapa_ensino) AS cd_etapa_ensino_prog
@@ -403,7 +408,8 @@ LEFT JOIN (
 LEFT JOIN (
     SELECT tur.cd_turma_escola,
            g.dc_grade,
-           g.cd_grade
+           g.cd_grade,
+           g.cd_tipo_grade
     FROM turma_escola (NOLOCK) tur
     LEFT JOIN serie_turma_escola(nolock) ste
         ON ste.cd_turma_escola = tur.cd_turma_escola
@@ -414,7 +420,7 @@ LEFT JOIN (
     LEFT JOIN escola_grade (NOLOCK) eg_p
         ON eg_p.cd_escola_grade = COALESCE(stg.cd_escola_grade, tegp.cd_escola_grade)
     LEFT JOIN grade (NOLOCK) g ON g.cd_grade = eg_p.cd_grade
-    GROUP BY tur.cd_turma_escola, g.dc_grade, g.cd_grade
+    GROUP BY tur.cd_turma_escola, g.dc_grade, g.cd_grade, g.cd_tipo_grade
 ) tur_prog_grade ON tur_prog_grade.cd_turma_escola = tur.cd_turma_escola
 WHERE tur.an_letivo = ?
   AND tur.st_turma_escola IN ('O', 'A', 'E', 'C')

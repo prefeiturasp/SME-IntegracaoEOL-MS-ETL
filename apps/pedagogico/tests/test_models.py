@@ -69,6 +69,7 @@ class PedagogicoModelsTest(TestCase):
         self.assertEqual(obj.tipo_escola, 0)
         self.assertEqual(obj.codigo_grade_programa, 0)
         self.assertEqual(obj.descricao_grade_programa, "NAO INFORMADA")
+        self.assertEqual(obj.tipo_grade_programa, 0)
 
     def test_turma_itinerario_ensino_medio_str(self) -> None:
         obj = TurmaItinerarioEnsinoMedio(nome="Itinerário A", serie="3")
