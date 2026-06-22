@@ -40,5 +40,16 @@
   {"model": "pedagogico.turmaitinerarioensinomedio", "pk": 47, "fields": {"nome": "Microrganismos, nutrição e qualidade de vida, vacinas e indústria farmacológica",                  "serie": 3}},
   {"model": "pedagogico.turmaitinerarioensinomedio", "pk": 49, "fields": {"nome": "Vida na terra, no espaço e no laboratório de robótica",                                            "serie": 3}},
   {"model": "pedagogico.turmaitinerarioensinomedio", "pk": 50, "fields": {"nome": "Diversidade e direitos como expressão das juventudes",                                             "serie": 3}},
-  {"model": "pedagogico.turmaitinerarioensinomedio", "pk": 51, "fields": {"nome": "Itinerário integrador",                                                                            "serie": 1}}
+  {"model": "pedagogico.turmaitinerarioensinomedio", "pk": 51, "fields": {"nome": "Itinerário integrador",                                                                            "serie": 1}},
+  {"model": "pedagogico.turmaitinerarioensinomedio", "pk": 52, "fields": {"nome": "Brasil em números",                                                                                "serie": 2}},
+  {"model": "pedagogico.turmaitinerarioensinomedio", "pk": 53, "fields": {"nome": "Brasil em números",                                                                                "serie": 3}},
+  {"model": "pedagogico.turmaitinerarioensinomedio", "pk": 54, "fields": {"nome": "Culturas juvenis e direitos das juventudes",                                                       "serie": 2}},
+  {"model": "pedagogico.turmaitinerarioensinomedio", "pk": 55, "fields": {"nome": "De olho nas redes, investigação e intervenção",                                                    "serie": 2}},
+  {"model": "pedagogico.turmaitinerarioensinomedio", "pk": 56, "fields": {"nome": "Literaturas na contemporaneidade",                                                                 "serie": 3}},
+  {"model": "pedagogico.turmaitinerarioensinomedio", "pk": 57, "fields": {"nome": "Núcleo de criação em linguagens",                                                                  "serie": 3}},
+  {"model": "pedagogico.turmaitinerarioensinomedio", "pk": 58, "fields": {"nome": "Experimentação e investigação, resolução de problemas",                                            "serie": 2}},
+  {"model": "pedagogico.turmaitinerarioensinomedio", "pk": 59, "fields": {"nome": "Culturas juvenis e direitos das juventudes",                                                       "serie": 2}},
+  {"model": "pedagogico.turmaitinerarioensinomedio", "pk": 60, "fields": {"nome": "De olho nas redes, investigação e intervenção",                                                    "serie": 2}},
+  {"model": "pedagogico.turmaitinerarioensinomedio", "pk": 61, "fields": {"nome": "Literatura na contemporaneidade",                                                                  "serie": 3}},
+  {"model": "pedagogico.turmaitinerarioensinomedio", "pk": 62, "fields": {"nome": "Núcleo de criação em linguagens",                                                                  "serie": 3}}
 ]

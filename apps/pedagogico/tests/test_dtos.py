@@ -114,6 +114,7 @@ def _turma_in_completa(**overrides: object) -> TurmaIn:
         "tipo_escola": 1,
         "codigo_grade_programa": 42,
         "descricao_grade_programa": " Programa Mais Educação ",
+        "tipo_grade_programa": 7,
     }
     defaults.update(overrides)
     return TurmaIn(**defaults)
@@ -149,6 +150,7 @@ class TurmaInTest(SimpleTestCase):
         self.assertEqual(
             data["descricao_grade_programa"], "Programa Mais Educação"
         )
+        self.assertEqual(data["tipo_grade_programa"], 7)
         self.assertEqual(data["transferido_em"], "agora")
 
     def test_data_inicio_turma_aware(self) -> None:
@@ -225,11 +227,13 @@ class TurmaInTest(SimpleTestCase):
             tipo_escola=None,
             codigo_grade_programa=None,
             descricao_grade_programa=None,
+            tipo_grade_programa=None,
         ).to_domain("agora")
 
         self.assertEqual(data["tipo_escola"], 0)
         self.assertEqual(data["codigo_grade_programa"], 0)
         self.assertEqual(data["descricao_grade_programa"], "NAO INFORMADA")
+        self.assertEqual(data["tipo_grade_programa"], 0)
 
     def test_descricao_grade_programa_vazia_vira_default(self) -> None:
         data = _turma_in_completa(descricao_grade_programa="   ").to_domain(
@@ -238,7 +242,7 @@ class TurmaInTest(SimpleTestCase):
         self.assertEqual(data["descricao_grade_programa"], "NAO INFORMADA")
 
     def test_ordem_posicional_alinha_com_select(self) -> None:
-        """As 3 últimas colunas do SELECT mapeiam os campos corretos."""
+        """As 4 últimas colunas do SELECT mapeiam os campos corretos."""
         row = (
             123456,
             2025,
@@ -267,6 +271,7 @@ class TurmaInTest(SimpleTestCase):
             7,
             42,
             " Programa Mais Educação ",
+            9,
         )
 
         dto = TurmaIn(*row)
@@ -277,3 +282,4 @@ class TurmaInTest(SimpleTestCase):
         self.assertEqual(
             data["descricao_grade_programa"], "Programa Mais Educação"
         )
+        self.assertEqual(data["tipo_grade_programa"], 9)

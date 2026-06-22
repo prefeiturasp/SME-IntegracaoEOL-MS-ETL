@@ -519,6 +519,7 @@ class EtlPedagogicoService(BaseEtlService):
                     "tipo_escola",
                     "codigo_grade_programa",
                     "descricao_grade_programa",
+                    "tipo_grade_programa",
                     "transferido_em",
                 ),
                 unique_fields=("codigo",),
