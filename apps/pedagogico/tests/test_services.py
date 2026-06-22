@@ -509,6 +509,153 @@ class TestPedagogicoService(TestCase):
         chave = _chave_grupo(row)
         self.assertEqual(chave[-1], date.min)
 
+    def test_iter_chunks_substitui_placeholder_por_ano_letivo(self) -> None:
+        """SQL com ``?`` itera uma vez por ano letivo do EOL."""
+        self.service._cache_anos = [2024, 2025]
+        self.mock_eol.iter_query.side_effect = [
+            [[("a",)]],
+            [[("b",)]],
+        ]
+
+        chunks = list(self.service._iter_chunks("SELECT * WHERE ano = ?"))
+
+        self.assertEqual(chunks, [[("a",)], [("b",)]])
+        self.assertEqual(
+            [c.args[0] for c in self.mock_eol.iter_query.call_args_list],
+            ["SELECT * WHERE ano = 2024", "SELECT * WHERE ano = 2025"],
+        )
+
+    def test_iter_chunks_sem_placeholder_executa_query_unica(self) -> None:
+        """SQL sem ``?`` é repassado direto ao EOL."""
+        self.mock_eol.iter_query.return_value = [[("x",)]]
+
+        chunks = list(self.service._iter_chunks("SELECT 1"))
+
+        self.assertEqual(chunks, [[("x",)]])
+        self.mock_eol.iter_query.assert_called_once_with("SELECT 1")
+
+    def test_criar_transform_fase_sem_factory_usa_implementacao_base(
+        self,
+    ) -> None:
+        """Fase sem transform específico cai no transform da base."""
+        config = self.service._fases[2]  # atribuicao_componente
+        config_sem_factory = PhaseConfig(
+            nome="fase_generica",
+            sql=config.sql,
+            table_name=config.table_name,
+            model_class=config.model_class,
+            dto_in=config.dto_in,
+            pk_field=config.pk_field,
+            update_fields=config.update_fields,
+            unique_fields=config.unique_fields,
+        )
+
+        with patch.object(
+            self.service.__class__.__bases__[0], "_criar_transform"
+        ) as mock_base:
+            self.service._criar_transform(config_sem_factory)
+
+        mock_base.assert_called_once_with(config_sem_factory)
+
+    def test_criar_transform_atribuicao_componente_monta_pk_composta(
+        self,
+    ) -> None:
+        """Transform de atribuição compõe PK turma-componente-professor."""
+        config = self.service._fases[2]
+        transform = self.service._criar_transform(config)
+
+        result = transform(
+            ("T1", 513, "RF9", False, 2025, None, None, None, None, None)
+        )
+        assert result is not None
+        pk, hash_val, obj = result
+
+        self.assertEqual(pk, "T1-513-RF9")
+        self.assertEqual(len(hash_val), 64)
+        self.assertEqual(obj.turma_codigo, "T1")
+        self.assertEqual(obj.componente_codigo, 513)
+        self.assertEqual(obj.professor, "RF9")
+
+    def test_criar_transform_atribuicao_componente_pula_sem_chave(
+        self,
+    ) -> None:
+        """Atribuição sem turma ou professor é descartada."""
+        config = self.service._fases[2]
+        transform = self.service._criar_transform(config)
+
+        self.assertIsNone(
+            transform(
+                (None, 513, "RF9", False, 2025, None, None, None, None, None)
+            )
+        )
+        self.assertIsNone(
+            transform(
+                ("T1", 513, None, False, 2025, None, None, None, None, None)
+            )
+        )
+
+    def test_processar_batch_sem_itens_validos_retorna_zero_escritos(
+        self,
+    ) -> None:
+        """Lote com apenas linhas inválidas não chama sync_batch."""
+        config = self.service._fases[1]
+
+        with patch.object(self.service, "sync_batch") as mock_sync:
+            escritos, ignorados = self.service._processar_batch(
+                config=config,
+                chunk=[(None, 513, 1105), ("T1", None, 1105)],
+                transform=self.service._criar_transform(config),
+                batch_num=0,
+            )
+
+        self.assertEqual((escritos, ignorados), (0, 2))
+        mock_sync.assert_not_called()
+
+    def test_anos_letivos_filtra_por_ano_letivo_minimo(self) -> None:
+        """Quando ``ano_letivo`` é informado, anos anteriores são removidos."""
+        service = EtlPedagogicoService(
+            db_alias="default",
+            eol=self.mock_eol,
+            id_execucao=uuid4(),
+            ano_letivo=2025,
+        )
+        self.mock_eol.iter_query.return_value = [[(2023,), (2024,), (2025,)]]
+
+        anos = service._anos_letivos()
+
+        self.assertEqual(anos, [2025])
+
+    def test_executar_fase_roteia_agrupamentos_para_metodo_dedicado(
+        self,
+    ) -> None:
+        """Fase de agrupamento é tratada pelo método dedicado."""
+        config = self.service._fases[3]
+
+        with patch.object(
+            self.service, "_executar_agrupamentos"
+        ) as mock_agrup:
+            mock_agrup.return_value = PipelineMetrics(total_escritos=5)
+            metrics = self.service._executar_fase(config, numero_fase=4)
+
+        mock_agrup.assert_called_once_with(config)
+        self.assertEqual(metrics.total_escritos, 5)
+
+    def test_executar_ignora_fases_anteriores_e_nao_selecionadas(
+        self,
+    ) -> None:
+        """``executar`` pula fases abaixo do início e fora da seleção."""
+        self.service._fases_selecionadas = ["turma"]
+
+        with (
+            patch.object(self.service, "_executar_fase") as mock_fase,
+            patch.object(self.service, "_registrar_auditoria_fase"),
+        ):
+            mock_fase.return_value = PipelineMetrics(total_escritos=3)
+            resultado = self.service.executar(fase_inicial=2)
+
+        self.assertEqual(mock_fase.call_count, 1)
+        self.assertEqual(resultado, {"turma": 3})
+
     @patch("apps.core.libs.base_etl_service.Queue")
     def test_executar_fase_timeout_producer_levanta_runtime_error(
         self, mock_queue: MagicMock

@@ -566,7 +566,8 @@ class BaseEtlService:
     ) -> list[Any] | None:
         timeout = getattr(settings, "THREAD_POOL_CHUNK_TIMEOUT", 30) or 0
         if timeout <= 0:
-            return queue.get()
+            chunk_sem_timeout: list | None = queue.get()
+            return chunk_sem_timeout
 
         max_espera = getattr(settings, "PRODUCER_MAX_WAIT_SECONDS", 600)
         tempo_espera = 0.0
