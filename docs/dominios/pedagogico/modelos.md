@@ -41,17 +41,17 @@ Atribuição real de professor a uma turma e componente. Separa a existência do
 
 ## 4. AgrupamentoAtribuicaoTerritorioSaber
 
-Agrupamento de componentes de território atribuídos a um professor numa mesma turma. `cod_agrupamento` é hash MD5 determinístico da chave natural.
+Agrupamento de componentes de território atribuídos a um professor numa mesma turma. `cod_agrupamento` é o identificador público/legado do agrupamento retornado nos endpoints, mas não identifica sozinho uma linha física da tabela.
 
 - **Tabela:** `agrupamento_atribuicao_territorio_saber`
 - **Fonte:** `SQL_ATRIBUICOES_TERRITORIO_SABER`
-- **Unique:** `cod_agrupamento` (BigIntegerField)
-- **Índices:** `cod_turma`, `rf_professor`, `ano_letivo`
+- **Unique:** `(cod_turma, cod_territorio_saber, cod_experiencia_pedagogica, rf_professor, dt_inicio_atribuicao, cod_componentes_curriculares)` com `nulls_distinct=False`
+- **Índices:** `cod_agrupamento`, `cod_turma`, `rf_professor`, `ano_letivo`
 - **Branches da query:** SME (`atribuicao_aula + v_cargo_base_cotic + v_servidor_cotic`) e externo (`atribuicao_externo + contrato_externo + pessoa`).
 - **Território:** resolvido por `turma_grade_territorio_experiencia`.
 - **Filtro de situação:** `st_turma_escola IN ('O', 'A', 'C', 'E')`
 - **Alimenta:** `territorio-saber/agrupamentos-correlacionados`, `territorio-saber/agrupamentos`
-- **Nota:** `cod_componentes_curriculares` armazena os códigos como CSV; o ETL faz o split e popula `ComponenteCurricularAgrupamento`.
+- **Nota:** `cod_componentes_curriculares` armazena os códigos como CSV; o ETL faz o split e popula `ComponenteCurricularAgrupamento`. O mesmo `cod_agrupamento` pode aparecer em mais de uma linha quando o legado reaproveita o identificador para outro professor ou outro recorte histórico.
 
 ## 5. ComponenteCurricularAgrupamento
 
@@ -59,8 +59,8 @@ Itens de um agrupamento de território do saber — uma linha por componente. De
 
 - **Tabela:** `componente_curricular_agrupamento`
 - **Fonte:** derivada de `AgrupamentoAtribuicaoTerritorioSaber`; o ETL faz split do CSV `cod_componentes_curriculares`.
-- **Unique:** `(componente_codigo, turma_codigo, codigo_agrupamento)`
-- **Índices:** `turma_codigo`, `componente_codigo`
+- **Unique:** `(componente_codigo, turma_codigo, codigo_agrupamento, rf_professor)` com `nulls_distinct=False`
+- **Índices:** `turma_codigo`, `componente_codigo`, `codigo_agrupamento`
 - **Alimenta:** `codigosTerritoriosAgrupamento` nos endpoints de perfil e planejamento
 
 ## 6. GradeComponenteCurricular

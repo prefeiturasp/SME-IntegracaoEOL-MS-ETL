@@ -11,8 +11,8 @@ O controle incremental é feito por hash SHA-256 dos `update_fields` de cada lin
 | `componente_curricular` | `codigo` |
 | `componente_turma` | `(turma_codigo, componente_codigo)` |
 | `atribuicao_componente` | `(turma_codigo, componente_codigo, professor)` |
-| `agrupamento_atribuicao_territorio_saber` | `cod_agrupamento` |
-| `componente_curricular_agrupamento` | `(componente_codigo, turma_codigo, codigo_agrupamento)` |
+| `agrupamento_atribuicao_territorio_saber` | `(cod_turma, cod_territorio_saber, cod_experiencia_pedagogica, rf_professor, dt_inicio_atribuicao, cod_componentes_curriculares)` |
+| `componente_curricular_agrupamento` | `(componente_codigo, turma_codigo, codigo_agrupamento, rf_professor)` |
 | `grade_componente_curricular` | `(codigo_componente_curricular, ano_letivo, modalidade, codigo_serie_ensino)` |
 | `turma` | `codigo` |
 
@@ -23,3 +23,5 @@ Fases 2 e 3 podem emitir `None` do transform quando a linha está incompleta (ex
 ## Fase 4 — escrita em duas tabelas
 
 A fase de agrupamentos escreve sequencialmente em `AgrupamentoAtribuicaoTerritorioSaber` e depois em `ComponenteCurricularAgrupamento`, em lotes de 500. O resultado da fase reporta ambas as contagens separadamente no dict de retorno de `executar()`.
+
+`cod_agrupamento` permanece como ID de contrato/legado e possui índice para consulta, mas não é chave única: a mesma origem de agrupamento pode ter linhas distintas por professor ou histórico.

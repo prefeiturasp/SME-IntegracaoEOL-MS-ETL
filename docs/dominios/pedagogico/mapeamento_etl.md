@@ -70,11 +70,11 @@ caso a linha não deve existir.
 
 **Query:** `SQL_ATRIBUICOES_TERRITORIO_SABER` (UNION ALL SME RF + Externo CPF, todos os anos)
 
-O agrupamento ocorre em Python via `_agrupar()`. Somente grupos com 2+ componentes geram registros.
+O agrupamento ocorre em Python via `_agrupar()`. Somente grupos com 2+ componentes geram registros. Quando existe histórico equivalente no destino, o ETL preserva/reutiliza o `cod_agrupamento` legado; para grupos novos, gera o próximo identificador sequencial a partir do piso legado.
 
 | Campo Origem | Campo Destino (`AgrupamentoAtribuicaoTerritorioSaber`) | Transformação |
 | :--- | :--- | :--- |
-| chave natural do grupo | `cod_agrupamento` | MD5 `[:15]` → `int` (BigInteger) |
+| identificador público do grupo | `cod_agrupamento` | reutiliza histórico equivalente; senão, próximo sequencial `>= 800000` |
 | `codigo_territorio_saber` | `cod_territorio_saber` | direto |
 | `codigo_experiencia_pedagogica` | `cod_experiencia_pedagogica` | nullable |
 | `data_atribuicao` | `dt_inicio_atribuicao` | `make_aware()` |
@@ -89,9 +89,11 @@ O agrupamento ocorre em Python via `_agrupar()`. Somente grupos com 2+ component
 | :--- | :--- | :--- |
 | componente do grupo | `componente_codigo` | `int()` |
 | `codigo_turma` | `turma_codigo` | `str()` |
-| hash do grupo | `codigo_agrupamento` | mesmo `cod_agrupamento` |
+| identificador público do grupo | `codigo_agrupamento` | mesmo `cod_agrupamento` |
 | `rf_professor` | `rf_professor` | direto |
 | `ano_letivo` | `ano_letivo` | direto |
+
+**Chave de persistência:** em `AgrupamentoAtribuicaoTerritorioSaber`, a identidade da linha é `(cod_turma, cod_territorio_saber, cod_experiencia_pedagogica, rf_professor, dt_inicio_atribuicao, cod_componentes_curriculares)`. Em `ComponenteCurricularAgrupamento`, a identidade inclui também `rf_professor`. Por isso `cod_agrupamento` deve ser tratado como ID de contrato, não como unique físico.
 
 ---
 

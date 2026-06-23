@@ -82,9 +82,9 @@ O agrupamento representa o conjunto como uma unidade: o professor planeja para o
 - Tabela `componente_curricular_agrupamento`: uma linha por componente dentro do agrupamento (split do CSV acima). Alimenta `codigosTerritoriosAgrupamento` nos endpoints.
 - **Regra:** somente grupos com 2 ou mais componentes distintos geram agrupamento. Atribuição isolada de um único componente de território não é agrupada.
 
-**Chave de agrupamento:** a combinação `(turma, território, experiência pedagógica, professor, data de atribuição, data de disponibilização)` define um grupo. Atribuições com datas de disponibilização em dias diferentes formam grupos distintos.
+**Chave de agrupamento:** a combinação `(turma, território, experiência pedagógica, professor, data de atribuição, componentes)` define a linha persistida. A data de disponibilização fica como atributo de vigência/encerramento, mas não deve colapsar professores ou composições diferentes.
 
-**`cod_agrupamento`:** ID gerado por hash MD5 determinístico da chave natural + lista ordenada de componentes. Sempre `>= 800.000` para não colidir com IDs reais de componentes do EOL (constante `COMPONENTE_AGRUPAMENTO_TERRITORIO_SABER_ID_INICIAL` do legado C#).
+**`cod_agrupamento`:** ID público/legado do agrupamento. O ETL preserva o código quando encontra histórico equivalente e gera novos IDs acima de `800.000` quando necessário. Ele pode se repetir em mais de uma linha física, por exemplo para outro professor ou outro recorte histórico.
 
 ---
 
@@ -326,9 +326,9 @@ Alguns componentes são variações de um componente "pai" — ex: componentes f
 
 ### `cod_agrupamento`
 
-ID único de um agrupamento de território. Gerado por hash MD5 determinístico sobre a chave natural `(turma, território, experiência, professor, data_atribuicao, componentes_ordenados)`.
+Identificador público de um agrupamento de território usado nos contratos do legado e do MS. Não é unique físico da tabela `agrupamento_atribuicao_territorio_saber`.
 
-Sempre `>= 800.000` (piso definido pela constante `COMPONENTE_AGRUPAMENTO_TERRITORIO_SABER_ID_INICIAL` do legado C#, para não colidir com IDs de componentes curriculares reais do EOL, que ficam abaixo desse valor).
+Quando há histórico equivalente, o ETL reutiliza o código legado. Para novos agrupamentos, usa IDs `>= 800.000` (piso definido pela constante `COMPONENTE_AGRUPAMENTO_TERRITORIO_SABER_ID_INICIAL` do legado C#, para não colidir com IDs de componentes curriculares reais do EOL).
 
 ---
 
