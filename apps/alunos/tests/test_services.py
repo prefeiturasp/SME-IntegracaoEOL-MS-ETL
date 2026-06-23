@@ -93,10 +93,42 @@ class TestAlunosService(TestCase):
         config = self.service._fases[5]
         transform = self.service._criar_transform(config)
 
-        row = (123, 456, "01", None, None, 7, 1, None, "5A", 5, 1)
+        # Ordem POSICIONAL deve casar com MatriculaTurmaIn:
+        # ... codigo_etapa_ensino, sequencia, origem_atual, ano_letivo_turma
+        row = (
+            123,
+            456,
+            "01",
+            None,
+            None,
+            7,
+            1,
+            None,
+            None,
+            "5A",
+            5,
+            1,
+            True,
+            2026,
+        )
         pk, _, _ = transform(row)
 
         self.assertEqual(pk, "123-456-7-1")
+
+    def test_sql_matricula_turma_ordem_final_casa_com_dto(self) -> None:
+        """Ordem do SELECT final casa com MatriculaTurmaIn (din posicional)."""
+        antes_from = SQL_MATRICULA_TURMA.split(
+            "FROM CteMatriculaTurmaSequencia"
+        )[0]
+        select_final = antes_from[antes_from.rfind(")") + 1 :]
+        self.assertLess(
+            select_final.index("sequencia"),
+            select_final.index("origem_atual"),
+        )
+        self.assertLess(
+            select_final.index("origem_atual"),
+            select_final.index("ano_letivo_turma"),
+        )
 
     def test_sql_aluno_expoe_cns_antes_de_data_atualizacao(self) -> None:
         """Valida que a query segue a ordem esperada pelo AlunoIn."""

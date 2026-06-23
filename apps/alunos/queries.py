@@ -228,7 +228,21 @@ CteMatriculaTurmaSequencia AS (
         ) AS sequencia
     FROM CteMatriculaTurma mt
 )
-SELECT *
+SELECT
+    cd_matricula
+  , codigo_turma
+  , numero_chamada
+  , data_situacao
+  , data_situacao_data_hora
+  , codigo_situacao_aluno
+  , codigo_tipo_turma
+  , tipo_turno
+  , data_atualizacao_tabela
+  , nome_turma
+  , codigo_etapa_ensino
+  , sequencia
+  , origem_atual
+  , ano_letivo_turma
 FROM CteMatriculaTurmaSequencia;
 """
 
