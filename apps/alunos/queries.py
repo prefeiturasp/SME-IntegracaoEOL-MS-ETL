@@ -55,6 +55,10 @@ SELECT
    , ra.nm_mae_responsavel AS nome_mae
    , ra.cd_ddd_celular_responsavel AS ddd_celular
    , ra.nr_celular_responsavel AS numero_celular
+   , ra.cd_ddd_telefone_fixo_responsavel AS ddd_telefone_fixo
+   , ra.nr_telefone_fixo_responsavel AS nr_telefone_fixo
+   , ra.cd_ddd_telefone_comercial_responsavel AS ddd_telefone_comercial
+   , ra.nr_telefone_comercial_responsavel AS nr_telefone_comercial
    , ra.in_autoriza_envio_sms AS autoriza_sms
    , e.ci_endereco AS endereco_id
    , e.cd_nr_endereco AS numero_endereco
@@ -179,9 +183,12 @@ CteMatriculaTurma AS (
       , mt.dt_situacao_aluno AS data_situacao_data_hora
       , mt.cd_situacao_aluno AS codigo_situacao_aluno
       , te.cd_tipo_turma AS codigo_tipo_turma
+      , te.cd_tipo_turno AS tipo_turno
       , mt.dt_atlz_tab AS data_atualizacao_tabela
       , te.dc_turma_escola AS nome_turma
       , etapa.cd_etapa_ensino AS codigo_etapa_ensino
+      , CAST(1 AS BIT) AS origem_atual
+      , te.an_letivo AS ano_letivo_turma
     FROM matricula_turma_escola mt
     INNER JOIN turma_escola te
         ON te.cd_turma_escola = mt.cd_turma_escola
@@ -198,9 +205,12 @@ CteMatriculaTurma AS (
       , mt.dt_situacao_aluno AS data_situacao_data_hora
       , mt.cd_situacao_aluno AS codigo_situacao_aluno
       , te.cd_tipo_turma AS codigo_tipo_turma
+      , te.cd_tipo_turno AS tipo_turno
       , mt.dt_atlz_tab AS data_atualizacao_tabela
       , te.dc_turma_escola AS nome_turma
       , etapa.cd_etapa_ensino AS codigo_etapa_ensino
+      , CAST(0 AS BIT) AS origem_atual
+      , te.an_letivo AS ano_letivo_turma
     FROM historico_matricula_turma_escola mt
     INNER JOIN turma_escola te
         ON te.cd_turma_escola = mt.cd_turma_escola
@@ -218,7 +228,21 @@ CteMatriculaTurmaSequencia AS (
         ) AS sequencia
     FROM CteMatriculaTurma mt
 )
-SELECT *
+SELECT
+    cd_matricula
+  , codigo_turma
+  , numero_chamada
+  , data_situacao
+  , data_situacao_data_hora
+  , codigo_situacao_aluno
+  , codigo_tipo_turma
+  , tipo_turno
+  , data_atualizacao_tabela
+  , nome_turma
+  , codigo_etapa_ensino
+  , sequencia
+  , origem_atual
+  , ano_letivo_turma
 FROM CteMatriculaTurmaSequencia;
 """
 
@@ -368,6 +392,8 @@ SELECT aluno.cd_aluno                        codigo_aluno,
        mte.dt_situacao_aluno                 data_situacao_matricula,
        etapa_ensino.cd_etapa_ensino AS codigo_etapa_ensino,
        ciclo_ensino.cd_ciclo_ensino AS codigo_ciclo_ensino,
+       etapa_ensino.dc_etapa_ensino AS descricao_etapa_ensino,
+       ciclo_ensino.dc_ciclo_ensino AS descricao_ciclo_ensino,
        serie_ensino.sg_resumida_serie AS serie_resumida,
        etapa_ensino.cd_etapa_ensino as codigo_modalidade_turma
 FROM   v_aluno_cotic aluno

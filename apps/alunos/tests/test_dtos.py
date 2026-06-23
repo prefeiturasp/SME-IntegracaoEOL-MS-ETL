@@ -155,6 +155,10 @@ class ResponsavelAlunoInTest(SimpleTestCase):
             email="pai@email.com",
             ddd_celular="11",
             numero_celular="999",
+            ddd_telefone_fixo="11",
+            nr_telefone_fixo="33334444",
+            ddd_telefone_comercial="11",
+            nr_telefone_comercial="55556666",
             autoriza_sms=1,
             data_nascimento=date(1980, 5, 20),
             nome_mae="Mae do Responsavel",
@@ -174,6 +178,8 @@ class ResponsavelAlunoInTest(SimpleTestCase):
         self.assertEqual(data["codigo_responsavel"], 100)
         self.assertEqual(data["aluno_id"], 1)
         self.assertEqual(data["email"], "pai@email.com")
+        self.assertEqual(data["ddd_telefone_fixo"], "11")
+        self.assertEqual(data["nr_telefone_fixo"], "33334444")
         self.assertEqual(data["data_nascimento"], date(1980, 5, 20))
         self.assertEqual(data["nome_mae"], "Mae do Responsavel")
 
@@ -189,6 +195,10 @@ class ResponsavelAlunoInTest(SimpleTestCase):
             "Mae do Responsavel",
             "11",
             "999",
+            "11",
+            "33334444",
+            "11",
+            "55556666",
             1,
             10,
             "100",
@@ -207,6 +217,7 @@ class ResponsavelAlunoInTest(SimpleTestCase):
 
         self.assertEqual(data["ddd_celular"], "11")
         self.assertEqual(data["numero_celular"], "999")
+        self.assertEqual(data["nr_telefone_comercial"], "55556666")
         self.assertEqual(data["data_nascimento"], date(1980, 5, 20))
         self.assertEqual(data["nome_mae"], "Mae do Responsavel")
 
@@ -286,6 +297,7 @@ class MatriculaTurmaInTest(SimpleTestCase):
             data_situacao_data_hora=datetime(2023, 3, 3, 10, 20, 30),
             codigo_situacao_aluno=1,
             codigo_tipo_turma=1,
+            tipo_turno=2,
             data_atualizacao_tabela=None,
             nome_turma=" 5A ",
             codigo_etapa_ensino=5,
@@ -297,6 +309,7 @@ class MatriculaTurmaInTest(SimpleTestCase):
         self.assertEqual(data["numero_chamada"], "A1")
         self.assertEqual(data["nome_turma"], "5A")
         self.assertEqual(data["codigo_etapa_ensino"], 5)
+        self.assertEqual(data["tipo_turno"], 2)
         self.assertEqual(data["sequencia"], 2)
         self.assertFalse(
             timezone.is_naive(data["data_situacao_aluno_data_hora"])
@@ -443,7 +456,7 @@ class DadosAlunoAcompanhamentoEscolarInTest(SimpleTestCase):
 
     def _make(self, **kwargs: Any) -> DadosAlunoAcompanhamentoEscolarIn:
         """Cria instância com campos padrão sobrescrevíveis via kwargs."""
-        defaults = {
+        defaults: dict[str, Any] = {
             "codigo_aluno": 1001,
             "nome": "JOAO SILVA",
             "nome_social": None,
@@ -463,6 +476,8 @@ class DadosAlunoAcompanhamentoEscolarInTest(SimpleTestCase):
             "data_situacao_matricula": date(2024, 2, 1),
             "codigo_etapa_ensino": 5,
             "codigo_ciclo_ensino": 2,
+            "descricao_etapa_ensino": "Ensino Fundamental",
+            "descricao_ciclo_ensino": "Ciclo Interdisciplinar",
             "serie_resumida": "5A",
             "codigo_modalidade_turma": 5,
         }
@@ -483,6 +498,10 @@ class DadosAlunoAcompanhamentoEscolarInTest(SimpleTestCase):
         self.assertEqual(data["codigo_turma"], 555)
         self.assertEqual(data["situacao_matricula"], "Ativo")
         self.assertEqual(data["codigo_etapa_ensino"], 5)
+        self.assertEqual(data["descricao_etapa_ensino"], "Ensino Fundamental")
+        self.assertEqual(
+            data["descricao_ciclo_ensino"], "Ciclo Interdisciplinar"
+        )
         self.assertEqual(data["serie_resumida"], "5A")
 
     def test_to_domain_campos_opcionais_nulos(self) -> None:
@@ -496,6 +515,8 @@ class DadosAlunoAcompanhamentoEscolarInTest(SimpleTestCase):
             data_situacao_matricula=None,
             codigo_etapa_ensino=None,
             codigo_ciclo_ensino=None,
+            descricao_etapa_ensino=None,
+            descricao_ciclo_ensino=None,
             serie_resumida=None,
             codigo_modalidade_turma=None,
         ).to_domain()
@@ -506,6 +527,7 @@ class DadosAlunoAcompanhamentoEscolarInTest(SimpleTestCase):
         self.assertIsNone(data["tipo_responsavel"])
         self.assertIsNone(data["sigla_dre"])
         self.assertIsNone(data["codigo_etapa_ensino"])
+        self.assertIsNone(data["descricao_etapa_ensino"])
         self.assertIsNone(data["serie_resumida"])
 
     def test_strip_em_strings(self) -> None:

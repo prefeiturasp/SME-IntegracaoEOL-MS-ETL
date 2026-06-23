@@ -93,10 +93,42 @@ class TestAlunosService(TestCase):
         config = self.service._fases[5]
         transform = self.service._criar_transform(config)
 
-        row = (123, 456, "01", None, None, 7, 1, None, "5A", 5, 1)
+        # Ordem POSICIONAL deve casar com MatriculaTurmaIn:
+        # ... codigo_etapa_ensino, sequencia, origem_atual, ano_letivo_turma
+        row = (
+            123,
+            456,
+            "01",
+            None,
+            None,
+            7,
+            1,
+            None,
+            None,
+            "5A",
+            5,
+            1,
+            True,
+            2026,
+        )
         pk, _, _ = transform(row)
 
         self.assertEqual(pk, "123-456-7-1")
+
+    def test_sql_matricula_turma_ordem_final_casa_com_dto(self) -> None:
+        """Ordem do SELECT final casa com MatriculaTurmaIn (din posicional)."""
+        antes_from = SQL_MATRICULA_TURMA.split(
+            "FROM CteMatriculaTurmaSequencia"
+        )[0]
+        select_final = antes_from[antes_from.rfind(")") + 1 :]
+        self.assertLess(
+            select_final.index("sequencia"),
+            select_final.index("origem_atual"),
+        )
+        self.assertLess(
+            select_final.index("origem_atual"),
+            select_final.index("ano_letivo_turma"),
+        )
 
     def test_sql_aluno_expoe_cns_antes_de_data_atualizacao(self) -> None:
         """Valida que a query segue a ordem esperada pelo AlunoIn."""
@@ -111,6 +143,14 @@ class TestAlunosService(TestCase):
     def test_sqls_expoem_campos_complementares_dos_dtos(self) -> None:
         """Valida campos esperados pelos DTOs nas fases principais."""
         self.assertIn("e.ci_endereco AS endereco_id", SQL_RESPONSAVEL)
+        self.assertIn(
+            "ra.cd_ddd_telefone_fixo_responsavel AS ddd_telefone_fixo",
+            SQL_RESPONSAVEL,
+        )
+        self.assertIn(
+            "ra.nr_telefone_comercial_responsavel AS nr_telefone_comercial",
+            SQL_RESPONSAVEL,
+        )
         self.assertIn(
             "ra.dt_atualizacao_tabela AS data_atualizacao_tabela",
             SQL_RESPONSAVEL,
@@ -333,6 +373,7 @@ class TestAlunosService(TestCase):
             data_situacao_data_hora=None,
             codigo_situacao_aluno=None,
             codigo_tipo_turma=None,
+            tipo_turno=None,
             data_atualizacao_tabela=None,
             nome_turma=None,
             codigo_etapa_ensino=None,
@@ -490,6 +531,8 @@ class TestAlunosService(TestCase):
             None,
             5,
             2,
+            "Ensino Fundamental",
+            "Ciclo Interdisciplinar",
             "5A",
             5,
         )
@@ -523,6 +566,8 @@ class TestAlunosService(TestCase):
             None,
             5,
             2,
+            "Ensino Fundamental",
+            "Ciclo Interdisciplinar",
             "5A",
             5,
         )
