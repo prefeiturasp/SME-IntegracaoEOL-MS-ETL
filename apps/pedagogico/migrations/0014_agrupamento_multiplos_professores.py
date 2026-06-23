@@ -4,7 +4,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("pedagogico", "0011_turma_codigo_etapa_ciclo_ensino"),
+        ("pedagogico", "0013_turma_tipo_grade_programa"),
     ]
 
     operations = [
