@@ -438,6 +438,8 @@ class EtlPedagogicoService(BaseEtlService):
                 pk_field=["turma_codigo", "componente_codigo"],
                 update_fields=(
                     "codigo_componente_territorio_saber",
+                    "desc_territorio_saber",
+                    "desc_experiencia_pedagogica",
                     "transferido_em",
                 ),
                 unique_fields=("turma_codigo", "componente_codigo"),

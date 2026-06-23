@@ -22,14 +22,24 @@ Resumo de origem e destino por fase. Para o mapeamento campo a campo e decisões
 **Query:** `SQL_COMPONENTE_TURMA` (parâmetro `?` por ano letivo)
 
 Estrutura turma × componente, sem professor e sem regra de planejamento.
-Serve para dizer quais componentes existem em cada turma real do EOL.
+Serve para dizer quais componentes existem em cada turma real do EOL. Para
+componentes de Território do Saber, também materializa a descrição contextual
+da turma, porque essa descrição vem da grade de território/experiência e não do
+catálogo base `componente_curricular`.
 
 | Campo Origem | Campo Destino | Transformação |
 | :--- | :--- | :--- |
 | `cd_turma_escola` | `turma_codigo` | `str()` ou `None` |
 | `cd_componente_curricular` | `componente_codigo` | `int()` |
 | presença em `turma_grade_territorio_experiencia` | `codigo_componente_territorio_saber` | código do componente ou `None` |
+| `território_saber.dc_territorio_saber` | `desc_territorio_saber` | texto contextual do território ou `None` |
+| `tipo_experiencia_pedagogica.dc_experiencia_pedagogica` | `desc_experiencia_pedagogica` | texto contextual da experiência ou `None` |
 | — | `transferido_em` | `timezone.now()` |
+
+Quando `codigo_componente_territorio_saber` está preenchido, o MS Pedagógico
+usa esses campos para compor a descrição exibida: `desc_territorio_saber -
+desc_experiencia_pedagogica`. Se a experiência pedagógica estiver ausente,
+usa apenas `desc_territorio_saber`.
 
 ---
 

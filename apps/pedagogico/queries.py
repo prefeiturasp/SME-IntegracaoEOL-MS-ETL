@@ -48,16 +48,30 @@ ORDER BY an_letivo
 #   Branch 1: turmas com série (via serie_turma_escola)
 #   Branch 2: turmas de programa (via turma_escola_grade_programa)
 #
-# codigo_componente_territorio_saber resolvido via CTE lida uma vez.
+# codigo_componente_territorio_saber e descrições resolvidos pela grade de
+# Território do Saber.
 SQL_COMPONENTE_TURMA = """
 WITH cte_territorio AS (
-    SELECT DISTINCT cd_componente_curricular
-    FROM turma_grade_territorio_experiencia (NOLOCK)
+    SELECT
+        tgt.cd_componente_curricular,
+        ter.dc_territorio_saber,
+        exp.dc_experiencia_pedagogica,
+        ROW_NUMBER() OVER (
+            PARTITION BY tgt.cd_componente_curricular
+            ORDER BY tgt.cd_territorio_saber, tgt.cd_experiencia_pedagogica
+        ) AS rn
+    FROM turma_grade_territorio_experiencia (NOLOCK) tgt
+    INNER JOIN território_saber (NOLOCK) ter
+        ON ter.cd_territorio_saber = tgt.cd_territorio_saber
+    INNER JOIN tipo_experiencia_pedagogica (NOLOCK) exp
+        ON exp.cd_experiencia_pedagogica = tgt.cd_experiencia_pedagogica
 )
 SELECT DISTINCT
     te.cd_turma_escola                                                                  AS turma_codigo,
     cc.cd_componente_curricular                                                         AS componente_codigo,
-    tgt.cd_componente_curricular                                                        AS codigo_componente_territorio_saber
+    tgt.cd_componente_curricular                                                        AS codigo_componente_territorio_saber,
+    ter.dc_territorio_saber                                                             AS desc_territorio_saber,
+    exp.dc_experiencia_pedagogica                                                       AS desc_experiencia_pedagogica
 FROM turma_escola (NOLOCK) te
 INNER JOIN serie_turma_escola (NOLOCK) ste ON ste.cd_turma_escola = te.cd_turma_escola
 INNER JOIN serie_turma_grade (NOLOCK) stg
@@ -67,7 +81,13 @@ INNER JOIN grade (NOLOCK) g             ON g.cd_grade = eg.cd_grade
 INNER JOIN grade_componente_curricular (NOLOCK) gcc ON gcc.cd_grade = g.cd_grade
 INNER JOIN componente_curricular (NOLOCK) cc
     ON cc.cd_componente_curricular = gcc.cd_componente_curricular AND cc.dt_cancelamento IS NULL
-LEFT JOIN cte_territorio tgt            ON tgt.cd_componente_curricular = cc.cd_componente_curricular
+LEFT JOIN turma_grade_territorio_experiencia (NOLOCK) tgt
+    ON tgt.cd_serie_grade = stg.cd_serie_grade
+   AND tgt.cd_componente_curricular = cc.cd_componente_curricular
+LEFT JOIN território_saber (NOLOCK) ter
+    ON ter.cd_territorio_saber = tgt.cd_territorio_saber
+LEFT JOIN tipo_experiencia_pedagogica (NOLOCK) exp
+    ON exp.cd_experiencia_pedagogica = tgt.cd_experiencia_pedagogica
 WHERE te.an_letivo = ?
   AND te.st_turma_escola IN ('O', 'A', 'C', 'E')
 UNION ALL
@@ -75,7 +95,9 @@ UNION ALL
 SELECT DISTINCT
     te.cd_turma_escola,
     cc.cd_componente_curricular,
-    tgt.cd_componente_curricular
+    tgt.cd_componente_curricular,
+    tgt.dc_territorio_saber,
+    tgt.dc_experiencia_pedagogica
 FROM turma_escola (NOLOCK) te
 INNER JOIN turma_escola_grade_programa (NOLOCK) tegp ON tegp.cd_turma_escola = te.cd_turma_escola
 INNER JOIN escola_grade (NOLOCK) teg    ON teg.cd_escola_grade = tegp.cd_escola_grade
@@ -83,7 +105,9 @@ INNER JOIN grade (NOLOCK) pg            ON pg.cd_grade = teg.cd_grade
 INNER JOIN grade_componente_curricular (NOLOCK) pgcc ON pgcc.cd_grade = teg.cd_grade
 INNER JOIN componente_curricular (NOLOCK) cc
     ON pgcc.cd_componente_curricular = cc.cd_componente_curricular AND cc.dt_cancelamento IS NULL
-LEFT JOIN cte_territorio tgt            ON tgt.cd_componente_curricular = cc.cd_componente_curricular
+LEFT JOIN cte_territorio tgt
+    ON tgt.cd_componente_curricular = cc.cd_componente_curricular
+   AND tgt.rn = 1
 WHERE te.an_letivo = ?
   AND te.st_turma_escola IN ('O', 'A', 'C', 'E')
 """

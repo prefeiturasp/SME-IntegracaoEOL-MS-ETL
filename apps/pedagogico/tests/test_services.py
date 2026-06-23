@@ -83,7 +83,7 @@ class TestPedagogicoService(TestCase):
         config = self.service._fases[1]
         transform = self.service._criar_transform(config)
 
-        result = transform(("T1", 513, 1105))
+        result = transform(("T1", 513, 1105, "Território", "Experiência"))
         assert result is not None
         pk, _, obj = result
 
@@ -91,6 +91,8 @@ class TestPedagogicoService(TestCase):
         self.assertEqual(obj.turma_codigo, "T1")
         self.assertEqual(obj.componente_codigo, 513)
         self.assertEqual(obj.codigo_componente_territorio_saber, 1105)
+        self.assertEqual(obj.desc_territorio_saber, "Território")
+        self.assertEqual(obj.desc_experiencia_pedagogica, "Experiência")
 
     def test_criar_transform_componente_turma_pula_linha_sem_codigo_ou_turma(
         self,

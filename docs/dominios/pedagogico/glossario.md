@@ -68,6 +68,22 @@ O código `cd_territorio_saber = 1` é um valor especial que significa "territó
 - `ComponenteTurma` não guarda uma flag booleana `territorio_saber`.
 - `SQL_COMPONENTE_TURMA` faz `LEFT JOIN` com `turma_grade_territorio_experiencia`.
 - Quando o componente pertence a território, `codigo_componente_territorio_saber` recebe o próprio código do componente; caso contrário, fica `NULL`.
+- Para componentes de território, `ComponenteTurma` também guarda
+  `desc_territorio_saber` e `desc_experiencia_pedagogica`. Esses campos vêm de
+  `território_saber` e `tipo_experiencia_pedagogica`, por meio da relação da
+  turma/grade em `turma_grade_territorio_experiencia`.
+
+**Descrição exibida:**
+- `ComponenteCurricular.descricao` é a descrição genérica do catálogo do
+  componente.
+- `ComponenteTurma.desc_territorio_saber` +
+  `desc_experiencia_pedagogica` é a descrição contextual do componente de
+  Território do Saber naquela turma.
+- O MS Pedagógico prioriza a descrição contextual quando
+  `codigo_componente_territorio_saber` está preenchido. Por isso um componente
+  como `1216` pode deixar de aparecer como `TERRIT SABER / EXP PEDAG 3` e
+  passar a aparecer como `III - ORIENTAÇÃO DE ESTUDOS E INVENÇÃO CRIATIVA -
+  CLUBE DE CIENCIAS/INVESTIGACOES`, quando essa relação existir no EOL.
 
 ---
 
@@ -311,6 +327,11 @@ O ETL faz o split desse CSV e popula `componente_curricular_agrupamento` com uma
 ### `codigo_componente_territorio_saber`
 
 Em `ComponenteTurma`, esse campo recebe o próprio código do componente quando ele existe em `turma_grade_territorio_experiencia`. É uma redundância intencional para indexação cruzada nos endpoints — permite identificar componentes de território sem JOIN adicional.
+
+A descrição desse componente de território não deve ser inferida apenas de
+`ComponenteCurricular.descricao`. Quando disponíveis, os campos
+`desc_territorio_saber` e `desc_experiencia_pedagogica` de `ComponenteTurma`
+representam a descrição contextual da turma e devem ser usados pelo consumidor.
 
 ---
 

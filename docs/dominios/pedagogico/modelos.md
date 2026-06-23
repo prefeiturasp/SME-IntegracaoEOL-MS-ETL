@@ -14,7 +14,9 @@ Catálogo de componentes curriculares ativos no EOL. Fonte de verdade para códi
 
 ## 2. ComponenteTurma
 
-Estrutura turma × componente, sem professor. Mantém apenas o vínculo curricular real da turma e o código do componente quando ele pertence a território do saber.
+Estrutura turma × componente, sem professor. Mantém o vínculo curricular real
+da turma e, quando o componente pertence a Território do Saber, materializa os
+dados contextuais usados na resposta do MS Pedagógico.
 
 - **Tabela:** `componente_turma`
 - **Fonte:** `SQL_COMPONENTE_TURMA`
@@ -22,6 +24,14 @@ Estrutura turma × componente, sem professor. Mantém apenas o vínculo curricul
 - **Índices:** `turma_codigo`, `componente_codigo`
 - **Branches da query:** turmas com série via `serie_turma_escola → serie_turma_grade → grade`; turmas de programa via `turma_escola_grade_programa`
 - **Filtro de situação:** `st_turma_escola IN ('O', 'A', 'C', 'E')`
+- **Território do Saber:** `codigo_componente_territorio_saber` recebe o
+  próprio código do componente quando há vínculo em
+  `turma_grade_territorio_experiencia`.
+- **Descrição contextual:** para componentes de Território do Saber,
+  `desc_territorio_saber` e `desc_experiencia_pedagogica` vêm de
+  `território_saber` e `tipo_experiencia_pedagogica`. O consumidor monta a
+  descrição como `desc_territorio_saber - desc_experiencia_pedagogica`, ou
+  apenas `desc_territorio_saber` quando a experiência não existir.
 - **Alimenta:** consultas de componentes por turma
 
 ## 3. AtribuicaoComponente

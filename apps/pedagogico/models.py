@@ -28,6 +28,16 @@ class ComponenteTurma(ModeloBase):
         null=True,
         blank=True,
     )
+    desc_territorio_saber = models.CharField(
+        max_length=200,
+        null=True,
+        blank=True,
+    )
+    desc_experiencia_pedagogica = models.CharField(
+        max_length=200,
+        null=True,
+        blank=True,
+    )
 
     class Meta:
         db_table = "componente_turma"

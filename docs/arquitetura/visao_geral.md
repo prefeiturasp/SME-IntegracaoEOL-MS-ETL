@@ -54,6 +54,10 @@ Referências externas (DRE, Cargo, ComponenteCurricular, etc.) são armazenadas 
 Descrições e nomes são resolvidos em tempo de resposta pelo **Transition Gateway** — serviço que enriquece as respostas consultando os domínios de origem.
 
 > **Regra prática:** um campo descritivo (`dc_*`) só é persistido se aparecer em cláusula `WHERE` de alguma query do domínio. Caso contrário, não é armazenado.
+> A exceção atual é a descrição contextual de Território do Saber em
+> `pedagogico.componente_turma`: `desc_territorio_saber` e
+> `desc_experiencia_pedagogica` são materializados porque dependem da turma/grade
+> e não apenas do catálogo de componente curricular.
 
 ---
 
