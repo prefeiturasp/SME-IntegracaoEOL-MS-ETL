@@ -471,6 +471,91 @@ class TestPedagogicoService(TestCase):
         self.assertEqual(len(agrupamentos), 1)
         self.assertEqual(agrupamentos[0].cod_agrupamento, 800777)
 
+    def test_agrupar_mantem_professores_distintos_com_mesmo_id_historico(
+        self,
+    ) -> None:
+        """RFs distintos podem compartilhar o mesmo cod_agrupamento legado."""
+        rows = [
+            AtribuicaoTerritorioSaberIn(
+                1216,
+                "3035027",
+                2026,
+                "8253251",
+                9,
+                66,
+                "TS",
+                "EP",
+                datetime(2026, 6, 1),
+                datetime(2026, 6, 16, 14, 26, 4, 757000),
+                64,
+                datetime(2026, 12, 22),
+                0,
+            ),
+            AtribuicaoTerritorioSaberIn(
+                1217,
+                "3035027",
+                2026,
+                "8253251",
+                9,
+                66,
+                "TS",
+                "EP",
+                datetime(2026, 6, 1),
+                datetime(2026, 6, 16, 14, 26, 4, 727000),
+                64,
+                datetime(2026, 12, 22),
+                0,
+            ),
+            AtribuicaoTerritorioSaberIn(
+                1216,
+                "3035027",
+                2026,
+                "9364528",
+                9,
+                66,
+                "TS",
+                "EP",
+                datetime(2026, 6, 16),
+                None,
+                None,
+                datetime(2026, 12, 22),
+                0,
+            ),
+            AtribuicaoTerritorioSaberIn(
+                1217,
+                "3035027",
+                2026,
+                "9364528",
+                9,
+                66,
+                "TS",
+                "EP",
+                datetime(2026, 6, 16),
+                None,
+                None,
+                datetime(2026, 12, 22),
+                0,
+            ),
+        ]
+
+        agrupamentos, itens = _agrupar(
+            rows,
+            timezone.now(),
+            agrupamentos_exatos={},
+            agrupamentos_historicos={("3035027", 9, 66, "1216,1217"): 815274},
+            ultimo_id_gerado=815274,
+        )
+
+        self.assertEqual(len(agrupamentos), 2)
+        self.assertEqual(
+            {a.rf_professor for a in agrupamentos}, {"8253251", "9364528"}
+        )
+        self.assertEqual({a.cod_agrupamento for a in agrupamentos}, {815274})
+        self.assertEqual(len(itens), 4)
+        self.assertEqual(
+            {i.rf_professor for i in itens}, {"8253251", "9364528"}
+        )
+
     def test_chave_grupo_normaliza_data_disponibilizacao_para_date(
         self,
     ) -> None:

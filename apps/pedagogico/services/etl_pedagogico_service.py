@@ -47,6 +47,7 @@ from apps.pedagogico.queries import (
 )
 from apps.pedagogico.services.agrupamentos import (
     agrupar_atribuicoes_territorio_saber,
+    chave_agrupamento_persistido,
     montar_indices_agrupamentos_existentes,
 )
 
@@ -77,6 +78,20 @@ _UPDATE_AGRUP = (
     "transferido_em",
 )
 _UPDATE_ITEM = ("rf_professor", "ano_letivo", "transferido_em")
+_UNIQUE_AGRUP = (
+    "cod_turma",
+    "cod_territorio_saber",
+    "cod_experiencia_pedagogica",
+    "rf_professor",
+    "dt_inicio_atribuicao",
+    "cod_componentes_curriculares",
+)
+_UNIQUE_ITEM = (
+    "componente_codigo",
+    "turma_codigo",
+    "codigo_agrupamento",
+    "rf_professor",
+)
 
 
 class EtlPedagogicoService(BaseEtlService):
@@ -319,7 +334,13 @@ class EtlPedagogicoService(BaseEtlService):
         hash_item = sorted(_UPDATE_ITEM)
 
         proc_agrup = [
-            (str(a.cod_agrupamento), calcular_hash(a, hash_agrup), a)
+            (
+                "|".join(
+                    str(valor) for valor in chave_agrupamento_persistido(a)
+                ),
+                calcular_hash(a, hash_agrup),
+                a,
+            )
             for a in agrupamentos
         ]
         meta_agrup = self._get_batch_meta(
@@ -327,7 +348,7 @@ class EtlPedagogicoService(BaseEtlService):
             table_name="agrupamento_atribuicao_territorio_saber",
             model_class=AgrupamentoAtribuicaoTerritorioSaber,
             update_fields=list(_UPDATE_AGRUP),
-            unique_fields=["cod_agrupamento"],
+            unique_fields=list(_UNIQUE_AGRUP),
             modo_escrita="upsert",
         )
         total_agrup = 0
@@ -343,7 +364,8 @@ class EtlPedagogicoService(BaseEtlService):
             (
                 f"{it.componente_codigo}"
                 f"-{it.turma_codigo}"
-                f"-{it.codigo_agrupamento}",
+                f"-{it.codigo_agrupamento}"
+                f"-{it.rf_professor or ''}",
                 calcular_hash(it, hash_item),
                 it,
             )
@@ -355,9 +377,7 @@ class EtlPedagogicoService(BaseEtlService):
             model_class=ComponenteCurricularAgrupamento,
             update_fields=list(_UPDATE_ITEM),
             unique_fields=[
-                "componente_codigo",
-                "turma_codigo",
-                "codigo_agrupamento",
+                *_UNIQUE_ITEM,
             ],
             modo_escrita="upsert",
         )
@@ -455,7 +475,7 @@ class EtlPedagogicoService(BaseEtlService):
                 dto_in=AtribuicaoTerritorioSaberIn,
                 pk_field="cod_agrupamento",
                 update_fields=_UPDATE_AGRUP,
-                unique_fields=("cod_agrupamento",),
+                unique_fields=_UNIQUE_AGRUP,
             ),
             PhaseConfig(
                 nome="grade_componente_curricular",

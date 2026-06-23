@@ -11,7 +11,7 @@ from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from queue import Empty, Queue
 from threading import Thread
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
     from apps.core.libs.base_etl_fase import BaseEtlFase
@@ -573,7 +573,7 @@ class BaseEtlService:
         tempo_espera = 0.0
         while True:
             try:
-                chunk: list | None = queue.get(timeout=timeout)
+                chunk = cast(list[Any] | None, queue.get(timeout=timeout))
                 return chunk
             except Empty as err:
                 self._validar_estado_producer(producer_thread, erros, err)
