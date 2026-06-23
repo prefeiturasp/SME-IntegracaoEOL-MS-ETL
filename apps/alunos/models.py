@@ -67,6 +67,18 @@ class ResponsavelAluno(models.Model):
     cpf = models.CharField(max_length=11, null=True, blank=True)
     ddd_celular = models.CharField(max_length=4, null=True, blank=True)
     numero_celular = models.CharField(max_length=20, null=True, blank=True)
+    ddd_telefone_fixo = models.CharField(max_length=4, null=True, blank=True)
+    nr_telefone_fixo = models.CharField(max_length=20, null=True, blank=True)
+    ddd_telefone_comercial = models.CharField(
+        max_length=4,
+        null=True,
+        blank=True,
+    )
+    nr_telefone_comercial = models.CharField(
+        max_length=20,
+        null=True,
+        blank=True,
+    )
     email = models.EmailField(max_length=200, null=True, blank=True)
     data_nascimento = models.DateField(null=True, blank=True)
     nome_mae = models.CharField(max_length=200, null=True, blank=True)
@@ -186,10 +198,13 @@ class MatriculaTurma(models.Model):
     )
     codigo_situacao_aluno = models.SmallIntegerField(null=True, blank=True)
     codigo_tipo_turma = models.SmallIntegerField(null=True, blank=True)
+    tipo_turno = models.SmallIntegerField(null=True, blank=True)
     data_atualizacao_tabela = models.DateTimeField(null=True, blank=True)
     nome_turma = models.CharField(max_length=80, null=True, blank=True)
     codigo_etapa_ensino = models.SmallIntegerField(null=True, blank=True)
     sequencia = models.IntegerField(default=1)
+    origem_atual = models.BooleanField(null=True, blank=True)
+    ano_letivo_turma = models.SmallIntegerField(null=True, blank=True)
 
     class Meta:
         app_label = "alunos"
@@ -304,6 +319,16 @@ class DadosAlunoAcompanhamentoEscolar(models.Model):
     data_situacao_matricula = models.DateField(null=True, blank=True)
     codigo_etapa_ensino = models.SmallIntegerField(null=True, blank=True)
     codigo_ciclo_ensino = models.SmallIntegerField(null=True, blank=True)
+    descricao_etapa_ensino = models.CharField(
+        max_length=100,
+        null=True,
+        blank=True,
+    )
+    descricao_ciclo_ensino = models.CharField(
+        max_length=100,
+        null=True,
+        blank=True,
+    )
     serie_resumida = models.CharField(max_length=20, null=True, blank=True)
     codigo_modalidade_turma = models.SmallIntegerField(null=True, blank=True)
 

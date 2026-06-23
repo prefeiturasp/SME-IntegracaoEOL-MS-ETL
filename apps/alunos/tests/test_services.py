@@ -112,6 +112,14 @@ class TestAlunosService(TestCase):
         """Valida campos esperados pelos DTOs nas fases principais."""
         self.assertIn("e.ci_endereco AS endereco_id", SQL_RESPONSAVEL)
         self.assertIn(
+            "ra.cd_ddd_telefone_fixo_responsavel AS ddd_telefone_fixo",
+            SQL_RESPONSAVEL,
+        )
+        self.assertIn(
+            "ra.nr_telefone_comercial_responsavel AS nr_telefone_comercial",
+            SQL_RESPONSAVEL,
+        )
+        self.assertIn(
             "ra.dt_atualizacao_tabela AS data_atualizacao_tabela",
             SQL_RESPONSAVEL,
         )
@@ -333,6 +341,7 @@ class TestAlunosService(TestCase):
             data_situacao_data_hora=None,
             codigo_situacao_aluno=None,
             codigo_tipo_turma=None,
+            tipo_turno=None,
             data_atualizacao_tabela=None,
             nome_turma=None,
             codigo_etapa_ensino=None,
@@ -490,6 +499,8 @@ class TestAlunosService(TestCase):
             None,
             5,
             2,
+            "Ensino Fundamental",
+            "Ciclo Interdisciplinar",
             "5A",
             5,
         )
@@ -523,6 +534,8 @@ class TestAlunosService(TestCase):
             None,
             5,
             2,
+            "Ensino Fundamental",
+            "Ciclo Interdisciplinar",
             "5A",
             5,
         )
