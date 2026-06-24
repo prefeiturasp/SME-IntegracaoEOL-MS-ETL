@@ -4,6 +4,11 @@ from django.test import SimpleTestCase
 from django.utils import timezone
 
 from apps.pedagogico.dtos.model_in import (
+    ApiEolAgrupamentoAtribuicaoTerritorioSaberIn,
+    ApiEolComponenteCurricularHierarquiaIn,
+    ApiEolComponenteCurricularPAPIn,
+    ApiEolComponenteCurricularPlanejamentoRegenciaIn,
+    ApiEolTurmaItinerarioEnsinoMedioIn,
     ComponenteCurricularSimplesIn,
     ComponenteTurmaIn,
     GradeComponenteCurricularIn,
@@ -45,6 +50,103 @@ class ApiEolPedagogicoTableMappingsTest(SimpleTestCase):
         }
 
         self.assertEqual(obtido, esperado)
+
+
+class ApiEolPedagogicoDtoTest(SimpleTestCase):
+    """Testes dos DTOs da fonte Postgres API EOL."""
+
+    def test_componente_curricular_hierarquia(self) -> None:
+        dto = ApiEolComponenteCurricularHierarquiaIn(
+            1,
+            "512",
+            "513",
+            datetime(2021, 12, 31, 0, 0, 0),
+        )
+
+        data = dto.to_domain()
+
+        self.assertEqual(data["id"], 1)
+        self.assertEqual(data["id_componente_curricular_pai"], 512)
+        self.assertEqual(data["id_componente_curricular"], 513)
+        self.assertTrue(timezone.is_aware(data["vigencia"]))
+
+    def test_componente_curricular_pap(self) -> None:
+        dto = ApiEolComponenteCurricularPAPIn(2, "1322")
+
+        data = dto.to_domain()
+
+        self.assertEqual(data, {"id": 2, "id_componente_curricular": 1322})
+
+    def test_componente_curricular_planejamento_regencia(self) -> None:
+        dto = ApiEolComponenteCurricularPlanejamentoRegenciaIn(
+            3,
+            "218",
+            None,
+            "5",
+        )
+
+        data = dto.to_domain()
+
+        self.assertEqual(data["id"], 3)
+        self.assertEqual(data["id_componente_curricular"], 218)
+        self.assertIsNone(data["turno"])
+        self.assertEqual(data["ano"], 5)
+
+    def test_turma_itinerario_ensino_medio(self) -> None:
+        dto = ApiEolTurmaItinerarioEnsinoMedioIn(
+            "9",
+            " Investigação cientifica ",
+            2,
+        )
+
+        data = dto.to_domain()
+
+        self.assertEqual(data["id"], 9)
+        self.assertEqual(data["nome"], "Investigação cientifica")
+        self.assertEqual(data["serie"], "2")
+
+    def test_agrupamento_atribuicao_territorio_saber(self) -> None:
+        dto = ApiEolAgrupamentoAtribuicaoTerritorioSaberIn(
+            "811496",
+            "2",
+            "68",
+            datetime(2025, 2, 3, 0, 0, 0),
+            "2025",
+            None,
+            datetime(2025, 12, 19, 0, 0, 0),
+            "8580464",
+            "2855275",
+            "1214,1215",
+            "2025",
+            None,
+            " I - EDUCOMUNICAÇÃO E NOVAS LINGUAGENS ",
+            " CLUBE DA LEITURA ",
+            False,
+        )
+
+        data = dto.to_domain("agora")
+
+        self.assertEqual(data["cod_agrupamento"], 811496)
+        self.assertEqual(data["cod_territorio_saber"], 2)
+        self.assertEqual(data["cod_experiencia_pedagogica"], 68)
+        self.assertTrue(timezone.is_aware(data["dt_inicio_atribuicao"]))
+        self.assertIsNone(data["dt_fim_atribuicao"])
+        self.assertEqual(data["rf_professor"], "8580464")
+        self.assertEqual(data["cod_turma"], "2855275")
+        self.assertEqual(data["cod_componentes_curriculares"], "1214,1215")
+        self.assertEqual(data["ano_letivo"], 2025)
+        self.assertIsNone(data["cod_motivo_disponibilizacao"])
+        self.assertEqual(
+            data["desc_territorio_saber"],
+            "I - EDUCOMUNICAÇÃO E NOVAS LINGUAGENS",
+        )
+        self.assertEqual(
+            data["desc_experiencia_pedagogica"], "CLUBE DA LEITURA"
+        )
+        self.assertFalse(
+            data["encerramento_atribuicao_agrupamento_atualizado"]
+        )
+        self.assertEqual(data["transferido_em"], "agora")
 
 
 class ComponenteCurricularSimplesInTest(SimpleTestCase):
