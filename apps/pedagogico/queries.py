@@ -41,6 +41,94 @@ WHERE st_turma_escola IN ('O', 'A', 'C', 'E')
 ORDER BY an_letivo
 """
 
+# Fonte Postgres API EOL → destino pedagogico_db.
+# Estas consultas alimentam tabelas estáticas/legadas via full refresh.
+SQL_API_EOL_COMPONENTE_CURRICULAR_HIERARQUIA = """
+SELECT
+    id,
+    idcomponentecurricularpai,
+    idcomponentecurricular,
+    vigencia
+FROM componentecurricularpai
+ORDER BY id
+"""
+
+SQL_API_EOL_COMPONENTE_CURRICULAR_PAP = """
+SELECT
+    id,
+    idcomponentecurricular
+FROM componentecurricularpap
+ORDER BY id
+"""
+
+SQL_API_EOL_COMPONENTE_CURRICULAR_PLANEJAMENTO_REGENCIA = """
+SELECT
+    id,
+    idcomponentecurricular,
+    turno,
+    ano
+FROM regenciacomponentecurricular
+ORDER BY id
+"""
+
+SQL_API_EOL_TURMA_ITINERARIO_ENSINO_MEDIO = """
+SELECT
+    id,
+    nome,
+    serie
+FROM turma_tipo_itinerario
+ORDER BY id
+"""
+
+SQL_API_EOL_AGRUPAMENTO_ATRIBUICAO_TERRITORIO_SABER = """
+SELECT
+    codagrupamento,
+    codterritoriosaber,
+    codexperienciapedagogica,
+    dtinicioatribuicao,
+    anoatribuicao,
+    dtfimatribuicao,
+    dtfimturma,
+    rfprofessor,
+    codturma,
+    codcomponentescurriculares,
+    anoletivo,
+    codmotivodisponibilizacao,
+    descterritoriosaber,
+    descexperienciapedagogica,
+    encerramento_atribuicao_agrupamento_atualizado
+FROM agrupamentoatribuicaoterritoriosaber
+ORDER BY codagrupamento
+"""
+
+API_EOL_PEDAGOGICO_TABLE_MAPPINGS = {
+    "componentecurricularhierarquia": {
+        "source_table": "componentecurricularpai",
+        "target_table": "componente_curricular_hierarquia",
+        "sql": SQL_API_EOL_COMPONENTE_CURRICULAR_HIERARQUIA,
+    },
+    "componentecurricularpap": {
+        "source_table": "componentecurricularpap",
+        "target_table": "componente_curricular_pap",
+        "sql": SQL_API_EOL_COMPONENTE_CURRICULAR_PAP,
+    },
+    "componentecurricularplanejamentoregencia": {
+        "source_table": "regenciacomponentecurricular",
+        "target_table": "componente_curricular_planejamento_regencia",
+        "sql": SQL_API_EOL_COMPONENTE_CURRICULAR_PLANEJAMENTO_REGENCIA,
+    },
+    "turmaitinerarioensinomedio": {
+        "source_table": "turma_tipo_itinerario",
+        "target_table": "turma_itinerario_ensino_medio",
+        "sql": SQL_API_EOL_TURMA_ITINERARIO_ENSINO_MEDIO,
+    },
+    "agrupamento_atribuicao_territorio_saber": {
+        "source_table": "agrupamentoatribuicaoterritoriosaber",
+        "target_table": "agrupamento_atribuicao_territorio_saber",
+        "sql": SQL_API_EOL_AGRUPAMENTO_ATRIBUICAO_TERRITORIO_SABER,
+    },
+}
+
 # Fase 2 — Estrutura turma × componente (sem professor).
 # Uma linha por (turma_codigo, componente_codigo).
 # Mantém apenas o vínculo e o código de território do saber, quando existir.

@@ -9,6 +9,42 @@ from apps.pedagogico.dtos.model_in import (
     GradeComponenteCurricularIn,
     TurmaIn,
 )
+from apps.pedagogico.queries import API_EOL_PEDAGOGICO_TABLE_MAPPINGS
+
+
+class ApiEolPedagogicoTableMappingsTest(SimpleTestCase):
+    """Testes do mapeamento Postgres API EOL para Pedagógico."""
+
+    def test_mapeia_tabelas_origem_e_destino(self) -> None:
+        esperado = {
+            "componentecurricularhierarquia": (
+                "componentecurricularpai",
+                "componente_curricular_hierarquia",
+            ),
+            "componentecurricularpap": (
+                "componentecurricularpap",
+                "componente_curricular_pap",
+            ),
+            "componentecurricularplanejamentoregencia": (
+                "regenciacomponentecurricular",
+                "componente_curricular_planejamento_regencia",
+            ),
+            "turmaitinerarioensinomedio": (
+                "turma_tipo_itinerario",
+                "turma_itinerario_ensino_medio",
+            ),
+            "agrupamento_atribuicao_territorio_saber": (
+                "agrupamentoatribuicaoterritoriosaber",
+                "agrupamento_atribuicao_territorio_saber",
+            ),
+        }
+
+        obtido = {
+            nome: (config["source_table"], config["target_table"])
+            for nome, config in API_EOL_PEDAGOGICO_TABLE_MAPPINGS.items()
+        }
+
+        self.assertEqual(obtido, esperado)
 
 
 class ComponenteCurricularSimplesInTest(SimpleTestCase):
