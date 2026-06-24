@@ -14,6 +14,7 @@ _TABELAS_UPSERT = frozenset(
         "dados_aula_turma",
         "grade_componente_curricular",
         "agrupamento_atribuicao_territorio_saber",
+        "atribuicao_territorio_saber",
         "turma",
     }
 )
@@ -24,7 +25,7 @@ class Command(BaseEtlCommand):
 
     help = "Popula pedagogico_db a partir do EOL (SQL Server)"
     dominio = "pedagogico"
-    fase_final = 6
+    fase_final = 7
     service_class = EtlPedagogicoService
     orquestrador_class = EtlPedagogicoOrquestrador
 

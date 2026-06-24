@@ -257,3 +257,29 @@ class AtribuicaoTerritorioSaberIn:
     codigo_motivo_disponibilizacao: Any
     data_fim_turma: Any
     atribuicao_externa: Any
+
+    def to_domain(self, transferido_em: Any) -> dict:
+        return {
+            "turma_codigo": str_or_none(self.codigo_turma),
+            "componente_codigo": int(self.codigo_componente_curricular),
+            "professor": str_or_none(self.rf_professor),
+            "codigo_territorio_saber": int(self.codigo_territorio_saber),
+            "codigo_experiencia_pedagogica": int_or_none(
+                self.codigo_experiencia_pedagogica
+            ),
+            "desc_territorio_saber": strip_or_none(
+                self.descricao_territorio_saber
+            ),
+            "desc_experiencia_pedagogica": strip_or_none(
+                self.descricao_experiencia_pedagogica
+            ),
+            "dt_atribuicao": aware_or_none(self.data_atribuicao),
+            "dt_disponibilizacao": aware_or_none(self.data_disponibilizacao),
+            "cd_motivo_disponibilizacao": int_or_none(
+                self.codigo_motivo_disponibilizacao
+            ),
+            "dt_fim_turma": aware_or_none(self.data_fim_turma),
+            "atribuicao_externa": bool(self.atribuicao_externa),
+            "ano_letivo": int(self.ano_letivo),
+            "transferido_em": transferido_em,
+        }

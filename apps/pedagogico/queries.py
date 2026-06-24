@@ -573,6 +573,7 @@ FROM turma_escola te
         ON vcbc.cd_cargo_base_servidor = aa.cd_cargo_base_servidor
     INNER JOIN v_servidor_cotic vsc ON vsc.cd_servidor = vcbc.cd_servidor
 WHERE te.st_turma_escola IN ('O', 'A', 'C', 'E')
+  AND te.an_letivo = ?
 
 UNION ALL
 
@@ -626,6 +627,7 @@ FROM turma_escola te
     INNER JOIN contrato_externo ce ON ce.cd_contrato_externo = ae.cd_contrato_externo
     INNER JOIN pessoa pe ON pe.cd_pessoa = ce.cd_pessoa
 WHERE te.st_turma_escola IN ('O', 'A', 'C', 'E')
+  AND te.an_letivo = ?
   AND esc.tp_escola IN {_TIPOS_ESCOLA_EXTERNOS}
 
 ORDER BY CodigoTurma, CodigoTerritorioSaber, CodigoExperienciaPedagogica,

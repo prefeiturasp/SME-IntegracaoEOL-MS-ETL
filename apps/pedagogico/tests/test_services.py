@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from queue import Empty
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
@@ -48,14 +48,15 @@ class TestPedagogicoService(TestCase):
         with self.assertRaises(AttributeError):
             config.nome = "mudar"  # type: ignore[misc]
 
-    def test_fases_contem_6_configs_esperados(self) -> None:
-        self.assertEqual(len(self.service._fases), 6)
+    def test_fases_contem_7_configs_esperados(self) -> None:
+        self.assertEqual(len(self.service._fases), 7)
         self.assertEqual(
             [fase.nome for fase in self.service._fases],
             [
                 "componente_curricular",
                 "componente_turma",
                 "atribuicao_componente",
+                "atribuicao_territorio_saber",
                 "agrupamento_territorio_saber",
                 "grade_componente_curricular",
                 "turma",
@@ -103,10 +104,40 @@ class TestPedagogicoService(TestCase):
         self.assertIsNone(transform((None, 513, 1105)))
         self.assertIsNone(transform(("T1", None, 1105)))
 
+    def test_criar_transform_atribuicao_territorio_saber(self) -> None:
+        config = self.service._fases[3]
+        transform = self.service._criar_transform(config)
+
+        result = transform(
+            (
+                1216,
+                "T1",
+                2025,
+                "RF1",
+                4,
+                116,
+                "III - ORIENTAÇÃO",
+                "CLUBE",
+                datetime(2025, 2, 3, tzinfo=UTC),
+                None,
+                None,
+                datetime(2025, 12, 19, tzinfo=UTC),
+                False,
+            )
+        )
+        assert result is not None
+        pk, _, obj = result
+
+        self.assertIn("T1-1216-RF1-4-116", pk)
+        self.assertEqual(obj.turma_codigo, "T1")
+        self.assertEqual(obj.componente_codigo, 1216)
+        self.assertEqual(obj.professor, "RF1")
+        self.assertEqual(obj.codigo_territorio_saber, 4)
+
     def test_criar_transform_turma_retorna_tripla_com_pk_codigo(
         self,
     ) -> None:
-        config = self.service._fases[5]  # fase 6 = turma
+        config = self.service._fases[6]  # fase 7 = turma
         transform = self.service._criar_transform(config)
 
         row = (

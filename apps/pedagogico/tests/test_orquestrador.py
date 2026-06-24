@@ -18,10 +18,10 @@ class TestEtlPedagogicoOrquestrador(TestCase):
             **kwargs,
         )
 
-    def test_dominio_e_6_fases(self) -> None:
-        """Pedagógico deve expor exatamente 6 fases ao orquestrador."""
+    def test_dominio_e_7_fases(self) -> None:
+        """Pedagógico deve expor exatamente 7 fases ao orquestrador."""
         orq = self._make_orquestrador()
-        self.assertEqual(len(orq.service._fases), 6)
+        self.assertEqual(len(orq.service._fases), 7)
 
     def test_id_execucao_mantido(self) -> None:
         """Valida que o orquestrador aceita e mantém um id_execucao."""
@@ -33,10 +33,10 @@ class TestEtlPedagogicoOrquestrador(TestCase):
         """Valida metadados da fase 4 (agrupamento_territorio_saber)."""
         orq = self._make_orquestrador()
         meta = orq.service.get_meta(
-            orq.service._fases[3], 4, 6, orq.id_execucao
+            orq.service._fases[4], 5, 7, orq.id_execucao
         )
 
-        self.assertEqual(meta.numero_fase, 4)
+        self.assertEqual(meta.numero_fase, 5)
         self.assertEqual(meta.nome, "agrupamento_territorio_saber")
         self.assertIn(
             "apps.core.tasks.processar_chunk", meta.task_processamento_path
