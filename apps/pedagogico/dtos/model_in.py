@@ -3,6 +3,8 @@
 from dataclasses import dataclass
 from typing import Any
 
+from django.utils import timezone
+
 from apps.core.libs.helpers import (
     aware_or_none,
     int_or_none,
@@ -294,7 +296,8 @@ class ApiEolComponenteCurricularHierarquiaIn:
     id_componente_curricular: Any
     vigencia: Any
 
-    def to_domain(self) -> dict:
+    def to_domain(self, transferido_em: Any | None = None) -> dict:
+        transferido_em = transferido_em or timezone.now()
         return {
             "id": int(self.id),
             "id_componente_curricular_pai": int(
@@ -302,6 +305,7 @@ class ApiEolComponenteCurricularHierarquiaIn:
             ),
             "id_componente_curricular": int(self.id_componente_curricular),
             "vigencia": aware_or_none(self.vigencia),
+            "transferido_em": transferido_em,
         }
 
 
@@ -312,10 +316,12 @@ class ApiEolComponenteCurricularPAPIn:
     id: Any
     id_componente_curricular: Any
 
-    def to_domain(self) -> dict:
+    def to_domain(self, transferido_em: Any | None = None) -> dict:
+        transferido_em = transferido_em or timezone.now()
         return {
             "id": int(self.id),
             "id_componente_curricular": int(self.id_componente_curricular),
+            "transferido_em": transferido_em,
         }
 
 
@@ -328,12 +334,14 @@ class ApiEolComponenteCurricularPlanejamentoRegenciaIn:
     turno: Any
     ano: Any
 
-    def to_domain(self) -> dict:
+    def to_domain(self, transferido_em: Any | None = None) -> dict:
+        transferido_em = transferido_em or timezone.now()
         return {
             "id": int(self.id),
             "id_componente_curricular": int(self.id_componente_curricular),
             "turno": int_or_none(self.turno),
             "ano": int_or_none(self.ano),
+            "transferido_em": transferido_em,
         }
 
 
@@ -345,11 +353,13 @@ class ApiEolTurmaItinerarioEnsinoMedioIn:
     nome: Any
     serie: Any
 
-    def to_domain(self) -> dict:
+    def to_domain(self, transferido_em: Any | None = None) -> dict:
+        transferido_em = transferido_em or timezone.now()
         return {
             "id": int(self.id),
             "nome": strip_str(self.nome),
             "serie": str_or_none(self.serie),
+            "transferido_em": transferido_em,
         }
 
 
@@ -373,7 +383,8 @@ class ApiEolAgrupamentoAtribuicaoTerritorioSaberIn:
     desc_experiencia_pedagogica: Any
     encerramento_atribuicao_agrupamento_atualizado: Any
 
-    def to_domain(self, transferido_em: Any) -> dict:
+    def to_domain(self, transferido_em: Any | None = None) -> dict:
+        transferido_em = transferido_em or timezone.now()
         return {
             "cod_agrupamento": int(self.cod_agrupamento),
             "cod_territorio_saber": int(self.cod_territorio_saber),

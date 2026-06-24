@@ -10,7 +10,13 @@ from apps.core.libs.base_etl_service import PhaseConfig, PipelineMetrics
 from apps.pedagogico.dtos.model_in import (
     AtribuicaoTerritorioSaberIn,
 )
-from apps.pedagogico.models import AgrupamentoAtribuicaoTerritorioSaber
+from apps.pedagogico.models import (
+    AgrupamentoAtribuicaoTerritorioSaber,
+    ComponenteCurricularAgrupamento,
+)
+from apps.pedagogico.queries import (
+    SQL_API_EOL_COMPONENTE_CURRICULAR_HIERARQUIA,
+)
 from apps.pedagogico.services import (
     _AGRUPAMENTO_ID_INICIAL,
     EtlPedagogicoService,
@@ -28,9 +34,11 @@ class TestPedagogicoService(TestCase):
 
     def setUp(self) -> None:
         self.mock_eol = MagicMock()
+        self.mock_api_eol = MagicMock()
         self.service = EtlPedagogicoService(
             db_alias="default",
             eol=self.mock_eol,
+            api_eol=self.mock_api_eol,
             id_execucao=uuid4(),
         )
 
@@ -48,8 +56,8 @@ class TestPedagogicoService(TestCase):
         with self.assertRaises(AttributeError):
             config.nome = "mudar"  # type: ignore[misc]
 
-    def test_fases_contem_7_configs_esperados(self) -> None:
-        self.assertEqual(len(self.service._fases), 7)
+    def test_fases_contem_11_configs_esperados(self) -> None:
+        self.assertEqual(len(self.service._fases), 11)
         self.assertEqual(
             [fase.nome for fase in self.service._fases],
             [
@@ -57,7 +65,11 @@ class TestPedagogicoService(TestCase):
                 "componente_turma",
                 "atribuicao_componente",
                 "atribuicao_territorio_saber",
-                "agrupamento_territorio_saber",
+                "componentecurricularhierarquia",
+                "componentecurricularpap",
+                "componentecurricularplanejamentoregencia",
+                "turmaitinerarioensinomedio",
+                "agrupamento_atribuicao_territorio_saber",
                 "grade_componente_curricular",
                 "turma",
             ],
@@ -137,7 +149,7 @@ class TestPedagogicoService(TestCase):
     def test_criar_transform_turma_retorna_tripla_com_pk_codigo(
         self,
     ) -> None:
-        config = self.service._fases[6]  # fase 7 = turma
+        config = self.service._fases[10]  # fase 11 = turma
         transform = self.service._criar_transform(config)
 
         row = (
@@ -194,7 +206,7 @@ class TestPedagogicoService(TestCase):
     def test_criar_transform_comp_por_ano_letivo_ignora_registro_sem_chave(
         self,
     ) -> None:
-        config = self.service._fases[4]
+        config = self.service._fases[9]
         transform = self.service._criar_transform(config)
 
         self.assertIsNone(transform((None, "Desc", "1", "1 ano", 1, 5, 2025)))
@@ -202,7 +214,7 @@ class TestPedagogicoService(TestCase):
 
     def test_criar_transform_grade_usa_serie_na_chave(self) -> None:
         """Grade usa série na chave e ano turma como campo atualizável."""
-        config = self.service._fases[4]
+        config = self.service._fases[9]
         transform = self.service._criar_transform(config)
 
         result = transform((100, " Arte ", "1", "1 ano", 88, 5, 2024))
@@ -231,6 +243,22 @@ class TestPedagogicoService(TestCase):
                 "codigo_serie_ensino",
             ),
         )
+
+    def test_criar_transform_api_eol_usa_transform_generico(
+        self,
+    ) -> None:
+        """Fase API EOL usa transform genérico da base."""
+        config = self.service._fases[4]
+        transform = self.service._criar_transform(config)
+
+        result = transform((1, 512, 513, "2021-12-31T00:00:00"))
+        assert result is not None
+        pk, _, obj = result
+
+        self.assertEqual(pk, "1")
+        self.assertEqual(obj.id_componente_curricular_pai, 512)
+        self.assertEqual(obj.id_componente_curricular, 513)
+        self.assertIsNotNone(obj.transferido_em)
 
     def test_fase_turma_inclui_campos_grade_programa(self) -> None:
         """Campos de grade de programa entram na dedup da fase turma."""
@@ -279,11 +307,11 @@ class TestPedagogicoService(TestCase):
         ".montar_indices_agrupamentos_existentes",
         return_value=({}, {}, _AGRUPAMENTO_ID_INICIAL),
     )
-    @patch.object(EtlPedagogicoService, "sync_batch")
+    @patch.object(EtlPedagogicoService, "_bulk_create_em_lotes")
     def test_executar_agrupamentos_escreve_duas_tabelas(
-        self, mock_sync: MagicMock, _mock_indices: MagicMock
+        self, mock_bulk: MagicMock, _mock_indices: MagicMock
     ) -> None:
-        config = self.service._fases[3]
+        config = self.service._fase_agrupamento_gerado()
         self.mock_eol.iter_query.return_value = [
             [
                 (
@@ -318,7 +346,7 @@ class TestPedagogicoService(TestCase):
                 ),
             ]
         ]
-        mock_sync.return_value = (1, 0)
+        mock_bulk.side_effect = [1, 1]
 
         metrics = self.service._executar_agrupamentos(config)
 
@@ -326,10 +354,10 @@ class TestPedagogicoService(TestCase):
         self.assertEqual(metrics.total_escritos, 1)
         self.assertEqual(self.service._total_itens_agrupamento, 1)
         self.assertEqual(
-            [call.args[1]["table_name"] for call in mock_sync.call_args_list],
+            [call.args[0] for call in mock_bulk.call_args_list],
             [
-                "agrupamento_atribuicao_territorio_saber",
-                "componente_curricular_agrupamento",
+                AgrupamentoAtribuicaoTerritorioSaber,
+                ComponenteCurricularAgrupamento,
             ],
         )
 
@@ -373,7 +401,7 @@ class TestPedagogicoService(TestCase):
         self.assertEqual(resultado["componente_curricular_agrupamento"], 7)
         self.assertIn("grade_componente_curricular", resultado)
         self.assertIn("turma", resultado)
-        self.assertEqual(mock_fase.call_count, 4)
+        self.assertEqual(mock_fase.call_count, 9)
 
     def test_cod_agrupamento_gera_proximo_sequencial_quando_novo(self) -> None:
         """Novo agrupamento deve receber o próximo ID acima do piso."""
@@ -652,6 +680,22 @@ class TestPedagogicoService(TestCase):
         self.assertEqual(chunks, [[("x",)]])
         self.mock_eol.iter_query.assert_called_once_with("SELECT 1")
 
+    def test_iter_chunks_api_eol_usa_servico_api_eol(self) -> None:
+        """SQL da API EOL é repassado ao serviço Postgres específico."""
+        self.mock_api_eol.iter_query.return_value = [[("api",)]]
+
+        chunks = list(
+            self.service._iter_chunks(
+                SQL_API_EOL_COMPONENTE_CURRICULAR_HIERARQUIA
+            )
+        )
+
+        self.assertEqual(chunks, [[("api",)]])
+        self.mock_api_eol.iter_query.assert_called_once_with(
+            SQL_API_EOL_COMPONENTE_CURRICULAR_HIERARQUIA
+        )
+        self.mock_eol.iter_query.assert_not_called()
+
     def test_criar_transform_fase_sem_factory_usa_implementacao_base(
         self,
     ) -> None:
@@ -747,7 +791,7 @@ class TestPedagogicoService(TestCase):
         self,
     ) -> None:
         """Fase de agrupamento é tratada pelo método dedicado."""
-        config = self.service._fases[3]
+        config = self.service._fase_agrupamento_gerado()
 
         with patch.object(
             self.service, "_executar_agrupamentos"
@@ -757,6 +801,23 @@ class TestPedagogicoService(TestCase):
 
         mock_agrup.assert_called_once_with(config)
         self.assertEqual(metrics.total_escritos, 5)
+
+    def test_fase_backup_gerada_entra_apenas_quando_selecionada(
+        self,
+    ) -> None:
+        """Agrupamento gerado fica disponível sem rodar no fluxo padrão."""
+        service = EtlPedagogicoService(
+            db_alias="default",
+            eol=self.mock_eol,
+            id_execucao=uuid4(),
+            fases=["agrupamento_territorio_saber_gerado"],
+        )
+
+        self.assertEqual(len(service._fases), 12)
+        self.assertEqual(
+            service._fases[-1].nome,
+            "agrupamento_territorio_saber_gerado",
+        )
 
     def test_executar_ignora_fases_anteriores_e_nao_selecionadas(
         self,

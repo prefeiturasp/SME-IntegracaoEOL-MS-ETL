@@ -63,19 +63,27 @@ class ApiEolPedagogicoDtoTest(SimpleTestCase):
             datetime(2021, 12, 31, 0, 0, 0),
         )
 
-        data = dto.to_domain()
+        data = dto.to_domain("agora")
 
         self.assertEqual(data["id"], 1)
         self.assertEqual(data["id_componente_curricular_pai"], 512)
         self.assertEqual(data["id_componente_curricular"], 513)
         self.assertTrue(timezone.is_aware(data["vigencia"]))
+        self.assertEqual(data["transferido_em"], "agora")
 
     def test_componente_curricular_pap(self) -> None:
         dto = ApiEolComponenteCurricularPAPIn(2, "1322")
 
-        data = dto.to_domain()
+        data = dto.to_domain("agora")
 
-        self.assertEqual(data, {"id": 2, "id_componente_curricular": 1322})
+        self.assertEqual(
+            data,
+            {
+                "id": 2,
+                "id_componente_curricular": 1322,
+                "transferido_em": "agora",
+            },
+        )
 
     def test_componente_curricular_planejamento_regencia(self) -> None:
         dto = ApiEolComponenteCurricularPlanejamentoRegenciaIn(
@@ -85,12 +93,13 @@ class ApiEolPedagogicoDtoTest(SimpleTestCase):
             "5",
         )
 
-        data = dto.to_domain()
+        data = dto.to_domain("agora")
 
         self.assertEqual(data["id"], 3)
         self.assertEqual(data["id_componente_curricular"], 218)
         self.assertIsNone(data["turno"])
         self.assertEqual(data["ano"], 5)
+        self.assertEqual(data["transferido_em"], "agora")
 
     def test_turma_itinerario_ensino_medio(self) -> None:
         dto = ApiEolTurmaItinerarioEnsinoMedioIn(
@@ -99,11 +108,12 @@ class ApiEolPedagogicoDtoTest(SimpleTestCase):
             2,
         )
 
-        data = dto.to_domain()
+        data = dto.to_domain("agora")
 
         self.assertEqual(data["id"], 9)
         self.assertEqual(data["nome"], "Investigação cientifica")
         self.assertEqual(data["serie"], "2")
+        self.assertEqual(data["transferido_em"], "agora")
 
     def test_agrupamento_atribuicao_territorio_saber(self) -> None:
         dto = ApiEolAgrupamentoAtribuicaoTerritorioSaberIn(

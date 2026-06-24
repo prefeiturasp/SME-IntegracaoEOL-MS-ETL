@@ -421,7 +421,7 @@ class Turma(ModeloBase):
         return f"{self.codigo} - {self.nome_turma}"
 
 
-class TurmaItinerarioEnsinoMedio(models.Model):
+class TurmaItinerarioEnsinoMedio(ModeloBase):
     """Itinerário estático do Ensino Médio."""
 
     nome = models.CharField(max_length=100)
@@ -434,7 +434,7 @@ class TurmaItinerarioEnsinoMedio(models.Model):
         db_table = "turma_itinerario_ensino_medio"
 
 
-class ComponenteCurricularPlanejamentoRegencia(models.Model):
+class ComponenteCurricularPlanejamentoRegencia(ModeloBase):
     """Componente curricular aplicável ao planejamento de regência."""
 
     id_componente_curricular = models.IntegerField()
@@ -445,7 +445,7 @@ class ComponenteCurricularPlanejamentoRegencia(models.Model):
         db_table = "componente_curricular_planejamento_regencia"
 
 
-class ComponenteCurricularHierarquia(models.Model):
+class ComponenteCurricularHierarquia(ModeloBase):
     """Mapeia componentes filhos para seus componentes curriculares pais."""
 
     id_componente_curricular_pai = models.IntegerField(
@@ -466,7 +466,7 @@ class ComponenteCurricularHierarquia(models.Model):
         ]
 
 
-class ComponenteCurricularPAP(models.Model):
+class ComponenteCurricularPAP(ModeloBase):
     """Componente curricular reconhecido como PAP."""
 
     id_componente_curricular = models.IntegerField(unique=True)
