@@ -168,6 +168,7 @@ URL_BANCO_PROFESSORES = os.getenv("URL_BANCO_PROFESSORES")
 URL_BANCO_ALUNOS = os.getenv("URL_BANCO_ALUNOS")
 URL_BANCO_PEDAGOGICO = os.getenv("URL_BANCO_PEDAGOGICO")
 URL_BANCO_PROGRAMAS = os.getenv("URL_BANCO_PROGRAMAS")
+API_EOL_DB = os.getenv("API_EOL_DB")
 
 DATABASES = {
     "default": {
@@ -186,6 +187,7 @@ DATABASES = {
     "alunos_db": _parse_db_url(URL_BANCO_ALUNOS),
     "pedagogico_db": _parse_db_url(URL_BANCO_PEDAGOGICO),
     "programas_db": _parse_db_url(URL_BANCO_PROGRAMAS),
+    "api_eol_db": _parse_db_url(API_EOL_DB),
 }
 
 DATABASE_ROUTERS = ["config.db_router.DominioRouter"]
