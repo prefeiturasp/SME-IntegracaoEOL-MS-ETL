@@ -41,6 +41,8 @@ class ComponenteTurmaInTest(SimpleTestCase):
         self.assertEqual(data["turma_codigo"], "123")
         self.assertEqual(data["componente_codigo"], 220)
         self.assertIsNone(data["codigo_componente_territorio_saber"])
+        self.assertIsNone(data["desc_territorio_saber"])
+        self.assertIsNone(data["desc_experiencia_pedagogica"])
         self.assertEqual(data["transferido_em"], "agora")
 
 

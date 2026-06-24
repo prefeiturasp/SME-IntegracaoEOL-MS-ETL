@@ -22,14 +22,24 @@ Resumo de origem e destino por fase. Para o mapeamento campo a campo e decisões
 **Query:** `SQL_COMPONENTE_TURMA` (parâmetro `?` por ano letivo)
 
 Estrutura turma × componente, sem professor e sem regra de planejamento.
-Serve para dizer quais componentes existem em cada turma real do EOL.
+Serve para dizer quais componentes existem em cada turma real do EOL. Para
+componentes de Território do Saber, também materializa a descrição contextual
+da turma, porque essa descrição vem da grade de território/experiência e não do
+catálogo base `componente_curricular`.
 
 | Campo Origem | Campo Destino | Transformação |
 | :--- | :--- | :--- |
 | `cd_turma_escola` | `turma_codigo` | `str()` ou `None` |
 | `cd_componente_curricular` | `componente_codigo` | `int()` |
 | presença em `turma_grade_territorio_experiencia` | `codigo_componente_territorio_saber` | código do componente ou `None` |
+| `território_saber.dc_territorio_saber` | `desc_territorio_saber` | texto contextual do território ou `None` |
+| `tipo_experiencia_pedagogica.dc_experiencia_pedagogica` | `desc_experiencia_pedagogica` | texto contextual da experiência ou `None` |
 | — | `transferido_em` | `timezone.now()` |
+
+Quando `codigo_componente_territorio_saber` está preenchido, o MS Pedagógico
+usa esses campos para compor a descrição exibida: `desc_territorio_saber -
+desc_experiencia_pedagogica`. Se a experiência pedagógica estiver ausente,
+usa apenas `desc_territorio_saber`.
 
 ---
 
@@ -70,11 +80,11 @@ caso a linha não deve existir.
 
 **Query:** `SQL_ATRIBUICOES_TERRITORIO_SABER` (UNION ALL SME RF + Externo CPF, todos os anos)
 
-O agrupamento ocorre em Python via `_agrupar()`. Somente grupos com 2+ componentes geram registros.
+O agrupamento ocorre em Python via `_agrupar()`. Somente grupos com 2+ componentes geram registros. Quando existe histórico equivalente no destino, o ETL preserva/reutiliza o `cod_agrupamento` legado; para grupos novos, gera o próximo identificador sequencial a partir do piso legado.
 
 | Campo Origem | Campo Destino (`AgrupamentoAtribuicaoTerritorioSaber`) | Transformação |
 | :--- | :--- | :--- |
-| chave natural do grupo | `cod_agrupamento` | MD5 `[:15]` → `int` (BigInteger) |
+| identificador público do grupo | `cod_agrupamento` | reutiliza histórico equivalente; senão, próximo sequencial `>= 800000` |
 | `codigo_territorio_saber` | `cod_territorio_saber` | direto |
 | `codigo_experiencia_pedagogica` | `cod_experiencia_pedagogica` | nullable |
 | `data_atribuicao` | `dt_inicio_atribuicao` | `make_aware()` |
@@ -89,9 +99,11 @@ O agrupamento ocorre em Python via `_agrupar()`. Somente grupos com 2+ component
 | :--- | :--- | :--- |
 | componente do grupo | `componente_codigo` | `int()` |
 | `codigo_turma` | `turma_codigo` | `str()` |
-| hash do grupo | `codigo_agrupamento` | mesmo `cod_agrupamento` |
+| identificador público do grupo | `codigo_agrupamento` | mesmo `cod_agrupamento` |
 | `rf_professor` | `rf_professor` | direto |
 | `ano_letivo` | `ano_letivo` | direto |
+
+**Chave de persistência:** em `AgrupamentoAtribuicaoTerritorioSaber`, a identidade da linha é `(cod_turma, cod_territorio_saber, cod_experiencia_pedagogica, rf_professor, dt_inicio_atribuicao, cod_componentes_curriculares)`. Em `ComponenteCurricularAgrupamento`, a identidade inclui também `rf_professor`. Por isso `cod_agrupamento` deve ser tratado como ID de contrato, não como unique físico.
 
 ---
 

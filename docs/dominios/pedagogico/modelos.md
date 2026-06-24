@@ -14,7 +14,9 @@ Catálogo de componentes curriculares ativos no EOL. Fonte de verdade para códi
 
 ## 2. ComponenteTurma
 
-Estrutura turma × componente, sem professor. Mantém apenas o vínculo curricular real da turma e o código do componente quando ele pertence a território do saber.
+Estrutura turma × componente, sem professor. Mantém o vínculo curricular real
+da turma e, quando o componente pertence a Território do Saber, materializa os
+dados contextuais usados na resposta do MS Pedagógico.
 
 - **Tabela:** `componente_turma`
 - **Fonte:** `SQL_COMPONENTE_TURMA`
@@ -22,6 +24,14 @@ Estrutura turma × componente, sem professor. Mantém apenas o vínculo curricul
 - **Índices:** `turma_codigo`, `componente_codigo`
 - **Branches da query:** turmas com série via `serie_turma_escola → serie_turma_grade → grade`; turmas de programa via `turma_escola_grade_programa`
 - **Filtro de situação:** `st_turma_escola IN ('O', 'A', 'C', 'E')`
+- **Território do Saber:** `codigo_componente_territorio_saber` recebe o
+  próprio código do componente quando há vínculo em
+  `turma_grade_territorio_experiencia`.
+- **Descrição contextual:** para componentes de Território do Saber,
+  `desc_territorio_saber` e `desc_experiencia_pedagogica` vêm de
+  `território_saber` e `tipo_experiencia_pedagogica`. O consumidor monta a
+  descrição como `desc_territorio_saber - desc_experiencia_pedagogica`, ou
+  apenas `desc_territorio_saber` quando a experiência não existir.
 - **Alimenta:** consultas de componentes por turma
 
 ## 3. AtribuicaoComponente
@@ -41,17 +51,17 @@ Atribuição real de professor a uma turma e componente. Separa a existência do
 
 ## 4. AgrupamentoAtribuicaoTerritorioSaber
 
-Agrupamento de componentes de território atribuídos a um professor numa mesma turma. `cod_agrupamento` é hash MD5 determinístico da chave natural.
+Agrupamento de componentes de território atribuídos a um professor numa mesma turma. `cod_agrupamento` é o identificador público/legado do agrupamento retornado nos endpoints, mas não identifica sozinho uma linha física da tabela.
 
 - **Tabela:** `agrupamento_atribuicao_territorio_saber`
 - **Fonte:** `SQL_ATRIBUICOES_TERRITORIO_SABER`
-- **Unique:** `cod_agrupamento` (BigIntegerField)
-- **Índices:** `cod_turma`, `rf_professor`, `ano_letivo`
+- **Unique:** `(cod_turma, cod_territorio_saber, cod_experiencia_pedagogica, rf_professor, dt_inicio_atribuicao, cod_componentes_curriculares)` com `nulls_distinct=False`
+- **Índices:** `cod_agrupamento`, `cod_turma`, `rf_professor`, `ano_letivo`
 - **Branches da query:** SME (`atribuicao_aula + v_cargo_base_cotic + v_servidor_cotic`) e externo (`atribuicao_externo + contrato_externo + pessoa`).
 - **Território:** resolvido por `turma_grade_territorio_experiencia`.
 - **Filtro de situação:** `st_turma_escola IN ('O', 'A', 'C', 'E')`
 - **Alimenta:** `territorio-saber/agrupamentos-correlacionados`, `territorio-saber/agrupamentos`
-- **Nota:** `cod_componentes_curriculares` armazena os códigos como CSV; o ETL faz o split e popula `ComponenteCurricularAgrupamento`.
+- **Nota:** `cod_componentes_curriculares` armazena os códigos como CSV; o ETL faz o split e popula `ComponenteCurricularAgrupamento`. O mesmo `cod_agrupamento` pode aparecer em mais de uma linha quando o legado reaproveita o identificador para outro professor ou outro recorte histórico.
 
 ## 5. ComponenteCurricularAgrupamento
 
@@ -59,8 +69,8 @@ Itens de um agrupamento de território do saber — uma linha por componente. De
 
 - **Tabela:** `componente_curricular_agrupamento`
 - **Fonte:** derivada de `AgrupamentoAtribuicaoTerritorioSaber`; o ETL faz split do CSV `cod_componentes_curriculares`.
-- **Unique:** `(componente_codigo, turma_codigo, codigo_agrupamento)`
-- **Índices:** `turma_codigo`, `componente_codigo`
+- **Unique:** `(componente_codigo, turma_codigo, codigo_agrupamento, rf_professor)` com `nulls_distinct=False`
+- **Índices:** `turma_codigo`, `componente_codigo`, `codigo_agrupamento`
 - **Alimenta:** `codigosTerritoriosAgrupamento` nos endpoints de perfil e planejamento
 
 ## 6. GradeComponenteCurricular

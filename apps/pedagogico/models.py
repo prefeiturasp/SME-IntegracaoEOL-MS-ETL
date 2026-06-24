@@ -28,6 +28,16 @@ class ComponenteTurma(ModeloBase):
         null=True,
         blank=True,
     )
+    desc_territorio_saber = models.CharField(
+        max_length=200,
+        null=True,
+        blank=True,
+    )
+    desc_experiencia_pedagogica = models.CharField(
+        max_length=200,
+        null=True,
+        blank=True,
+    )
 
     class Meta:
         db_table = "componente_turma"
@@ -132,8 +142,10 @@ class ComponenteCurricularAgrupamento(ModeloBase):
                     "componente_codigo",
                     "turma_codigo",
                     "codigo_agrupamento",
+                    "rf_professor",
                 ],
                 name="uq_componente_agrupamento",
+                nulls_distinct=False,
             ),
         ]
         indexes = [
@@ -207,7 +219,7 @@ class GradeComponenteCurricular(ModeloBase):
 class AgrupamentoAtribuicaoTerritorioSaber(ModeloBase):
     """Agrupamento de atribuições de território do saber."""
 
-    cod_agrupamento = models.BigIntegerField(unique=True)
+    cod_agrupamento = models.BigIntegerField()
     cod_territorio_saber = models.IntegerField()
     cod_experiencia_pedagogica = models.IntegerField(null=True, blank=True)
     dt_inicio_atribuicao = models.DateTimeField()
@@ -247,11 +259,28 @@ class AgrupamentoAtribuicaoTerritorioSaber(ModeloBase):
         verbose_name = "agrupamento atribuição território saber"
         verbose_name_plural = "agrupamentos atribuição território saber"
         indexes = [
+            models.Index(
+                fields=["cod_agrupamento"], name="idx_aats_cod_agrupamento"
+            ),
             models.Index(fields=["cod_turma"], name="idx_aats_cod_turma"),
             models.Index(
                 fields=["rf_professor"], name="idx_aats_rf_professor"
             ),
             models.Index(fields=["ano_letivo"], name="idx_aats_ano_letivo"),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "cod_turma",
+                    "cod_territorio_saber",
+                    "cod_experiencia_pedagogica",
+                    "rf_professor",
+                    "dt_inicio_atribuicao",
+                    "cod_componentes_curriculares",
+                ],
+                name="uq_aats_agrupamento_exato",
+                nulls_distinct=False,
+            ),
         ]
 
     def __str__(self) -> str:

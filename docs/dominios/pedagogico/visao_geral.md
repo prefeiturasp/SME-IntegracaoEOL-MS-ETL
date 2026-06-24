@@ -72,7 +72,7 @@ O código define **11 modelos** em `apps/pedagogico/models.py`:
 
 - Escreve em **duas** tabelas: `AgrupamentoAtribuicaoTerritorioSaber` e `ComponenteCurricularAgrupamento`.
 - **Query:** `SQL_ATRIBUICOES_TERRITORIO_SABER` (UNION ALL SME RF + Externo CPF, todos os anos).
-- Agrupamento ocorre em Python via `_agrupar()`. `cod_agrupamento` é hash MD5 determinístico.
+- Agrupamento ocorre em Python via `_agrupar()`. `cod_agrupamento` é o ID público/legado do grupo; a identidade física da linha inclui turma, território, experiência, professor, início e componentes.
 
 ### Fase 5 — GradeComponenteCurricular
 
