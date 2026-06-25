@@ -214,6 +214,11 @@ class PostgresUpsertEngine:
         """Executa upsert massivo na tabela de auditoria."""
         if not rows:
             return 0
+        # Bypass de auditoria para rodadas locais (ex.: disco cheio no QA).
+        # Evita criar temp_audit + INSERT em etl_auditoria_linha; os dados de
+        # destino são persistidos normalmente, apenas o hash não é gravado.
+        if os.getenv("ETL_SKIP_AUDIT_HASH") == "1":
+            return 0
         rows.sort(key=lambda x: x[0])
         buf = io.StringIO()
         for r in rows:
