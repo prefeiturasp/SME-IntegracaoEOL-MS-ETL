@@ -22,7 +22,7 @@ digraph G {
     TGW    [label="Transition Gateway\n(resolução de IDs)"];
 
     EOL    -> SVC -> PROF;
-    APIEOL -> PROF [label="futuro" style=dashed];
+    APIEOL -> PROF [label="tabelas de apoio e agrupamentos"];
     SVC    -> EXEC;
     SVC    -> CHK;
     SVC    -> HASH;
@@ -48,11 +48,11 @@ exceções documentadas no domínio proprietário do dado.
 | `TurmaEscolaGradePrograma` | `codigo` (PK) | `codigo_turma`, `codigo_escola_grade` |
 | `TurmaGradeTerritorioExperiencia` | auto (PK) | `codigo_serie_grade`, `codigo_componente_curricular`, `codigo_territorio_saber`, `codigo_experiencia_pedagogica` |
 
-### Programas (pendente — ref. ApiEolConnection)
+### Programas (API EOL PostgreSQL)
 
 | Tabela | Fonte | Nota |
 |---|---|---|
-| `AgrupamentoAtribuicaoTerritorioSaber` | ApiEolConnection | Integração prevista, não carregada pelo ETL atual |
+| `AgrupamentoAtribuicaoTerritorioSaber` | `API_EOL_DB.agrupamentoatribuicaoterritoriosaber` | Carregada via `full_refresh`; preserva `cod_agrupamento` da origem |
 
 ### Núcleo servidor efetivo
 

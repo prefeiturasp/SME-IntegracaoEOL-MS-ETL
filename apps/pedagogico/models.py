@@ -121,6 +121,69 @@ class AtribuicaoComponente(ModeloBase):
         )
 
 
+class AtribuicaoTerritorioSaber(ModeloBase):
+    """Atribuição individual de componente de Território do Saber."""
+
+    turma_codigo = models.CharField(max_length=20)
+    componente_codigo = models.IntegerField()
+    professor = models.CharField(
+        max_length=20, null=True, blank=True
+    )  # NOSONAR
+    codigo_territorio_saber = models.IntegerField()
+    codigo_experiencia_pedagogica = models.IntegerField(null=True, blank=True)
+    desc_territorio_saber = models.CharField(
+        max_length=200,
+        null=True,
+        blank=True,
+    )
+    desc_experiencia_pedagogica = models.CharField(
+        max_length=200,
+        null=True,
+        blank=True,
+    )
+    atribuicao_externa = models.BooleanField(default=False)
+    ano_letivo = models.IntegerField()
+    dt_atribuicao = models.DateTimeField(null=True, blank=True)
+    dt_disponibilizacao = models.DateTimeField(null=True, blank=True)
+    cd_motivo_disponibilizacao = models.IntegerField(null=True, blank=True)
+    dt_fim_turma = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "atribuicao_territorio_saber"
+        verbose_name = "atribuição território saber"
+        verbose_name_plural = "atribuições território saber"
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "turma_codigo",
+                    "componente_codigo",
+                    "professor",
+                    "codigo_territorio_saber",
+                    "codigo_experiencia_pedagogica",
+                    "dt_atribuicao",
+                    "dt_disponibilizacao",
+                ],
+                name="uq_atribuicao_territorio_saber",
+                nulls_distinct=False,
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["turma_codigo"], name="idx_ats_turma"),
+            models.Index(fields=["professor"], name="idx_ats_professor"),
+            models.Index(fields=["ano_letivo"], name="idx_ats_ano_letivo"),
+            models.Index(
+                fields=["turma_codigo", "componente_codigo"],
+                name="idx_ats_turma_comp",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return (
+            f"{self.componente_codigo} turma={self.turma_codigo}"
+            f" professor={self.professor}"
+        )
+
+
 class ComponenteCurricularAgrupamento(ModeloBase):
     """Item de componente em agrupamento de território do saber."""
 
@@ -268,20 +331,6 @@ class AgrupamentoAtribuicaoTerritorioSaber(ModeloBase):
             ),
             models.Index(fields=["ano_letivo"], name="idx_aats_ano_letivo"),
         ]
-        constraints = [
-            models.UniqueConstraint(
-                fields=[
-                    "cod_turma",
-                    "cod_territorio_saber",
-                    "cod_experiencia_pedagogica",
-                    "rf_professor",
-                    "dt_inicio_atribuicao",
-                    "cod_componentes_curriculares",
-                ],
-                name="uq_aats_agrupamento_exato",
-                nulls_distinct=False,
-            ),
-        ]
 
     def __str__(self) -> str:
         return (
@@ -358,7 +407,7 @@ class Turma(ModeloBase):
         return f"{self.codigo} - {self.nome_turma}"
 
 
-class TurmaItinerarioEnsinoMedio(models.Model):
+class TurmaItinerarioEnsinoMedio(ModeloBase):
     """Itinerário estático do Ensino Médio."""
 
     nome = models.CharField(max_length=100)
@@ -371,7 +420,7 @@ class TurmaItinerarioEnsinoMedio(models.Model):
         db_table = "turma_itinerario_ensino_medio"
 
 
-class ComponenteCurricularPlanejamentoRegencia(models.Model):
+class ComponenteCurricularPlanejamentoRegencia(ModeloBase):
     """Componente curricular aplicável ao planejamento de regência."""
 
     id_componente_curricular = models.IntegerField()
@@ -382,7 +431,7 @@ class ComponenteCurricularPlanejamentoRegencia(models.Model):
         db_table = "componente_curricular_planejamento_regencia"
 
 
-class ComponenteCurricularHierarquia(models.Model):
+class ComponenteCurricularHierarquia(ModeloBase):
     """Mapeia componentes filhos para seus componentes curriculares pais."""
 
     id_componente_curricular_pai = models.IntegerField(
@@ -403,7 +452,7 @@ class ComponenteCurricularHierarquia(models.Model):
         ]
 
 
-class ComponenteCurricularPAP(models.Model):
+class ComponenteCurricularPAP(ModeloBase):
     """Componente curricular reconhecido como PAP."""
 
     id_componente_curricular = models.IntegerField(unique=True)

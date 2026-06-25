@@ -3,6 +3,8 @@
 from dataclasses import dataclass
 from typing import Any
 
+from django.utils import timezone
+
 from apps.core.libs.helpers import (
     aware_or_none,
     int_or_none,
@@ -238,10 +240,7 @@ class AtribuicaoTerritorioSaberIn:
     """Linha bruta da query SQL_ATRIBUICOES_TERRITORIO_SABER.
 
     Cada linha representa um componente atribuído por turma com território
-    saber. O agrupamento ocorre em Python: linhas com mesma chave natural
-    e mais de 1 componente geram registros em
-    AgrupamentoAtribuicaoTerritorioSaber e filhos em
-    ComponenteCurricularAgrupamento.
+    saber e é transformada para a tabela de atribuições granulares.
     """
 
     codigo_componente_curricular: Any
@@ -257,3 +256,159 @@ class AtribuicaoTerritorioSaberIn:
     codigo_motivo_disponibilizacao: Any
     data_fim_turma: Any
     atribuicao_externa: Any
+
+    def to_domain(self, transferido_em: Any) -> dict:
+        return {
+            "turma_codigo": str_or_none(self.codigo_turma),
+            "componente_codigo": int(self.codigo_componente_curricular),
+            "professor": str_or_none(self.rf_professor),
+            "codigo_territorio_saber": int(self.codigo_territorio_saber),
+            "codigo_experiencia_pedagogica": int_or_none(
+                self.codigo_experiencia_pedagogica
+            ),
+            "desc_territorio_saber": strip_or_none(
+                self.descricao_territorio_saber
+            ),
+            "desc_experiencia_pedagogica": strip_or_none(
+                self.descricao_experiencia_pedagogica
+            ),
+            "dt_atribuicao": aware_or_none(self.data_atribuicao),
+            "dt_disponibilizacao": aware_or_none(self.data_disponibilizacao),
+            "cd_motivo_disponibilizacao": int_or_none(
+                self.codigo_motivo_disponibilizacao
+            ),
+            "dt_fim_turma": aware_or_none(self.data_fim_turma),
+            "atribuicao_externa": bool(self.atribuicao_externa),
+            "ano_letivo": int(self.ano_letivo),
+            "transferido_em": transferido_em,
+        }
+
+
+@dataclass
+class ApiEolComponenteCurricularHierarquiaIn:
+    """Linha de componentecurricularpai da API EOL."""
+
+    id: Any
+    id_componente_curricular_pai: Any
+    id_componente_curricular: Any
+    vigencia: Any
+
+    def to_domain(self, transferido_em: Any | None = None) -> dict:
+        transferido_em = transferido_em or timezone.now()
+        return {
+            "id": int(self.id),
+            "id_componente_curricular_pai": int(
+                self.id_componente_curricular_pai
+            ),
+            "id_componente_curricular": int(self.id_componente_curricular),
+            "vigencia": aware_or_none(self.vigencia),
+            "transferido_em": transferido_em,
+        }
+
+
+@dataclass
+class ApiEolComponenteCurricularPAPIn:
+    """Linha de componentecurricularpap da API EOL."""
+
+    id: Any
+    id_componente_curricular: Any
+
+    def to_domain(self, transferido_em: Any | None = None) -> dict:
+        transferido_em = transferido_em or timezone.now()
+        return {
+            "id": int(self.id),
+            "id_componente_curricular": int(self.id_componente_curricular),
+            "transferido_em": transferido_em,
+        }
+
+
+@dataclass
+class ApiEolComponenteCurricularPlanejamentoRegenciaIn:
+    """Linha de regenciacomponentecurricular da API EOL."""
+
+    id_componente_curricular: Any
+    turno: Any
+    ano: Any
+
+    def to_domain(self, transferido_em: Any | None = None) -> dict:
+        transferido_em = transferido_em or timezone.now()
+        return {
+            "id_componente_curricular": int(self.id_componente_curricular),
+            "turno": int_or_none(self.turno),
+            "ano": int_or_none(self.ano),
+            "transferido_em": transferido_em,
+        }
+
+
+@dataclass
+class ApiEolTurmaItinerarioEnsinoMedioIn:
+    """Linha de turma_tipo_itinerario da API EOL."""
+
+    id: Any
+    nome: Any
+    serie: Any
+
+    def to_domain(self, transferido_em: Any | None = None) -> dict:
+        transferido_em = transferido_em or timezone.now()
+        return {
+            "id": int(self.id),
+            "nome": strip_str(self.nome),
+            "serie": str_or_none(self.serie),
+            "transferido_em": transferido_em,
+        }
+
+
+@dataclass
+class ApiEolAgrupamentoAtribuicaoTerritorioSaberIn:
+    """Linha de agrupamentoatribuicaoterritoriosaber da API EOL."""
+
+    id_linha_api_eol: Any
+    cod_agrupamento: Any
+    cod_territorio_saber: Any
+    cod_experiencia_pedagogica: Any
+    dt_inicio_atribuicao: Any
+    ano_atribuicao: Any
+    dt_fim_atribuicao: Any
+    dt_fim_turma: Any
+    rf_professor: Any
+    cod_turma: Any
+    cod_componentes_curriculares: Any
+    ano_letivo: Any
+    cod_motivo_disponibilizacao: Any
+    desc_territorio_saber: Any
+    desc_experiencia_pedagogica: Any
+    encerramento_atribuicao_agrupamento_atualizado: Any
+
+    def to_domain(self, transferido_em: Any | None = None) -> dict:
+        transferido_em = transferido_em or timezone.now()
+        return {
+            "cod_agrupamento": int(self.cod_agrupamento),
+            "cod_territorio_saber": int(self.cod_territorio_saber),
+            "cod_experiencia_pedagogica": int_or_none(
+                self.cod_experiencia_pedagogica
+            ),
+            "dt_inicio_atribuicao": aware_or_none(self.dt_inicio_atribuicao),
+            "ano_atribuicao": int(self.ano_atribuicao),
+            "dt_fim_atribuicao": aware_or_none(self.dt_fim_atribuicao),
+            "dt_fim_turma": aware_or_none(self.dt_fim_turma),
+            "rf_professor": str_or_none(self.rf_professor),
+            "cod_turma": str_or_none(self.cod_turma),
+            "cod_componentes_curriculares": str_or_none(
+                self.cod_componentes_curriculares
+            ),
+            "ano_letivo": int(self.ano_letivo),
+            "cod_motivo_disponibilizacao": int_or_none(
+                self.cod_motivo_disponibilizacao
+            ),
+            "desc_territorio_saber": strip_or_none(self.desc_territorio_saber),
+            "desc_experiencia_pedagogica": strip_or_none(
+                self.desc_experiencia_pedagogica
+            ),
+            "encerramento_atribuicao_agrupamento_atualizado": (
+                bool(self.encerramento_atribuicao_agrupamento_atualizado)
+                if self.encerramento_atribuicao_agrupamento_atualizado
+                is not None
+                else None
+            ),
+            "transferido_em": transferido_em,
+        }

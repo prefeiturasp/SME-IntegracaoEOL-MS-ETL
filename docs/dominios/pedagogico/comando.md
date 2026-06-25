@@ -29,27 +29,26 @@ Herdados de `BaseEtlCommand`:
 
 Documentação alvo do domínio:
 
-- Fases do pipeline: `6`
+- Fases do pipeline: `11`
 - Tabelas persistidas pelo ETL:
   - `componente_curricular`
   - `componente_turma`
   - `atribuicao_componente`
+  - `atribuicao_territorio_saber`
+  - `componente_curricular_hierarquia`
+  - `componente_curricular_pap`
+  - `componente_curricular_planejamento_regencia`
+  - `turma_itinerario_ensino_medio`
   - `agrupamento_atribuicao_territorio_saber`
-  - `componente_curricular_agrupamento`
   - `grade_componente_curricular`
   - `turma`
 
 Estado atual do código em `etl_pedagogico.py`:
 
-- `_TABELAS_UPSERT` ainda lista nomes antigos:
-  - `componente_curricular_regencia`
-  - `dados_aula_turma`
-- `_TABELAS_UPSERT` ainda não lista explicitamente:
-  - `componente_turma`
-  - `atribuicao_componente`
-- `fase_final` ainda está em `6`
-
-Essa é uma divergência conhecida apenas na classificação de modo de escrita do comando. O pipeline de serviço atual possui 6 fases.
+- `fase_final` está em `11`.
+- O modo real de escrita de cada fase é definido no `PhaseConfig` do serviço.
+- As tabelas auxiliares da API EOL e `agrupamento_atribuicao_territorio_saber` usam `full_refresh` no `PhaseConfig`.
+- A fase backup `agrupamento_territorio_saber_gerado` só é executada quando selecionada explicitamente por nome.
 
 ## Exemplos
 
@@ -57,4 +56,5 @@ Essa é uma divergência conhecida apenas na classificação de modo de escrita 
 python manage.py etl_pedagogico
 python manage.py etl_pedagogico --continuar
 python manage.py etl_pedagogico --primeiro-run
+python manage.py etl_pedagogico --fases agrupamento_atribuicao_territorio_saber
 ```
