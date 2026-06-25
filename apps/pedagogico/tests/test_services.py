@@ -36,7 +36,7 @@ class TestPedagogicoService(TestCase):
         self.mock_eol = MagicMock()
         self.mock_api_eol = MagicMock()
         self.service = EtlPedagogicoService(
-            db_alias="default",
+            db_alias="pedagogico_db",
             eol=self.mock_eol,
             api_eol=self.mock_api_eol,
             id_execucao=uuid4(),
@@ -823,7 +823,7 @@ class TestPedagogicoService(TestCase):
     ) -> None:
         """Agrupamento gerado fica disponível sem rodar no fluxo padrão."""
         service = EtlPedagogicoService(
-            db_alias="default",
+            db_alias="pedagogico_db",
             eol=self.mock_eol,
             id_execucao=uuid4(),
             fases=["agrupamento_territorio_saber_gerado"],
