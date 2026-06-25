@@ -328,6 +328,7 @@ class TestPedagogicoService(TestCase):
         self, mock_bulk: MagicMock, _mock_indices: MagicMock
     ) -> None:
         config = self.service._fase_agrupamento_gerado()
+        self.service._cache_anos = [2025]
         self.mock_eol.iter_query.return_value = [
             [
                 (
@@ -414,7 +415,7 @@ class TestPedagogicoService(TestCase):
         self.assertEqual(
             resultado["agrupamento_atribuicao_territorio_saber"], 10
         )
-        self.assertEqual(resultado["componente_curricular_agrupamento"], 7)
+        self.assertNotIn("componente_curricular_agrupamento", resultado)
         self.assertIn("grade_componente_curricular", resultado)
         self.assertIn("turma", resultado)
         self.assertEqual(mock_fase.call_count, 9)
