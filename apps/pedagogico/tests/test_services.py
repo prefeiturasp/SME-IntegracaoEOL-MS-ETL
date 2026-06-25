@@ -1,5 +1,6 @@
 from datetime import UTC, date, datetime
 from queue import Empty
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
@@ -377,6 +378,109 @@ class TestPedagogicoService(TestCase):
                 ComponenteCurricularAgrupamento,
             ],
         )
+
+    def test_bulk_create_em_lotes_fragmenta_em_batches_de_500(self) -> None:
+        """Bulk create é executado em lotes de 500 objetos."""
+
+        class FakeManager:
+            def __init__(self) -> None:
+                self.batch_sizes: list[int] = []
+
+            def bulk_create(
+                self,
+                lote: list[object],
+                batch_size: int,
+            ) -> None:
+                self.batch_sizes.append(len(lote))
+                self.batch_size = batch_size
+
+        class FakeObjects:
+            def __init__(self) -> None:
+                self.manager = FakeManager()
+
+            def using(self, db_alias: str) -> FakeManager:
+                self.db_alias = db_alias
+                return self.manager
+
+        class FakeModel:
+            objects = FakeObjects()
+
+        total = self.service._bulk_create_em_lotes(
+            FakeModel,
+            [object() for _ in range(1001)],
+        )
+
+        self.assertEqual(total, 1001)
+        self.assertEqual(FakeModel.objects.db_alias, "pedagogico_db")
+        self.assertEqual(FakeModel.objects.manager.batch_sizes, [500, 500, 1])
+        self.assertEqual(FakeModel.objects.manager.batch_size, 500)
+
+    @patch.object(EtlPedagogicoService, "_bulk_create_em_lotes")
+    @patch.object(EtlPedagogicoService, "_anos_letivos", return_value=[2025])
+    def test_executar_atribuicoes_territorio_deduplica_e_descarta_invalidos(
+        self,
+        _mock_anos: MagicMock,
+        mock_bulk: MagicMock,
+    ) -> None:
+        """Fase de atribuição materializa apenas linhas válidas e únicas."""
+        config = self.service._fases[3]
+        row_valida = (
+            1216,
+            "T1",
+            2025,
+            "RF1",
+            4,
+            116,
+            "TS",
+            "EP",
+            datetime(2025, 2, 3, tzinfo=UTC),
+            None,
+            None,
+            datetime(2025, 12, 19, tzinfo=UTC),
+            False,
+        )
+        row_sem_rf = (
+            1217,
+            "T1",
+            2025,
+            None,
+            4,
+            116,
+            "TS",
+            "EP",
+            datetime(2025, 2, 3, tzinfo=UTC),
+            None,
+            None,
+            datetime(2025, 12, 19, tzinfo=UTC),
+            False,
+        )
+        self.mock_eol.iter_query.return_value = [[row_valida, row_valida]]
+        mock_bulk.side_effect = lambda _model, objs: len(objs)
+
+        with patch(
+            "apps.pedagogico.services.etl_pedagogico_service"
+            ".AtribuicaoTerritorioSaber"
+        ) as mock_model:
+            mock_model.objects.using.return_value.filter.return_value.delete.return_value = (  # noqa: E501
+                0,
+                {},
+            )
+            mock_model.side_effect = lambda **kwargs: SimpleNamespace(**kwargs)
+            self.mock_eol.iter_query.return_value = [
+                [row_valida, row_valida, row_sem_rf]
+            ]
+
+            metrics = self.service._executar_atribuicoes_territorio(config)
+
+        self.assertEqual(metrics.total_lidos, 3)
+        self.assertEqual(metrics.total_escritos, 1)
+        mock_model.objects.using.assert_called_with("pedagogico_db")
+        mock_model.objects.using.return_value.filter.assert_called_once_with(
+            ano_letivo__in=[2025]
+        )
+        mock_bulk.assert_called_once()
+        objetos_criados = mock_bulk.call_args.args[1]
+        self.assertEqual(len(objetos_criados), 1)
 
     def test_agrupar_descarta_grupos_com_apenas_um_componente(self) -> None:
         agrupamentos, itens = _agrupar(
@@ -818,6 +922,21 @@ class TestPedagogicoService(TestCase):
 
         mock_agrup.assert_called_once_with(config)
         self.assertEqual(metrics.total_escritos, 5)
+
+    def test_executar_fase_roteia_atribuicao_territorio_para_metodo_dedicado(
+        self,
+    ) -> None:
+        """Fase de atribuição de território é tratada pelo método dedicado."""
+        config = self.service._fases[3]
+
+        with patch.object(
+            self.service, "_executar_atribuicoes_territorio"
+        ) as mock_atribuicoes:
+            mock_atribuicoes.return_value = PipelineMetrics(total_escritos=4)
+            metrics = self.service._executar_fase(config, numero_fase=4)
+
+        mock_atribuicoes.assert_called_once_with(config)
+        self.assertEqual(metrics.total_escritos, 4)
 
     def test_fase_backup_gerada_entra_apenas_quando_selecionada(
         self,
