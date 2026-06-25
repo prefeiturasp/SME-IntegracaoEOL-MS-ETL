@@ -56,19 +56,18 @@ ORDER BY id
 SQL_API_EOL_COMPONENTE_CURRICULAR_PAP = """
 SELECT
     id,
-    idcomponentecurricular
+    id AS idcomponentecurricular
 FROM componentecurricularpap
 ORDER BY id
 """
 
 SQL_API_EOL_COMPONENTE_CURRICULAR_PLANEJAMENTO_REGENCIA = """
 SELECT
-    id,
     idcomponentecurricular,
     turno,
     ano
 FROM regenciacomponentecurricular
-ORDER BY id
+ORDER BY idcomponentecurricular, turno, ano
 """
 
 SQL_API_EOL_TURMA_ITINERARIO_ENSINO_MEDIO = """
@@ -82,13 +81,23 @@ ORDER BY id
 
 SQL_API_EOL_AGRUPAMENTO_ATRIBUICAO_TERRITORIO_SABER = """
 SELECT
+    ROW_NUMBER() OVER (
+        ORDER BY
+            codagrupamento,
+            codturma,
+            rfprofessor,
+            codterritoriosaber,
+            codexperienciapedagogica,
+            dtinicioatribuicao,
+            codcomponentescurriculares
+    ) AS id_linha_api_eol,
     codagrupamento,
     codterritoriosaber,
     codexperienciapedagogica,
-    dtinicioatribuicao,
+    dtinicioatribuicao::timestamp AS dtinicioatribuicao,
     anoatribuicao,
-    dtfimatribuicao,
-    dtfimturma,
+    dtfimatribuicao::timestamp AS dtfimatribuicao,
+    dtfimturma::timestamp AS dtfimturma,
     rfprofessor,
     codturma,
     codcomponentescurriculares,

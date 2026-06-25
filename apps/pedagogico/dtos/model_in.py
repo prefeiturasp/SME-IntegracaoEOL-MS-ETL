@@ -329,7 +329,6 @@ class ApiEolComponenteCurricularPAPIn:
 class ApiEolComponenteCurricularPlanejamentoRegenciaIn:
     """Linha de regenciacomponentecurricular da API EOL."""
 
-    id: Any
     id_componente_curricular: Any
     turno: Any
     ano: Any
@@ -337,7 +336,6 @@ class ApiEolComponenteCurricularPlanejamentoRegenciaIn:
     def to_domain(self, transferido_em: Any | None = None) -> dict:
         transferido_em = transferido_em or timezone.now()
         return {
-            "id": int(self.id),
             "id_componente_curricular": int(self.id_componente_curricular),
             "turno": int_or_none(self.turno),
             "ano": int_or_none(self.ano),
@@ -367,6 +365,7 @@ class ApiEolTurmaItinerarioEnsinoMedioIn:
 class ApiEolAgrupamentoAtribuicaoTerritorioSaberIn:
     """Linha de agrupamentoatribuicaoterritoriosaber da API EOL."""
 
+    id_linha_api_eol: Any
     cod_agrupamento: Any
     cod_territorio_saber: Any
     cod_experiencia_pedagogica: Any

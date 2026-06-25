@@ -87,7 +87,6 @@ class ApiEolPedagogicoDtoTest(SimpleTestCase):
 
     def test_componente_curricular_planejamento_regencia(self) -> None:
         dto = ApiEolComponenteCurricularPlanejamentoRegenciaIn(
-            3,
             "218",
             None,
             "5",
@@ -95,7 +94,6 @@ class ApiEolPedagogicoDtoTest(SimpleTestCase):
 
         data = dto.to_domain("agora")
 
-        self.assertEqual(data["id"], 3)
         self.assertEqual(data["id_componente_curricular"], 218)
         self.assertIsNone(data["turno"])
         self.assertEqual(data["ano"], 5)
@@ -117,6 +115,7 @@ class ApiEolPedagogicoDtoTest(SimpleTestCase):
 
     def test_agrupamento_atribuicao_territorio_saber(self) -> None:
         dto = ApiEolAgrupamentoAtribuicaoTerritorioSaberIn(
+            "1",
             "811496",
             "2",
             "68",

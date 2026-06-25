@@ -260,6 +260,22 @@ class TestPedagogicoService(TestCase):
         self.assertEqual(obj.id_componente_curricular, 513)
         self.assertIsNotNone(obj.transferido_em)
 
+    def test_criar_transform_regencia_api_eol_usa_chave_composta(
+        self,
+    ) -> None:
+        """Regência da API EOL não depende de id físico de origem."""
+        config = self.service._fases[6]
+        transform = self.service._criar_transform(config)
+
+        result = transform((218, 4, 5))
+        assert result is not None
+        pk, _, obj = result
+
+        self.assertEqual(pk, "218-4-5")
+        self.assertEqual(obj.id_componente_curricular, 218)
+        self.assertEqual(obj.turno, 4)
+        self.assertEqual(obj.ano, 5)
+
     def test_fase_turma_inclui_campos_grade_programa(self) -> None:
         """Campos de grade de programa entram na dedup da fase turma."""
         config = next(

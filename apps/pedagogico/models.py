@@ -331,20 +331,6 @@ class AgrupamentoAtribuicaoTerritorioSaber(ModeloBase):
             ),
             models.Index(fields=["ano_letivo"], name="idx_aats_ano_letivo"),
         ]
-        constraints = [
-            models.UniqueConstraint(
-                fields=[
-                    "cod_turma",
-                    "cod_territorio_saber",
-                    "cod_experiencia_pedagogica",
-                    "rf_professor",
-                    "dt_inicio_atribuicao",
-                    "cod_componentes_curriculares",
-                ],
-                name="uq_aats_agrupamento_exato",
-                nulls_distinct=False,
-            ),
-        ]
 
     def __str__(self) -> str:
         return (
