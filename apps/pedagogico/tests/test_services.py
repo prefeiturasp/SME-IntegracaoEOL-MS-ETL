@@ -792,7 +792,7 @@ class TestPedagogicoService(TestCase):
     def test_anos_letivos_filtra_por_ano_letivo_minimo(self) -> None:
         """Quando ``ano_letivo`` é informado, anos anteriores são removidos."""
         service = EtlPedagogicoService(
-            db_alias="default",
+            db_alias="pedagogico_db",
             eol=self.mock_eol,
             id_execucao=uuid4(),
             ano_letivo=2025,

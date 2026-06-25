@@ -159,7 +159,7 @@ def _parse_readonly_db(url: Any) -> dict[str, Any]:
         "HOST": parsed.hostname or "localhost",
         "PORT": str(parsed.port or 1433),
         "OPTIONS": options,
-        "TEST": {"MIGRATE": True},
+        "TEST": {"MIGRATE": False},
     }
 
 
