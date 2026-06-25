@@ -300,7 +300,11 @@ class MatriculaTurmaInTest(SimpleTestCase):
             tipo_turno=2,
             data_atualizacao_tabela=None,
             nome_turma=" 5A ",
+            codigo_ue_turma=" 100001 ",
             codigo_etapa_ensino=5,
+            codigo_ciclo_ensino=2,
+            descricao_etapa_ensino=" Ensino Fundamental ",
+            descricao_ciclo_ensino=" Ciclo Interdisciplinar ",
             sequencia=2,
         )
         data = dto.to_domain()
@@ -308,7 +312,17 @@ class MatriculaTurmaInTest(SimpleTestCase):
         self.assertEqual(data["codigo_turma"], 55)
         self.assertEqual(data["numero_chamada"], "A1")
         self.assertEqual(data["nome_turma"], "5A")
+        self.assertEqual(data["codigo_ue_turma"], "100001")
         self.assertEqual(data["codigo_etapa_ensino"], 5)
+        self.assertEqual(data["codigo_ciclo_ensino"], 2)
+        self.assertEqual(
+            data["descricao_etapa_ensino"],
+            "Ensino Fundamental",
+        )
+        self.assertEqual(
+            data["descricao_ciclo_ensino"],
+            "Ciclo Interdisciplinar",
+        )
         self.assertEqual(data["tipo_turno"], 2)
         self.assertEqual(data["sequencia"], 2)
         self.assertFalse(

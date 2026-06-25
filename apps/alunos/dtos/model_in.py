@@ -204,7 +204,11 @@ class MatriculaTurmaIn:
     tipo_turno: int | None
     data_atualizacao_tabela: datetime | None
     nome_turma: str | None
+    codigo_ue_turma: str | None
     codigo_etapa_ensino: int | None
+    codigo_ciclo_ensino: int | None
+    descricao_etapa_ensino: str | None
+    descricao_ciclo_ensino: str | None
     sequencia: int
     origem_atual: bool | None = None
     ano_letivo_turma: int | None = None
@@ -225,7 +229,11 @@ class MatriculaTurmaIn:
                 self.data_atualizacao_tabela
             ),
             "nome_turma": strip_str(self.nome_turma),
+            "codigo_ue_turma": strip_str(self.codigo_ue_turma),
             "codigo_etapa_ensino": self.codigo_etapa_ensino,
+            "codigo_ciclo_ensino": self.codigo_ciclo_ensino,
+            "descricao_etapa_ensino": strip_str(self.descricao_etapa_ensino),
+            "descricao_ciclo_ensino": strip_str(self.descricao_ciclo_ensino),
             "sequencia": self.sequencia,
             "origem_atual": self.origem_atual,
             "ano_letivo_turma": self.ano_letivo_turma,

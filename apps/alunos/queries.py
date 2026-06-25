@@ -160,18 +160,20 @@ WHERE rn = 1
 """
 
 SQL_MATRICULA_TURMA = """
-WITH EtapaPorTurma AS (
+WITH SeriePorTurma AS (
     SELECT ste.cd_turma_escola
          , MIN(se.cd_etapa_ensino) AS cd_etapa_ensino
+         , MIN(se.cd_ciclo_ensino) AS cd_ciclo_ensino
+         , MIN(eten.dc_etapa_ensino) AS dc_etapa_ensino
+         , MIN(ce.dc_ciclo_ensino) AS dc_ciclo_ensino
     FROM serie_turma_escola ste
-    INNER JOIN serie_turma_grade stg
-        ON stg.cd_turma_escola = ste.cd_turma_escola
-    INNER JOIN escola_grade eg
-        ON stg.cd_escola_grade = eg.cd_escola_grade
-    INNER JOIN grade g
-        ON eg.cd_grade = g.cd_grade
-    INNER JOIN serie_ensino se
-        ON g.cd_serie_ensino = se.cd_serie_ensino
+    LEFT JOIN serie_ensino se
+        ON ste.cd_serie_ensino = se.cd_serie_ensino
+    LEFT JOIN etapa_ensino eten
+        ON se.cd_etapa_ensino = eten.cd_etapa_ensino
+    LEFT JOIN ciclo_ensino ce
+        ON se.cd_ciclo_ensino = ce.cd_ciclo_ensino
+    WHERE ste.dt_fim IS NULL
     GROUP BY ste.cd_turma_escola
 ),
 CteMatriculaTurma AS (
@@ -186,14 +188,18 @@ CteMatriculaTurma AS (
       , te.cd_tipo_turno AS tipo_turno
       , mt.dt_atlz_tab AS data_atualizacao_tabela
       , te.dc_turma_escola AS nome_turma
-      , etapa.cd_etapa_ensino AS codigo_etapa_ensino
+      , te.cd_escola AS codigo_ue_turma
+      , serie.cd_etapa_ensino AS codigo_etapa_ensino
+      , serie.cd_ciclo_ensino AS codigo_ciclo_ensino
+      , serie.dc_etapa_ensino AS descricao_etapa_ensino
+      , serie.dc_ciclo_ensino AS descricao_ciclo_ensino
       , CAST(1 AS BIT) AS origem_atual
       , te.an_letivo AS ano_letivo_turma
     FROM matricula_turma_escola mt
     INNER JOIN turma_escola te
         ON te.cd_turma_escola = mt.cd_turma_escola
-    LEFT JOIN EtapaPorTurma etapa
-        ON etapa.cd_turma_escola = te.cd_turma_escola
+    LEFT JOIN SeriePorTurma serie
+        ON serie.cd_turma_escola = te.cd_turma_escola
     WHERE 1 = 1
     /*FILTRO_ANO_LETIVO_MATRICULA_TURMA_ATUAL*/
     UNION ALL
@@ -208,14 +214,18 @@ CteMatriculaTurma AS (
       , te.cd_tipo_turno AS tipo_turno
       , mt.dt_atlz_tab AS data_atualizacao_tabela
       , te.dc_turma_escola AS nome_turma
-      , etapa.cd_etapa_ensino AS codigo_etapa_ensino
+      , te.cd_escola AS codigo_ue_turma
+      , serie.cd_etapa_ensino AS codigo_etapa_ensino
+      , serie.cd_ciclo_ensino AS codigo_ciclo_ensino
+      , serie.dc_etapa_ensino AS descricao_etapa_ensino
+      , serie.dc_ciclo_ensino AS descricao_ciclo_ensino
       , CAST(0 AS BIT) AS origem_atual
       , te.an_letivo AS ano_letivo_turma
     FROM historico_matricula_turma_escola mt
     INNER JOIN turma_escola te
         ON te.cd_turma_escola = mt.cd_turma_escola
-    LEFT JOIN EtapaPorTurma etapa
-        ON etapa.cd_turma_escola = te.cd_turma_escola
+    LEFT JOIN SeriePorTurma serie
+        ON serie.cd_turma_escola = te.cd_turma_escola
     WHERE 1 = 1
     /*FILTRO_ANO_LETIVO_MATRICULA_TURMA_HISTORICA*/
 ),
@@ -239,7 +249,11 @@ SELECT
   , tipo_turno
   , data_atualizacao_tabela
   , nome_turma
+  , codigo_ue_turma
   , codigo_etapa_ensino
+  , codigo_ciclo_ensino
+  , descricao_etapa_ensino
+  , descricao_ciclo_ensino
   , sequencia
   , origem_atual
   , ano_letivo_turma
