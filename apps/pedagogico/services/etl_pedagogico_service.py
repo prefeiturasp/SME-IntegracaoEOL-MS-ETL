@@ -117,12 +117,12 @@ class EtlPedagogicoService(BaseEtlService):
 
     Customizações em relação ao padrão base:
         - ``_iter_chunks``: suporta templates com ``?`` para iteração
-          por ano letivo (phases 2, 4, 5, 6).
+          por ano letivo e encaminha SQLs da API EOL para ``ApiEOLService``.
         - ``_criar_transform``: injeta ``_agora`` via closure, sem
           alocação extra a cada linha.
-        - ``_executar_fase``: fase 3 (agrupamentos) é tratada à parte
-          por escrever em duas tabelas após agregação completa em memória.
-        - ``executar``: trata o resultado duplo da fase 3.
+        - ``_executar_fase``: trata atribuições de território e a fase
+          opcional de agrupamento gerado.
+        - ``executar``: respeita execução parcial por nome de fase.
     """
 
     _dominio = "PEDAGOGICO"
@@ -350,7 +350,7 @@ class EtlPedagogicoService(BaseEtlService):
         return self._cache_anos
 
     # ------------------------------------------------------------------
-    # Fase 3 — Agrupamentos (escrita em duas tabelas)
+    # Território do Saber
     # ------------------------------------------------------------------
 
     def _bulk_create_em_lotes(self, model_class: Any, objs: list[Any]) -> int:
@@ -366,7 +366,14 @@ class EtlPedagogicoService(BaseEtlService):
         self,
         config: PhaseConfig,
     ) -> PipelineMetrics:
-        """Atualiza atribuições individuais de território por ano letivo."""
+        """Atualiza atribuições individuais de território por ano letivo.
+
+        Args:
+            config: Configuração da fase de atribuições de território.
+
+        Returns:
+            Métricas de leitura e escrita da fase.
+        """
         agora = self._agora
         anos = self._anos_letivos()
         objs_por_chave: dict[tuple[Any, ...], AtribuicaoTerritorioSaber] = {}
@@ -408,14 +415,13 @@ class EtlPedagogicoService(BaseEtlService):
         return PipelineMetrics(total_lidos=total_lidos, total_escritos=total)
 
     def _executar_agrupamentos(self, config: PhaseConfig) -> PipelineMetrics:
-        """Fase de agrupamentos com persistência em duas tabelas.
+        """Gera agrupamentos locais de território e seus itens.
 
-        Coleta todas as linhas, agrega em Python e persiste em
-        AgrupamentoAtribuicaoTerritorioSaber e
-        ComponenteCurricularAgrupamento.
+        Args:
+            config: Configuração da fase de geração de agrupamentos.
 
-        Retorna PipelineMetrics com total_escritos = agrupamentos.
-        O total de itens fica em ``self._total_itens_agrupamento``.
+        Returns:
+            Métricas de leitura e escrita da fase.
         """
         agora = self._agora
         rows: list[AtribuicaoTerritorioSaberIn] = []

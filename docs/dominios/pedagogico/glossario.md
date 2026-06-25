@@ -58,7 +58,7 @@ Componentes curriculares especiais do programa **Mais Educação** / educação 
 **Valor sentinela — código 1 (`TERRITORIO_SABER_NAO_UTILIZADO`):**
 O código `cd_territorio_saber = 1` é um valor especial que significa "território não utilizado" — não representa um território real. O C# filtra explicitamente `CodigoTerritorioSaber != 1` antes de agrupar (`CargaDBAgrupamentosTerritorioSaberPorTurmaUseCase.cs:43`) e no service (`ComponenteCurricularService.cs:318`). **Registros com território 1 devem ser ignorados no agrupamento.**
 
-> **Divergência atual:** o ETL Python (`SQL_ATRIBUICOES_TERRITORIO_SABER` e `_agrupar`) não aplica esse filtro. Qualquer registro com `cd_territorio_saber = 1` na base EOL entrará no agrupamento indevidamente.
+Na carga principal, os agrupamentos são copiados da API EOL. Portanto, esse filtro já vem refletido em `agrupamentoatribuicaoterritoriosaber`. Na atribuição granular (`atribuicao_territorio_saber`), o dado ainda pode existir para apoiar diagnósticos e componentes individuais, mas o MS Pedagógico não deve tratar território `0`, `NULL` ou sentinela como agrupável.
 
 **No EOL:**
 - A presença na tabela `turma_grade_territorio_experiencia` indica que o componente é de território.
@@ -95,12 +95,13 @@ O agrupamento representa o conjunto como uma unidade: o professor planeja para o
 
 **No ETL:**
 - Tabela `agrupamento_atribuicao_territorio_saber`: o agrupamento como um todo — quem é o professor, qual a turma, qual território, período de atribuição, e a lista de componentes como CSV em `cod_componentes_curriculares`.
-- Tabela `componente_curricular_agrupamento`: uma linha por componente dentro do agrupamento (split do CSV acima). Alimenta `codigosTerritoriosAgrupamento` nos endpoints.
-- **Regra:** somente grupos com 2 ou mais componentes distintos geram agrupamento. Atribuição isolada de um único componente de território não é agrupada.
+- A carga principal copia a tabela `agrupamentoatribuicaoterritoriosaber` da API EOL via `API_EOL_DB`, em `full_refresh`.
+- Tabela `componente_curricular_agrupamento`: mantida para compatibilidade e para a fase backup de geração local. O fluxo principal dos endpoints lê os códigos do CSV em `cod_componentes_curriculares`.
+- **Regra de domínio:** somente grupos com 2 ou mais componentes distintos formam agrupamento. Atribuição isolada de um único componente de território permanece como componente individual.
 
 **Chave de agrupamento:** a combinação `(turma, território, experiência pedagógica, professor, data de atribuição, componentes)` define a linha persistida. A data de disponibilização fica como atributo de vigência/encerramento, mas não deve colapsar professores ou composições diferentes.
 
-**`cod_agrupamento`:** ID público/legado do agrupamento. O ETL preserva o código quando encontra histórico equivalente e gera novos IDs acima de `800.000` quando necessário. Ele pode se repetir em mais de uma linha física, por exemplo para outro professor ou outro recorte histórico.
+**`cod_agrupamento`:** ID público do agrupamento. Na carga principal, o ETL preserva o código recebido da API EOL. Ele pode se repetir em mais de uma linha física, por exemplo para outro professor ou outro recorte histórico.
 
 ---
 
@@ -318,9 +319,9 @@ Timestamp de quando o registro foi escrito pelo ETL. Equivale ao `timezone.now()
 
 ### `cod_componentes_curriculares` (CSV)
 
-Campo de `AgrupamentoAtribuicaoTerritorioSaber` que armazena os IDs dos componentes do agrupamento separados por vírgula — ex: `"508,511,1064"`. Sempre ordenados crescentemente para garantir determinismo no hash.
+Campo de `AgrupamentoAtribuicaoTerritorioSaber` que armazena os IDs dos componentes do agrupamento separados por vírgula — ex: `"508,511,1064"`.
 
-O ETL faz o split desse CSV e popula `componente_curricular_agrupamento` com uma linha por componente.
+No fluxo principal, o ETL copia esse CSV da API EOL e o MS Pedagógico faz o split quando precisa montar `codigosTerritoriosAgrupamento`. A tabela `componente_curricular_agrupamento` só é populada pela fase backup de geração local.
 
 ---
 

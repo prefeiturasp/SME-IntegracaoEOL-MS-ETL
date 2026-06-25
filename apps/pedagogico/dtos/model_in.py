@@ -240,10 +240,7 @@ class AtribuicaoTerritorioSaberIn:
     """Linha bruta da query SQL_ATRIBUICOES_TERRITORIO_SABER.
 
     Cada linha representa um componente atribuído por turma com território
-    saber. O agrupamento ocorre em Python: linhas com mesma chave natural
-    e mais de 1 componente geram registros em
-    AgrupamentoAtribuicaoTerritorioSaber e filhos em
-    ComponenteCurricularAgrupamento.
+    saber e é transformada para a tabela de atribuições granulares.
     """
 
     codigo_componente_curricular: Any

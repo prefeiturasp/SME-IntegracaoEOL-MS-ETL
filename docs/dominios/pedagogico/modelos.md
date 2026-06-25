@@ -54,24 +54,23 @@ Atribuição real de professor a uma turma e componente. Separa a existência do
 Agrupamento de componentes de território atribuídos a um professor numa mesma turma. `cod_agrupamento` é o identificador público/legado do agrupamento retornado nos endpoints, mas não identifica sozinho uma linha física da tabela.
 
 - **Tabela:** `agrupamento_atribuicao_territorio_saber`
-- **Fonte:** `SQL_ATRIBUICOES_TERRITORIO_SABER`
-- **Unique:** `(cod_turma, cod_territorio_saber, cod_experiencia_pedagogica, rf_professor, dt_inicio_atribuicao, cod_componentes_curriculares)` com `nulls_distinct=False`
+- **Fonte principal:** `SQL_API_EOL_AGRUPAMENTO_ATRIBUICAO_TERRITORIO_SABER`, a partir de `agrupamentoatribuicaoterritoriosaber` no `API_EOL_DB`
+- **Modo de carga:** `full_refresh`
+- **Chave física:** não há unique funcional no destino; a carga usa `id_linha_api_eol`, uma chave técnica calculada na leitura, para copiar todas as linhas da origem.
 - **Índices:** `cod_agrupamento`, `cod_turma`, `rf_professor`, `ano_letivo`
-- **Branches da query:** SME (`atribuicao_aula + v_cargo_base_cotic + v_servidor_cotic`) e externo (`atribuicao_externo + contrato_externo + pessoa`).
-- **Território:** resolvido por `turma_grade_territorio_experiencia`.
-- **Filtro de situação:** `st_turma_escola IN ('O', 'A', 'C', 'E')`
+- **Território:** descrições e códigos vêm prontos da API EOL, com origem no processo de agrupamento do domínio legado.
 - **Alimenta:** `territorio-saber/agrupamentos-correlacionados`, `territorio-saber/agrupamentos`
-- **Nota:** `cod_componentes_curriculares` armazena os códigos como CSV; o ETL faz o split e popula `ComponenteCurricularAgrupamento`. O mesmo `cod_agrupamento` pode aparecer em mais de uma linha quando o legado reaproveita o identificador para outro professor ou outro recorte histórico.
+- **Nota:** `cod_componentes_curriculares` armazena os códigos como CSV. O mesmo `cod_agrupamento` pode aparecer em mais de uma linha quando a origem reaproveita o identificador para outro professor ou outro recorte histórico.
 
 ## 5. ComponenteCurricularAgrupamento
 
-Itens de um agrupamento de território do saber — uma linha por componente. Derivada do split do CSV de `AgrupamentoAtribuicaoTerritorioSaber`.
+Itens de um agrupamento de território do saber — uma linha por componente. Mantida para compatibilidade e para a fase backup de geração local de agrupamentos.
 
 - **Tabela:** `componente_curricular_agrupamento`
-- **Fonte:** derivada de `AgrupamentoAtribuicaoTerritorioSaber`; o ETL faz split do CSV `cod_componentes_curriculares`.
+- **Fonte:** derivada de `AgrupamentoAtribuicaoTerritorioSaber` apenas quando a fase opcional `agrupamento_territorio_saber_gerado` é executada.
 - **Unique:** `(componente_codigo, turma_codigo, codigo_agrupamento, rf_professor)` com `nulls_distinct=False`
 - **Índices:** `turma_codigo`, `componente_codigo`, `codigo_agrupamento`
-- **Alimenta:** `codigosTerritoriosAgrupamento` nos endpoints de perfil e planejamento
+- **Uso atual:** apoio/compatibilidade; o fluxo principal lê o CSV diretamente da tabela de agrupamento.
 
 ## 6. GradeComponenteCurricular
 
@@ -104,33 +103,34 @@ Dados cadastrais de turmas extraídos do EOL. Sincronizado por ano letivo a part
 
 ## 8. TurmaItinerarioEnsinoMedio
 
-Tabela local de apoio com os itinerários disponíveis para o Ensino Médio. Não requer query ao SQL Server — populada via fixture Django.
+Tabela de apoio com os itinerários disponíveis para o Ensino Médio.
 
 - **Tabela:** `turma_itinerario_ensino_medio`
-- **Origem:** `apps/pedagogico/fixtures/turma_itinerario_ensino_medio.json`
+- **Origem:** `turma_tipo_itinerario` no `API_EOL_DB`, via `full_refresh`
 - **Alimenta:** `GET /api/v1/itinerario/ensino-medio`
 
 ## 9. ComponenteCurricularPlanejamentoRegencia
 
-Tabela local de apoio. Armazena triplas `(id_componente_curricular, turno, ano)` que representam quais componentes entram no planejamento de regência por combinação de turno e série.
+Tabela de apoio. Armazena triplas `(id_componente_curricular, turno, ano)` que representam quais componentes entram no planejamento de regência por combinação de turno e série.
 
 - **Tabela:** `componente_curricular_planejamento_regencia`
-- **Origem:** fixtures/migração local
-- **Uso atual:** referência para o microsserviço de consumo. Não é fase do ETL e não enriquece `ComponenteTurma`.
+- **Origem:** `regenciacomponentecurricular` no `API_EOL_DB`, via `full_refresh`
+- **Uso atual:** referência para o microsserviço de consumo. Não enriquece `ComponenteTurma`.
 
 ## 10. ComponenteCurricularHierarquia
 
-Tabela local de apoio para resolver componentes filhos e seus componentes curriculares pais.
+Tabela de apoio para resolver componentes filhos e seus componentes curriculares pais.
 
 - **Tabela:** `componente_curricular_hierarquia`
 - **Campos principais:** `id_componente_curricular_pai`, `id_componente_curricular`, `vigencia`
-- **Uso atual:** referência para o microsserviço de consumo. Não é fase do ETL e não é gravada em `ComponenteTurma`.
+- **Origem:** `componentecurricularpai` no `API_EOL_DB`, via `full_refresh`
+- **Uso atual:** referência para o microsserviço de consumo. Não é gravada em `ComponenteTurma`.
 
 ## 11. ComponenteCurricularPAP
 
-Tabela local de apoio com os IDs de componentes PAP (Programa de Apoio e Acompanhamento à Aprendizagem).
+Tabela de apoio com os IDs de componentes PAP (Programa de Apoio e Acompanhamento à Aprendizagem).
 
 - **Tabela:** `componente_curricular_pap`
 - **Unique:** `id_componente_curricular`
-- **Origem:** fixtures/migração local
+- **Origem:** `componentecurricularpap` no `API_EOL_DB`, via `full_refresh`
 - **Alimenta:** validações e regras ligadas a PAP
