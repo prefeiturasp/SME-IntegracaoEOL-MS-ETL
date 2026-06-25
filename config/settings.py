@@ -190,6 +190,25 @@ DATABASES = {
     "api_eol_db": _parse_db_url(API_EOL_DB),
 }
 
+# Cada domínio migra apenas no seu banco (ver DominioRouter.allow_migrate).
+# Em testes, o Django cria um banco por alias e deduplica aliases que
+# compartilham a mesma assinatura (ENGINE/NAME/HOST/PORT), tratando-os como
+# mirror e pulando as migrations do domínio. Quando os bancos de domínio
+# apontam para o mesmo Postgres (ex.: CI), isso deixa as tabelas do app sem
+# ser criadas e quebra consultas com "relation ... does not exist".
+# Forçar um nome de banco de teste único por alias evita o espelhamento e
+# garante que cada domínio aplique suas próprias migrations.
+for _alias_dominio in (
+    "institucional_db",
+    "professores_db",
+    "alunos_db",
+    "pedagogico_db",
+    "programas_db",
+    "api_eol_db",
+):
+    DATABASES[_alias_dominio].setdefault("TEST", {})
+    DATABASES[_alias_dominio]["TEST"]["NAME"] = f"test_{_alias_dominio}"
+
 DATABASE_ROUTERS = ["config.db_router.DominioRouter"]
 
 # W035 já silenciado acima.
