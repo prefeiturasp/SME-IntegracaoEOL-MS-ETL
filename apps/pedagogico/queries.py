@@ -8,6 +8,15 @@ _TIPO_UNIDADE_ADMINISTRATIVA_DRE = 24
 # CEI_INDIR=11, CRP_CONV=12, EMEFPFOM=32, EMEIPFOM=33
 _TIPOS_ESCOLA_EXTERNOS = "(11, 12, 32, 33)"
 
+# Componentes de Território do Saber por código fixo (espelha o legado:
+# COMPONENTES_TERRITORIO em QueriesComponenteCurricular). O legado decide
+# território por esta lista + atribuicao_aula, usando a grade/território
+# (turma_grade_territorio_experiencia) apenas como dado opcional de descrição.
+_COMPONENTES_TERRITORIO = (
+    "1214, 1215, 1216, 1217, 1218, 1219, 1220, 1221, 1222, 1223, "
+    "1519, 1520, 1521, 1522"
+)
+
 # Mapeamento componente regência (constante hardcoded)
 _IDS_REGENCIA = (
     508,
@@ -166,7 +175,7 @@ WITH cte_territorio AS (
 SELECT DISTINCT
     te.cd_turma_escola                                                                  AS turma_codigo,
     cc.cd_componente_curricular                                                         AS componente_codigo,
-    tgt.cd_componente_curricular                                                        AS codigo_componente_territorio_saber,
+    CASE WHEN cc.cd_componente_curricular IN (1214, 1215, 1216, 1217, 1218, 1219, 1220, 1221, 1222, 1223, 1519, 1520, 1521, 1522) THEN cc.cd_componente_curricular ELSE tgt.cd_componente_curricular END AS codigo_componente_territorio_saber,
     ter.dc_territorio_saber                                                             AS desc_territorio_saber,
     exp.dc_experiencia_pedagogica                                                       AS desc_experiencia_pedagogica
 FROM turma_escola (NOLOCK) te
@@ -192,7 +201,7 @@ UNION ALL
 SELECT DISTINCT
     te.cd_turma_escola,
     cc.cd_componente_curricular,
-    tgt.cd_componente_curricular,
+    CASE WHEN cc.cd_componente_curricular IN (1214, 1215, 1216, 1217, 1218, 1219, 1220, 1221, 1222, 1223, 1519, 1520, 1521, 1522) THEN cc.cd_componente_curricular ELSE tgt.cd_componente_curricular END,
     tgt.dc_territorio_saber,
     tgt.dc_experiencia_pedagogica
 FROM turma_escola (NOLOCK) te
@@ -623,7 +632,7 @@ SELECT
     te.cd_turma_escola                AS CodigoTurma,
     te.an_letivo                      AS AnoLetivo,
     vsc.cd_registro_funcional         AS RfProfessor,
-    tgt.cd_territorio_saber           AS CodigoTerritorioSaber,
+    COALESCE(tgt.cd_territorio_saber, 0) AS CodigoTerritorioSaber,
     tgt.cd_experiencia_pedagogica     AS CodigoExperienciaPedagogica,
     ter.dc_territorio_saber           AS DescricaoTerritorioSaber,
     exp.dc_experiencia_pedagogica     AS DescricaoExperienciaPedagogica,
@@ -648,13 +657,14 @@ FROM turma_escola te
     INNER JOIN componente_curricular cc
         ON cc.cd_componente_curricular = gcc.cd_componente_curricular
         AND cc.dt_cancelamento IS NULL
+        AND cc.cd_componente_curricular IN ({_COMPONENTES_TERRITORIO})
     INNER JOIN serie_ensino se ON se.cd_serie_ensino = g.cd_serie_ensino
-    INNER JOIN turma_grade_territorio_experiencia tgt
+    LEFT JOIN turma_grade_territorio_experiencia tgt
         ON tgt.cd_serie_grade = stg.cd_serie_grade
         AND tgt.cd_componente_curricular = cc.cd_componente_curricular
-    INNER JOIN tipo_experiencia_pedagogica exp
+    LEFT JOIN tipo_experiencia_pedagogica exp
         ON exp.cd_experiencia_pedagogica = tgt.cd_experiencia_pedagogica
-    INNER JOIN território_saber ter
+    LEFT JOIN território_saber ter
         ON ter.cd_territorio_saber = tgt.cd_territorio_saber
     INNER JOIN atribuicao_aula aa
         ON gcc.cd_grade = aa.cd_grade
@@ -680,7 +690,7 @@ SELECT
     te.cd_turma_escola                AS CodigoTurma,
     te.an_letivo                      AS AnoLetivo,
     pe.cd_cpf_pessoa                  AS RfProfessor,
-    tgt.cd_territorio_saber           AS CodigoTerritorioSaber,
+    COALESCE(tgt.cd_territorio_saber, 0) AS CodigoTerritorioSaber,
     tgt.cd_experiencia_pedagogica     AS CodigoExperienciaPedagogica,
     ter.dc_territorio_saber           AS DescricaoTerritorioSaber,
     exp.dc_experiencia_pedagogica     AS DescricaoExperienciaPedagogica,
@@ -705,12 +715,13 @@ FROM turma_escola te
     INNER JOIN componente_curricular cc
         ON cc.cd_componente_curricular = gcc.cd_componente_curricular
         AND cc.dt_cancelamento IS NULL
-    INNER JOIN turma_grade_territorio_experiencia tgt
+        AND cc.cd_componente_curricular IN ({_COMPONENTES_TERRITORIO})
+    LEFT JOIN turma_grade_territorio_experiencia tgt
         ON tgt.cd_serie_grade = stg.cd_serie_grade
         AND tgt.cd_componente_curricular = cc.cd_componente_curricular
-    INNER JOIN tipo_experiencia_pedagogica exp
+    LEFT JOIN tipo_experiencia_pedagogica exp
         ON exp.cd_experiencia_pedagogica = tgt.cd_experiencia_pedagogica
-    INNER JOIN território_saber ter
+    LEFT JOIN território_saber ter
         ON ter.cd_territorio_saber = tgt.cd_territorio_saber
     INNER JOIN atribuicao_externo ae
         ON gcc.cd_grade = ae.cd_grade
