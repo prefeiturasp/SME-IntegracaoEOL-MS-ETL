@@ -44,6 +44,16 @@ class EtlAlunosCommandTest(TestCase):
             "upsert",
         )
 
+    def test_extra_service_kwargs_com_anos_letivos(self) -> None:
+        """Valida repasse de anos_letivos para o service."""
+        cmd = Command()
+        self.assertEqual(
+            cmd._extra_service_kwargs(anos_letivos=[2024, 2025]),
+            {"anos_letivos": [2024, 2025]},
+        )
+        self.assertEqual(cmd._extra_service_kwargs(anos_letivos=None), {})
+        self.assertEqual(cmd._extra_service_kwargs(), {})
+
     @patch(
         "apps.alunos.management.commands.etl_alunos"
         ".EtlAlunosOrquestrador.lancar"

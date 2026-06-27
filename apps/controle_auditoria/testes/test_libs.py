@@ -137,6 +137,20 @@ class DominiosTestCase(TestCase):
             validar_parametros_dominio("alunos", ano_letivo=2024)
         )
 
+    def test_alunos_aceita_anos_letivos(self) -> None:
+        """Domínio alunos aceita lista de anos letivos."""
+        self.assertIsNone(
+            validar_parametros_dominio(
+                "alunos", anos_letivos=[2021, 2022, 2023, 2024, 2025]
+            )
+        )
+
+    def test_pedagogico_rejeita_anos_letivos(self) -> None:
+        """Domínio pedagógico não aceita o parâmetro anos_letivos."""
+        self.assertIsNotNone(
+            validar_parametros_dominio("pedagogico", anos_letivos=[2024])
+        )
+
 
 class TasksControleAuditoriaTestCase(TestCase):
     """Valida tasks celery do dominio."""

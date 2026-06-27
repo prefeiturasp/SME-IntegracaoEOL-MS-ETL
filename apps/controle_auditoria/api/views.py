@@ -145,9 +145,15 @@ class ExecucaoDetalheView(APIView):
             "já estiver finalizada (sucesso, erro ou cancelado)."
         ),
         responses={
-            200: {"type": "object", "properties": {"cancelado": {"type": "string"}}},
+            200: {
+                "type": "object",
+                "properties": {"cancelado": {"type": "string"}},
+            },
             404: None,
-            409: {"type": "object", "properties": {"erro": {"type": "string"}}},
+            409: {
+                "type": "object",
+                "properties": {"erro": {"type": "string"}},
+            },
         },
     )
     def delete(self, request: Request, id_execucao: str) -> Response:
@@ -162,7 +168,12 @@ class ExecucaoDetalheView(APIView):
 
         if execucao.situacao != "em_execucao":
             return Response(
-                {"erro": f"execução já finalizada com situação '{execucao.situacao}'"},
+                {
+                    "erro": (
+                        "execução já finalizada com situação "
+                        f"'{execucao.situacao}'"
+                    )
+                },
                 status=status.HTTP_409_CONFLICT,
             )
 
@@ -288,6 +299,19 @@ class ExecutarDominioView(APIView):
                         ),
                         "example": ["aluno", "matricula"],
                     },
+                    "anos_letivos": {
+                        "type": "array",
+                        "items": {"type": "integer"},
+                        "nullable": True,
+                        "x-nullable": True,
+                        "description": (
+                            "Opcional. Lista de anos letivos a processar. "
+                            "Quando omitido, processa todos os anos. "
+                            "Aplicável apenas ao domínio alunos: filtra "
+                            "matrículas e turmas aos anos informados."
+                        ),
+                        "example": [2021, 2022, 2023, 2024, 2025],
+                    },
                 },
             }
         },
@@ -308,11 +332,17 @@ class ExecutarDominioView(APIView):
         prioridade = int(request.data.get("prioridade", 5))
         ano_letivo = request.data.get("ano_letivo")
         fases = request.data.get("fases")
+        anos_letivos = request.data.get("anos_letivos")
 
         erro_parametros = validar_parametros_dominio(
             dominio,
             ano_letivo=int(ano_letivo) if ano_letivo is not None else None,
             fases=list(fases) if fases is not None else None,
+            anos_letivos=(
+                [int(a) for a in anos_letivos]
+                if anos_letivos is not None
+                else None
+            ),
         )
         if erro_parametros:
             return Response(
@@ -330,6 +360,8 @@ class ExecutarDominioView(APIView):
             kwargs_task["ano_letivo"] = int(ano_letivo)
         if fases is not None:
             kwargs_task["fases"] = list(fases)
+        if anos_letivos is not None:
+            kwargs_task["anos_letivos"] = [int(a) for a in anos_letivos]
 
         if executar_em:
             eta = parse_datetime(executar_em)

@@ -39,6 +39,14 @@ class Command(BaseCommand):
             metavar="FASE",
             help="Executa apenas as fases informadas (pelo nome).",
         )
+        parser.add_argument(
+            "--anos-letivos",
+            type=int,
+            nargs="+",
+            default=None,
+            metavar="ANO",
+            help="(alunos) Processa apenas os anos letivos informados.",
+        )
 
     def handle(self, *args: Any, **options: Any) -> None:
         """Executa o ETL do dominio especificado."""
@@ -48,11 +56,13 @@ class Command(BaseCommand):
         continuar = options["continuar"]
         ano_letivo = options.get("ano_letivo")
         fases = options.get("fases")
+        anos_letivos = options.get("anos_letivos")
 
         erro_parametros = validar_parametros_dominio(
             dominio,
             ano_letivo=ano_letivo,
             fases=fases,
+            anos_letivos=anos_letivos,
         )
         if erro_parametros:
             raise CommandError(erro_parametros)
@@ -66,4 +76,6 @@ class Command(BaseCommand):
             argumentos += ["--ano-letivo", str(ano_letivo)]
         if fases:
             argumentos += ["--fases", *fases]
+        if anos_letivos:
+            argumentos += ["--anos-letivos", *[str(a) for a in anos_letivos]]
         call_command(str(comando_etl), *argumentos)

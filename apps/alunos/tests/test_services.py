@@ -213,6 +213,36 @@ class TestAlunosService(TestCase):
             fases["dados_aluno_acompanhamento_escolar"].sql,
         )
 
+    def test_anos_letivos_aplica_filtro_in_nas_fases(self) -> None:
+        """Valida que anos_letivos gera filtro IN e remove marcadores."""
+        service = EtlAlunosService(
+            db_alias="default",
+            eol=self.mock_eol,
+            id_execucao=uuid4(),
+            anos_letivos=[2021, 2022, 2023, 2024, 2025],
+        )
+        fases = {fase.nome: fase for fase in service._fases}
+        anos = "2021, 2022, 2023, 2024, 2025"
+
+        for fase in fases.values():
+            self.assertNotIn("/*FILTRO_ANO_LETIVO", fase.sql)
+
+        self.assertIn(
+            f"AND an_letivo IN ({anos})", fases["matricula"].sql
+        )
+        self.assertIn(
+            f"AND te.an_letivo IN ({anos})", fases["matricula_turma"].sql
+        )
+        self.assertIn("fmc.cd_aluno = a.cd_aluno", fases["aluno"].sql)
+        self.assertIn(
+            f"and an_letivo IN ({anos})",
+            fases["dados_aluno_acompanhamento_escolar"].sql,
+        )
+        self.assertNotIn(
+            "year(getdate())",
+            fases["dados_aluno_acompanhamento_escolar"].sql,
+        )
+
     def test_fases_selecionadas_sao_repassadas_para_base(self) -> None:
         """Valida que o service respeita execução parcial por nome de fase."""
         service = EtlAlunosService(
