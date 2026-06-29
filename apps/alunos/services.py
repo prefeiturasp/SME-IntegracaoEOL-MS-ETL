@@ -304,6 +304,7 @@ class EtlAlunosService(BaseEtlService):
                     "sequencia",
                     "origem_atual",
                     "ano_letivo_turma",
+                    "serie_resumida",
                 ),
                 unique_fields=(
                     "codigo_matricula",

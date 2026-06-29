@@ -212,6 +212,7 @@ class MatriculaTurmaIn:
     sequencia: int
     origem_atual: bool | None = None
     ano_letivo_turma: int | None = None
+    serie_resumida: str | None = None
 
     def to_domain(self) -> dict:
         return {
@@ -237,6 +238,7 @@ class MatriculaTurmaIn:
             "sequencia": self.sequencia,
             "origem_atual": self.origem_atual,
             "ano_letivo_turma": self.ano_letivo_turma,
+            "serie_resumida": strip_str(self.serie_resumida),
         }
 
 

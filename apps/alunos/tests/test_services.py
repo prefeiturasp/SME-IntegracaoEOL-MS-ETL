@@ -94,7 +94,7 @@ class TestAlunosService(TestCase):
         transform = self.service._criar_transform(config)
 
         # Ordem POSICIONAL deve casar com MatriculaTurmaIn:
-        # ... nome_turma, campos da turma, sequencia, origem, ano.
+        # ... sequencia, origem, ano, serie_resumida.
         row = (
             123,
             456,
@@ -114,6 +114,7 @@ class TestAlunosService(TestCase):
             1,
             True,
             2026,
+            "5",
         )
         pk, _, _ = transform(row)
 
@@ -140,6 +141,10 @@ class TestAlunosService(TestCase):
         self.assertLess(
             select_final.index("origem_atual"),
             select_final.index("ano_letivo_turma"),
+        )
+        self.assertLess(
+            select_final.index("ano_letivo_turma"),
+            select_final.index("serie_resumida"),
         )
 
     def test_sql_aluno_expoe_cns_antes_de_data_atualizacao(self) -> None:

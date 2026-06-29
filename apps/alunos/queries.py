@@ -166,6 +166,7 @@ WITH SeriePorTurma AS (
          , MIN(se.cd_ciclo_ensino) AS cd_ciclo_ensino
          , MIN(eten.dc_etapa_ensino) AS dc_etapa_ensino
          , MIN(ce.dc_ciclo_ensino) AS dc_ciclo_ensino
+         , MIN(se.sg_resumida_serie) AS sg_resumida_serie
     FROM serie_turma_escola ste
     LEFT JOIN serie_ensino se
         ON ste.cd_serie_ensino = se.cd_serie_ensino
@@ -193,6 +194,7 @@ CteMatriculaTurma AS (
       , serie.cd_ciclo_ensino AS codigo_ciclo_ensino
       , serie.dc_etapa_ensino AS descricao_etapa_ensino
       , serie.dc_ciclo_ensino AS descricao_ciclo_ensino
+      , serie.sg_resumida_serie AS serie_resumida
       , CAST(1 AS BIT) AS origem_atual
       , te.an_letivo AS ano_letivo_turma
     FROM matricula_turma_escola mt
@@ -219,6 +221,7 @@ CteMatriculaTurma AS (
       , serie.cd_ciclo_ensino AS codigo_ciclo_ensino
       , serie.dc_etapa_ensino AS descricao_etapa_ensino
       , serie.dc_ciclo_ensino AS descricao_ciclo_ensino
+      , serie.sg_resumida_serie AS serie_resumida
       , CAST(0 AS BIT) AS origem_atual
       , te.an_letivo AS ano_letivo_turma
     FROM historico_matricula_turma_escola mt
@@ -257,6 +260,7 @@ SELECT
   , sequencia
   , origem_atual
   , ano_letivo_turma
+  , serie_resumida
 FROM CteMatriculaTurmaSequencia;
 """
 
