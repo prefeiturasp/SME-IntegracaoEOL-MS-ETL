@@ -245,7 +245,7 @@ SELECT
   , vuedg.nm_distrito_mec AS distrito
   , (SELECT dc_dispositivo FROM dispositivo
      WHERE tp_dispositivo_comunicacao = 9 AND sequencia = 1
-       AND cd_unidade_educacao = vuedg.cd_unidade_educacao) AS email
+       AND cd_unidade_educacao = vcue.cd_unidade_educacao) AS email
   , (SELECT CONCAT('(', cd_ddd, ') ', dc_dispositivo) FROM dispositivo
      WHERE tp_dispositivo_comunicacao = 1 AND sequencia = 1
        AND cd_unidade_educacao = vuedg.cd_unidade_educacao) AS telefone_1
@@ -254,8 +254,29 @@ SELECT
        AND cd_unidade_educacao = vuedg.cd_unidade_educacao) AS telefone_2
   , escola.an_construcao AS ano_construcao
   , vuedg.dc_tipo_forma_ocupacao_predio AS propriedade
-  , CASE WHEN vuedg.tp_escola IN (11, 12) THEN CAST(1 AS BIT)
-         ELSE CAST(0 AS BIT) END AS organizacao_parceira
+  , CASE
+        WHEN EXISTS (
+            SELECT 1
+            FROM dispositivo
+            WHERE tp_dispositivo_comunicacao = 9
+              AND sequencia = 1
+              AND cd_unidade_educacao = vcue.cd_unidade_educacao
+              AND LTRIM(RTRIM(ISNULL(dc_dispositivo, ''))) <> ''
+        )
+        AND NOT (
+            COALESCE(vuedg.tp_escola, escola.tp_escola) = 11
+            AND vuedg.tp_forma_ocupacao_predio = 3
+            AND vuedg.tp_proprietario = 4
+            AND EXISTS (
+                SELECT 1
+                FROM contrato_externo ce
+                WHERE ce.cd_unidade_educacao = vcue.cd_unidade_educacao
+                  AND ce.dt_cancelamento IS NULL
+            )
+        )
+        THEN CAST(1 AS BIT)
+        ELSE CAST(0 AS BIT)
+    END AS organizacao_parceira
   , CASE WHEN COALESCE(vuedg.tp_escola, escola.tp_escola) = 5
          THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT) END AS eh_ceu
   , vcue.dt_atualizacao_endereco AS data_atualizacao
