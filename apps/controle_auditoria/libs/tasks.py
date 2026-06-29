@@ -18,6 +18,35 @@ def verificar_saude() -> str:
     return "ok"
 
 
+def _montar_argumentos(
+    dominio: str,
+    volume: int,
+    offset: int,
+    continuar: bool,
+    ano_letivo: int | None,
+    fases: list[str] | None,
+    anos_letivos: list[int] | None,
+) -> list[str]:
+    """Monta a lista de argumentos para o comando executar_dominio."""
+    args = [
+        "--dominio",
+        dominio,
+        "--volume",
+        str(volume),
+        "--offset",
+        str(offset),
+    ]
+    if continuar:
+        args.append("--continuar")
+    if ano_letivo is not None:
+        args += ["--ano-letivo", str(ano_letivo)]
+    if fases:
+        args += ["--fases", *fases]
+    if anos_letivos:
+        args += ["--anos-letivos", *[str(ano) for ano in anos_letivos]]
+    return args
+
+
 @aplicacao_celery.task(name="etl.executar_dominio", bind=True, max_retries=5)
 def executar_dominio_task(
     self: Task,
@@ -27,12 +56,14 @@ def executar_dominio_task(
     continuar: bool = False,
     ano_letivo: int | None = None,
     fases: list[str] | None = None,
+    anos_letivos: list[int] | None = None,
 ) -> str:
     """Executa domínio ETL via fila Celery com retomada por checkpoint."""
     erro_parametros = validar_parametros_dominio(
         dominio,
         ano_letivo=ano_letivo,
         fases=fases,
+        anos_letivos=anos_letivos,
     )
     if erro_parametros:
         return f"erro:{erro_parametros}"
@@ -43,38 +74,31 @@ def executar_dominio_task(
 
     try:
         while True:
-            checkpoint_antes = repositorio.obter_checkpoint_dominio(dominio)
+            cp_antes = repositorio.obter_checkpoint_dominio(dominio) or {}
+            token_antes = int(
+                cast(int | str, cp_antes.get("token_parada", 0))
+            )
 
-            token_antes_valor = (checkpoint_antes or {}).get("token_parada", 0)
-            token_antes = int(cast(int | str, token_antes_valor))
-
-            argumentos: list[str] = [
-                "--dominio",
+            argumentos = _montar_argumentos(
                 dominio,
-                "--volume",
-                str(volume),
-                "--offset",
-                str(offset),
-            ]
-
-            if continuar_execucao:
-                argumentos.append("--continuar")
-            if ano_letivo is not None:
-                argumentos += ["--ano-letivo", str(ano_letivo)]
-            if fases:
-                argumentos += ["--fases", *fases]
-
+                volume,
+                offset,
+                continuar_execucao,
+                ano_letivo,
+                fases,
+                anos_letivos,
+            )
             call_command("executar_dominio", *argumentos)
 
             checkpoint_depois = repositorio.obter_checkpoint_dominio(dominio)
-
             situacao = str(
                 (checkpoint_depois or {}).get("ultima_situacao", "")
             )
-            token_depois_valor = (checkpoint_depois or {}).get(
-                "token_parada", 0
+            token_depois = int(
+                cast(
+                    int | str, (checkpoint_depois or {}).get("token_parada", 0)
+                )
             )
-            token_depois = int(cast(int | str, token_depois_valor))
 
             linhas = max(token_depois - token_antes, 0)
             total_linhas_processadas += linhas
@@ -94,6 +118,7 @@ def executar_dominio_task(
             "continuar": True,
             "ano_letivo": ano_letivo,
             "fases": fases,
+            "anos_letivos": anos_letivos,
         }
 
         raise self.retry(

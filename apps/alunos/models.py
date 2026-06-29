@@ -201,10 +201,23 @@ class MatriculaTurma(models.Model):
     tipo_turno = models.SmallIntegerField(null=True, blank=True)
     data_atualizacao_tabela = models.DateTimeField(null=True, blank=True)
     nome_turma = models.CharField(max_length=80, null=True, blank=True)
+    codigo_ue_turma = models.CharField(max_length=20, null=True, blank=True)
     codigo_etapa_ensino = models.SmallIntegerField(null=True, blank=True)
+    codigo_ciclo_ensino = models.SmallIntegerField(null=True, blank=True)
+    descricao_etapa_ensino = models.CharField(
+        max_length=100,
+        null=True,
+        blank=True,
+    )
+    descricao_ciclo_ensino = models.CharField(
+        max_length=100,
+        null=True,
+        blank=True,
+    )
     sequencia = models.IntegerField(default=1)
     origem_atual = models.BooleanField(null=True, blank=True)
     ano_letivo_turma = models.SmallIntegerField(null=True, blank=True)
+    serie_resumida = models.CharField(max_length=20, null=True, blank=True)
 
     class Meta:
         app_label = "alunos"

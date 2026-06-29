@@ -222,3 +222,54 @@ class TestConnectionFactory(TestCase):
             mock_cursor.execute.side_effect = RuntimeError("invalid object name: 'ZYX'")
             with self.assertRaises(RuntimeError):
                 list(factory.iter_consulta("SELECT 1"))
+
+    @patch("apps.core.libs.connection_readonly.time.sleep")
+    @patch("django.conf.settings.DATABASES")
+    def test_iter_consulta_reconecta_apos_queda_de_conexao(
+        self, mock_databases: MagicMock, mock_sleep: MagicMock
+    ) -> None:
+        """Reconecta e refaz a consulta após erro de conexão TCP 10054."""
+        mock_databases.__contains__.return_value = True
+        mock_databases.__getitem__.return_value = {"NAME": "fake"}
+        factory = ReadOnlySQLServerConnectionFactory(db_alias="fake_db")
+
+        with patch(
+            "apps.core.libs.connection_readonly.connections"
+        ) as mock_connections:
+            mock_cursor = mock_connections[
+                "fake_db"
+            ].cursor.return_value.__enter__.return_value
+            mock_cursor.fetchmany.side_effect = [
+                RuntimeError("[08S01] TCP Provider: error 0x2746 (10054)"),
+                [(1,)],
+                [],
+            ]
+
+            chunks = list(factory.iter_consulta("SELECT 1", chunk_size=1))
+
+            self.assertEqual(chunks, [[(1,)]])
+            mock_connections["fake_db"].close.assert_called_once()
+            mock_sleep.assert_called_once()
+
+    @patch("apps.core.libs.connection_readonly.time.sleep")
+    @patch("django.conf.settings.DATABASES")
+    def test_iter_consulta_desiste_apos_maximo_de_tentativas(
+        self, mock_databases: MagicMock, mock_sleep: MagicMock
+    ) -> None:
+        """Propaga o erro de conexão após esgotar as tentativas."""
+        mock_databases.__contains__.return_value = True
+        mock_databases.__getitem__.return_value = {"NAME": "fake"}
+        factory = ReadOnlySQLServerConnectionFactory(db_alias="fake_db")
+
+        with patch(
+            "apps.core.libs.connection_readonly.connections"
+        ) as mock_connections:
+            mock_cursor = mock_connections[
+                "fake_db"
+            ].cursor.return_value.__enter__.return_value
+            mock_cursor.fetchmany.side_effect = RuntimeError(
+                "[08S01] connection reset (10054)"
+            )
+
+            with self.assertRaises(RuntimeError):
+                list(factory.iter_consulta("SELECT 1"))

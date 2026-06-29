@@ -127,6 +127,47 @@ class ViewsApiControleAuditoriaTestCase(TestCase):
         )
 
     @patch("apps.controle_auditoria.api.views.executar_dominio_task")
+    def test_deve_enfileirar_alunos_com_anos_letivos(
+        self, tarefa_mock: Any
+    ) -> None:
+        """POST em alunos aceita anos_letivos e repassa para a task."""
+        tarefa_mock.apply_async.return_value = type(
+            "Result", (), {"id": "task-alunos"}
+        )()
+        resposta = self.client.post(
+            "/api/v1/dominios/alunos/executar/",
+            data={"anos_letivos": [2021, 2022, 2023, 2024, 2025]},
+            format="json",
+            **self.headers,
+        )
+        self.assertEqual(resposta.status_code, 202)
+        tarefa_mock.apply_async.assert_called_once_with(
+            kwargs={
+                "dominio": "alunos",
+                "volume": 100,
+                "offset": 0,
+                "continuar": False,
+                "anos_letivos": [2021, 2022, 2023, 2024, 2025],
+            },
+            priority=5,
+        )
+
+    @patch("apps.controle_auditoria.api.views.executar_dominio_task")
+    def test_deve_rejeitar_anos_letivos_em_dominio_sem_suporte(
+        self, tarefa_mock: Any
+    ) -> None:
+        """Retorna 400 quando domínio sem suporte recebe anos_letivos."""
+        resposta = self.client.post(
+            "/api/v1/dominios/pedagogico/executar/",
+            data={"anos_letivos": [2024]},
+            format="json",
+            **self.headers,
+        )
+        self.assertEqual(resposta.status_code, 400)
+        self.assertIn("anos_letivos", resposta.json()["erro"])
+        tarefa_mock.apply_async.assert_not_called()
+
+    @patch("apps.controle_auditoria.api.views.executar_dominio_task")
     def test_deve_agendar_execucao_com_data_hora(
         self, tarefa_mock: Any
     ) -> None:

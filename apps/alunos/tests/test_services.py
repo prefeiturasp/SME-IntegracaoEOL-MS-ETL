@@ -94,7 +94,7 @@ class TestAlunosService(TestCase):
         transform = self.service._criar_transform(config)
 
         # Ordem POSICIONAL deve casar com MatriculaTurmaIn:
-        # ... codigo_etapa_ensino, sequencia, origem_atual, ano_letivo_turma
+        # ... sequencia, origem, ano, serie_resumida.
         row = (
             123,
             456,
@@ -106,10 +106,15 @@ class TestAlunosService(TestCase):
             None,
             None,
             "5A",
+            "100001",
             5,
+            2,
+            "Ensino Fundamental",
+            "Ciclo Interdisciplinar",
             1,
             True,
             2026,
+            "5",
         )
         pk, _, _ = transform(row)
 
@@ -122,12 +127,24 @@ class TestAlunosService(TestCase):
         )[0]
         select_final = antes_from[antes_from.rfind(")") + 1 :]
         self.assertLess(
+            select_final.index("codigo_ue_turma"),
+            select_final.index("codigo_etapa_ensino"),
+        )
+        self.assertLess(
+            select_final.index("descricao_ciclo_ensino"),
+            select_final.index("sequencia"),
+        )
+        self.assertLess(
             select_final.index("sequencia"),
             select_final.index("origem_atual"),
         )
         self.assertLess(
             select_final.index("origem_atual"),
             select_final.index("ano_letivo_turma"),
+        )
+        self.assertLess(
+            select_final.index("ano_letivo_turma"),
+            select_final.index("serie_resumida"),
         )
 
     def test_sql_aluno_expoe_cns_antes_de_data_atualizacao(self) -> None:
@@ -175,6 +192,19 @@ class TestAlunosService(TestCase):
             "mt.dt_atlz_tab AS data_atualizacao_tabela",
             SQL_MATRICULA_TURMA,
         )
+        self.assertIn("te.cd_escola AS codigo_ue_turma", SQL_MATRICULA_TURMA)
+        self.assertIn(
+            "serie.cd_ciclo_ensino AS codigo_ciclo_ensino",
+            SQL_MATRICULA_TURMA,
+        )
+        self.assertIn(
+            "serie.dc_etapa_ensino AS descricao_etapa_ensino",
+            SQL_MATRICULA_TURMA,
+        )
+        self.assertIn(
+            "serie.dc_ciclo_ensino AS descricao_ciclo_ensino",
+            SQL_MATRICULA_TURMA,
+        )
 
     def test_sem_ano_letivo_remove_marcadores_e_preserva_padrao(self) -> None:
         """Valida SQLs sem marcador quando ano_letivo não é informado."""
@@ -185,6 +215,36 @@ class TestAlunosService(TestCase):
 
         self.assertIn(
             "and an_letivo = year(getdate())",
+            fases["dados_aluno_acompanhamento_escolar"].sql,
+        )
+
+    def test_anos_letivos_aplica_filtro_in_nas_fases(self) -> None:
+        """Valida que anos_letivos gera filtro IN e remove marcadores."""
+        service = EtlAlunosService(
+            db_alias="default",
+            eol=self.mock_eol,
+            id_execucao=uuid4(),
+            anos_letivos=[2021, 2022, 2023, 2024, 2025],
+        )
+        fases = {fase.nome: fase for fase in service._fases}
+        anos = "2021, 2022, 2023, 2024, 2025"
+
+        for fase in fases.values():
+            self.assertNotIn("/*FILTRO_ANO_LETIVO", fase.sql)
+
+        self.assertIn(
+            f"AND an_letivo IN ({anos})", fases["matricula"].sql
+        )
+        self.assertIn(
+            f"AND te.an_letivo IN ({anos})", fases["matricula_turma"].sql
+        )
+        self.assertIn("fmc.cd_aluno = a.cd_aluno", fases["aluno"].sql)
+        self.assertIn(
+            f"and an_letivo IN ({anos})",
+            fases["dados_aluno_acompanhamento_escolar"].sql,
+        )
+        self.assertNotIn(
+            "year(getdate())",
             fases["dados_aluno_acompanhamento_escolar"].sql,
         )
 
@@ -376,13 +436,18 @@ class TestAlunosService(TestCase):
             tipo_turno=None,
             data_atualizacao_tabela=None,
             nome_turma=None,
+            codigo_ue_turma=None,
             codigo_etapa_ensino=None,
+            codigo_ciclo_ensino=None,
+            descricao_etapa_ensino=None,
+            descricao_ciclo_ensino=None,
             sequencia=1,
         )
         domain = dto.to_domain()
         self.assertIsNone(domain["codigo_matricula"])
         self.assertEqual(domain["codigo_turma"], 101)
         self.assertEqual(domain["sequencia"], 1)
+        self.assertIsNone(domain["codigo_ue_turma"])
 
     def test_fase_matricula_turma_chave_inclui_sequencia(self) -> None:
         """Valida chave e update_fields da fase matricula_turma."""
@@ -407,6 +472,10 @@ class TestAlunosService(TestCase):
             ),
         )
         self.assertIn("sequencia", fase.update_fields)
+        self.assertIn("codigo_ue_turma", fase.update_fields)
+        self.assertIn("codigo_ciclo_ensino", fase.update_fields)
+        self.assertIn("descricao_etapa_ensino", fase.update_fields)
+        self.assertIn("descricao_ciclo_ensino", fase.update_fields)
 
     def test_fase_matricula_inclui_codigo_dre_em_update_fields(self) -> None:
         """Valida que a fase matricula atualiza codigo_dre."""
