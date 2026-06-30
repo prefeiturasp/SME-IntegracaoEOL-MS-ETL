@@ -8,6 +8,15 @@ _TIPO_UNIDADE_ADMINISTRATIVA_DRE = 24
 # CEI_INDIR=11, CRP_CONV=12, EMEFPFOM=32, EMEIPFOM=33
 _TIPOS_ESCOLA_EXTERNOS = "(11, 12, 32, 33)"
 
+# Componentes de Território do Saber por código fixo (espelha o legado:
+# COMPONENTES_TERRITORIO em QueriesComponenteCurricular). O legado decide
+# território por esta lista + atribuicao_aula, usando a grade/território
+# (turma_grade_territorio_experiencia) apenas como dado opcional de descrição.
+_COMPONENTES_TERRITORIO = (
+    "1214, 1215, 1216, 1217, 1218, 1219, 1220, 1221, 1222, 1223, "
+    "1519, 1520, 1521, 1522"
+)
+
 # Mapeamento componente regência (constante hardcoded)
 _IDS_REGENCIA = (
     508,
@@ -41,6 +50,103 @@ WHERE st_turma_escola IN ('O', 'A', 'C', 'E')
 ORDER BY an_letivo
 """
 
+# Fonte Postgres API EOL → destino pedagogico_db.
+# Estas consultas alimentam tabelas estáticas/legadas via full refresh.
+SQL_API_EOL_COMPONENTE_CURRICULAR_HIERARQUIA = """
+SELECT
+    id,
+    idcomponentecurricularpai,
+    idcomponentecurricular,
+    vigencia
+FROM componentecurricularpai
+ORDER BY id
+"""
+
+SQL_API_EOL_COMPONENTE_CURRICULAR_PAP = """
+SELECT
+    id,
+    id AS idcomponentecurricular
+FROM componentecurricularpap
+ORDER BY id
+"""
+
+SQL_API_EOL_COMPONENTE_CURRICULAR_PLANEJAMENTO_REGENCIA = """
+SELECT
+    idcomponentecurricular,
+    turno,
+    ano
+FROM regenciacomponentecurricular
+ORDER BY idcomponentecurricular, turno, ano
+"""
+
+SQL_API_EOL_TURMA_ITINERARIO_ENSINO_MEDIO = """
+SELECT
+    id,
+    nome,
+    serie
+FROM turma_tipo_itinerario
+ORDER BY id
+"""
+
+SQL_API_EOL_AGRUPAMENTO_ATRIBUICAO_TERRITORIO_SABER = """
+SELECT
+    ROW_NUMBER() OVER (
+        ORDER BY
+            codagrupamento,
+            codturma,
+            rfprofessor,
+            codterritoriosaber,
+            codexperienciapedagogica,
+            dtinicioatribuicao,
+            codcomponentescurriculares
+    ) AS id_linha_api_eol,
+    codagrupamento,
+    codterritoriosaber,
+    codexperienciapedagogica,
+    dtinicioatribuicao::timestamp AS dtinicioatribuicao,
+    anoatribuicao,
+    dtfimatribuicao::timestamp AS dtfimatribuicao,
+    dtfimturma::timestamp AS dtfimturma,
+    rfprofessor,
+    codturma,
+    codcomponentescurriculares,
+    anoletivo,
+    codmotivodisponibilizacao,
+    descterritoriosaber,
+    descexperienciapedagogica,
+    encerramento_atribuicao_agrupamento_atualizado
+FROM agrupamentoatribuicaoterritoriosaber
+ORDER BY codagrupamento
+"""
+
+API_EOL_PEDAGOGICO_TABLE_MAPPINGS = {
+    "componentecurricularhierarquia": {
+        "source_table": "componentecurricularpai",
+        "target_table": "componente_curricular_hierarquia",
+        "sql": SQL_API_EOL_COMPONENTE_CURRICULAR_HIERARQUIA,
+    },
+    "componentecurricularpap": {
+        "source_table": "componentecurricularpap",
+        "target_table": "componente_curricular_pap",
+        "sql": SQL_API_EOL_COMPONENTE_CURRICULAR_PAP,
+    },
+    "componentecurricularplanejamentoregencia": {
+        "source_table": "regenciacomponentecurricular",
+        "target_table": "componente_curricular_planejamento_regencia",
+        "sql": SQL_API_EOL_COMPONENTE_CURRICULAR_PLANEJAMENTO_REGENCIA,
+    },
+    "turmaitinerarioensinomedio": {
+        "source_table": "turma_tipo_itinerario",
+        "target_table": "turma_itinerario_ensino_medio",
+        "sql": SQL_API_EOL_TURMA_ITINERARIO_ENSINO_MEDIO,
+    },
+    "agrupamento_atribuicao_territorio_saber": {
+        "source_table": "agrupamentoatribuicaoterritoriosaber",
+        "target_table": "agrupamento_atribuicao_territorio_saber",
+        "sql": SQL_API_EOL_AGRUPAMENTO_ATRIBUICAO_TERRITORIO_SABER,
+    },
+}
+
 # Fase 2 — Estrutura turma × componente (sem professor).
 # Uma linha por (turma_codigo, componente_codigo).
 # Mantém apenas o vínculo e o código de território do saber, quando existir.
@@ -48,16 +154,30 @@ ORDER BY an_letivo
 #   Branch 1: turmas com série (via serie_turma_escola)
 #   Branch 2: turmas de programa (via turma_escola_grade_programa)
 #
-# codigo_componente_territorio_saber resolvido via CTE lida uma vez.
+# codigo_componente_territorio_saber e descrições resolvidos pela grade de
+# Território do Saber.
 SQL_COMPONENTE_TURMA = """
 WITH cte_territorio AS (
-    SELECT DISTINCT cd_componente_curricular
-    FROM turma_grade_territorio_experiencia (NOLOCK)
+    SELECT
+        tgt.cd_componente_curricular,
+        ter.dc_territorio_saber,
+        exp.dc_experiencia_pedagogica,
+        ROW_NUMBER() OVER (
+            PARTITION BY tgt.cd_componente_curricular
+            ORDER BY tgt.cd_territorio_saber, tgt.cd_experiencia_pedagogica
+        ) AS rn
+    FROM turma_grade_territorio_experiencia (NOLOCK) tgt
+    INNER JOIN território_saber (NOLOCK) ter
+        ON ter.cd_territorio_saber = tgt.cd_territorio_saber
+    INNER JOIN tipo_experiencia_pedagogica (NOLOCK) exp
+        ON exp.cd_experiencia_pedagogica = tgt.cd_experiencia_pedagogica
 )
 SELECT DISTINCT
     te.cd_turma_escola                                                                  AS turma_codigo,
     cc.cd_componente_curricular                                                         AS componente_codigo,
-    tgt.cd_componente_curricular                                                        AS codigo_componente_territorio_saber
+    CASE WHEN cc.cd_componente_curricular IN (1214, 1215, 1216, 1217, 1218, 1219, 1220, 1221, 1222, 1223, 1519, 1520, 1521, 1522) THEN cc.cd_componente_curricular ELSE tgt.cd_componente_curricular END AS codigo_componente_territorio_saber,
+    ter.dc_territorio_saber                                                             AS desc_territorio_saber,
+    exp.dc_experiencia_pedagogica                                                       AS desc_experiencia_pedagogica
 FROM turma_escola (NOLOCK) te
 INNER JOIN serie_turma_escola (NOLOCK) ste ON ste.cd_turma_escola = te.cd_turma_escola
 INNER JOIN serie_turma_grade (NOLOCK) stg
@@ -67,7 +187,13 @@ INNER JOIN grade (NOLOCK) g             ON g.cd_grade = eg.cd_grade
 INNER JOIN grade_componente_curricular (NOLOCK) gcc ON gcc.cd_grade = g.cd_grade
 INNER JOIN componente_curricular (NOLOCK) cc
     ON cc.cd_componente_curricular = gcc.cd_componente_curricular AND cc.dt_cancelamento IS NULL
-LEFT JOIN cte_territorio tgt            ON tgt.cd_componente_curricular = cc.cd_componente_curricular
+LEFT JOIN turma_grade_territorio_experiencia (NOLOCK) tgt
+    ON tgt.cd_serie_grade = stg.cd_serie_grade
+   AND tgt.cd_componente_curricular = cc.cd_componente_curricular
+LEFT JOIN território_saber (NOLOCK) ter
+    ON ter.cd_territorio_saber = tgt.cd_territorio_saber
+LEFT JOIN tipo_experiencia_pedagogica (NOLOCK) exp
+    ON exp.cd_experiencia_pedagogica = tgt.cd_experiencia_pedagogica
 WHERE te.an_letivo = ?
   AND te.st_turma_escola IN ('O', 'A', 'C', 'E')
 UNION ALL
@@ -75,7 +201,9 @@ UNION ALL
 SELECT DISTINCT
     te.cd_turma_escola,
     cc.cd_componente_curricular,
-    tgt.cd_componente_curricular
+    CASE WHEN cc.cd_componente_curricular IN (1214, 1215, 1216, 1217, 1218, 1219, 1220, 1221, 1222, 1223, 1519, 1520, 1521, 1522) THEN cc.cd_componente_curricular ELSE tgt.cd_componente_curricular END,
+    tgt.dc_territorio_saber,
+    tgt.dc_experiencia_pedagogica
 FROM turma_escola (NOLOCK) te
 INNER JOIN turma_escola_grade_programa (NOLOCK) tegp ON tegp.cd_turma_escola = te.cd_turma_escola
 INNER JOIN escola_grade (NOLOCK) teg    ON teg.cd_escola_grade = tegp.cd_escola_grade
@@ -83,7 +211,9 @@ INNER JOIN grade (NOLOCK) pg            ON pg.cd_grade = teg.cd_grade
 INNER JOIN grade_componente_curricular (NOLOCK) pgcc ON pgcc.cd_grade = teg.cd_grade
 INNER JOIN componente_curricular (NOLOCK) cc
     ON pgcc.cd_componente_curricular = cc.cd_componente_curricular AND cc.dt_cancelamento IS NULL
-LEFT JOIN cte_territorio tgt            ON tgt.cd_componente_curricular = cc.cd_componente_curricular
+LEFT JOIN cte_territorio tgt
+    ON tgt.cd_componente_curricular = cc.cd_componente_curricular
+   AND tgt.rn = 1
 WHERE te.an_letivo = ?
   AND te.st_turma_escola IN ('O', 'A', 'C', 'E')
 """
@@ -333,7 +463,7 @@ SELECT DISTINCT
     END                                                                        AS Ano,
     tur.cd_tipo_turma                                                          AS TipoTurma,
     tur.dc_turma_escola                                                        AS NomeTurma,
-    tur.cd_duracao                                                             AS DuracaoTurno,
+    dtt.qt_hora_duracao                                                        AS DuracaoTurno,
     tur.cd_tipo_turno                                                          AS TipoTurno,
     tur.dt_inicio_turma                                                        AS DataInicioTurma,
     tur.dt_fim                                                                 AS DataFim,
@@ -357,6 +487,7 @@ SELECT DISTINCT
             OR (tur.cd_tipo_turma <> 1 AND esc.tp_escola IN (2,17,28,30,31))  THEN 1
         WHEN ee.cd_etapa_ensino IN (2, 3, 7, 11)                              THEN 3
         WHEN ee.cd_etapa_ensino IN (4, 5, 12, 13)                             THEN 5
+        WHEN tur.cd_tipo_turma = 3 AND esc.tp_escola IN(1, 3, 4, 16) 		  THEN 5
         WHEN ee.cd_etapa_ensino IN (6, 7, 8, 14, 17)                         THEN 6
         WHEN tur.cd_tipo_turma = 7                                            THEN 6
         WHEN esc.tp_escola = 13                                               THEN 4
@@ -378,8 +509,11 @@ SELECT DISTINCT
     END                                                                        AS Semestre,
     IIF((se.cd_etapa_ensino = 13) AND (se.cd_modalidade_ensino = 2), 1, 0)    AS EnsinoEspecial,
     ee.cd_etapa_ensino                                                         AS CodigoEtapaEnsino,
-    se.cd_ciclo_ensino                                                         AS CodigoCicloEnsino
-
+    se.cd_ciclo_ensino                                                         AS CodigoCicloEnsino,
+    esc.tp_escola                                                              AS TipoEscola,
+    tur_prog_grade.cd_grade                                                    AS CodigoGradePrograma,
+    tur_prog_grade.dc_grade                                                    AS DescricaoGradePrograma,
+    tur_prog_grade.cd_tipo_grade                                               AS TipoGradePrograma
 FROM turma_escola (NOLOCK) tur
 INNER JOIN escola (NOLOCK) esc
     ON esc.cd_escola = tur.cd_escola
@@ -389,6 +523,9 @@ LEFT JOIN serie_ensino (NOLOCK) se
     ON se.cd_serie_ensino = ste.cd_serie_ensino
 LEFT JOIN etapa_ensino (NOLOCK) ee
     ON ee.cd_etapa_ensino = se.cd_etapa_ensino
+LEFT JOIN duracao_tipo_turno dtt
+    ON tur.cd_tipo_turno = dtt.cd_tipo_turno
+    AND tur.cd_duracao = dtt.cd_duracao
 LEFT JOIN (
     SELECT tegp.cd_turma_escola,
            MIN(se_p.cd_etapa_ensino) AS cd_etapa_ensino_prog
@@ -398,7 +535,23 @@ LEFT JOIN (
     INNER JOIN serie_ensino (NOLOCK) se_p ON se_p.cd_serie_ensino = gr_p.cd_serie_ensino
     GROUP BY tegp.cd_turma_escola
 ) prog_etapa ON prog_etapa.cd_turma_escola = tur.cd_turma_escola
-
+LEFT JOIN (
+    SELECT tur.cd_turma_escola,
+           g.dc_grade,
+           g.cd_grade,
+           g.cd_tipo_grade
+    FROM turma_escola (NOLOCK) tur
+    LEFT JOIN serie_turma_escola(nolock) ste
+        ON ste.cd_turma_escola = tur.cd_turma_escola
+    LEFT JOIN serie_turma_grade(nolock) stg
+        ON stg.cd_turma_escola = ste.cd_turma_escola and stg.dt_fim is null
+    LEFT JOIN turma_escola_grade_programa(nolock) tegp
+        ON tegp.cd_turma_escola = tur.cd_turma_escola and tegp.dt_fim is null
+    LEFT JOIN escola_grade (NOLOCK) eg_p
+        ON eg_p.cd_escola_grade = COALESCE(stg.cd_escola_grade, tegp.cd_escola_grade)
+    LEFT JOIN grade (NOLOCK) g ON g.cd_grade = eg_p.cd_grade
+    GROUP BY tur.cd_turma_escola, g.dc_grade, g.cd_grade, g.cd_tipo_grade
+) tur_prog_grade ON tur_prog_grade.cd_turma_escola = tur.cd_turma_escola
 WHERE tur.an_letivo = ?
   AND tur.st_turma_escola IN ('O', 'A', 'E', 'C')
 """
@@ -479,7 +632,7 @@ SELECT
     te.cd_turma_escola                AS CodigoTurma,
     te.an_letivo                      AS AnoLetivo,
     vsc.cd_registro_funcional         AS RfProfessor,
-    tgt.cd_territorio_saber           AS CodigoTerritorioSaber,
+    COALESCE(tgt.cd_territorio_saber, 0) AS CodigoTerritorioSaber,
     tgt.cd_experiencia_pedagogica     AS CodigoExperienciaPedagogica,
     ter.dc_territorio_saber           AS DescricaoTerritorioSaber,
     exp.dc_experiencia_pedagogica     AS DescricaoExperienciaPedagogica,
@@ -504,13 +657,14 @@ FROM turma_escola te
     INNER JOIN componente_curricular cc
         ON cc.cd_componente_curricular = gcc.cd_componente_curricular
         AND cc.dt_cancelamento IS NULL
+        AND cc.cd_componente_curricular IN ({_COMPONENTES_TERRITORIO})
     INNER JOIN serie_ensino se ON se.cd_serie_ensino = g.cd_serie_ensino
-    INNER JOIN turma_grade_territorio_experiencia tgt
+    LEFT JOIN turma_grade_territorio_experiencia tgt
         ON tgt.cd_serie_grade = stg.cd_serie_grade
         AND tgt.cd_componente_curricular = cc.cd_componente_curricular
-    INNER JOIN tipo_experiencia_pedagogica exp
+    LEFT JOIN tipo_experiencia_pedagogica exp
         ON exp.cd_experiencia_pedagogica = tgt.cd_experiencia_pedagogica
-    INNER JOIN território_saber ter
+    LEFT JOIN território_saber ter
         ON ter.cd_territorio_saber = tgt.cd_territorio_saber
     INNER JOIN atribuicao_aula aa
         ON gcc.cd_grade = aa.cd_grade
@@ -526,6 +680,7 @@ FROM turma_escola te
         ON vcbc.cd_cargo_base_servidor = aa.cd_cargo_base_servidor
     INNER JOIN v_servidor_cotic vsc ON vsc.cd_servidor = vcbc.cd_servidor
 WHERE te.st_turma_escola IN ('O', 'A', 'C', 'E')
+  AND te.an_letivo = ?
 
 UNION ALL
 
@@ -535,7 +690,7 @@ SELECT
     te.cd_turma_escola                AS CodigoTurma,
     te.an_letivo                      AS AnoLetivo,
     pe.cd_cpf_pessoa                  AS RfProfessor,
-    tgt.cd_territorio_saber           AS CodigoTerritorioSaber,
+    COALESCE(tgt.cd_territorio_saber, 0) AS CodigoTerritorioSaber,
     tgt.cd_experiencia_pedagogica     AS CodigoExperienciaPedagogica,
     ter.dc_territorio_saber           AS DescricaoTerritorioSaber,
     exp.dc_experiencia_pedagogica     AS DescricaoExperienciaPedagogica,
@@ -560,12 +715,13 @@ FROM turma_escola te
     INNER JOIN componente_curricular cc
         ON cc.cd_componente_curricular = gcc.cd_componente_curricular
         AND cc.dt_cancelamento IS NULL
-    INNER JOIN turma_grade_territorio_experiencia tgt
+        AND cc.cd_componente_curricular IN ({_COMPONENTES_TERRITORIO})
+    LEFT JOIN turma_grade_territorio_experiencia tgt
         ON tgt.cd_serie_grade = stg.cd_serie_grade
         AND tgt.cd_componente_curricular = cc.cd_componente_curricular
-    INNER JOIN tipo_experiencia_pedagogica exp
+    LEFT JOIN tipo_experiencia_pedagogica exp
         ON exp.cd_experiencia_pedagogica = tgt.cd_experiencia_pedagogica
-    INNER JOIN território_saber ter
+    LEFT JOIN território_saber ter
         ON ter.cd_territorio_saber = tgt.cd_territorio_saber
     INNER JOIN atribuicao_externo ae
         ON gcc.cd_grade = ae.cd_grade
@@ -579,6 +735,7 @@ FROM turma_escola te
     INNER JOIN contrato_externo ce ON ce.cd_contrato_externo = ae.cd_contrato_externo
     INNER JOIN pessoa pe ON pe.cd_pessoa = ce.cd_pessoa
 WHERE te.st_turma_escola IN ('O', 'A', 'C', 'E')
+  AND te.an_letivo = ?
   AND esc.tp_escola IN {_TIPOS_ESCOLA_EXTERNOS}
 
 ORDER BY CodigoTurma, CodigoTerritorioSaber, CodigoExperienciaPedagogica,

@@ -192,6 +192,28 @@ def chave_grupo_atribuicao(row: AtribuicaoTerritorioSaberIn) -> tuple:
     )
 
 
+def chave_agrupamento_persistido(
+    agrupamento: AgrupamentoAtribuicaoTerritorioSaber,
+) -> tuple:
+    """Retorna a chave exata persistida para deduplicação/upsert."""
+    return (
+        str(agrupamento.cod_turma),
+        int(agrupamento.cod_territorio_saber),
+        (
+            int(agrupamento.cod_experiencia_pedagogica)
+            if agrupamento.cod_experiencia_pedagogica is not None
+            else -1
+        ),
+        (
+            str(agrupamento.rf_professor)
+            if agrupamento.rf_professor is not None
+            else ""
+        ),
+        _normalizar_data_atribuicao(agrupamento.dt_inicio_atribuicao),
+        agrupamento.cod_componentes_curriculares or "",
+    )
+
+
 def agrupar_atribuicoes_territorio_saber(
     rows: list[AtribuicaoTerritorioSaberIn],
     transferido_em: Any,
@@ -297,7 +319,9 @@ def agrupar_atribuicoes_territorio_saber(
             )
 
     agrupamentos = list(
-        {item.cod_agrupamento: item for item in agrupamentos}.values()
+        {
+            chave_agrupamento_persistido(item): item for item in agrupamentos
+        }.values()
     )
     itens = list(
         {
@@ -305,6 +329,7 @@ def agrupar_atribuicoes_territorio_saber(
                 item.componente_codigo,
                 item.turma_codigo,
                 item.codigo_agrupamento,
+                item.rf_professor,
             ): item
             for item in itens
         }.values()

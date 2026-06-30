@@ -11,7 +11,7 @@ from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from queue import Empty, Queue
 from threading import Thread
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
     from apps.core.libs.base_etl_fase import BaseEtlFase
@@ -213,6 +213,11 @@ class PostgresUpsertEngine:
     ) -> int:
         """Executa upsert massivo na tabela de auditoria."""
         if not rows:
+            return 0
+        # Bypass de auditoria para rodadas locais (ex.: disco cheio no QA).
+        # Evita criar temp_audit + INSERT em etl_auditoria_linha; os dados de
+        # destino são persistidos normalmente, apenas o hash não é gravado.
+        if os.getenv("ETL_SKIP_AUDIT_HASH") == "1":
             return 0
         rows.sort(key=lambda x: x[0])
         buf = io.StringIO()
@@ -566,13 +571,14 @@ class BaseEtlService:
     ) -> list[Any] | None:
         timeout = getattr(settings, "THREAD_POOL_CHUNK_TIMEOUT", 30) or 0
         if timeout <= 0:
-            return queue.get()
+            chunk_sem_timeout: list | None = queue.get()
+            return chunk_sem_timeout
 
         max_espera = getattr(settings, "PRODUCER_MAX_WAIT_SECONDS", 600)
         tempo_espera = 0.0
         while True:
             try:
-                chunk: list | None = queue.get(timeout=timeout)
+                chunk = cast(list[Any] | None, queue.get(timeout=timeout))
                 return chunk
             except Empty as err:
                 self._validar_estado_producer(producer_thread, erros, err)

@@ -6,9 +6,12 @@ Popular `pedagogico_db` com os dados de componentes curriculares do EOL — cat�
 
 ## Origem dos Dados
 
-Todos os dados são extraídos exclusivamente do banco **EOL (SQL Server)** via `EOLService`.
+O domínio pedagógico usa duas fontes:
 
-Não há fonte secundária (o banco Postgres legado `ApiEolConnection` foi removido). Ver [remocao_dependencia_apieolconnection(postgres).md](<remocao_dependencia_apieolconnection(postgres).md>) para o histórico completo.
+- **EOL (SQL Server)** via `EOLService`, para catálogo, turma, grade, vínculo turma × componente e atribuições.
+- **API EOL (PostgreSQL)** via `API_EOL_DB`, para tabelas auxiliares historicamente mantidas pela API EOL e para o agrupamento oficial de Território do Saber.
+
+O agrupamento de Território do Saber é copiado da tabela `agrupamentoatribuicaoterritoriosaber` da API EOL, preservando os identificadores públicos (`cod_agrupamento`) e o histórico físico da origem.
 
 ## Classe principal
 
@@ -20,35 +23,29 @@ Herda de `BaseEtlService` (pipeline Producer-Consumer com ThreadPool, auditoria 
 
 | Customização       | Descrição                                                                                                    |
 | :----------------- | :----------------------------------------------------------------------------------------------------------- |
-| `_iter_chunks`     | Quando o SQL contém `?`, itera para cada ano letivo substituindo o placeholder.                              |
-| `_criar_transform` | Injeta `_agora` via closure por fase, sem overhead por linha.                                                |
-| `_executar_fase`   | Fase 4 (agrupamentos) é tratada à parte: coleta tudo em memória, agrega em Python e escreve em duas tabelas. |
-| `executar`         | Registra o resultado duplo da fase de agrupamentos.                                                          |
-
-## Regras mantidas fora do ETL
-
-O ETL não calcula mais `planejamento_regencia`, nem grava relação pai de componente em `ComponenteTurma`. Essas regras pertencem ao microsserviço de consumo e às tabelas locais de apoio:
-
-- `componente_curricular_planejamento_regencia`
-- `componente_curricular_hierarquia`
+| `_iter_chunks`     | Quando o SQL contém `?`, itera para cada ano letivo substituindo o placeholder; para SQLs da API EOL, usa `ApiEOLService`. |
+| `_criar_transform` | Injeta `_agora` via closure por fase, sem overhead por linha.                                                         |
+| `_executar_fase`   | Trata fases especiais de Território do Saber: atribuição granular e geração Python de agrupamento somente quando a fase backup é selecionada. |
+| `executar`         | Executa as fases na ordem definida e respeita seleção parcial por nome de fase.                                       |
 
 No ETL, `regencia` fica no catálogo `ComponenteCurricular` e é calculada por `CASE` sobre `_IDS_REGENCIA` em `SQL_COMPONENTES_NAO_CANCELADOS`.
 
 ## Modelos do app
 
-O código define **11 modelos** em `apps/pedagogico/models.py`:
+O código define os modelos em `apps/pedagogico/models.py`, incluindo:
 
 1. `ComponenteCurricular`
 2. `ComponenteTurma`
-3. `ComponenteCurricularAgrupamento`
+3. `ComponenteCurricularAgrupamento` (tabela mantida para compatibilidade e para a geração backup)
 4. `AtribuicaoComponente`
 5. `GradeComponenteCurricular`
 6. `AgrupamentoAtribuicaoTerritorioSaber`
 7. `Turma`
-8. `TurmaItinerarioEnsinoMedio` (fixture estática; não é fase do ETL)
-9. `ComponenteCurricularPlanejamentoRegencia` (tabela local de apoio; não é fase do ETL)
-10. `ComponenteCurricularHierarquia` (tabela local de apoio; não é fase do ETL)
-11. `ComponenteCurricularPAP` (tabela local de apoio; não é fase do ETL)
+8. `AtribuicaoTerritorioSaber`
+9. `TurmaItinerarioEnsinoMedio`
+10. `ComponenteCurricularPlanejamentoRegencia`
+11. `ComponenteCurricularHierarquia`
+12. `ComponenteCurricularPAP`
 
 ## Fases implementadas
 
@@ -68,19 +65,41 @@ O código define **11 modelos** em `apps/pedagogico/models.py`:
 - Relação professor × turma × componente.
 - **Query:** `SQL_ATRIBUICAO_COMPONENTE` com `?` por ano letivo.
 
-### Fase 4 — Agrupamentos de Território do Saber
+### Fase 4 — AtribuicaoTerritorioSaber
 
-- Escreve em **duas** tabelas: `AgrupamentoAtribuicaoTerritorioSaber` e `ComponenteCurricularAgrupamento`.
-- **Query:** `SQL_ATRIBUICOES_TERRITORIO_SABER` (UNION ALL SME RF + Externo CPF, todos os anos).
-- Agrupamento ocorre em Python via `_agrupar()`. `cod_agrupamento` é hash MD5 determinístico.
+- Atribuições granulares de Território do Saber por turma, componente e professor.
+- **Query:** `SQL_ATRIBUICOES_TERRITORIO_SABER` com `?` por ano letivo.
+- Serve de apoio para componentes individuais de Território do Saber e para validação de professores atribuídos.
 
-### Fase 5 — GradeComponenteCurricular
+### Fases 5 a 8 — Tabelas auxiliares da API EOL
+
+- Cópia via `API_EOL_DB`, em modo `full_refresh`.
+- Tabelas:
+  - `componentecurricularpai` → `componente_curricular_hierarquia`
+  - `componentecurricularpap` → `componente_curricular_pap`
+  - `regenciacomponentecurricular` → `componente_curricular_planejamento_regencia`
+  - `turma_tipo_itinerario` → `turma_itinerario_ensino_medio`
+
+### Fase 9 — AgrupamentoAtribuicaoTerritorioSaber
+
+- Copia a tabela oficial `agrupamentoatribuicaoterritoriosaber` da API EOL para `agrupamento_atribuicao_territorio_saber`.
+- **Query:** `SQL_API_EOL_AGRUPAMENTO_ATRIBUICAO_TERRITORIO_SABER`.
+- Modo `full_refresh`, preservando os códigos de agrupamento e as linhas físicas da origem.
+- `cod_agrupamento` é o identificador público usado pelos consumidores, mas não é chave única física.
+
+### Fase backup — agrupamento_territorio_saber_gerado
+
+- Fase opcional, executada apenas quando selecionada explicitamente por nome.
+- Recalcula agrupamentos a partir de `SQL_ATRIBUICOES_TERRITORIO_SABER` e grava também `componente_curricular_agrupamento`.
+- Mantida como contingência para comparação/recuperação, não como fonte principal.
+
+### Fase 10 — GradeComponenteCurricular
 
 - Catálogo de oferta de componentes por série, ano letivo e modalidade.
 - Chave de upsert: componente, ano letivo, modalidade e série de ensino.
 - **Query:** `SQL_GRADE_COMPONENTE_CURRICULAR` com `?` por ano letivo.
 
-### Fase 6 — Turma
+### Fase 11 — Turma
 
 - Dados cadastrais de turmas do EOL (situação, modalidade, série, UE).
 - **Query:** `SQL_TURMAS` com `?` por ano letivo. Filtra `st_turma_escola IN ('O', 'A', 'E', 'C')`.
@@ -96,10 +115,12 @@ digraph G {
     F1 [label="Fase 1\nComponenteCurricular"];
     F2 [label="Fase 2\nComponenteTurma"];
     F3 [label="Fase 3\nAtribuicaoComponente"];
-    F4 [label="Fase 4\nAgrupamentos TS\n(2 tabelas)"];
-    F5 [label="Fase 5\nGradeComponenteCurricular"];
-    F6 [label="Fase 6\nTurma"];
+    F4 [label="Fase 4\nAtribuicaoTerritorioSaber"];
+    F5 [label="Fases 5-8\nApoio API EOL"];
+    F9 [label="Fase 9\nAgrupamentos TS\nAPI EOL"];
+    F10 [label="Fase 10\nGradeComponenteCurricular"];
+    F11 [label="Fase 11\nTurma"];
 
-    F1 -> F2 -> F3 -> F4 -> F5 -> F6;
+    F1 -> F2 -> F3 -> F4 -> F5 -> F9 -> F10 -> F11;
 }
 ```

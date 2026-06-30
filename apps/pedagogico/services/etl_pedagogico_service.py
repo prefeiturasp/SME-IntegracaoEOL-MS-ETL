@@ -18,8 +18,14 @@ from apps.core.libs.base_etl_service import (
     PipelineMetrics,
 )
 from apps.core.libs.thread_processor import calcular_hash
+from apps.eol_connection.libs.servico_api_eol import ApiEOLService
 from apps.eol_connection.libs.servico_eol import EOLService
 from apps.pedagogico.dtos.model_in import (
+    ApiEolAgrupamentoAtribuicaoTerritorioSaberIn,
+    ApiEolComponenteCurricularHierarquiaIn,
+    ApiEolComponenteCurricularPAPIn,
+    ApiEolComponenteCurricularPlanejamentoRegenciaIn,
+    ApiEolTurmaItinerarioEnsinoMedioIn,
     AtribuicaoComponenteIn,
     AtribuicaoTerritorioSaberIn,
     ComponenteCurricularSimplesIn,
@@ -30,14 +36,25 @@ from apps.pedagogico.dtos.model_in import (
 from apps.pedagogico.models import (
     AgrupamentoAtribuicaoTerritorioSaber,
     AtribuicaoComponente,
+    AtribuicaoTerritorioSaber,
     ComponenteCurricular,
     ComponenteCurricularAgrupamento,
+    ComponenteCurricularHierarquia,
+    ComponenteCurricularPAP,
+    ComponenteCurricularPlanejamentoRegencia,
     ComponenteTurma,
     GradeComponenteCurricular,
     Turma,
+    TurmaItinerarioEnsinoMedio,
 )
 from apps.pedagogico.queries import (
+    API_EOL_PEDAGOGICO_TABLE_MAPPINGS,
     SQL_ANOS_LETIVOS,
+    SQL_API_EOL_AGRUPAMENTO_ATRIBUICAO_TERRITORIO_SABER,
+    SQL_API_EOL_COMPONENTE_CURRICULAR_HIERARQUIA,
+    SQL_API_EOL_COMPONENTE_CURRICULAR_PAP,
+    SQL_API_EOL_COMPONENTE_CURRICULAR_PLANEJAMENTO_REGENCIA,
+    SQL_API_EOL_TURMA_ITINERARIO_ENSINO_MEDIO,
     SQL_ATRIBUICAO_COMPONENTE,
     SQL_ATRIBUICOES_TERRITORIO_SABER,
     SQL_COMPONENTE_TURMA,
@@ -53,6 +70,11 @@ from apps.pedagogico.services.agrupamentos import (
 logger = logging.getLogger(__name__)
 
 _DB = "pedagogico_db"
+_AGRUPAMENTO_GERADO_BACKUP = "agrupamento_territorio_saber_gerado"
+_API_EOL_SQLS = frozenset(
+    str(mapping["sql"])
+    for mapping in API_EOL_PEDAGOGICO_TABLE_MAPPINGS.values()
+)
 ProcessedRecord = tuple[str, str, Any]
 TransformResult = ProcessedRecord | None
 
@@ -76,7 +98,14 @@ _UPDATE_AGRUP = (
     "encerramento_atribuicao_agrupamento_atualizado",
     "transferido_em",
 )
-_UPDATE_ITEM = ("rf_professor", "ano_letivo", "transferido_em")
+_UNIQUE_AGRUP = (
+    "cod_turma",
+    "cod_territorio_saber",
+    "cod_experiencia_pedagogica",
+    "rf_professor",
+    "dt_inicio_atribuicao",
+    "cod_componentes_curriculares",
+)
 
 
 class EtlPedagogicoService(BaseEtlService):
@@ -88,12 +117,12 @@ class EtlPedagogicoService(BaseEtlService):
 
     Customizações em relação ao padrão base:
         - ``_iter_chunks``: suporta templates com ``?`` para iteração
-          por ano letivo (phases 2, 4, 5, 6).
+          por ano letivo e encaminha SQLs da API EOL para ``ApiEOLService``.
         - ``_criar_transform``: injeta ``_agora`` via closure, sem
           alocação extra a cada linha.
-        - ``_executar_fase``: fase 3 (agrupamentos) é tratada à parte
-          por escrever em duas tabelas após agregação completa em memória.
-        - ``executar``: trata o resultado duplo da fase 3.
+        - ``_executar_fase``: trata atribuições de território e a fase
+          opcional de agrupamento gerado.
+        - ``executar``: respeita execução parcial por nome de fase.
     """
 
     _dominio = "PEDAGOGICO"
@@ -105,6 +134,7 @@ class EtlPedagogicoService(BaseEtlService):
         repositorio_auditoria: Any | None = None,
         primeiro_run: bool = False,
         eol: EOLService | None = None,
+        api_eol: ApiEOLService | None = None,
         ano_letivo: int | None = None,
         fases: list[str] | None = None,
     ) -> None:
@@ -116,11 +146,16 @@ class EtlPedagogicoService(BaseEtlService):
             fases=fases,
         )
         self.eol = eol or EOLService()
+        self.api_eol = api_eol or ApiEOLService()
         self._agora = timezone.now()
         self._total_itens_agrupamento: int = 0
         self._cache_anos: list[int] | None = None
         self._ano_letivo: int | None = ano_letivo
         self._fases = self._init_fases()
+        if self._fases_selecionadas and (
+            _AGRUPAMENTO_GERADO_BACKUP in self._fases_selecionadas
+        ):
+            self._fases.append(self._fase_agrupamento_gerado())
 
     # ------------------------------------------------------------------
     # Contrato BaseEtlService
@@ -133,6 +168,9 @@ class EtlPedagogicoService(BaseEtlService):
         substituindo o placeholder — permite o Producer-Consumer operar
         de forma transparente sobre queries parametrizadas por ano.
         """
+        if sql in _API_EOL_SQLS:
+            yield from self.api_eol.iter_query(sql)
+            return
         if "?" in sql:
             for ano in self._anos_letivos():
                 yield from self.eol.iter_query(sql.replace("?", str(ano)))
@@ -156,6 +194,9 @@ class EtlPedagogicoService(BaseEtlService):
             "componente_curricular": self._transform_componente_curricular,
             "componente_turma": self._transform_componente_turma,
             "atribuicao_componente": self._transform_atribuicao_componente,
+            "atribuicao_territorio_saber": (
+                self._transform_atribuicao_territorio_saber
+            ),
             "grade_componente_curricular": (
                 self._transform_grade_componente_curricular
             ),
@@ -210,6 +251,35 @@ class EtlPedagogicoService(BaseEtlService):
                 return None
             obj = model_class(**dto.to_domain(agora))
             pk = f"{obj.turma_codigo}-{obj.componente_codigo}-{obj.professor}"
+            return pk, calcular_hash(obj, hash_fields), obj
+
+        return transform
+
+    def _transform_atribuicao_territorio_saber(
+        self,
+        dto_in: Any,
+        model_class: Any,
+        agora: Any,
+        hash_fields: list[str],
+    ) -> Callable[[tuple[Any, ...]], TransformResult]:
+        def transform(row: tuple[Any, ...]) -> TransformResult:
+            dto = dto_in(*row)
+            if (
+                dto.codigo_turma is None
+                or dto.codigo_componente_curricular is None
+                or dto.rf_professor is None
+            ):
+                return None
+            obj = model_class(**dto.to_domain(agora))
+            pk = (
+                f"{obj.turma_codigo}"
+                f"-{obj.componente_codigo}"
+                f"-{obj.professor}"
+                f"-{obj.codigo_territorio_saber}"
+                f"-{obj.codigo_experiencia_pedagogica or ''}"
+                f"-{obj.dt_atribuicao or ''}"
+                f"-{obj.dt_disponibilizacao or ''}"
+            )
             return pk, calcular_hash(obj, hash_fields), obj
 
         return transform
@@ -280,18 +350,78 @@ class EtlPedagogicoService(BaseEtlService):
         return self._cache_anos
 
     # ------------------------------------------------------------------
-    # Fase 3 — Agrupamentos (escrita em duas tabelas)
+    # Território do Saber
     # ------------------------------------------------------------------
 
+    def _bulk_create_em_lotes(self, model_class: Any, objs: list[Any]) -> int:
+        total = 0
+        manager = model_class.objects.using(self.db_alias)
+        for i in range(0, len(objs), 500):
+            lote = objs[i : i + 500]
+            manager.bulk_create(lote, batch_size=500)
+            total += len(lote)
+        return total
+
+    def _executar_atribuicoes_territorio(
+        self,
+        config: PhaseConfig,
+    ) -> PipelineMetrics:
+        """Atualiza atribuições individuais de território por ano letivo.
+
+        Args:
+            config: Configuração da fase de atribuições de território.
+
+        Returns:
+            Métricas de leitura e escrita da fase.
+        """
+        agora = self._agora
+        anos = self._anos_letivos()
+        objs_por_chave: dict[tuple[Any, ...], AtribuicaoTerritorioSaber] = {}
+        total_lidos = 0
+
+        for chunk in self._iter_chunks(config.sql):
+            total_lidos += len(chunk)
+            for row in chunk:
+                dto = AtribuicaoTerritorioSaberIn(*row)
+                if (
+                    dto.codigo_turma is None
+                    or dto.codigo_componente_curricular is None
+                    or dto.rf_professor is None
+                ):
+                    continue
+                obj = AtribuicaoTerritorioSaber(**dto.to_domain(agora))
+                chave = (
+                    obj.turma_codigo,
+                    obj.componente_codigo,
+                    obj.professor,
+                    obj.codigo_territorio_saber,
+                    obj.codigo_experiencia_pedagogica,
+                    obj.dt_atribuicao,
+                    obj.dt_disponibilizacao,
+                )
+                objs_por_chave.setdefault(chave, obj)
+
+        AtribuicaoTerritorioSaber.objects.using(self.db_alias).filter(
+            ano_letivo__in=anos
+        ).delete()
+        total = self._bulk_create_em_lotes(
+            AtribuicaoTerritorioSaber,
+            list(objs_por_chave.values()),
+        )
+        logger.info(
+            "AtribuicaoTerritorioSaber: %d registros.",
+            total,
+        )
+        return PipelineMetrics(total_lidos=total_lidos, total_escritos=total)
+
     def _executar_agrupamentos(self, config: PhaseConfig) -> PipelineMetrics:
-        """Fase de agrupamentos com persistência em duas tabelas.
+        """Gera agrupamentos locais de território e seus itens.
 
-        Coleta todas as linhas, agrega em Python e persiste em
-        AgrupamentoAtribuicaoTerritorioSaber e
-        ComponenteCurricularAgrupamento.
+        Args:
+            config: Configuração da fase de geração de agrupamentos.
 
-        Retorna PipelineMetrics com total_escritos = agrupamentos.
-        O total de itens fica em ``self._total_itens_agrupamento``.
+        Returns:
+            Métricas de leitura e escrita da fase.
         """
         agora = self._agora
         rows: list[AtribuicaoTerritorioSaberIn] = []
@@ -315,60 +445,22 @@ class EtlPedagogicoService(BaseEtlService):
             ultimo_id_gerado=ultimo_id_gerado,
         )
 
-        hash_agrup = sorted(_UPDATE_AGRUP)
-        hash_item = sorted(_UPDATE_ITEM)
+        anos = self._anos_letivos()
+        ComponenteCurricularAgrupamento.objects.using(self.db_alias).filter(
+            ano_letivo__in=anos
+        ).delete()
+        AgrupamentoAtribuicaoTerritorioSaber.objects.using(
+            self.db_alias
+        ).filter(ano_letivo__in=anos).delete()
 
-        proc_agrup = [
-            (str(a.cod_agrupamento), calcular_hash(a, hash_agrup), a)
-            for a in agrupamentos
-        ]
-        meta_agrup = self._get_batch_meta(
-            None,
-            table_name="agrupamento_atribuicao_territorio_saber",
-            model_class=AgrupamentoAtribuicaoTerritorioSaber,
-            update_fields=list(_UPDATE_AGRUP),
-            unique_fields=["cod_agrupamento"],
-            modo_escrita="upsert",
+        total_agrup = self._bulk_create_em_lotes(
+            AgrupamentoAtribuicaoTerritorioSaber,
+            agrupamentos,
         )
-        total_agrup = 0
-        for i in range(0, len(proc_agrup), 500):
-            escritos, _ = self.sync_batch(
-                proc_agrup[i : i + 500],
-                meta_agrup,
-                batch_num=i,
-            )
-            total_agrup += escritos
-
-        proc_itens = [
-            (
-                f"{it.componente_codigo}"
-                f"-{it.turma_codigo}"
-                f"-{it.codigo_agrupamento}",
-                calcular_hash(it, hash_item),
-                it,
-            )
-            for it in itens
-        ]
-        meta_itens = self._get_batch_meta(
-            None,
-            table_name="componente_curricular_agrupamento",
-            model_class=ComponenteCurricularAgrupamento,
-            update_fields=list(_UPDATE_ITEM),
-            unique_fields=[
-                "componente_codigo",
-                "turma_codigo",
-                "codigo_agrupamento",
-            ],
-            modo_escrita="upsert",
+        total_itens = self._bulk_create_em_lotes(
+            ComponenteCurricularAgrupamento,
+            itens,
         )
-        total_itens = 0
-        for i in range(0, len(proc_itens), 500):
-            escritos, _ = self.sync_batch(
-                proc_itens[i : i + 500],
-                meta_itens,
-                batch_num=i,
-            )
-            total_itens += escritos
 
         self._total_itens_agrupamento = total_itens
         logger.info(
@@ -387,7 +479,9 @@ class EtlPedagogicoService(BaseEtlService):
     def _executar_fase(
         self, config: PhaseConfig, numero_fase: int = 0
     ) -> PipelineMetrics:
-        if config.nome == "agrupamento_territorio_saber":
+        if config.nome == "atribuicao_territorio_saber":
+            return self._executar_atribuicoes_territorio(config)
+        if config.nome == _AGRUPAMENTO_GERADO_BACKUP:
             return self._executar_agrupamentos(config)
         return super()._executar_fase(config, numero_fase=numero_fase)
 
@@ -395,8 +489,21 @@ class EtlPedagogicoService(BaseEtlService):
     # Definição das fases
     # ------------------------------------------------------------------
 
+    def _fase_agrupamento_gerado(self) -> PhaseConfig:
+        return PhaseConfig(
+            nome=_AGRUPAMENTO_GERADO_BACKUP,
+            sql=SQL_ATRIBUICOES_TERRITORIO_SABER,
+            table_name="agrupamento_atribuicao_territorio_saber",
+            source_table="atribuicao_territorio_saber",
+            model_class=AgrupamentoAtribuicaoTerritorioSaber,
+            dto_in=AtribuicaoTerritorioSaberIn,
+            pk_field="cod_agrupamento",
+            update_fields=_UPDATE_AGRUP,
+            unique_fields=_UNIQUE_AGRUP,
+        )
+
     def _init_fases(self) -> list[PhaseConfig]:
-        return [
+        fases = [
             PhaseConfig(
                 nome="componente_curricular",
                 sql=SQL_COMPONENTES_NAO_CANCELADOS,
@@ -418,6 +525,8 @@ class EtlPedagogicoService(BaseEtlService):
                 pk_field=["turma_codigo", "componente_codigo"],
                 update_fields=(
                     "codigo_componente_territorio_saber",
+                    "desc_territorio_saber",
+                    "desc_experiencia_pedagogica",
                     "transferido_em",
                 ),
                 unique_fields=("turma_codigo", "componente_codigo"),
@@ -447,15 +556,114 @@ class EtlPedagogicoService(BaseEtlService):
                 ),
             ),
             PhaseConfig(
-                nome="agrupamento_territorio_saber",
+                nome="atribuicao_territorio_saber",
                 sql=SQL_ATRIBUICOES_TERRITORIO_SABER,
-                table_name="agrupamento_atribuicao_territorio_saber",
-                source_table="agrupamento_atribuicao_territorio_saber",
-                model_class=AgrupamentoAtribuicaoTerritorioSaber,
+                table_name="atribuicao_territorio_saber",
+                source_table="atribuicao_territorio_saber",
+                model_class=AtribuicaoTerritorioSaber,
                 dto_in=AtribuicaoTerritorioSaberIn,
-                pk_field="cod_agrupamento",
+                pk_field=[
+                    "turma_codigo",
+                    "componente_codigo",
+                    "professor",
+                    "codigo_territorio_saber",
+                    "codigo_experiencia_pedagogica",
+                    "dt_atribuicao",
+                    "dt_disponibilizacao",
+                ],
+                update_fields=(
+                    "desc_territorio_saber",
+                    "desc_experiencia_pedagogica",
+                    "atribuicao_externa",
+                    "ano_letivo",
+                    "cd_motivo_disponibilizacao",
+                    "dt_fim_turma",
+                    "transferido_em",
+                ),
+                unique_fields=(
+                    "turma_codigo",
+                    "componente_codigo",
+                    "professor",
+                    "codigo_territorio_saber",
+                    "codigo_experiencia_pedagogica",
+                    "dt_atribuicao",
+                    "dt_disponibilizacao",
+                ),
+            ),
+            PhaseConfig(
+                nome="componentecurricularhierarquia",
+                sql=SQL_API_EOL_COMPONENTE_CURRICULAR_HIERARQUIA,
+                table_name="componente_curricular_hierarquia",
+                source_table="componentecurricularpai",
+                model_class=ComponenteCurricularHierarquia,
+                dto_in=ApiEolComponenteCurricularHierarquiaIn,
+                pk_field="id",
+                update_fields=(
+                    "id_componente_curricular_pai",
+                    "id_componente_curricular",
+                    "vigencia",
+                    "transferido_em",
+                ),
+                unique_fields=("id",),
+                modo_escrita="full_refresh",
+                truncate_on_full_sync=True,
+            ),
+            PhaseConfig(
+                nome="componentecurricularpap",
+                sql=SQL_API_EOL_COMPONENTE_CURRICULAR_PAP,
+                table_name="componente_curricular_pap",
+                source_table="componentecurricularpap",
+                model_class=ComponenteCurricularPAP,
+                dto_in=ApiEolComponenteCurricularPAPIn,
+                pk_field="id",
+                update_fields=("id_componente_curricular", "transferido_em"),
+                unique_fields=("id",),
+                modo_escrita="full_refresh",
+                truncate_on_full_sync=True,
+            ),
+            PhaseConfig(
+                nome="componentecurricularplanejamentoregencia",
+                sql=SQL_API_EOL_COMPONENTE_CURRICULAR_PLANEJAMENTO_REGENCIA,
+                table_name="componente_curricular_planejamento_regencia",
+                source_table="regenciacomponentecurricular",
+                model_class=ComponenteCurricularPlanejamentoRegencia,
+                dto_in=ApiEolComponenteCurricularPlanejamentoRegenciaIn,
+                pk_field=["id_componente_curricular", "turno", "ano"],
+                update_fields=(
+                    "id_componente_curricular",
+                    "turno",
+                    "ano",
+                    "transferido_em",
+                ),
+                unique_fields=("id_componente_curricular", "turno", "ano"),
+                modo_escrita="full_refresh",
+                truncate_on_full_sync=True,
+            ),
+            PhaseConfig(
+                nome="turmaitinerarioensinomedio",
+                sql=SQL_API_EOL_TURMA_ITINERARIO_ENSINO_MEDIO,
+                table_name="turma_itinerario_ensino_medio",
+                source_table="turma_tipo_itinerario",
+                model_class=TurmaItinerarioEnsinoMedio,
+                dto_in=ApiEolTurmaItinerarioEnsinoMedioIn,
+                pk_field="id",
+                update_fields=("nome", "serie", "transferido_em"),
+                unique_fields=("id",),
+                modo_escrita="full_refresh",
+                truncate_on_full_sync=True,
+            ),
+            PhaseConfig(
+                nome="agrupamento_atribuicao_territorio_saber",
+                sql=SQL_API_EOL_AGRUPAMENTO_ATRIBUICAO_TERRITORIO_SABER,
+                table_name="agrupamento_atribuicao_territorio_saber",
+                source_table="agrupamentoatribuicaoterritoriosaber",
+                model_class=AgrupamentoAtribuicaoTerritorioSaber,
+                dto_in=ApiEolAgrupamentoAtribuicaoTerritorioSaberIn,
+                pk_field="id_linha_api_eol",
                 update_fields=_UPDATE_AGRUP,
-                unique_fields=("cod_agrupamento",),
+                unique_fields=_UNIQUE_AGRUP,
+                modo_escrita="full_refresh",
+                truncate_on_full_sync=True,
             ),
             PhaseConfig(
                 nome="grade_componente_curricular",
@@ -516,11 +724,16 @@ class EtlPedagogicoService(BaseEtlService):
                     "ensino_especial",
                     "codigo_etapa_ensino",
                     "codigo_ciclo_ensino",
+                    "tipo_escola",
+                    "codigo_grade_programa",
+                    "descricao_grade_programa",
+                    "tipo_grade_programa",
                     "transferido_em",
                 ),
                 unique_fields=("codigo",),
             ),
         ]
+        return fases
 
     # ------------------------------------------------------------------
     # Execução completa
@@ -533,9 +746,14 @@ class EtlPedagogicoService(BaseEtlService):
             1 — componente_curricular
             2 — componente_turma             (por ano letivo)
             3 — atribuicao_componente        (por ano letivo)
-            4 — agrupamento_territorio_saber (agregação → 2 tabelas)
-            5 — grade_componente_curricular  (por ano letivo)
-            6 — turma                        (por ano letivo)
+            4 — atribuicao_territorio_saber  (por ano letivo)
+            5 — componentecurricularhierarquia       (API EOL Postgres)
+            6 — componentecurricularpap              (API EOL Postgres)
+            7 — componentecurricularplanejamentoregencia (API EOL Postgres)
+            8 — turmaitinerarioensinomedio           (API EOL Postgres)
+            9 — agrupamento_atribuicao_territorio_saber (API EOL Postgres)
+            10 — grade_componente_curricular (por ano letivo)
+            11 — turma                       (por ano letivo)
         """
         self._agora = timezone.now()
         self._cache_anos = None  # reseta cache de anos para o run
@@ -562,8 +780,7 @@ class EtlPedagogicoService(BaseEtlService):
             logger.info("[ETL PEDAG] === Fase %d: %s ===", i, config.nome)
             metrics = self._executar_fase(config)
 
-            # Fase 3 grava em 2 tabelas — registra ambas no resultado
-            if config.nome == "agrupamento_territorio_saber":
+            if config.nome == _AGRUPAMENTO_GERADO_BACKUP:
                 resultados["agrupamento_atribuicao_territorio_saber"] = (
                     metrics.total_escritos
                 )

@@ -58,7 +58,7 @@ Componentes curriculares especiais do programa **Mais Educação** / educação 
 **Valor sentinela — código 1 (`TERRITORIO_SABER_NAO_UTILIZADO`):**
 O código `cd_territorio_saber = 1` é um valor especial que significa "território não utilizado" — não representa um território real. O C# filtra explicitamente `CodigoTerritorioSaber != 1` antes de agrupar (`CargaDBAgrupamentosTerritorioSaberPorTurmaUseCase.cs:43`) e no service (`ComponenteCurricularService.cs:318`). **Registros com território 1 devem ser ignorados no agrupamento.**
 
-> **Divergência atual:** o ETL Python (`SQL_ATRIBUICOES_TERRITORIO_SABER` e `_agrupar`) não aplica esse filtro. Qualquer registro com `cd_territorio_saber = 1` na base EOL entrará no agrupamento indevidamente.
+Na carga principal, os agrupamentos são copiados da API EOL. Portanto, esse filtro já vem refletido em `agrupamentoatribuicaoterritoriosaber`. Na atribuição granular (`atribuicao_territorio_saber`), o dado ainda pode existir para apoiar diagnósticos e componentes individuais, mas o MS Pedagógico não deve tratar território `0`, `NULL` ou sentinela como agrupável.
 
 **No EOL:**
 - A presença na tabela `turma_grade_territorio_experiencia` indica que o componente é de território.
@@ -68,6 +68,22 @@ O código `cd_territorio_saber = 1` é um valor especial que significa "territó
 - `ComponenteTurma` não guarda uma flag booleana `territorio_saber`.
 - `SQL_COMPONENTE_TURMA` faz `LEFT JOIN` com `turma_grade_territorio_experiencia`.
 - Quando o componente pertence a território, `codigo_componente_territorio_saber` recebe o próprio código do componente; caso contrário, fica `NULL`.
+- Para componentes de território, `ComponenteTurma` também guarda
+  `desc_territorio_saber` e `desc_experiencia_pedagogica`. Esses campos vêm de
+  `território_saber` e `tipo_experiencia_pedagogica`, por meio da relação da
+  turma/grade em `turma_grade_territorio_experiencia`.
+
+**Descrição exibida:**
+- `ComponenteCurricular.descricao` é a descrição genérica do catálogo do
+  componente.
+- `ComponenteTurma.desc_territorio_saber` +
+  `desc_experiencia_pedagogica` é a descrição contextual do componente de
+  Território do Saber naquela turma.
+- O MS Pedagógico prioriza a descrição contextual quando
+  `codigo_componente_territorio_saber` está preenchido. Por isso um componente
+  como `1216` pode deixar de aparecer como `TERRIT SABER / EXP PEDAG 3` e
+  passar a aparecer como `III - ORIENTAÇÃO DE ESTUDOS E INVENÇÃO CRIATIVA -
+  CLUBE DE CIENCIAS/INVESTIGACOES`, quando essa relação existir no EOL.
 
 ---
 
@@ -79,12 +95,13 @@ O agrupamento representa o conjunto como uma unidade: o professor planeja para o
 
 **No ETL:**
 - Tabela `agrupamento_atribuicao_territorio_saber`: o agrupamento como um todo — quem é o professor, qual a turma, qual território, período de atribuição, e a lista de componentes como CSV em `cod_componentes_curriculares`.
-- Tabela `componente_curricular_agrupamento`: uma linha por componente dentro do agrupamento (split do CSV acima). Alimenta `codigosTerritoriosAgrupamento` nos endpoints.
-- **Regra:** somente grupos com 2 ou mais componentes distintos geram agrupamento. Atribuição isolada de um único componente de território não é agrupada.
+- A carga principal copia a tabela `agrupamentoatribuicaoterritoriosaber` da API EOL via `API_EOL_DB`, em `full_refresh`.
+- Tabela `componente_curricular_agrupamento`: mantida para compatibilidade e para a fase backup de geração local. O fluxo principal dos endpoints lê os códigos do CSV em `cod_componentes_curriculares`.
+- **Regra de domínio:** somente grupos com 2 ou mais componentes distintos formam agrupamento. Atribuição isolada de um único componente de território permanece como componente individual.
 
-**Chave de agrupamento:** a combinação `(turma, território, experiência pedagógica, professor, data de atribuição, data de disponibilização)` define um grupo. Atribuições com datas de disponibilização em dias diferentes formam grupos distintos.
+**Chave de agrupamento:** a combinação `(turma, território, experiência pedagógica, professor, data de atribuição, componentes)` define a linha persistida. A data de disponibilização fica como atributo de vigência/encerramento, mas não deve colapsar professores ou composições diferentes.
 
-**`cod_agrupamento`:** ID gerado por hash MD5 determinístico da chave natural + lista ordenada de componentes. Sempre `>= 800.000` para não colidir com IDs reais de componentes do EOL (constante `COMPONENTE_AGRUPAMENTO_TERRITORIO_SABER_ID_INICIAL` do legado C#).
+**`cod_agrupamento`:** ID público do agrupamento. Na carga principal, o ETL preserva o código recebido da API EOL. Ele pode se repetir em mais de uma linha física, por exemplo para outro professor ou outro recorte histórico.
 
 ---
 
@@ -302,15 +319,20 @@ Timestamp de quando o registro foi escrito pelo ETL. Equivale ao `timezone.now()
 
 ### `cod_componentes_curriculares` (CSV)
 
-Campo de `AgrupamentoAtribuicaoTerritorioSaber` que armazena os IDs dos componentes do agrupamento separados por vírgula — ex: `"508,511,1064"`. Sempre ordenados crescentemente para garantir determinismo no hash.
+Campo de `AgrupamentoAtribuicaoTerritorioSaber` que armazena os IDs dos componentes do agrupamento separados por vírgula — ex: `"508,511,1064"`.
 
-O ETL faz o split desse CSV e popula `componente_curricular_agrupamento` com uma linha por componente.
+No fluxo principal, o ETL copia esse CSV da API EOL e o MS Pedagógico faz o split quando precisa montar `codigosTerritoriosAgrupamento`. A tabela `componente_curricular_agrupamento` só é populada pela fase backup de geração local.
 
 ---
 
 ### `codigo_componente_territorio_saber`
 
 Em `ComponenteTurma`, esse campo recebe o próprio código do componente quando ele existe em `turma_grade_territorio_experiencia`. É uma redundância intencional para indexação cruzada nos endpoints — permite identificar componentes de território sem JOIN adicional.
+
+A descrição desse componente de território não deve ser inferida apenas de
+`ComponenteCurricular.descricao`. Quando disponíveis, os campos
+`desc_territorio_saber` e `desc_experiencia_pedagogica` de `ComponenteTurma`
+representam a descrição contextual da turma e devem ser usados pelo consumidor.
 
 ---
 
@@ -326,9 +348,9 @@ Alguns componentes são variações de um componente "pai" — ex: componentes f
 
 ### `cod_agrupamento`
 
-ID único de um agrupamento de território. Gerado por hash MD5 determinístico sobre a chave natural `(turma, território, experiência, professor, data_atribuicao, componentes_ordenados)`.
+Identificador público de um agrupamento de território usado nos contratos do legado e do MS. Não é unique físico da tabela `agrupamento_atribuicao_territorio_saber`.
 
-Sempre `>= 800.000` (piso definido pela constante `COMPONENTE_AGRUPAMENTO_TERRITORIO_SABER_ID_INICIAL` do legado C#, para não colidir com IDs de componentes curriculares reais do EOL, que ficam abaixo desse valor).
+Quando há histórico equivalente, o ETL reutiliza o código legado. Para novos agrupamentos, usa IDs `>= 800.000` (piso definido pela constante `COMPONENTE_AGRUPAMENTO_TERRITORIO_SABER_ID_INICIAL` do legado C#, para não colidir com IDs de componentes curriculares reais do EOL).
 
 ---
 

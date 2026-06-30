@@ -2,6 +2,7 @@
 
 import logging
 import os
+import time
 from collections.abc import Iterator
 from typing import Any, cast
 
@@ -13,8 +14,32 @@ logger = logging.getLogger(__name__)
 # Configurações padrão (podem ser sobrescritas por variáveis de ambiente específicas)
 _DEFAULT_CHUNK_SIZE = int(os.getenv("EOL_CHUNK_SIZE", "10000"))
 _DEFAULT_LOTE_MAXIMO = int(os.getenv("EOL_LOTE_MAXIMO", "0"))
+_MAX_RETRY_CONEXAO = int(os.getenv("EOL_MAX_RETRY_CONEXAO", "3"))
+_BACKOFF_MAX_SEGUNDOS = int(os.getenv("EOL_BACKOFF_MAX_SEGUNDOS", "30"))
+
+# Marcas de erro de conexão TCP recuperável com reconexão (ex: 10054).
+_MARCAS_ERRO_CONEXAO = (
+    "08s01",
+    "10054",
+    "communication link",
+    "connection reset",
+    "tcp provider",
+    "server closed the connection",
+)
 
 WRITE_COMMANDS = {"insert", "update", "delete", "merge", "create", "drop"}
+
+
+def _eh_erro_conexao(exc: Exception) -> bool:
+    """Indica se a exceção representa queda de conexão recuperável."""
+    mensagem = str(exc).lower()
+    return any(marca in mensagem for marca in _MARCAS_ERRO_CONEXAO)
+
+
+def _eh_tabela_inexistente(exc: Exception) -> bool:
+    """Indica se a exceção é de tabela/objeto inexistente na origem."""
+    mensagem = str(exc).lower()
+    return "no such table" in mensagem or "invalid object name" in mensagem
 
 
 class ConexaoSomenteLeituraError(Exception):
@@ -100,51 +125,85 @@ class ReadOnlySQLServerConnectionFactory:
 
         Permite que o chamador processe cada lote imediatamente, sem
         acumular todos os resultados em memória antes de começar o ETL.
+
+        Quedas transitórias de conexão (ex: TCP 10054) disparam reconexão
+        com backoff e a consulta é refeita do início; como a escrita no
+        destino é idempotente (upsert), não há duplicação de dados.
         """
         parametros = parametros or {}
         chunk_size = chunk_size or self.chunk_size
-        total = 0
 
-        try:
-            with self.obter_conexao().cursor() as cursor:
-                if parametros:
-                    cursor.execute(sql, parametros)
-                else:
-                    cursor.execute(sql)
-
-                iteracao = 0
-                while True:
-                    lote = cursor.fetchmany(chunk_size)
-                    if not lote:
-                        break
-                    iteracao += 1
-                    total += len(lote)
-                    logger.info(
-                        "[%s] fetch: lote %d — %d registros acumulados",
+        tentativa = 0
+        while True:
+            try:
+                yield from self._gerar_lotes(sql, parametros, chunk_size)
+                return
+            except Exception as exc:
+                if _eh_tabela_inexistente(exc):
+                    logger.warning(
+                        "[%s] Tabela não encontrada na consulta iterativa:"
+                        " %s",
                         self.db_alias,
-                        iteracao,
-                        total,
+                        exc,
                     )
-                    yield lote
-                    if self.lote_maximo and iteracao >= self.lote_maximo:
-                        logger.info(
-                            "[%s] iter: limite de %d lote(s) atingido"
-                            " — interrompendo query",
-                            self.db_alias,
-                            self.lote_maximo,
-                        )
-                        break
-
-        except Exception as exc:
-            erro_str = str(exc).lower()
-            if "no such table" in erro_str or "invalid object name" in erro_str:
+                    raise
+                excedeu_tentativas = tentativa >= _MAX_RETRY_CONEXAO
+                if not _eh_erro_conexao(exc) or excedeu_tentativas:
+                    logger.exception(
+                        "[%s] Erro ao executar consulta iterativa",
+                        self.db_alias,
+                    )
+                    raise
+                tentativa += 1
+                espera = min(2**tentativa, _BACKOFF_MAX_SEGUNDOS)
                 logger.warning(
-                    "[%s] Tabela não encontrada na consulta iterativa: %s", 
-                    self.db_alias, exc
+                    "[%s] Conexão EOL perdida (%s). Tentativa %d/%d —"
+                    " reconectando em %ds e refazendo a consulta.",
+                    self.db_alias,
+                    exc,
+                    tentativa,
+                    _MAX_RETRY_CONEXAO,
+                    espera,
                 )
+                connections[self.db_alias].close()
+                time.sleep(espera)
+
+    def _gerar_lotes(
+        self,
+        sql: str,
+        parametros: list | dict,
+        chunk_size: int,
+    ) -> Iterator[list[tuple[Any, ...]]]:
+        """Executa a consulta e faz yield dos lotes via fetchmany."""
+        with self.obter_conexao().cursor() as cursor:
+            if parametros:
+                cursor.execute(sql, parametros)
             else:
-                logger.exception("[%s] Erro ao executar consulta iterativa", self.db_alias)
-            raise
+                cursor.execute(sql)
+
+            iteracao = 0
+            total = 0
+            while True:
+                lote = cursor.fetchmany(chunk_size)
+                if not lote:
+                    break
+                iteracao += 1
+                total += len(lote)
+                logger.info(
+                    "[%s] fetch: lote %d — %d registros acumulados",
+                    self.db_alias,
+                    iteracao,
+                    total,
+                )
+                yield lote
+                if self.lote_maximo and iteracao >= self.lote_maximo:
+                    logger.info(
+                        "[%s] iter: limite de %d lote(s) atingido"
+                        " — interrompendo query",
+                        self.db_alias,
+                        self.lote_maximo,
+                    )
+                    break
 
     def executar_comando(self, sql: str) -> list[tuple[Any, ...]]:
         """Executa comando SQL de leitura (bloqueia escrita)."""

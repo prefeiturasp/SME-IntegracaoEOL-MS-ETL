@@ -22,7 +22,7 @@ digraph G {
     TGW    [label="Transition Gateway\n(resolução de IDs)"];
 
     EOL    -> SVC -> PROF;
-    APIEOL -> PROF [label="futuro" style=dashed];
+    APIEOL -> PROF [label="tabelas de apoio e agrupamentos"];
     SVC    -> EXEC;
     SVC    -> CHK;
     SVC    -> HASH;
@@ -37,7 +37,8 @@ digraph G {
 ### Suporte (estruturais — necessárias para filtros e junções)
 
 Armazenam apenas os IDs mínimos para que as queries de professor funcionem.
-Nenhum campo de descrição (`dc_`, `nm_`) é persistido — apenas IDs usados em cláusulas `WHERE`.
+Campos de descrição (`dc_`, `nm_`) não são persistidos nesse recorte, salvo
+exceções documentadas no domínio proprietário do dado.
 
 | Tabela | Chave | IDs externos armazenados |
 |---|---|---|
@@ -47,11 +48,11 @@ Nenhum campo de descrição (`dc_`, `nm_`) é persistido — apenas IDs usados e
 | `TurmaEscolaGradePrograma` | `codigo` (PK) | `codigo_turma`, `codigo_escola_grade` |
 | `TurmaGradeTerritorioExperiencia` | auto (PK) | `codigo_serie_grade`, `codigo_componente_curricular`, `codigo_territorio_saber`, `codigo_experiencia_pedagogica` |
 
-### Programas (pendente — ref. ApiEolConnection)
+### Programas (API EOL PostgreSQL)
 
 | Tabela | Fonte | Nota |
 |---|---|---|
-| `AgrupamentoAtribuicaoTerritorioSaber` | ApiEolConnection | Integração prevista, não carregada pelo ETL atual |
+| `AgrupamentoAtribuicaoTerritorioSaber` | `API_EOL_DB.agrupamentoatribuicaoterritoriosaber` | Carregada via `full_refresh`; preserva `cod_agrupamento` da origem |
 
 ### Núcleo servidor efetivo
 
@@ -97,6 +98,11 @@ Nenhum campo de descrição (`dc_`, `nm_`) é persistido — apenas IDs usados e
 > **Regra:** guarda-se apenas o ID quando há par `id + descrição`.
 > A descrição só é persistida se aparecer em cláusula `WHERE` de alguma query deste domínio.
 > Caso contrário, será resolvida pelo **Transition Gateway** em tempo de resposta.
+>
+> **Exceção documentada:** no domínio pedagógico, `componente_turma` materializa
+> `desc_territorio_saber` e `desc_experiencia_pedagogica` porque a descrição de
+> Território do Saber é contextual da turma/grade, não do catálogo base de
+> componente curricular.
 
 Domínios externos **não replicados** no `professores_db`:
 

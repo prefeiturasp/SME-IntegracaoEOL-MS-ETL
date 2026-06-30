@@ -1,6 +1,6 @@
 # Mapeamento do ETL Pedagógico
 
-Resumo de origem e destino por fase. Para o mapeamento campo a campo e decisões de migração do banco legado (ApiEolConnection), ver [remocao_dependencia_apieolconnection(postgres).md](remocao_dependencia_apieolconnection(postgres).md).
+Resumo de origem e destino por fase. As fases com origem no EOL SQL Server usam `EOLService`; as fases com origem na API EOL PostgreSQL usam `API_EOL_DB`.
 
 ---
 
@@ -22,14 +22,24 @@ Resumo de origem e destino por fase. Para o mapeamento campo a campo e decisões
 **Query:** `SQL_COMPONENTE_TURMA` (parâmetro `?` por ano letivo)
 
 Estrutura turma × componente, sem professor e sem regra de planejamento.
-Serve para dizer quais componentes existem em cada turma real do EOL.
+Serve para dizer quais componentes existem em cada turma real do EOL. Para
+componentes de Território do Saber, também materializa a descrição contextual
+da turma, porque essa descrição vem da grade de território/experiência e não do
+catálogo base `componente_curricular`.
 
 | Campo Origem | Campo Destino | Transformação |
 | :--- | :--- | :--- |
 | `cd_turma_escola` | `turma_codigo` | `str()` ou `None` |
 | `cd_componente_curricular` | `componente_codigo` | `int()` |
 | presença em `turma_grade_territorio_experiencia` | `codigo_componente_territorio_saber` | código do componente ou `None` |
+| `território_saber.dc_territorio_saber` | `desc_territorio_saber` | texto contextual do território ou `None` |
+| `tipo_experiencia_pedagogica.dc_experiencia_pedagogica` | `desc_experiencia_pedagogica` | texto contextual da experiência ou `None` |
 | — | `transferido_em` | `timezone.now()` |
+
+Quando `codigo_componente_territorio_saber` está preenchido, o MS Pedagógico
+usa esses campos para compor a descrição exibida: `desc_territorio_saber -
+desc_experiencia_pedagogica`. Se a experiência pedagógica estiver ausente,
+usa apenas `desc_territorio_saber`.
 
 ---
 
@@ -66,36 +76,74 @@ caso a linha não deve existir.
 
 ---
 
-## Fase 4 — AgrupamentoAtribuicaoTerritorioSaber + ComponenteCurricularAgrupamento
+## Fase 4 — AtribuicaoTerritorioSaber
 
-**Query:** `SQL_ATRIBUICOES_TERRITORIO_SABER` (UNION ALL SME RF + Externo CPF, todos os anos)
+**Query:** `SQL_ATRIBUICOES_TERRITORIO_SABER` (parâmetro `?` por ano letivo)
 
-O agrupamento ocorre em Python via `_agrupar()`. Somente grupos com 2+ componentes geram registros.
+Materializa a atribuição granular de Território do Saber. Cada linha representa um componente de território atribuído a um professor em uma turma, com território, experiência, datas e motivo de disponibilização.
 
-| Campo Origem | Campo Destino (`AgrupamentoAtribuicaoTerritorioSaber`) | Transformação |
+| Campo Origem | Campo Destino | Transformação |
 | :--- | :--- | :--- |
-| chave natural do grupo | `cod_agrupamento` | MD5 `[:15]` → `int` (BigInteger) |
-| `codigo_territorio_saber` | `cod_territorio_saber` | direto |
-| `codigo_experiencia_pedagogica` | `cod_experiencia_pedagogica` | nullable |
-| `data_atribuicao` | `dt_inicio_atribuicao` | `make_aware()` |
-| `data_disponibilizacao` | `dt_fim_atribuicao` | `make_aware()` |
-| `data_fim_turma` | `dt_fim_turma` | `make_aware()` |
-| `rf_professor` | `rf_professor` | direto |
-| `codigo_turma` | `cod_turma` | `str()` |
-| componentes ordenados | `cod_componentes_curriculares` | `",".join(...)` |
+| `cd_componente_curricular` | `componente_codigo` | `int()` |
+| `cd_turma_escola` | `turma_codigo` | `str()` |
+| RF ou CPF | `professor` | `str()` |
+| `cd_territorio_saber` | `codigo_territorio_saber` | `int()` |
+| `cd_experiencia_pedagogica` | `codigo_experiencia_pedagogica` | `int()` ou `None` |
+| `dc_territorio_saber` | `desc_territorio_saber` | `strip_str()` |
+| `dc_experiencia_pedagogica` | `desc_experiencia_pedagogica` | `strip_str()` |
+| data de atribuição | `dt_atribuicao` | `make_aware()` |
+| data de disponibilização | `dt_disponibilizacao` | `make_aware()` |
+| motivo de disponibilização | `cd_motivo_disponibilizacao` | `int()` ou `None` |
+| fim da turma | `dt_fim_turma` | `make_aware()` |
+| branch externo | `atribuicao_externa` | `bool()` |
 | `ano_letivo` | `ano_letivo` | direto |
-
-| Campo Origem | Campo Destino (`ComponenteCurricularAgrupamento`) | Transformação |
-| :--- | :--- | :--- |
-| componente do grupo | `componente_codigo` | `int()` |
-| `codigo_turma` | `turma_codigo` | `str()` |
-| hash do grupo | `codigo_agrupamento` | mesmo `cod_agrupamento` |
-| `rf_professor` | `rf_professor` | direto |
-| `ano_letivo` | `ano_letivo` | direto |
+| — | `transferido_em` | `timezone.now()` |
 
 ---
 
-## Fase 5 — GradeComponenteCurricular
+## Fases 5 a 8 — tabelas auxiliares da API EOL
+
+Todas usam `full_refresh` e `truncate_on_full_sync=True`.
+
+| Fase | Origem API EOL | Destino | Observação |
+| :--- | :--- | :--- | :--- |
+| 5 | `componentecurricularpai` | `componente_curricular_hierarquia` | Hierarquia pai/filho de componentes. |
+| 6 | `componentecurricularpap` | `componente_curricular_pap` | Componentes PAP. |
+| 7 | `regenciacomponentecurricular` | `componente_curricular_planejamento_regencia` | Planejamento de regência por componente, turno e ano. |
+| 8 | `turma_tipo_itinerario` | `turma_itinerario_ensino_medio` | Itinerários do Ensino Médio. |
+
+---
+
+## Fase 9 — AgrupamentoAtribuicaoTerritorioSaber
+
+**Query:** `SQL_API_EOL_AGRUPAMENTO_ATRIBUICAO_TERRITORIO_SABER`
+
+Copia a tabela `agrupamentoatribuicaoterritoriosaber` da API EOL em modo `full_refresh`. O ETL não recalcula o `cod_agrupamento` nesse fluxo principal; ele preserva o identificador público recebido da origem. A query cria `id_linha_api_eol` com `ROW_NUMBER()` apenas como chave técnica para processar todas as linhas, inclusive quando o mesmo `cod_agrupamento` aparece em mais de um recorte físico.
+
+| Campo Origem API EOL | Campo Destino | Transformação |
+| :--- | :--- | :--- |
+| `codagrupamento` | `cod_agrupamento` | `int()` |
+| `codterritoriosaber` | `cod_territorio_saber` | `int()` |
+| `codexperienciapedagogica` | `cod_experiencia_pedagogica` | `int()` ou `None` |
+| `dtinicioatribuicao` | `dt_inicio_atribuicao` | `make_aware()` |
+| `anoatribuicao` | `ano_atribuicao` | `int()` |
+| `dtfimatribuicao` | `dt_fim_atribuicao` | `make_aware()` |
+| `dtfimturma` | `dt_fim_turma` | `make_aware()` |
+| `rfprofessor` | `rf_professor` | `str()` |
+| `codturma` | `cod_turma` | `str()` |
+| `codcomponentescurriculares` | `cod_componentes_curriculares` | CSV recebido da origem |
+| `anoletivo` | `ano_letivo` | `int()` |
+| `codmotivodisponibilizacao` | `cod_motivo_disponibilizacao` | `int()` ou `None` |
+| `descterritoriosaber` | `desc_territorio_saber` | `strip_str()` |
+| `descexperienciapedagogica` | `desc_experiencia_pedagogica` | `strip_str()` |
+| `encerramento_atribuicao_agrupamento_atualizado` | `encerramento_atribuicao_agrupamento_atualizado` | `bool()` ou `None` |
+| — | `transferido_em` | `timezone.now()` |
+
+**Observação:** `cod_agrupamento` deve ser tratado como ID de contrato, não como unique físico. A mesma numeração pode aparecer em mais de uma linha quando a origem registra outro professor ou histórico.
+
+---
+
+## Fase 10 — GradeComponenteCurricular
 
 **Query:** `SQL_GRADE_COMPONENTE_CURRICULAR` (parâmetro `?` por ano letivo)
 
@@ -123,7 +171,7 @@ ensino; por isso `codigo_serie_ensino` é a referência de identidade.
 
 ---
 
-## Fase 6 — Turma
+## Fase 11 — Turma
 
 **Query:** `SQL_TURMAS` (parâmetro `?` por ano letivo)
 

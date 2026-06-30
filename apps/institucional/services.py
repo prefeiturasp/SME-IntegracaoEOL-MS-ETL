@@ -46,10 +46,10 @@ FROM sub_prefeitura
 """
 
 SQL_DRE = """
-SELECT
+SELECT DISTINCT
     ua.cd_unidade_administrativa AS codigo_dre
   , vcue.nm_unidade_educacao AS nome
-  , vcue.nm_exibicao_unidade AS sigla
+  , LEFT(vcue.nm_exibicao_unidade, 20) AS sigla
   , ua.tp_unidade_administrativa AS tipo_unidade_adm
   , tua.dc_tipo_unidade_administrativa AS descricao_unidade_adm
 FROM unidade_administrativa ua
@@ -58,6 +58,21 @@ INNER JOIN v_cadastro_unidade_educacao vcue
 LEFT JOIN tipo_unidade_administrativa tua
     ON tua.tp_unidade_administrativa = ua.tp_unidade_administrativa
 WHERE ua.tp_unidade_administrativa = 24
+   OR EXISTS (
+      SELECT 1
+      FROM v_cadastro_unidade_educacao vcue_escola
+      LEFT JOIN v_unidade_educacao_dados_gerais vuedg_escola
+          ON vuedg_escola.cd_unidade_educacao =
+          vcue_escola.cd_unidade_educacao
+      LEFT JOIN escola escola_ref
+          ON escola_ref.cd_escola = vcue_escola.cd_unidade_educacao
+      LEFT JOIN tipo_escola te_ref
+          ON te_ref.tp_escola =
+          COALESCE(vuedg_escola.tp_escola, escola_ref.tp_escola)
+      WHERE vcue_escola.cd_unidade_administrativa_referencia =
+          ua.cd_unidade_administrativa
+        AND te_ref.tp_escola IS NOT NULL
+  )
 """
 
 SQL_OBTER_CODIGOS_UES_POR_DRE = """
@@ -230,7 +245,7 @@ SELECT
   , vuedg.nm_distrito_mec AS distrito
   , (SELECT dc_dispositivo FROM dispositivo
      WHERE tp_dispositivo_comunicacao = 9 AND sequencia = 1
-       AND cd_unidade_educacao = vuedg.cd_unidade_educacao) AS email
+       AND cd_unidade_educacao = vcue.cd_unidade_educacao) AS email
   , (SELECT CONCAT('(', cd_ddd, ') ', dc_dispositivo) FROM dispositivo
      WHERE tp_dispositivo_comunicacao = 1 AND sequencia = 1
        AND cd_unidade_educacao = vuedg.cd_unidade_educacao) AS telefone_1
@@ -239,8 +254,29 @@ SELECT
        AND cd_unidade_educacao = vuedg.cd_unidade_educacao) AS telefone_2
   , escola.an_construcao AS ano_construcao
   , vuedg.dc_tipo_forma_ocupacao_predio AS propriedade
-  , CASE WHEN vuedg.tp_escola IN (11, 12) THEN CAST(1 AS BIT)
-         ELSE CAST(0 AS BIT) END AS organizacao_parceira
+  , CASE
+        WHEN EXISTS (
+            SELECT 1
+            FROM dispositivo
+            WHERE tp_dispositivo_comunicacao = 9
+              AND sequencia = 1
+              AND cd_unidade_educacao = vcue.cd_unidade_educacao
+              AND LTRIM(RTRIM(ISNULL(dc_dispositivo, ''))) <> ''
+        )
+        AND NOT (
+            COALESCE(vuedg.tp_escola, escola.tp_escola) = 11
+            AND vuedg.tp_forma_ocupacao_predio = 3
+            AND vuedg.tp_proprietario = 4
+            AND EXISTS (
+                SELECT 1
+                FROM contrato_externo ce
+                WHERE ce.cd_unidade_educacao = vcue.cd_unidade_educacao
+                  AND ce.dt_cancelamento IS NULL
+            )
+        )
+        THEN CAST(1 AS BIT)
+        ELSE CAST(0 AS BIT)
+    END AS organizacao_parceira
   , CASE WHEN COALESCE(vuedg.tp_escola, escola.tp_escola) = 5
          THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT) END AS eh_ceu
   , vcue.dt_atualizacao_endereco AS data_atualizacao
@@ -286,8 +322,7 @@ LEFT JOIN tipo_logradouro tpl
     ON tpl.tp_logradouro = vcue.tp_logradouro
 LEFT JOIN municipio mun
     ON mun.cd_municipio = vcue.cd_municipio
-WHERE dre.tp_unidade_administrativa = 24
-AND  vcue.tp_unidade_educacao  <> 15
+WHERE te.tp_escola IS NOT NULL
 """
 
 
@@ -413,7 +448,8 @@ class EtlInstitucionalService(BaseEtlService):
                     "codigo_ue_integracao",
                 ),
                 unique_fields=("codigo_ue",),
-                modo_escrita="upsert",
+                truncate_on_full_sync=True,
+                modo_escrita="full_refresh",
             ),
         ]
 

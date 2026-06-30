@@ -77,6 +77,10 @@ class ResponsavelAlunoIn:
     nome_mae: str | None
     ddd_celular: str | None
     numero_celular: str | None
+    ddd_telefone_fixo: str | None
+    nr_telefone_fixo: str | None
+    ddd_telefone_comercial: str | None
+    nr_telefone_comercial: str | None
     autoriza_sms: int | None
     endereco_id: int | None
     numero_endereco: str | None
@@ -100,6 +104,10 @@ class ResponsavelAlunoIn:
             "email": strip_str(self.email),
             "ddd_celular": strip_str(self.ddd_celular),
             "numero_celular": strip_str(self.numero_celular),
+            "ddd_telefone_fixo": strip_str(self.ddd_telefone_fixo),
+            "nr_telefone_fixo": strip_str(self.nr_telefone_fixo),
+            "ddd_telefone_comercial": strip_str(self.ddd_telefone_comercial),
+            "nr_telefone_comercial": strip_str(self.nr_telefone_comercial),
             "autoriza_sms": self.autoriza_sms,
             "data_nascimento": parse_date(self.data_nascimento),
             "nome_mae": strip_str(self.nome_mae),
@@ -152,6 +160,7 @@ class MatriculaIn:
     codigo_matricula: int
     codigo_aluno: int
     codigo_ue: str
+    codigo_dre: str
     data_situacao_matricula: date | None
     data_situacao_matricula_data_hora: datetime | None
     ano_letivo: int
@@ -165,6 +174,7 @@ class MatriculaIn:
             "codigo_matricula": self.codigo_matricula,
             "aluno_id": self.codigo_aluno,
             "codigo_ue": strip_str(self.codigo_ue),
+            "codigo_dre": strip_str(self.codigo_dre),
             "data_situacao_matricula": parse_date(
                 self.data_situacao_matricula
             ),
@@ -191,9 +201,18 @@ class MatriculaTurmaIn:
     data_situacao_data_hora: datetime | None
     codigo_situacao_aluno: int | None
     codigo_tipo_turma: int | None
+    tipo_turno: int | None
     data_atualizacao_tabela: datetime | None
     nome_turma: str | None
+    codigo_ue_turma: str | None
     codigo_etapa_ensino: int | None
+    codigo_ciclo_ensino: int | None
+    descricao_etapa_ensino: str | None
+    descricao_ciclo_ensino: str | None
+    sequencia: int
+    origem_atual: bool | None = None
+    ano_letivo_turma: int | None = None
+    serie_resumida: str | None = None
 
     def to_domain(self) -> dict:
         return {
@@ -206,11 +225,20 @@ class MatriculaTurmaIn:
             ),
             "codigo_situacao_aluno": self.codigo_situacao_aluno,
             "codigo_tipo_turma": self.codigo_tipo_turma,
+            "tipo_turno": self.tipo_turno,
             "data_atualizacao_tabela": aware_or_none(
                 self.data_atualizacao_tabela
             ),
             "nome_turma": strip_str(self.nome_turma),
+            "codigo_ue_turma": strip_str(self.codigo_ue_turma),
             "codigo_etapa_ensino": self.codigo_etapa_ensino,
+            "codigo_ciclo_ensino": self.codigo_ciclo_ensino,
+            "descricao_etapa_ensino": strip_str(self.descricao_etapa_ensino),
+            "descricao_ciclo_ensino": strip_str(self.descricao_ciclo_ensino),
+            "sequencia": self.sequencia,
+            "origem_atual": self.origem_atual,
+            "ano_letivo_turma": self.ano_letivo_turma,
+            "serie_resumida": strip_str(self.serie_resumida),
         }
 
 
@@ -295,6 +323,8 @@ class DadosAlunoAcompanhamentoEscolarIn:
     data_situacao_matricula: date | None
     codigo_etapa_ensino: int | None
     codigo_ciclo_ensino: int | None
+    descricao_etapa_ensino: str | None
+    descricao_ciclo_ensino: str | None
     serie_resumida: str | None
     codigo_modalidade_turma: int | None
 
@@ -309,8 +339,7 @@ class DadosAlunoAcompanhamentoEscolarIn:
             "cpf_responsavel": strip_str(self.cpf_responsavel),
             "data_nascimento": parse_date(self.data_nascimento),
             "descricao_tipo_escola": (
-                strip_str(self.descricao_tipo_escola)
-                or _texto_nao_informado
+                strip_str(self.descricao_tipo_escola) or _texto_nao_informado
             ),
             "tipo_responsavel": self.tipo_responsavel,
             "codigo_dre": strip_str(self.codigo_dre),
@@ -330,6 +359,8 @@ class DadosAlunoAcompanhamentoEscolarIn:
             ),
             "codigo_etapa_ensino": self.codigo_etapa_ensino,
             "codigo_ciclo_ensino": self.codigo_ciclo_ensino,
+            "descricao_etapa_ensino": strip_str(self.descricao_etapa_ensino),
+            "descricao_ciclo_ensino": strip_str(self.descricao_ciclo_ensino),
             "serie_resumida": strip_str(self.serie_resumida),
             "codigo_modalidade_turma": self.codigo_modalidade_turma,
         }

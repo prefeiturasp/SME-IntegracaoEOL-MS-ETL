@@ -6,7 +6,7 @@ A retomada é baseada em `EtlCheckpointDominio` e em `ultima_fase_concluida` do 
 
 Se `--continuar`:
 - Lê checkpoint do domínio `pedagogico`
-- Se `ultima_situacao == "erro"` e `0 < ultima_pagina < 6`, define `fase_inicial = ultima_pagina + 1`
+- Se `ultima_situacao == "erro"` e `0 < ultima_pagina < 11`, define `fase_inicial = ultima_pagina + 1`
 - Caso contrário, reinicia em fase 1
 
 ## Em caso de erro
@@ -15,13 +15,15 @@ Se `--continuar`:
 - `ultima_situacao` vira `"erro"`
 
 ## Em caso de sucesso
-- `ultima_pagina` recebe `6` (última fase)
+- `ultima_pagina` recebe `11` (última fase)
 - `token_parada` é atualizado com `token_anterior + total_alterado`
 - `ultima_situacao` vira `"concluido"`
 
-## Fase 4 e retomada
+## Fases `full_refresh` e retomada
 
-A fase 4 escreve em duas tabelas (`agrupamento_atribuicao_territorio_saber` e `componente_curricular_agrupamento`). Se falhar após gravar a primeira tabela, a retomada reexecutará a fase inteira — o upsert incremental garante idempotência.
+As fases vindas da API EOL usam `full_refresh`. Se uma dessas fases falhar, a retomada reexecuta a fase inteira. Como a fase trunca e recarrega a tabela de destino, o resultado esperado é espelhar novamente a origem completa.
+
+A fase opcional `agrupamento_territorio_saber_gerado` escreve em duas tabelas (`agrupamento_atribuicao_territorio_saber` e `componente_curricular_agrupamento`) e só entra na ordem quando selecionada explicitamente.
 
 ## Diagrama
 
@@ -31,7 +33,7 @@ digraph G {
     node [shape=box, style="rounded"];
 
     CP [label="Ler checkpoint"];
-    DEC [label="Definir fase inicial\n(1–6)"];
+    DEC [label="Definir fase inicial\n(1–11)"];
     RUN [label="Executar ETL"];
     OK [label="Checkpoint concluído"];
     ER [label="Checkpoint erro\n(salva ultima_fase_concluida)"];

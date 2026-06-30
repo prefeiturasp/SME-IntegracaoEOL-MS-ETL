@@ -69,6 +69,7 @@ class EtlAlunosService(BaseEtlService):
         eol: EOLService | None = None,
         primeiro_run: bool = False,
         fases: list[str] | None = None,
+        anos_letivos: list[int] | None = None,
     ) -> None:
         super().__init__(
             db_alias=db_alias,
@@ -78,22 +79,76 @@ class EtlAlunosService(BaseEtlService):
             fases=fases,
         )
         self.eol = eol or EOLService()
+        self._anos_letivos = (
+            [int(ano) for ano in anos_letivos] if anos_letivos else None
+        )
         self._fases = self._init_fases()
 
     def _iter_chunks(self, sql: str) -> Iterator[list[tuple]]:
         """Lê os dados brutos da origem em chunks."""
         return self.eol.iter_query(sql)
 
+    @staticmethod
+    def _existe_matricula_no_ano(coluna_aluno: str, anos: str) -> str:
+        """Monta filtro de aluno com matrícula nos anos letivos informados."""
+        return (
+            f"WHERE (EXISTS (SELECT 1 FROM v_matricula_cotic fmc "
+            f"WHERE fmc.cd_aluno = {coluna_aluno} "
+            f"AND fmc.an_letivo IN ({anos})) "
+            f"OR EXISTS (SELECT 1 FROM v_historico_matricula_cotic fhmc "
+            f"WHERE fhmc.cd_aluno = {coluna_aluno} "
+            f"AND fhmc.an_letivo IN ({anos})))"
+        )
+
+    def _montar_filtros_ano(self) -> dict[str, str]:
+        """Monta as substituições de filtro conforme os anos selecionados."""
+        if not self._anos_letivos:
+            return _FILTROS_ANO_VAZIOS
+        anos = ", ".join(str(ano) for ano in self._anos_letivos)
+        return {
+            "/*FILTRO_ANO_LETIVO_ALUNO*/": self._existe_matricula_no_ano(
+                "a.cd_aluno", anos
+            ),
+            "/*FILTRO_ANO_LETIVO_RESPONSAVEL*/": (
+                self._existe_matricula_no_ano("ra.cd_aluno", anos)
+            ),
+            "/*FILTRO_ANO_LETIVO_NEE*/": self._existe_matricula_no_ano(
+                "nea.cd_aluno", anos
+            ),
+            "/*FILTRO_ANO_LETIVO_MATRICULA_ATUAL*/": (
+                f"AND an_letivo IN ({anos})"
+            ),
+            "/*FILTRO_ANO_LETIVO_MATRICULA_HISTORICA*/": (
+                f"AND an_letivo IN ({anos})"
+            ),
+            "/*FILTRO_ANO_LETIVO_MATRICULA_TURMA_ATUAL*/": (
+                f"AND te.an_letivo IN ({anos})"
+            ),
+            "/*FILTRO_ANO_LETIVO_MATRICULA_TURMA_HISTORICA*/": (
+                f"AND te.an_letivo IN ({anos})"
+            ),
+            "/*FILTRO_ANO_LETIVO_MATRICULA_ANO*/": (
+                f"AND VMC.an_letivo IN ({anos})"
+            ),
+            "/*FILTRO_ANO_LETIVO_MATRICULA_COMPONENTE*/": (
+                f"AND vmc.an_letivo IN ({anos})"
+            ),
+            "/*FILTRO_ANO_LETIVO_ACOMPANHAMENTO*/": (
+                f"and an_letivo IN ({anos})"
+            ),
+        }
+
     def _sql_com_filtro_ano_letivo(self, sql: str) -> str:
-        """Substitui os marcadores de filtro de ano pelos valores padrão.
+        """Aplica os filtros de ano letivo aos marcadores da query.
 
         Args:
             sql: SQL com marcadores de filtro a substituir.
 
         Returns:
-            SQL com os marcadores substituídos pelos valores padrão.
+            SQL com os marcadores substituídos pelo filtro de anos ou
+            pelos valores padrão quando nenhum ano é informado.
         """
-        for marcador, filtro in _FILTROS_ANO_VAZIOS.items():
+        for marcador, filtro in self._montar_filtros_ano().items():
             sql = sql.replace(marcador, filtro)
         return sql
 
@@ -157,6 +212,10 @@ class EtlAlunosService(BaseEtlService):
                     "cpf",
                     "ddd_celular",
                     "numero_celular",
+                    "ddd_telefone_fixo",
+                    "nr_telefone_fixo",
+                    "ddd_telefone_comercial",
+                    "nr_telefone_comercial",
                     "email",
                     "data_nascimento",
                     "nome_mae",
@@ -205,6 +264,7 @@ class EtlAlunosService(BaseEtlService):
                 pk_field="codigo_matricula",
                 update_fields=(
                     "codigo_ue",
+                    "codigo_dre",
                     "ano_letivo",
                     "data_situacao_matricula",
                     "data_situacao_matricula_data_hora",
@@ -222,18 +282,36 @@ class EtlAlunosService(BaseEtlService):
                 source_table="matricula_turma_escola",
                 model_class=MatriculaTurma,
                 dto_in=MatriculaTurmaIn,
-                pk_field=["codigo_matricula", "codigo_turma"],
+                pk_field=[
+                    "codigo_matricula",
+                    "codigo_turma",
+                    "codigo_situacao_aluno",
+                    "sequencia",
+                ],
                 update_fields=(
                     "numero_chamada",
                     "data_situacao_aluno",
                     "data_situacao_aluno_data_hora",
-                    "codigo_situacao_aluno",
                     "codigo_tipo_turma",
+                    "tipo_turno",
                     "data_atualizacao_tabela",
                     "nome_turma",
+                    "codigo_ue_turma",
                     "codigo_etapa_ensino",
+                    "codigo_ciclo_ensino",
+                    "descricao_etapa_ensino",
+                    "descricao_ciclo_ensino",
+                    "sequencia",
+                    "origem_atual",
+                    "ano_letivo_turma",
+                    "serie_resumida",
                 ),
-                unique_fields=("codigo_matricula", "codigo_turma"),
+                unique_fields=(
+                    "codigo_matricula",
+                    "codigo_turma",
+                    "codigo_situacao_aluno",
+                    "sequencia",
+                ),
                 suporta_bulk_insert=False,
             ),
             PhaseConfig(
@@ -323,6 +401,8 @@ class EtlAlunosService(BaseEtlService):
                     "data_situacao_matricula",
                     "codigo_etapa_ensino",
                     "codigo_ciclo_ensino",
+                    "descricao_etapa_ensino",
+                    "descricao_ciclo_ensino",
                     "serie_resumida",
                     "codigo_modalidade_turma",
                 ),

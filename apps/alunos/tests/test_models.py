@@ -36,14 +36,16 @@ class AlunosModelsTest(TestCase):
     def test_necessidade_especial_aluno_str(self) -> None:
         aluno = Aluno(codigo_aluno=12345)
         nee = TipoNecessidadeEspecial(codigo_necessidade_especial=10)
-        obj = NecessidadeEspecialAluno(
-            aluno=aluno, necessidade_especial=nee
-        )
+        obj = NecessidadeEspecialAluno(aluno=aluno, necessidade_especial=nee)
         self.assertEqual(str(obj), "Aluno 12345 - NEE 10")
 
     def test_matricula_str(self) -> None:
         obj = Matricula(codigo_matricula=999, ano_letivo=2024)
         self.assertEqual(str(obj), "999 (2024)")
+
+    def test_matricula_possui_indice_codigo_dre(self) -> None:
+        nomes_indices = {indice.name for indice in Matricula._meta.indexes}
+        self.assertIn("idx_matricula_codigo_dre", nomes_indices)
 
     def test_matricula_turma_str(self) -> None:
         obj = MatriculaTurma(codigo_matricula=100, codigo_turma=555)
