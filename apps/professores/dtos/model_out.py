@@ -165,11 +165,15 @@ class AtribuicaoAulaOut:
     cargo_base_id: int
     codigo_unidade_educacao: str
     codigo_turma_escola: int | None
+    descricao_turma_escola: str | None
     codigo_turma_escola_grade_programa: int | None
     codigo_grade: int | None
     codigo_componente_curricular: int | None
+    descricao_componente_curricular: str | None
     codigo_serie_grade: int | None
+    ano_escolar: str | None
     ano_atribuicao: int | None
+    codigo_etapa_ensino: int | None
     dt_atribuicao_aula: Any
     dt_disponibilizacao_aulas: Any
     codigo_motivo_disponibilizacao: int | None
@@ -181,13 +185,19 @@ class AtribuicaoAulaOut:
             "cargo_base_id": self.cargo_base_id,
             "codigo_unidade_educacao": self.codigo_unidade_educacao,
             "codigo_turma_escola": self.codigo_turma_escola,
+            "descricao_turma_escola": self.descricao_turma_escola,
             "codigo_turma_escola_grade_programa": (
                 self.codigo_turma_escola_grade_programa
             ),
             "codigo_grade": self.codigo_grade,
             "codigo_componente_curricular": self.codigo_componente_curricular,
+            "descricao_componente_curricular": (
+                self.descricao_componente_curricular
+            ),
             "codigo_serie_grade": self.codigo_serie_grade,
+            "ano_escolar": self.ano_escolar,
             "ano_atribuicao": self.ano_atribuicao,
+            "codigo_etapa_ensino": self.codigo_etapa_ensino,
             "dt_atribuicao_aula": self.dt_atribuicao_aula,
             "dt_disponibilizacao_aulas": self.dt_disponibilizacao_aulas,
             "codigo_motivo_disponibilizacao": (
@@ -205,11 +215,15 @@ class AtribuicaoExternoOut:
     contrato_externo_id: int
     codigo_unidade_educacao: str
     codigo_turma_escola: int | None
+    descricao_turma_escola: str | None
     codigo_grade: int | None
     codigo_componente_curricular: int | None
+    descricao_componente_curricular: str | None
     codigo_serie_grade: int | None
     codigo_turma_escola_grade_programa: int | None
+    ano_escolar: str | None
     ano_atribuicao: int | None
+    codigo_etapa_ensino: int | None
     dt_atribuicao: Any
     dt_disponibilizacao: Any
     codigo_motivo_disponibilizacao_externo: int | None
@@ -221,13 +235,19 @@ class AtribuicaoExternoOut:
             "contrato_externo_id": self.contrato_externo_id,
             "codigo_unidade_educacao": self.codigo_unidade_educacao,
             "codigo_turma_escola": self.codigo_turma_escola,
+            "descricao_turma_escola": self.descricao_turma_escola,
             "codigo_grade": self.codigo_grade,
             "codigo_componente_curricular": self.codigo_componente_curricular,
+            "descricao_componente_curricular": (
+                self.descricao_componente_curricular
+            ),
             "codigo_serie_grade": self.codigo_serie_grade,
             "codigo_turma_escola_grade_programa": (
                 self.codigo_turma_escola_grade_programa
             ),
+            "ano_escolar": self.ano_escolar,
             "ano_atribuicao": self.ano_atribuicao,
+            "codigo_etapa_ensino": self.codigo_etapa_ensino,
             "dt_atribuicao": self.dt_atribuicao,
             "dt_disponibilizacao": self.dt_disponibilizacao,
             "codigo_motivo_disponibilizacao_externo": (
@@ -352,9 +372,7 @@ class FuncionarioUnidadeEducacionalOut:
         self.cpf = _normalizar_texto_opcional(self.cpf)
         self.codigo_rf = _normalizar_texto(self.codigo_rf)
         self.codigo_ue = _normalizar_texto(self.codigo_ue)
-        self.data_inicio = _normalizar_data_chave_funcionario(
-            self.data_inicio
-        )
+        self.data_inicio = _normalizar_data_chave_funcionario(self.data_inicio)
         self.data_fim = _normalizar_datetime(self.data_fim)
         self.codigo_cargo = _normalizar_int_opcional(self.codigo_cargo)
         self.cargo = _normalizar_texto_opcional(self.cargo)
@@ -390,7 +408,5 @@ class FuncionarioUnidadeEducacionalOut:
             "eh_professor": self.eh_professor,
             "esta_afastado": self.esta_afastado,
             "funcao_externo": _normalizar_int(self.funcao_externo),
-            "tipo_funcao_externo": _normalizar_int(
-                self.tipo_funcao_externo
-            ),
+            "tipo_funcao_externo": _normalizar_int(self.tipo_funcao_externo),
         }

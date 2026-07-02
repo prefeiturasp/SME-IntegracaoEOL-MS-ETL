@@ -139,11 +139,15 @@ SQL_ATRIBUICOES_AULA = f"""
         aa.cd_cargo_base_servidor,
         aa.cd_unidade_educacao,
         COALESCE(stg.cd_turma_escola, tegp.cd_turma_escola) AS cd_turma_escola,
+        te.dc_turma_escola,
         aa.cd_turma_escola_grade_programa,
         aa.cd_grade,
         aa.cd_componente_curricular,
+        cc.dc_componente_curricular,
         aa.cd_serie_grade,
+        se.sg_resumida_serie as ano_escolar,
         aa.an_atribuicao,
+        se.cd_etapa_ensino,
         aa.dt_atribuicao_aula,
         COALESCE(
             aa.dt_disponibilizacao_aulas,
@@ -161,6 +165,10 @@ SQL_ATRIBUICOES_AULA = f"""
             = aa.cd_turma_escola_grade_programa
     LEFT JOIN turma_escola te
         ON te.cd_turma_escola = tegp.cd_turma_escola
+    LEFT JOIN componente_curricular cc
+        ON cc.cd_componente_curricular = aa.cd_componente_curricular
+    LEFT JOIN serie_ensino se
+        ON se.cd_serie_ensino = stg.cd_serie_ensino
     WHERE cbs.cd_cargo IN ({_PLACEHOLDERS_CARGO})
 """
 
@@ -170,11 +178,15 @@ SQL_ATRIBUICOES_EXTERNO = """
         ae.cd_contrato_externo,
         ae.cd_unidade_educacao,
         COALESCE(stg.cd_turma_escola, tegp.cd_turma_escola) AS cd_turma_escola,
+        te.dc_turma_escola,
         ae.cd_grade,
         ae.cd_componente_curricular,
+        cc.dc_componente_curricular,
         ae.cd_serie_grade,
         ae.cd_turma_escola_grade_programa,
+        se.sg_resumida_serie as ano_escolar,
         ae.an_atribuicao,
+        se.cd_etapa_ensino,
         ae.dt_atribuicao,
         COALESCE(
             ae.dt_disponibilizacao,
@@ -192,6 +204,10 @@ SQL_ATRIBUICOES_EXTERNO = """
             = ae.cd_turma_escola_grade_programa
     LEFT JOIN turma_escola te
         ON te.cd_turma_escola = tegp.cd_turma_escola
+    LEFT JOIN componente_curricular cc
+        ON cc.cd_componente_curricular = ae.cd_componente_curricular
+	LEFT JOIN serie_ensino se
+		ON se.cd_serie_ensino = stg.cd_serie_ensino
     WHERE ce.dt_cancelamento IS NULL
 """
 

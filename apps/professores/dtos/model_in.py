@@ -200,11 +200,15 @@ class AtribuicaoAulaIn:
     cd_cargo_base_servidor: Any
     cd_unidade_educacao: Any
     cd_turma_escola: Any
+    dc_turma_escola: Any
     cd_turma_escola_grade_programa: Any
     cd_grade: Any
     cd_componente_curricular: Any
+    dc_componente_curricular: Any
     cd_serie_grade: Any
+    ano_escolar: Any
     an_atribuicao: Any
+    cd_etapa_ensino: Any
     dt_atribuicao_aula: Any
     dt_disponibilizacao_aulas: Any
     cd_motivo_disponibilizacao: Any
@@ -218,13 +222,17 @@ class AtribuicaoAulaIn:
             cargo_base_id=self.cd_cargo_base_servidor,
             codigo_unidade_educacao=str(self.cd_unidade_educacao).strip(),
             codigo_turma_escola=self.cd_turma_escola,
+            descricao_turma_escola=self.dc_turma_escola,
             codigo_turma_escola_grade_programa=(
                 self.cd_turma_escola_grade_programa
             ),
             codigo_grade=self.cd_grade,
             codigo_componente_curricular=self.cd_componente_curricular,
+            descricao_componente_curricular=self.dc_componente_curricular,
             codigo_serie_grade=self.cd_serie_grade,
+            ano_escolar=self.ano_escolar,
             ano_atribuicao=self.an_atribuicao,
+            codigo_etapa_ensino=self.cd_etapa_ensino,
             dt_atribuicao_aula=self.dt_atribuicao_aula,
             dt_disponibilizacao_aulas=self.dt_disponibilizacao_aulas,
             codigo_motivo_disponibilizacao=self.cd_motivo_disponibilizacao,
@@ -240,11 +248,15 @@ class AtribuicaoExternoIn:
     cd_contrato_externo: Any
     cd_unidade_educacao: Any
     cd_turma_escola: Any
+    dc_turma_escola: Any
     cd_grade: Any
     cd_componente_curricular: Any
+    dc_componente_curricular: Any
     cd_serie_grade: Any
     cd_turma_escola_grade_programa: Any
+    ano_escolar: Any
     an_atribuicao: Any
+    cd_etapa_ensino: Any
     dt_atribuicao: Any
     dt_disponibilizacao: Any
     cd_motivo_disponibilizacao_externo: Any
@@ -258,13 +270,17 @@ class AtribuicaoExternoIn:
             contrato_externo_id=self.cd_contrato_externo,
             codigo_unidade_educacao=str(self.cd_unidade_educacao).strip(),
             codigo_turma_escola=self.cd_turma_escola,
+            descricao_turma_escola=self.dc_turma_escola,
             codigo_grade=self.cd_grade,
             codigo_componente_curricular=self.cd_componente_curricular,
+            descricao_componente_curricular=self.dc_componente_curricular,
             codigo_serie_grade=self.cd_serie_grade,
             codigo_turma_escola_grade_programa=(
                 self.cd_turma_escola_grade_programa
             ),
+            ano_escolar=self.ano_escolar,
             ano_atribuicao=self.an_atribuicao,
+            codigo_etapa_ensino=self.cd_etapa_ensino,
             dt_atribuicao=self.dt_atribuicao,
             dt_disponibilizacao=self.dt_disponibilizacao,
             codigo_motivo_disponibilizacao_externo=(
