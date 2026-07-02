@@ -164,7 +164,8 @@ SQL_ATRIBUICOES_AULA = f"""
         ON tegp.cd_turma_escola_grade_programa
             = aa.cd_turma_escola_grade_programa
     LEFT JOIN turma_escola te
-        ON te.cd_turma_escola = tegp.cd_turma_escola
+        ON te.cd_turma_escola = COALESCE(stg.cd_turma_escola,
+        tegp.cd_turma_escola)
     LEFT JOIN componente_curricular cc
         ON cc.cd_componente_curricular = aa.cd_componente_curricular
     LEFT JOIN serie_ensino se
@@ -203,7 +204,8 @@ SQL_ATRIBUICOES_EXTERNO = """
         ON tegp.cd_turma_escola_grade_programa
             = ae.cd_turma_escola_grade_programa
     LEFT JOIN turma_escola te
-        ON te.cd_turma_escola = tegp.cd_turma_escola
+        ON te.cd_turma_escola = COALESCE(stg.cd_turma_escola,
+        tegp.cd_turma_escola)
     LEFT JOIN componente_curricular cc
         ON cc.cd_componente_curricular = ae.cd_componente_curricular
 	LEFT JOIN serie_ensino se
