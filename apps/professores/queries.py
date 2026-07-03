@@ -149,6 +149,7 @@ SQL_ATRIBUICOES_AULA = f"""
         aa.an_atribuicao,
         se.cd_etapa_ensino,
         aa.dt_atribuicao_aula,
+        te.dt_inicio_turma,
         COALESCE(
             aa.dt_disponibilizacao_aulas,
             te.dt_fim_turma
@@ -189,6 +190,7 @@ SQL_ATRIBUICOES_EXTERNO = """
         ae.an_atribuicao,
         se.cd_etapa_ensino,
         ae.dt_atribuicao,
+        te.dt_inicio_turma,
         COALESCE(
             ae.dt_disponibilizacao,
             te.dt_fim_turma

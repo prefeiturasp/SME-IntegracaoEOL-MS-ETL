@@ -210,6 +210,7 @@ class AtribuicaoAulaIn:
     an_atribuicao: Any
     cd_etapa_ensino: Any
     dt_atribuicao_aula: Any
+    dt_inicio_turma: Any
     dt_disponibilizacao_aulas: Any
     cd_motivo_disponibilizacao: Any
     dt_cancelamento: Any
@@ -234,6 +235,7 @@ class AtribuicaoAulaIn:
             ano_atribuicao=self.an_atribuicao,
             codigo_etapa_ensino=self.cd_etapa_ensino,
             dt_atribuicao_aula=self.dt_atribuicao_aula,
+            dt_inicio_turma=self.dt_inicio_turma,
             dt_disponibilizacao_aulas=self.dt_disponibilizacao_aulas,
             codigo_motivo_disponibilizacao=self.cd_motivo_disponibilizacao,
             dt_cancelamento=self.dt_cancelamento,
@@ -258,6 +260,7 @@ class AtribuicaoExternoIn:
     an_atribuicao: Any
     cd_etapa_ensino: Any
     dt_atribuicao: Any
+    dt_inicio_turma: Any
     dt_disponibilizacao: Any
     cd_motivo_disponibilizacao_externo: Any
     dt_cancelamento: Any
@@ -282,6 +285,7 @@ class AtribuicaoExternoIn:
             ano_atribuicao=self.an_atribuicao,
             codigo_etapa_ensino=self.cd_etapa_ensino,
             dt_atribuicao=self.dt_atribuicao,
+            dt_inicio_turma=self.dt_inicio_turma,
             dt_disponibilizacao=self.dt_disponibilizacao,
             codigo_motivo_disponibilizacao_externo=(
                 self.cd_motivo_disponibilizacao_externo

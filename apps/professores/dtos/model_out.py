@@ -175,6 +175,7 @@ class AtribuicaoAulaOut:
     ano_atribuicao: int | None
     codigo_etapa_ensino: int | None
     dt_atribuicao_aula: Any
+    dt_inicio_turma: Any
     dt_disponibilizacao_aulas: Any
     codigo_motivo_disponibilizacao: int | None
     dt_cancelamento: Any
@@ -199,6 +200,7 @@ class AtribuicaoAulaOut:
             "ano_atribuicao": self.ano_atribuicao,
             "codigo_etapa_ensino": self.codigo_etapa_ensino,
             "dt_atribuicao_aula": self.dt_atribuicao_aula,
+            "dt_inicio_turma": self.dt_inicio_turma,
             "dt_disponibilizacao_aulas": self.dt_disponibilizacao_aulas,
             "codigo_motivo_disponibilizacao": (
                 self.codigo_motivo_disponibilizacao
@@ -225,6 +227,7 @@ class AtribuicaoExternoOut:
     ano_atribuicao: int | None
     codigo_etapa_ensino: int | None
     dt_atribuicao: Any
+    dt_inicio_turma: Any
     dt_disponibilizacao: Any
     codigo_motivo_disponibilizacao_externo: int | None
     dt_cancelamento: Any
@@ -249,6 +252,7 @@ class AtribuicaoExternoOut:
             "ano_atribuicao": self.ano_atribuicao,
             "codigo_etapa_ensino": self.codigo_etapa_ensino,
             "dt_atribuicao": self.dt_atribuicao,
+            "dt_inicio_turma": self.dt_inicio_turma,
             "dt_disponibilizacao": self.dt_disponibilizacao,
             "codigo_motivo_disponibilizacao_externo": (
                 self.codigo_motivo_disponibilizacao_externo

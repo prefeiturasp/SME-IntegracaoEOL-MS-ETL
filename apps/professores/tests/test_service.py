@@ -208,6 +208,7 @@ class RowToAtribuicaoAulaTest(TestCase):
     def test_campos(self) -> None:
         """Verifica que os campos da atribuição de aula são extraídos."""
         dt = datetime.date(2024, 2, 1)
+        dt_inicio_turma = datetime.date(2024, 2, 5)
         row = (
             9001,
             1001,
@@ -223,6 +224,7 @@ class RowToAtribuicaoAulaTest(TestCase):
             2024,
             1,
             dt,
+            dt_inicio_turma,
             dt,
             None,
             None,
@@ -236,6 +238,7 @@ class RowToAtribuicaoAulaTest(TestCase):
         self.assertEqual(r["descricao_componente_curricular"], "MATEMATICA")
         self.assertEqual(r["ano_escolar"], "1")
         self.assertEqual(r["codigo_etapa_ensino"], 1)
+        self.assertEqual(r["dt_inicio_turma"], dt_inicio_turma)
 
 
 class RowToAtribuicaoExternoTest(TestCase):
@@ -244,6 +247,7 @@ class RowToAtribuicaoExternoTest(TestCase):
     def test_campos(self) -> None:
         """Verifica que os campos da atribuição externo são extraídos."""
         dt = datetime.date(2024, 2, 1)
+        dt_inicio_turma = datetime.date(2024, 2, 5)
         row = (
             9002,
             800,
@@ -259,6 +263,7 @@ class RowToAtribuicaoExternoTest(TestCase):
             2024,
             1,
             dt,
+            dt_inicio_turma,
             dt,
             None,
             None,
@@ -272,6 +277,7 @@ class RowToAtribuicaoExternoTest(TestCase):
         self.assertEqual(r["descricao_componente_curricular"], "PORTUGUES")
         self.assertEqual(r["ano_escolar"], "2")
         self.assertEqual(r["codigo_etapa_ensino"], 1)
+        self.assertEqual(r["dt_inicio_turma"], dt_inicio_turma)
 
     def test_codigo_turma_escola_none(self) -> None:
         """Verifica que codigo_turma_escola None é preservado."""
@@ -291,6 +297,7 @@ class RowToAtribuicaoExternoTest(TestCase):
             2024,
             1,
             dt,
+            None,
             dt,
             None,
             None,
@@ -903,6 +910,7 @@ class EtlProfessoresServiceFase3Test(TestCase):
                     1,
                     dt,
                     dt,
+                    dt,
                     None,
                     None,
                 )
@@ -935,6 +943,7 @@ class EtlProfessoresServiceFase3Test(TestCase):
                     "2",
                     2024,
                     1,
+                    dt,
                     dt,
                     dt,
                     None,

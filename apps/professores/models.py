@@ -312,6 +312,7 @@ class AtribuicaoAula(models.Model):
     codigo_etapa_ensino = models.IntegerField(null=True, blank=True)
     dt_atribuicao_aula = models.DateField()
     dt_disponibilizacao_aulas = models.DateField(null=True, blank=True)
+    dt_inicio_turma = models.DateField(null=True, blank=True)
     codigo_motivo_disponibilizacao = models.IntegerField(null=True, blank=True)
     dt_cancelamento = models.DateField(null=True, blank=True)
 
@@ -388,6 +389,7 @@ class AtribuicaoExterno(models.Model):
     codigo_etapa_ensino = models.IntegerField(null=True, blank=True)
     dt_atribuicao = models.DateField()
     dt_disponibilizacao = models.DateField(null=True, blank=True)
+    dt_inicio_turma = models.DateField(null=True, blank=True)
     codigo_motivo_disponibilizacao_externo = models.IntegerField(
         null=True, blank=True
     )
