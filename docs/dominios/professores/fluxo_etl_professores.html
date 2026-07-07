@@ -134,7 +134,7 @@
       /* ── Phase grid ── */
       .phases {
         display: grid;
-        grid-template-columns: repeat(3, 1fr);
+        grid-template-columns: repeat(4, 1fr);
         gap: 1rem;
         margin-bottom: 1rem;
       }
@@ -157,6 +157,7 @@
       .phase-header.f1 { background: #0c2a45; color: #7dd3fc; border-bottom: 1px solid #0369a1; }
       .phase-header.f2 { background: #1e0a3c; color: #c084fc; border-bottom: 1px solid #6d28d9; }
       .phase-header.f3 { background: #0a2018; color: #6ee7b7; border-bottom: 1px solid #065f46; }
+      .phase-header.f4 { background: #3a2505; color: #fbbf24; border-bottom: 1px solid #b45309; }
       .phase-body { padding: 0.75rem 1rem; }
 
       .table-row {
@@ -522,7 +523,7 @@
             <ul>
               <li>checkpoint: situação = <code>concluido</code></li>
               <li>token_parada acumulado</li>
-              <li>ultima_pagina = fase concluída (3)</li>
+              <li>ultima_pagina = fase concluída (4)</li>
             </ul>
           </div>
           <div class="situation-card error">
@@ -555,20 +556,6 @@
           <div class="phase-body">
             <div class="table-row">
               <div>
-                <span class="table-name">unidade_educacional</span>
-                <span class="source-label">v_cadastro_unidade_educacao</span>
-              </div>
-              <span class="badge badge-upsert">upsert</span>
-            </div>
-            <div class="table-row">
-              <div>
-                <span class="table-name">turma_escola</span>
-                <span class="source-label">turma_escola</span>
-              </div>
-              <span class="badge badge-upsert">upsert</span>
-            </div>
-            <div class="table-row">
-              <div>
                 <span class="table-name">professor</span>
                 <span class="source-label">v_servidor_cotic</span>
               </div>
@@ -589,20 +576,6 @@
           <div class="phase-body">
             <div class="table-row">
               <div>
-                <span class="table-name">serie_turma_grade</span>
-                <span class="source-label">serie_turma_grade</span>
-              </div>
-              <span class="badge badge-upsert">upsert</span>
-            </div>
-            <div class="table-row">
-              <div>
-                <span class="table-name">turma_escola_grade_programa</span>
-                <span class="source-label">turma_escola_grade_programa</span>
-              </div>
-              <span class="badge badge-upsert">upsert</span>
-            </div>
-            <div class="table-row">
-              <div>
                 <span class="table-name">cargo_base_servidor</span>
                 <span class="source-label">v_cargo_base_cotic</span>
               </div>
@@ -621,12 +594,6 @@
         <div class="phase-card">
           <div class="phase-header f3">Fase 3 — dependem da Fase 2</div>
           <div class="phase-body">
-            <div class="table-row">
-              <div>
-                <span class="table-name">turma_grade_territorio_experiencia</span>
-              </div>
-              <span class="badge badge-refresh">full&nbsp;refresh</span>
-            </div>
             <div class="table-row">
               <div>
                 <span class="table-name">lotacao_servidor</span>
@@ -662,6 +629,19 @@
               <div>
                 <span class="table-name">atribuicao_externo</span>
                 <span class="source-label">atribuicao_externo</span>
+              </div>
+              <span class="badge badge-upsert">upsert</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="phase-card">
+          <div class="phase-header f4">Fase 4 - consulta consolidada</div>
+          <div class="phase-body">
+            <div class="table-row">
+              <div>
+                <span class="table-name">funcionario_unidade_educacional</span>
+                <span class="source-label">SQL_FUNCIONARIOS_UNIDADE_EDUCACIONAL</span>
               </div>
               <span class="badge badge-upsert">upsert</span>
             </div>
@@ -714,7 +694,7 @@
       </div>
       <div style="display:flex;gap:1rem;margin-top:0.75rem;flex-wrap:wrap">
         <div class="info-box" style="flex:1;min-width:200px;margin-bottom:0">
-          <strong>Full Refresh:</strong> tabelas sem chave natural estável (5 tabelas da Fase 3)
+          <strong>Full Refresh:</strong> tabelas sem chave natural estável (4 tabelas da Fase 3)
           executam <code>delete()</code> + <code>bulk_create()</code> em transação atômica no <code>professores_db</code>.
           Não usam <code>EtlAuditoriaLinha</code>.
         </div>
@@ -736,7 +716,7 @@
           <div class="cp-card-title">EtlCheckpointDominio — campos relevantes</div>
           <div class="cp-row"><span class="cp-key">dominio</span><span class="cp-val">"professores"</span></div>
           <div class="cp-row"><span class="cp-key">ultimo_id_execucao</span><span class="cp-val">UUID da última execução</span></div>
-          <div class="cp-row"><span class="cp-key">ultima_pagina</span><span class="cp-val">nº da última fase concluída (1, 2 ou 3)</span></div>
+          <div class="cp-row"><span class="cp-key">ultima_pagina</span><span class="cp-val">nº da última fase concluída (1, 2, 3 ou 4)</span></div>
           <div class="cp-row"><span class="cp-key">token_parada</span><span class="cp-val">total acumulado de linhas alteradas</span></div>
           <div class="cp-row"><span class="cp-key">ultima_situacao</span><span class="cp-val">"concluido" | "erro" | "em_execucao"</span></div>
           <div class="cp-row"><span class="cp-key">ultimo_sucesso_em</span><span class="cp-val">datetime do último sucesso</span></div>
@@ -831,7 +811,7 @@
         <div class="cp-card" style="flex:1;min-width:200px">
           <div class="cp-card-title" style="color:var(--accent-red)">professores_db</div>
           <div class="cp-row"><span class="cp-key">app</span><span class="cp-val">professores</span></div>
-          <div class="cp-row"><span class="cp-key">conteúdo</span><span class="cp-val">16 modelos de domínio</span></div>
+          <div class="cp-row"><span class="cp-key">conteúdo</span><span class="cp-val">11 modelos de domínio</span></div>
           <div class="cp-row"><span class="cp-key">escrita</span><span class="cp-val">bulk_create / delete</span></div>
           <div class="cp-row"><span class="cp-key">usando</span><span class="cp-val">DominioRouter</span></div>
         </div>
