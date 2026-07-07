@@ -39,7 +39,7 @@ digraph G {
 
 Exemplos de `id_destino`:
 - `professor:0012345`
-- `turma_escola:9988776`
+- `cargo_base_servidor:9988776`
 - `atribuicao_aula:123456`
 
 ## Benefícios reais no código
@@ -50,7 +50,8 @@ Exemplos de `id_destino`:
 ## FuncionarioUnidadeEducacional
 
 Para `funcionario_unidade_educacional`, a chave primaria e `id`, enquanto o
-upsert usa a chave natural composta por `codigo_rf` e `codigo_ue`. O hash
-considera essa chave natural e os campos de atualizacao. O `id_destino` da
-auditoria usa o formato
-`funcionario_unidade_educacional:<codigo_rf>|<codigo_ue>`.
+upsert usa a chave natural composta por `codigo_rf`, `codigo_ue`,
+`codigo_cargo`, `codigo_tipo_funcao_atividade`, `data_inicio`, `data_fim`,
+`funcao_externo` e `tipo_funcao_externo`. O hash considera essa chave natural
+e os campos de atualizacao. O `id_destino` da auditoria usa o formato
+`funcionario_unidade_educacional:<codigo_rf>|<codigo_ue>|<codigo_cargo>|...`.
