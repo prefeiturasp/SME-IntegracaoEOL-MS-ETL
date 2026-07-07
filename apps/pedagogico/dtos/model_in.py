@@ -190,6 +190,7 @@ class TurmaIn:
     codigo_grade_programa: Any
     descricao_grade_programa: Any
     tipo_grade_programa: Any
+    codigo_tipo_periodicidade: Any
 
     def to_domain(self, transferido_em: Any) -> dict:
         return {
@@ -230,6 +231,9 @@ class TurmaIn:
             ),
             "tipo_grade_programa": (
                 int_or_none(self.tipo_grade_programa) or 0
+            ),
+            "codigo_tipo_periodicidade": int_or_none(
+                self.codigo_tipo_periodicidade
             ),
             "transferido_em": transferido_em,
         }

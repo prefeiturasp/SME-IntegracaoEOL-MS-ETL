@@ -359,6 +359,7 @@ class Turma(ModeloBase):
     codigo_modalidade = models.IntegerField(null=True, blank=True)
     codigo_tipo_programa = models.IntegerField(null=True, blank=True)
     semestre = models.IntegerField(null=True, blank=True, default=0)
+    codigo_tipo_periodicidade = models.IntegerField(null=True, blank=True)
     ensino_especial = models.BooleanField(default=False)
     codigo_modalidade_etapa = models.IntegerField(null=True, blank=True)
     serie_ensino = models.CharField(max_length=200, null=True, blank=True)

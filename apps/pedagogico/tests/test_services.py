@@ -182,6 +182,7 @@ class TestPedagogicoService(TestCase):
             42,  # codigo_grade_programa
             " Programa Mais Educação ",  # descricao_grade_programa
             9,  # tipo_grade_programa
+            1,  # codigo_tipo_periodicidade
         )
         result = transform(row)
         assert result is not None
@@ -203,6 +204,7 @@ class TestPedagogicoService(TestCase):
             obj.descricao_grade_programa, "Programa Mais Educação"
         )
         self.assertEqual(obj.tipo_grade_programa, 9)
+        self.assertEqual(obj.codigo_tipo_periodicidade, 1)
 
     def test_criar_transform_comp_por_ano_letivo_ignora_registro_sem_chave(
         self,
