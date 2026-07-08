@@ -2,6 +2,7 @@
 
 import hashlib
 import logging
+import os
 from collections.abc import Callable, Iterator
 from typing import Any
 
@@ -61,6 +62,11 @@ from apps.professores.queries import (
 )
 
 logger = logging.getLogger(__name__)
+
+_MARCADORES_ANO_LETIVO = {
+    "/*FILTRO_ANO_LETIVO_ATRIBUICAO_AULA*/": "",
+    "/*FILTRO_ANO_LETIVO_ATRIBUICAO_EXTERNO*/": "",
+}
 
 
 def _row_to_professor(row: tuple) -> dict:
@@ -286,6 +292,9 @@ def _upsert_incremental(
         EtlAuditoriaLinha(id_destino=id_d, hash_controle=h)
         for id_d, h in novos_hashes.items()
     ]
+    if os.getenv("ETL_SKIP_AUDIT_HASH") == "1":
+        return len(objs_para_salvar)
+
     EtlAuditoriaLinha.objects.bulk_create(
         hash_objs,
         update_conflicts=True,
@@ -324,10 +333,44 @@ _ORDEM_TABELAS: tuple[str, ...] = (
 class EtlProfessoresService:
     """Orquestra o ETL completo do dominio PROFESSORES_DB."""
 
-    def __init__(self, eol: EOLService | None = None) -> None:
-        """Inicializa o serviço com instância de EOLService."""
+    def __init__(
+        self,
+        eol: EOLService | None = None,
+        ano_letivo: int | None = None,
+    ) -> None:
+        """Inicializa o serviço.
+
+        Args:
+            eol: Cliente EOL; instanciado sob demanda quando omitido.
+            ano_letivo: Ano letivo mínimo aplicado ao filtro incremental.
+        """
         self.eol = eol or EOLService()
+        self._ano_letivo = ano_letivo
         self.ultima_fase_concluida: int = 0
+
+    def _sql_com_filtro_ano_letivo(self, sql: str) -> str:
+        """Aplica filtro de ano letivo nas consultas compatíveis.
+
+        Args:
+            sql: Consulta usada na carga.
+
+        Returns:
+            Consulta com marcadores resolvidos.
+        """
+        filtros = _MARCADORES_ANO_LETIVO
+        if self._ano_letivo is not None:
+            ano = int(self._ano_letivo)
+            filtros = {
+                "/*FILTRO_ANO_LETIVO_ATRIBUICAO_AULA*/": (
+                    f"AND aa.an_atribuicao >= {ano}"
+                ),
+                "/*FILTRO_ANO_LETIVO_ATRIBUICAO_EXTERNO*/": (
+                    f"AND ae.an_atribuicao >= {ano}"
+                ),
+            }
+        for marcador, filtro in filtros.items():
+            sql = sql.replace(marcador, filtro)
+        return sql
 
     def popular_professores(self) -> int:
         """Popula a tabela Professor."""
@@ -498,7 +541,8 @@ class EtlProfessoresService:
         total = 0
         with ThreadPoolProcessor(prefixo_log="PROF:atribuicao_aula") as proc:
             for chunk in self.eol.iter_query(
-                SQL_ATRIBUICOES_AULA, _params_cargo()
+                self._sql_com_filtro_ano_letivo(SQL_ATRIBUICOES_AULA),
+                _params_cargo(),
             ):
                 out_objs: list[AtribuicaoAulaOut] = proc.processar(
                     chunk,
@@ -524,8 +568,20 @@ class EtlProfessoresService:
                         "dt_atribuicao_aula",
                         "dt_disponibilizacao_aulas",
                         "dt_inicio_turma",
+                        "dt_fim_turma",
                         "codigo_motivo_disponibilizacao",
                         "dt_cancelamento",
+                        "codigo_dre",
+                        "nome_dre",
+                        "abreviacao_dre",
+                        "nome_unidade_educacional",
+                        "codigo_tipo_escola",
+                        "codigo_tipo_turma",
+                        "modalidade",
+                        "codigo_modalidade",
+                        "semestre",
+                        "duracao_turno",
+                        "tipo_turno",
                     ],
                 )
         return total
@@ -536,7 +592,9 @@ class EtlProfessoresService:
         with ThreadPoolProcessor(
             prefixo_log="PROF:atribuicao_externo"
         ) as proc:
-            for chunk in self.eol.iter_query(SQL_ATRIBUICOES_EXTERNO):
+            for chunk in self.eol.iter_query(
+                self._sql_com_filtro_ano_letivo(SQL_ATRIBUICOES_EXTERNO)
+            ):
                 out_objs: list[AtribuicaoExternoOut] = proc.processar(
                     chunk,
                     lambda r: AtribuicaoExternoIn(*r).to_domain(),
@@ -561,6 +619,7 @@ class EtlProfessoresService:
                         "dt_atribuicao",
                         "dt_disponibilizacao",
                         "dt_inicio_turma",
+                        "dt_fim_turma",
                         "codigo_motivo_disponibilizacao_externo",
                         "dt_cancelamento",
                     ],

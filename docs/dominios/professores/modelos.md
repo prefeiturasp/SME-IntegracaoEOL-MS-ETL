@@ -167,11 +167,28 @@ Modelos atuais de `apps/professores/models.py`.
 | `codigo_etapa_ensino` | `IntegerField` | null=True |
 | `dt_atribuicao_aula` | `DateField` | |
 | `dt_disponibilizacao_aulas` | `DateField` | null=True |
-| `dt_inicio_turma` | `DateField` | null=True |
+| `dt_inicio_turma` | `DateField` | null=True — início da turma |
+| `dt_fim_turma` | `DateField` | null=True — fim da turma |
 | `codigo_motivo_disponibilizacao` | `IntegerField` | null=True |
 | `dt_cancelamento` | `DateField` | null=True — IS NULL = ativa |
+| `codigo_dre` | `CharField` | max_length=20; null=True — ID da DRE (domínio institucional) |
+| `nome_dre` | `CharField` | max_length=200; null=True |
+| `abreviacao_dre` | `CharField` | max_length=100; null=True |
+| `nome_unidade_educacional` | `CharField` | max_length=200; null=True |
+| `codigo_tipo_escola` | `IntegerField` | null=True |
+| `codigo_tipo_turma` | `IntegerField` | null=True |
+| `modalidade` | `CharField` | max_length=50; null=True — derivada (ver mapeamento) |
+| `codigo_modalidade` | `IntegerField` | null=True — derivada (ver mapeamento) |
+| `semestre` | `IntegerField` | null=True — derivada (ver mapeamento) |
+| `duracao_turno` | `IntegerField` | null=True |
+| `tipo_turno` | `IntegerField` | null=True |
 
 Índices: `codigo_unidade_educacao`, `codigo_turma_escola`, `codigo_componente_curricular`, `ano_atribuicao`, `dt_cancelamento`.
+
+> Dados de DRE/UE, modalidade, semestre e turno são **desnormalizados** na
+> atribuição para que a abrangência de turmas do funcionário seja respondida sem
+> recompor a hierarquia DRE → UE → turma no serviço de consumo. Regras de
+> derivação em [Mapeamento ETL](mapeamento_etl.md).
 
 ---
 

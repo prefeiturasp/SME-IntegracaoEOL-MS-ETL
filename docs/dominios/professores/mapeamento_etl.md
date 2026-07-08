@@ -33,10 +33,33 @@ Documenta o fluxo real implementado nos métodos `popular_*` do serviço.
 |---|---|---|---|
 | `popular_funcionarios` | `funcionario_unidade_educacional` | `upsert_incremental` | `SQL_FUNCIONARIOS_UNIDADE_EDUCACIONAL` |
 
+## Dados desnormalizados na atribuição de aula
+
+Cada atribuição carrega, junto de si, os dados de DRE, UE, tipo de turma,
+modalidade, semestre e turno. Isso evita recompor a hierarquia DRE → UE → turma
+ao responder a abrangência de turmas do funcionário. DRE e UE vêm do cadastro de
+unidades do EOL — a DRE é a unidade administrativa de referência da UE.
+
+Modalidade, código de modalidade e semestre são **derivados** da etapa de ensino
+e do tipo de turma da turma atribuída:
+
+| Campo | Regra de domínio |
+| :--- | :--- |
+| `modalidade` / `codigo_modalidade` | classifica a turma em Fundamental, Médio ou EJA a partir da etapa de ensino e do tipo de turma |
+| `semestre` | turmas de EJA recebem 1º ou 2º semestre conforme o mês de início; as demais não têm semestre |
+
+## Filtro incremental por ano letivo
+
+A carga das atribuições (SME e externas) pode ser restrita a um ano letivo em
+diante, em vez de recarregar todo o histórico. Sem o filtro, a carga é completa.
+Ver [Comando](comando.md).
+
 ## Observações
 
-- Domínios externos (DRE, TipoEscola, ComponenteCurricular, Cargo, etc.) **não são carregados**.
-  Apenas seus IDs são armazenados nos campos `codigo_*` dos modelos acima.
+- Domínios externos (DRE, TipoEscola, ComponenteCurricular, Cargo, etc.) **não são carregados**
+  como tabelas próprias; apenas seus IDs são armazenados nos campos `codigo_*` dos modelos acima.
+  **Exceção:** a atribuição de aula desnormaliza nome/abreviação de DRE e nome da UE
+  (ver seção acima), para servir a abrangência de turmas sem recompor a hierarquia.
 - `_TABELAS_UPSERT` no comando `etl_professores` define quais tabelas registram
   `modo_escrita="upsert"` em `EtlExecucaoTabelaEscrita`.
 - As 4 tabelas `full_refresh` não possuem chave natural para hash por linha —

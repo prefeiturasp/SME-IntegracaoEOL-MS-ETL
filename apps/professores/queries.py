@@ -150,12 +150,43 @@ SQL_ATRIBUICOES_AULA = f"""
         se.cd_etapa_ensino,
         aa.dt_atribuicao_aula,
         te.dt_inicio_turma,
+        te.dt_fim_turma,
         COALESCE(
             aa.dt_disponibilizacao_aulas,
             te.dt_fim_turma
         ) AS dt_disponibilizacao_aulas,
         aa.cd_motivo_disponibilizacao,
-        aa.dt_cancelamento
+        aa.dt_cancelamento,
+        dre.cd_unidade_educacao AS codigo_dre,
+        dre.nm_unidade_educacao AS nome_dre,
+        dre.nm_exibicao_unidade AS abreviacao_dre,
+        ue.nm_unidade_educacao AS nome_unidade_educacional,
+        esc.tp_escola AS codigo_tipo_escola,
+        te.cd_tipo_turma AS codigo_tipo_turma,
+        CASE
+            WHEN te.cd_tipo_turma IN (2, 3, 4, 5) THEN 'Fundamental'
+            WHEN etapa.cd_etapa_ensino IN (2, 3, 7, 11) THEN 'EJA'
+            WHEN etapa.cd_etapa_ensino IN (4, 5, 12, 13)
+                THEN 'Fundamental'
+            WHEN etapa.cd_etapa_ensino IN (6, 7, 8, 9, 14, 17)
+                THEN 'Médio'
+        END AS modalidade,
+        CASE
+            WHEN te.cd_tipo_turma IN (2, 3, 4, 5) THEN 5
+            WHEN etapa.cd_etapa_ensino IN (2, 3, 7, 11) THEN 3
+            WHEN etapa.cd_etapa_ensino IN (4, 5, 12, 13) THEN 5
+            WHEN etapa.cd_etapa_ensino IN (6, 7, 8, 9, 14, 17) THEN 6
+        END AS codigo_modalidade,
+        CASE
+            WHEN etapa.cd_etapa_ensino IN (2, 3, 7, 11)
+            THEN CASE
+                WHEN DATEPART(MONTH, te.dt_inicio_turma) > 6 THEN 2
+                ELSE 1
+            END
+            ELSE 0
+        END AS semestre,
+        dtt.qt_hora_duracao AS duracao_turno,
+        tt.cd_tipo_turno AS tipo_turno
     FROM atribuicao_aula aa
     INNER JOIN v_cargo_base_cotic cbs
         ON cbs.cd_cargo_base_servidor = aa.cd_cargo_base_servidor
@@ -171,7 +202,21 @@ SQL_ATRIBUICOES_AULA = f"""
         ON cc.cd_componente_curricular = aa.cd_componente_curricular
     LEFT JOIN serie_ensino se
         ON se.cd_serie_ensino = stg.cd_serie_ensino
+    LEFT JOIN etapa_ensino etapa
+        ON etapa.cd_etapa_ensino = se.cd_etapa_ensino
+    LEFT JOIN v_cadastro_unidade_educacao ue
+        ON ue.cd_unidade_educacao = te.cd_escola
+    LEFT JOIN v_cadastro_unidade_educacao dre
+        ON dre.cd_unidade_educacao = ue.cd_unidade_administrativa_referencia
+    LEFT JOIN escola esc
+        ON esc.cd_escola = te.cd_escola
+    LEFT JOIN tipo_turno tt
+        ON tt.cd_tipo_turno = te.cd_tipo_turno
+    LEFT JOIN duracao_tipo_turno dtt
+        ON dtt.cd_tipo_turno = tt.cd_tipo_turno
+       AND dtt.cd_duracao = te.cd_duracao
     WHERE cbs.cd_cargo IN ({_PLACEHOLDERS_CARGO})
+      /*FILTRO_ANO_LETIVO_ATRIBUICAO_AULA*/
 """
 
 SQL_ATRIBUICOES_EXTERNO = """
@@ -191,6 +236,7 @@ SQL_ATRIBUICOES_EXTERNO = """
         se.cd_etapa_ensino,
         ae.dt_atribuicao,
         te.dt_inicio_turma,
+        te.dt_fim_turma,
         COALESCE(
             ae.dt_disponibilizacao,
             te.dt_fim_turma
@@ -213,6 +259,7 @@ SQL_ATRIBUICOES_EXTERNO = """
 	LEFT JOIN serie_ensino se
 		ON se.cd_serie_ensino = stg.cd_serie_ensino
     WHERE ce.dt_cancelamento IS NULL
+      /*FILTRO_ANO_LETIVO_ATRIBUICAO_EXTERNO*/
 """
 
 SQL_FUNCIONARIOS_UNIDADE_EDUCACIONAL = f"""

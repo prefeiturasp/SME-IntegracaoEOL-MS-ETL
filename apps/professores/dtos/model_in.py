@@ -211,9 +211,21 @@ class AtribuicaoAulaIn:
     cd_etapa_ensino: Any
     dt_atribuicao_aula: Any
     dt_inicio_turma: Any
+    dt_fim_turma: Any
     dt_disponibilizacao_aulas: Any
     cd_motivo_disponibilizacao: Any
     dt_cancelamento: Any
+    codigo_dre: Any
+    nome_dre: Any
+    abreviacao_dre: Any
+    nome_unidade_educacional: Any
+    codigo_tipo_escola: Any
+    codigo_tipo_turma: Any
+    modalidade: Any
+    codigo_modalidade: Any
+    semestre: Any
+    duracao_turno: Any
+    tipo_turno: Any
 
     def to_domain(self) -> "AtribuicaoAulaOut":
         from apps.professores.dtos.model_out import AtribuicaoAulaOut
@@ -236,9 +248,21 @@ class AtribuicaoAulaIn:
             codigo_etapa_ensino=self.cd_etapa_ensino,
             dt_atribuicao_aula=self.dt_atribuicao_aula,
             dt_inicio_turma=self.dt_inicio_turma,
+            dt_fim_turma=self.dt_fim_turma,
             dt_disponibilizacao_aulas=self.dt_disponibilizacao_aulas,
             codigo_motivo_disponibilizacao=self.cd_motivo_disponibilizacao,
             dt_cancelamento=self.dt_cancelamento,
+            codigo_dre=self.codigo_dre,
+            nome_dre=self.nome_dre,
+            abreviacao_dre=self.abreviacao_dre,
+            nome_unidade_educacional=self.nome_unidade_educacional,
+            codigo_tipo_escola=self.codigo_tipo_escola,
+            codigo_tipo_turma=self.codigo_tipo_turma,
+            modalidade=self.modalidade,
+            codigo_modalidade=self.codigo_modalidade,
+            semestre=self.semestre,
+            duracao_turno=self.duracao_turno,
+            tipo_turno=self.tipo_turno,
         )
 
 
@@ -261,6 +285,7 @@ class AtribuicaoExternoIn:
     cd_etapa_ensino: Any
     dt_atribuicao: Any
     dt_inicio_turma: Any
+    dt_fim_turma: Any
     dt_disponibilizacao: Any
     cd_motivo_disponibilizacao_externo: Any
     dt_cancelamento: Any
@@ -286,6 +311,7 @@ class AtribuicaoExternoIn:
             codigo_etapa_ensino=self.cd_etapa_ensino,
             dt_atribuicao=self.dt_atribuicao,
             dt_inicio_turma=self.dt_inicio_turma,
+            dt_fim_turma=self.dt_fim_turma,
             dt_disponibilizacao=self.dt_disponibilizacao,
             codigo_motivo_disponibilizacao_externo=(
                 self.cd_motivo_disponibilizacao_externo
@@ -314,7 +340,7 @@ class FuncionarioUnidadeEducacionalIn:
     tipo_funcao_externo: Any
 
     def to_domain(self) -> "FuncionarioUnidadeEducacionalOut":
-        """Converte a linha de origem em DTO de destino.
+        """Monta o DTO de destino a partir da linha de origem.
 
         Returns:
             Dados normalizados do funcionario.
