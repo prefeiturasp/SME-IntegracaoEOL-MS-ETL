@@ -24,7 +24,7 @@ class Command(BaseEtlCommand):
 
     help = "Popula pedagogico_db a partir do EOL (SQL Server)"
     dominio = "pedagogico"
-    fase_final = 11
+    fase_final = 12
     service_class = EtlPedagogicoService
     orquestrador_class = EtlPedagogicoOrquestrador
 

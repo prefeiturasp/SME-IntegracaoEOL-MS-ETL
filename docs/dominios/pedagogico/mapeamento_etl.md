@@ -204,3 +204,30 @@ Origem: `turma_escola` (NOLOCK) com joins em `escola`, `serie_turma_escola`, `se
 | CASE EJA pelo mês de `dt_inicio_turma` | `semestre` | `int()` (1 ou 2 para EJA; 0 demais) |
 | `cd_etapa_ensino = 13` e `cd_modalidade_ensino = 2` | `ensino_especial` | `bool()` |
 | — | `transferido_em` | `timezone.now()` |
+
+---
+
+## Fase 12 — TurmaAtribuidaDreUe
+
+**Origem:** turmas já consolidadas por DRE e UE no EOL, por ano letivo.
+
+A origem entrega a turma final, então a carga substitui o conteúdo do ano letivo
+sem detecção de mudança por linha. Linhas sem escola ou turma são descartadas.
+
+| Campo EOL | Campo Destino | Transformação |
+| :--- | :--- | :--- |
+| `CodEscola` | `codigo_escola` | `strip_str()` |
+| `CodTurma` | `codigo_turma` | `int()` |
+| `AnoLetivo` | `ano_letivo` | `int()` |
+| `Modalidade` | `modalidade` | `strip_or_none()` |
+| `Semestre` | `semestre` | `int_or_none()` |
+| `CodModalidade` | `codigo_modalidade` | `int_or_none()` |
+| `CodDre` | `codigo_dre` | `strip_str()` |
+| `Dre` / `DreAbrev` | `dre` / `dre_abreviacao` | `strip_or_none()` |
+| `UE` / `UEAbrev` | `ue` / `ue_abreviacao` | `strip_or_none()` |
+| `NomeTurma` | `nome_turma` | `strip_or_none()` |
+| `Ano` | `ano` | `strip_or_none()` |
+| `TipoUE` / `CodTipoUE` | `tipo_ue` / `codigo_tipo_ue` | `strip_or_none()` / `int_or_none()` |
+| `CodTipoEscola` / `TipoEscola` | `codigo_tipo_escola` / `tipo_escola` | `int_or_none()` / `strip_or_none()` |
+| `DuracaoTurno` / `TipoTurno` | `duracao_turno` / `tipo_turno` | `int_or_none()` |
+| — | `transferido_em` | `timezone.now()` |

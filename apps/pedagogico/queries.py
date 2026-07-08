@@ -556,6 +556,34 @@ WHERE tur.an_letivo = ?
   AND tur.st_turma_escola IN ('O', 'A', 'E', 'C')
 """
 
+# Alimenta: turma_atribuida_dre_ue
+# Parâmetros (?):
+#   1 — AnoLetivo
+SQL_TURMAS_ATRIBUIDAS_DRE_UE = """
+SELECT
+    CodEscola       AS CodigoEscola,
+    CodTurma        AS CodigoTurma,
+    AnoLetivo       AS AnoLetivo,
+    Modalidade      AS Modalidade,
+    Semestre        AS Semestre,
+    CodModalidade   AS CodigoModalidade,
+    CodDre          AS CodigoDre,
+    Dre             AS Dre,
+    DreAbrev        AS DreAbreviacao,
+    UE              AS Ue,
+    UEAbrev         AS UeAbreviacao,
+    NomeTurma       AS NomeTurma,
+    Ano             AS Ano,
+    TipoUE          AS TipoUe,
+    CodTipoUE       AS CodigoTipoUe,
+    CodTipoEscola   AS CodigoTipoEscola,
+    TipoEscola      AS TipoEscola,
+    DuracaoTurno    AS DuracaoTurno,
+    TipoTurno       AS TipoTurno
+FROM turmas_atribuidas_dre_ue WITH (NOLOCK)
+WHERE AnoLetivo = ?
+"""
+
 SQL_COMPONENTES_NAO_CANCELADOS = f"""
 SELECT
     cd_componente_curricular              AS Codigo,
