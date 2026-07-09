@@ -10,12 +10,14 @@ if TYPE_CHECKING:
         CargoBaseServidorOut,
         CargoSobrepostoServidorOut,
         ContratoExternoOut,
+        DisciplinaTurmaAtribuidaUeOut,
         FuncaoAtividadeCargoServidorOut,
         FuncionarioUnidadeEducacionalOut,
         LaudoMedicoOut,
         LotacaoServidorOut,
         PessoaOut,
         ProfessorOut,
+        TurmaAtribuidaUeOut,
     )
 
 
@@ -364,4 +366,112 @@ class FuncionarioUnidadeEducacionalIn:
             esta_afastado=self.esta_afastado,
             funcao_externo=self.funcao_externo,
             tipo_funcao_externo=self.tipo_funcao_externo,
+        )
+
+
+@dataclass(slots=True)
+class TurmaAtribuidaUeIn:
+    """Dados consolidados de turma atribuída por UE."""
+
+    codigo_escola: Any
+    codigo_turma: Any
+    ano_letivo: Any
+    modalidade: Any
+    semestre: Any
+    codigo_modalidade: Any
+    codigo_dre: Any
+    dre: Any
+    dre_abreviacao: Any
+    ue: Any
+    ue_abreviacao: Any
+    nome_turma: Any
+    ano: Any
+    tipo_ue: Any
+    codigo_tipo_ue: Any
+    codigo_tipo_escola: Any
+    tipo_escola: Any
+    duracao_turno: Any
+    tipo_turno: Any
+    usuario_rf: Any
+    cargo: Any
+    cargo_sobreposto: Any
+
+    def to_domain(self) -> "TurmaAtribuidaUeOut":
+        """Monta o DTO de destino a partir da linha de origem."""
+        from apps.professores.dtos.model_out import TurmaAtribuidaUeOut
+
+        return TurmaAtribuidaUeOut(
+            codigo_escola=str(self.codigo_escola).strip(),
+            codigo_turma=self.codigo_turma,
+            ano_letivo=self.ano_letivo,
+            modalidade=self.modalidade,
+            semestre=self.semestre,
+            codigo_modalidade=self.codigo_modalidade,
+            codigo_dre=self.codigo_dre,
+            dre=self.dre,
+            dre_abreviacao=self.dre_abreviacao,
+            ue=self.ue,
+            ue_abreviacao=self.ue_abreviacao,
+            nome_turma=self.nome_turma,
+            ano=self.ano,
+            tipo_ue=self.tipo_ue,
+            codigo_tipo_ue=self.codigo_tipo_ue,
+            codigo_tipo_escola=self.codigo_tipo_escola,
+            tipo_escola=self.tipo_escola,
+            duracao_turno=self.duracao_turno,
+            tipo_turno=self.tipo_turno,
+            usuario_rf=str(self.usuario_rf).strip(),
+            cargo=self.cargo,
+            cargo_sobreposto=self.cargo_sobreposto,
+        )
+
+
+@dataclass(slots=True)
+class DisciplinaTurmaAtribuidaUeIn:
+    """Dados de disciplina atribuída por vínculo com UE."""
+
+    codigo_escola: Any
+    codigo_turma: Any
+    ano_letivo: Any
+    usuario_rf: Any
+    codigo_componente_curricular: Any
+    descricao_componente_curricular: Any
+    codigo_componente_curricular_pai: Any
+    regencia: Any
+    codigo_componente_territorio_saber: Any
+    territorio_saber: Any
+    codigo_dre: Any
+    codigo_tipo_escola: Any
+    tipo_escola: Any
+    cargo: Any
+    cargo_sobreposto: Any
+
+    def to_domain(self) -> "DisciplinaTurmaAtribuidaUeOut":
+        """Monta o DTO de destino a partir da linha de origem."""
+        from apps.professores.dtos.model_out import (
+            DisciplinaTurmaAtribuidaUeOut,
+        )
+
+        return DisciplinaTurmaAtribuidaUeOut(
+            codigo_escola=str(self.codigo_escola).strip(),
+            codigo_turma=self.codigo_turma,
+            ano_letivo=self.ano_letivo,
+            usuario_rf=str(self.usuario_rf).strip(),
+            codigo_componente_curricular=self.codigo_componente_curricular,
+            descricao_componente_curricular=(
+                self.descricao_componente_curricular
+            ),
+            codigo_componente_curricular_pai=(
+                self.codigo_componente_curricular_pai
+            ),
+            regencia=self.regencia,
+            codigo_componente_territorio_saber=(
+                self.codigo_componente_territorio_saber
+            ),
+            territorio_saber=self.territorio_saber,
+            codigo_dre=self.codigo_dre,
+            codigo_tipo_escola=self.codigo_tipo_escola,
+            tipo_escola=self.tipo_escola,
+            cargo=self.cargo,
+            cargo_sobreposto=self.cargo_sobreposto,
         )

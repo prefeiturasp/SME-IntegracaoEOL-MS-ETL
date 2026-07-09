@@ -41,6 +41,10 @@ _IDS_REGENCIA = (
 )
 
 _PLACEHOLDERS_REGENCIA = ",".join(str(i) for i in _IDS_REGENCIA)
+_IDS_REGENCIA_ATRIBUICAO = (*_IDS_REGENCIA, 512, 513)
+_PLACEHOLDERS_REGENCIA_ATRIBUICAO = ",".join(
+    str(i) for i in _IDS_REGENCIA_ATRIBUICAO
+)
 
 # Anos letivos disponíveis no EOL (EolConnection)
 SQL_ANOS_LETIVOS = """
@@ -177,8 +181,10 @@ SELECT DISTINCT
     cc.cd_componente_curricular                                                         AS componente_codigo,
     CASE WHEN cc.cd_componente_curricular IN (1214, 1215, 1216, 1217, 1218, 1219, 1220, 1221, 1222, 1223, 1519, 1520, 1521, 1522) THEN cc.cd_componente_curricular ELSE tgt.cd_componente_curricular END AS codigo_componente_territorio_saber,
     ter.dc_territorio_saber                                                             AS desc_territorio_saber,
-    exp.dc_experiencia_pedagogica                                                       AS desc_experiencia_pedagogica
+    exp.dc_experiencia_pedagogica                                                       AS desc_experiencia_pedagogica,
+    esc.tp_escola                                                                        AS tipo_escola
 FROM turma_escola (NOLOCK) te
+INNER JOIN escola (NOLOCK) esc ON esc.cd_escola = te.cd_escola
 INNER JOIN serie_turma_escola (NOLOCK) ste ON ste.cd_turma_escola = te.cd_turma_escola
 INNER JOIN serie_turma_grade (NOLOCK) stg
     ON stg.cd_turma_escola = ste.cd_turma_escola AND stg.dt_fim IS NULL
@@ -203,8 +209,10 @@ SELECT DISTINCT
     cc.cd_componente_curricular,
     CASE WHEN cc.cd_componente_curricular IN (1214, 1215, 1216, 1217, 1218, 1219, 1220, 1221, 1222, 1223, 1519, 1520, 1521, 1522) THEN cc.cd_componente_curricular ELSE tgt.cd_componente_curricular END,
     tgt.dc_territorio_saber,
-    tgt.dc_experiencia_pedagogica
+    tgt.dc_experiencia_pedagogica,
+    esc.tp_escola                                                                        AS tipo_escola
 FROM turma_escola (NOLOCK) te
+INNER JOIN escola (NOLOCK) esc ON esc.cd_escola = te.cd_escola
 INNER JOIN turma_escola_grade_programa (NOLOCK) tegp ON tegp.cd_turma_escola = te.cd_turma_escola
 INNER JOIN escola_grade (NOLOCK) teg    ON teg.cd_escola_grade = tegp.cd_escola_grade
 INNER JOIN grade (NOLOCK) pg            ON pg.cd_grade = teg.cd_grade
@@ -256,7 +264,70 @@ WHERE aa.an_atribuicao = ?
        OR aa.cd_motivo_disponibilizacao IS NULL)
   AND (aa.dt_disponibilizacao_aulas >= DATEFROMPARTS(aa.an_atribuicao, 2, 5)
        OR aa.dt_disponibilizacao_aulas IS NULL
-       OR aa.cd_motivo_disponibilizacao = {_MOTIVO_DISPONIBILIZACAO_FIM_ANO_LETIVO})
+       OR aa.cd_motivo_disponibilizacao = {_MOTIVO_DISPONIBILIZACAO_FIM_ANO_LETIVO}
+       OR aa.cd_componente_curricular IN ({_PLACEHOLDERS_REGENCIA_ATRIBUICAO}))
+UNION ALL
+-- Branch 1b: SME regência por série, espelha BuscarDisciplinasRegenciaProfessor
+SELECT
+    te.cd_turma_escola                  AS turma_codigo,
+    aa.cd_componente_curricular         AS componente_codigo,
+    vsc.cd_registro_funcional           AS professor,
+    0                                   AS atribuicao_externa,
+    aa.an_atribuicao                    AS ano_letivo,
+    aa.cd_atribuicao_aula               AS id_atribuicao_origem,
+    aa.dt_atribuicao_aula               AS dt_atribuicao,
+    aa.dt_cancelamento                  AS dt_cancelamento,
+    aa.dt_disponibilizacao_aulas        AS dt_disponibilizacao,
+    aa.cd_motivo_disponibilizacao       AS cd_motivo_disponibilizacao
+FROM turma_escola (NOLOCK) te
+INNER JOIN escola (NOLOCK) esc
+    ON te.cd_escola = esc.cd_escola
+INNER JOIN serie_turma_escola (NOLOCK) ste
+    ON ste.cd_turma_escola = te.cd_turma_escola
+INNER JOIN serie_turma_grade (NOLOCK) stg
+    ON stg.cd_turma_escola = ste.cd_turma_escola
+INNER JOIN escola_grade (NOLOCK) eg
+    ON stg.cd_escola_grade = eg.cd_escola_grade
+INNER JOIN grade (NOLOCK) g
+    ON eg.cd_grade = g.cd_grade
+INNER JOIN serie_ensino (NOLOCK) se
+    ON g.cd_serie_ensino = se.cd_serie_ensino
+INNER JOIN atribuicao_aula (NOLOCK) aa
+    ON g.cd_grade = aa.cd_grade
+   AND aa.an_atribuicao = te.an_letivo
+   AND aa.cd_unidade_educacao = te.cd_escola
+   AND aa.cd_serie_grade = stg.cd_serie_grade
+INNER JOIN componente_curricular (NOLOCK) cc
+    ON cc.cd_componente_curricular = aa.cd_componente_curricular
+INNER JOIN v_cargo_base_cotic (NOLOCK) vcbc
+    ON vcbc.cd_cargo_base_servidor = aa.cd_cargo_base_servidor
+INNER JOIN v_servidor_cotic (NOLOCK) vsc
+    ON vsc.cd_servidor = vcbc.cd_servidor
+INNER JOIN cargo (NOLOCK) c
+    ON vcbc.cd_cargo = c.cd_cargo
+INNER JOIN v_cadastro_unidade_educacao (NOLOCK) escola
+    ON escola.cd_unidade_educacao = te.cd_escola
+INNER JOIN v_cadastro_unidade_educacao (NOLOCK) dre
+    ON dre.cd_unidade_educacao =
+       escola.cd_unidade_administrativa_referencia
+INNER JOIN unidade_administrativa (NOLOCK) ua
+    ON escola.cd_unidade_administrativa_referencia =
+       ua.cd_unidade_administrativa
+   AND ua.tp_unidade_administrativa = {_TIPO_UNIDADE_ADMINISTRATIVA_DRE}
+INNER JOIN etapa_ensino (NOLOCK) ee
+    ON se.cd_etapa_ensino = ee.cd_etapa_ensino
+INNER JOIN tipo_unidade_educacao (NOLOCK) tue
+    ON dre.tp_unidade_educacao = tue.tp_unidade_educacao
+INNER JOIN tipo_escola (NOLOCK) tes
+    ON esc.tp_escola = tes.tp_escola
+LEFT JOIN funcao_atividade_cargo_servidor (NOLOCK) facs
+    ON vcbc.cd_cargo_base_servidor = facs.cd_cargo_base_servidor
+   AND facs.dt_fim_funcao_atividade IS NULL
+WHERE aa.an_atribuicao = ?
+  AND aa.dt_cancelamento IS NULL
+  AND cc.dt_cancelamento IS NULL
+  AND te.st_turma_escola IN ('A', 'O', 'C')
+  AND aa.cd_componente_curricular IN ({_PLACEHOLDERS_REGENCIA_ATRIBUICAO})
 UNION ALL
 -- Branch 2a: SME ativo via programa EXPLÍCITO (cd_turma_escola_grade_programa preenchido)
 SELECT
@@ -284,7 +355,8 @@ WHERE aa.an_atribuicao = ?
        OR aa.cd_motivo_disponibilizacao IS NULL)
   AND (aa.dt_disponibilizacao_aulas >= DATEFROMPARTS(aa.an_atribuicao, 2, 5)
        OR aa.dt_disponibilizacao_aulas IS NULL
-       OR aa.cd_motivo_disponibilizacao = {_MOTIVO_DISPONIBILIZACAO_FIM_ANO_LETIVO})
+       OR aa.cd_motivo_disponibilizacao = {_MOTIVO_DISPONIBILIZACAO_FIM_ANO_LETIVO}
+       OR aa.cd_componente_curricular IN ({_PLACEHOLDERS_REGENCIA_ATRIBUICAO}))
 UNION ALL
 -- Branch 2b: SME ativo via programa por ESCOLA_GRADE (cd_turma_escola_grade_programa nulo)
 SELECT
@@ -312,7 +384,8 @@ WHERE aa.an_atribuicao = ?
        OR aa.cd_motivo_disponibilizacao IS NULL)
   AND (aa.dt_disponibilizacao_aulas >= DATEFROMPARTS(aa.an_atribuicao, 2, 5)
        OR aa.dt_disponibilizacao_aulas IS NULL
-       OR aa.cd_motivo_disponibilizacao = {_MOTIVO_DISPONIBILIZACAO_FIM_ANO_LETIVO})
+       OR aa.cd_motivo_disponibilizacao = {_MOTIVO_DISPONIBILIZACAO_FIM_ANO_LETIVO}
+       OR aa.cd_componente_curricular IN ({_PLACEHOLDERS_REGENCIA_ATRIBUICAO}))
 UNION ALL
 -- Branch 3: EXT ativo (grade → turma via série)
 SELECT
@@ -392,7 +465,10 @@ WHERE aa.an_atribuicao = ?
   AND aa.cd_motivo_disponibilizacao <> {_MOTIVO_DISPONIBILIZACAO_ERRO_CADASTRO}
   AND (aa.cd_motivo_disponibilizacao = {_MOTIVO_DISPONIBILIZACAO_FIM_ANO_LETIVO}
        OR aa.cd_motivo_disponibilizacao IS NULL)
-  AND aa.dt_disponibilizacao_aulas >= DATEFROMPARTS(aa.an_atribuicao, 2, 5)
+  AND (
+       aa.dt_disponibilizacao_aulas >= DATEFROMPARTS(aa.an_atribuicao, 2, 5)
+       OR aa.cd_componente_curricular IN ({_PLACEHOLDERS_REGENCIA_ATRIBUICAO})
+      )
 UNION ALL
 -- Branch 6: externo liberado (escola + grade → turmas)
 SELECT

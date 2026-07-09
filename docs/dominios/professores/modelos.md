@@ -254,6 +254,57 @@ codigo_tipo_funcao_atividade, data_inicio, data_fim, funcao_externo,
 tipo_funcao_externo)` para permitir múltiplos vínculos do mesmo servidor sem
 sobrescrever registros no upsert.
 
-O endpoint `GET /api/v1/professores/escolas/{codigo_ue}/funcionarios/`
-consulta apenas esta tabela no `professores_db`. O filtro `codigo_cargo` e
-opcional por query string.
+Alimenta a consulta de funcionários por unidade educacional, filtrável por
+cargo. É a única fonte dessa consulta — não recompõe vínculos em tempo de
+resposta.
+
+---
+
+### TurmaAtribuidaUe
+
+Turmas sob abrangência de um servidor pelo **vínculo com a UE** (lotação/cargo),
+não pelas aulas que leciona. Um gestor de UE (por exemplo, diretor ou CP) enxerga
+todas as turmas da unidade onde está lotado, mesmo sem atribuição de aula.
+
+Esse conjunto existe para preservar a visão de abrangência que nasce do vínculo
+administrativo com a unidade, separada da visão de aulas atribuídas.
+
+| Campo | Tipo | Detalhes |
+|---|---|---|
+| `usuario_rf` | `CharField` | RF do servidor — filtro principal |
+| `cargo` / `cargo_sobreposto` | `IntegerField` | cargo do vínculo (null=True) |
+| `codigo_escola` | `CharField` | UE da turma |
+| `codigo_dre` | `CharField` | DRE da turma (null=True) |
+| `codigo_turma` | `BigIntegerField` | turma |
+| demais campos | | metadados da turma (modalidade, semestre, turno, tipo de escola, etc.) |
+
+Os recortes por UE, DRE e cargo são aplicados pelos consumidores conforme o
+perfil informado.
+
+---
+
+### DisciplinaTurmaAtribuidaUe
+
+Componentes disponíveis em cada turma sob abrangência de UE do servidor —
+responde "quais disciplinas o funcionário vê nesta turma". A tabela mantém
+cardinalidade por `RF + turma + componente`, separada de `turma_atribuida_ue`
+para não duplicar a abrangência de turmas.
+
+| Campo | Tipo | Detalhes |
+|---|---|---|
+| `usuario_rf` | `CharField` | RF do servidor |
+| `codigo_escola` | `CharField` | UE da turma |
+| `codigo_turma` | `BigIntegerField` | turma |
+| `ano_letivo` | `IntegerField` | ano letivo da turma |
+| `codigo_componente_curricular` | `IntegerField` | componente |
+| `descricao_componente_curricular` | `CharField` | nome do componente na origem |
+| `codigo_componente_curricular_pai` | `IntegerField` | null=True |
+| `regencia` | `BooleanField` | default=False |
+| `codigo_componente_territorio_saber` | `IntegerField` | null=True |
+| `territorio_saber` | `BooleanField` | default=False |
+| `codigo_dre` | `CharField` | DRE da turma (null=True) |
+| `codigo_tipo_escola` / `tipo_escola` | | tipo de escola da turma |
+| `cargo` / `cargo_sobreposto` | `IntegerField` | cargo do vínculo (null=True) |
+
+Esse conjunto atende consultas de disciplinas por abrangência de unidade. A
+expansão de planejamento por regência permanece fora deste modelo.

@@ -1,37 +1,40 @@
-# Mapeamento ETL (Origem → Destino)
+# Mapeamento ETL (Origem -> Destino)
 
-Documenta o fluxo real implementado nos métodos `popular_*` do serviço.
+Documenta os grupos de dados carregados para o domínio de professores e suas
+dependencias conceituais.
 
 ## Fase 1 — sem dependências internas
 
-| Método | Tabela destino | Estratégia | SQL / Fonte |
+| Grupo | Destino | Estratégia | Origem |
 |---|---|---|---|
-| `popular_professores` | `professor` | `upsert_incremental` | `v_servidor_cotic` |
-| `popular_pessoas` | `pessoa` | `upsert_incremental` | `pessoa` |
+| Professores | `professor` | incremental | servidores |
+| Pessoas | `pessoa` | incremental | pessoas |
 
 ## Fase 2 — dependem da Fase 1
 
-| Método | Tabela destino | Estratégia | SQL / Fonte |
+| Grupo | Destino | Estratégia | Origem |
 |---|---|---|---|
-| `popular_cargos_base` | `cargo_base_servidor` | `upsert_incremental` | `v_cargo_base_cotic` |
-| `popular_contratos_externos` | `contrato_externo` | `upsert_incremental` | `contrato_externo` |
+| Cargos base | `cargo_base_servidor` | incremental | cargos dos servidores |
+| Contratos externos | `contrato_externo` | incremental | contratos externos |
 
 ## Fase 3 — dependem da Fase 2
 
-| Método | Tabela destino | Estratégia | SQL / Fonte |
+| Grupo | Destino | Estratégia | Origem |
 |---|---|---|---|
-| `popular_lotacoes` | `lotacao_servidor` | `full_refresh` | `lotacao_servidor` |
-| `popular_cargos_sobrepostos` | `cargo_sobreposto_servidor` | `full_refresh` | `cargo_sobreposto_servidor` |
-| `popular_funcoes_atividade` | `funcao_atividade_cargo_servidor` | `full_refresh` | `funcao_atividade_cargo_servidor` |
-| `popular_laudos` | `laudo_medico` | `full_refresh` | `laudo_medico` |
-| `popular_atribuicoes_aula` | `atribuicao_aula` | `upsert_incremental` | `atribuicao_aula` |
-| `popular_atribuicoes_externo` | `atribuicao_externo` | `upsert_incremental` | `atribuicao_externo` |
+| Lotacoes | `lotacao_servidor` | completa | lotacoes |
+| Cargos sobrepostos | `cargo_sobreposto_servidor` | completa | cargos sobrepostos |
+| Funcoes de atividade | `funcao_atividade_cargo_servidor` | completa | funcoes de atividade |
+| Laudos | `laudo_medico` | completa | laudos |
+| Atribuicoes de aula | `atribuicao_aula` | incremental | atribuicoes de aula |
+| Atribuicoes externas | `atribuicao_externo` | incremental | atribuicoes externas |
 
 ## Fase 4 — dependem das Fases 1–3
 
-| Método | Tabela destino | Estratégia | SQL / Fonte |
+| Grupo | Destino | Estratégia | Origem |
 |---|---|---|---|
-| `popular_funcionarios` | `funcionario_unidade_educacional` | `upsert_incremental` | `SQL_FUNCIONARIOS_UNIDADE_EDUCACIONAL` |
+| Funcionarios por unidade | `funcionario_unidade_educacional` | incremental | vinculos de servidor com unidade |
+| Turmas por abrangencia de unidade | `turma_atribuida_ue` | completa | turmas associadas ao vinculo de unidade |
+| Componentes por abrangencia de unidade | `disciplina_turma_atribuida_ue` | completa | componentes disponiveis nas turmas abrangidas |
 
 ## Dados desnormalizados na atribuição de aula
 
@@ -60,7 +63,7 @@ Ver [Comando](comando.md).
   como tabelas próprias; apenas seus IDs são armazenados nos campos `codigo_*` dos modelos acima.
   **Exceção:** a atribuição de aula desnormaliza nome/abreviação de DRE e nome da UE
   (ver seção acima), para servir a abrangência de turmas sem recompor a hierarquia.
-- `_TABELAS_UPSERT` no comando `etl_professores` define quais tabelas registram
-  `modo_escrita="upsert"` em `EtlExecucaoTabelaEscrita`.
-- As 4 tabelas `full_refresh` não possuem chave natural para hash por linha —
-  o controle de mudanças é feito via recarga completa em transação.
+- Cargas incrementais atualizam registros identificaveis sem recompor todo o
+  historico.
+- Cargas completas recriam conjuntos consolidados quando o dado de origem nao
+  oferece uma chave natural estavel para controle linha a linha.

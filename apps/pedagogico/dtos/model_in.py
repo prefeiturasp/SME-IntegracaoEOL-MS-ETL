@@ -50,6 +50,7 @@ class ComponenteTurmaIn:
     codigo_componente_territorio_saber: Any
     desc_territorio_saber: Any = None
     desc_experiencia_pedagogica: Any = None
+    tipo_escola: Any = None
 
     def to_domain(self, transferido_em: Any) -> dict:
         return {
@@ -66,6 +67,7 @@ class ComponenteTurmaIn:
             ),
             "desc_territorio_saber": self.desc_territorio_saber,
             "desc_experiencia_pedagogica": self.desc_experiencia_pedagogica,
+            "tipo_escola": str_or_none(self.tipo_escola),
             "transferido_em": transferido_em,
         }
 

@@ -4,7 +4,7 @@ import hashlib
 import logging
 import os
 from collections.abc import Callable, Iterator
-from typing import Any
+from typing import Any, cast
 
 from django.db.models import Q
 
@@ -17,12 +17,14 @@ from apps.professores.dtos.model_in import (
     CargoBaseServidorIn,
     CargoSobrepostoServidorIn,
     ContratoExternoIn,
+    DisciplinaTurmaAtribuidaUeIn,
     FuncaoAtividadeCargoServidorIn,
     FuncionarioUnidadeEducacionalIn,
     LaudoMedicoIn,
     LotacaoServidorIn,
     PessoaIn,
     ProfessorIn,
+    TurmaAtribuidaUeIn,
 )
 from apps.professores.dtos.model_out import (
     AtribuicaoAulaOut,
@@ -39,12 +41,14 @@ from apps.professores.models import (
     CargoBaseServidor,
     CargoSobrepostoServidor,
     ContratoExterno,
+    DisciplinaTurmaAtribuidaUe,
     FuncaoAtividadeCargoServidor,
     FuncionarioUnidadeEducacional,
     LaudoMedico,
     LotacaoServidor,
     Pessoa,
     Professor,
+    TurmaAtribuidaUe,
 )
 from apps.professores.queries import (
     CARGOS_PROFESSOR,
@@ -53,12 +57,14 @@ from apps.professores.queries import (
     SQL_CARGOS_BASE,
     SQL_CARGOS_SOBREPOSTOS,
     SQL_CONTRATOS_EXTERNOS,
+    SQL_DISCIPLINAS_TURMAS_ATRIBUIDAS_UE,
     SQL_FUNCIONARIOS_UNIDADE_EDUCACIONAL,
     SQL_FUNCOES_ATIVIDADE,
     SQL_LAUDOS,
     SQL_LOTACOES,
     SQL_PESSOAS,
     SQL_PROFESSORES,
+    SQL_TURMAS_ATRIBUIDAS_UE,
 )
 
 logger = logging.getLogger(__name__)
@@ -66,6 +72,12 @@ logger = logging.getLogger(__name__)
 _MARCADORES_ANO_LETIVO = {
     "/*FILTRO_ANO_LETIVO_ATRIBUICAO_AULA*/": "",
     "/*FILTRO_ANO_LETIVO_ATRIBUICAO_EXTERNO*/": "",
+    "/*FILTRO_ANO_LETIVO_TURMAS_ATRIBUIDAS_UE*/": (
+        "AND AnoLetivo IN (2025, 2026)"
+    ),
+    "/*FILTRO_ANO_LETIVO_DISCIPLINAS_TURMAS_ATRIBUIDAS_UE*/": (
+        "AND tau.AnoLetivo IN (2025, 2026)"
+    ),
 }
 
 
@@ -119,6 +131,16 @@ def _row_to_funcionario(row: tuple) -> dict:
         Dados prontos para persistencia no destino.
     """
     return FuncionarioUnidadeEducacionalIn(*row).to_domain().to_dict()
+
+
+def _row_to_turma_atribuida_ue(row: tuple) -> dict:
+    """Monta o dicionário da linha de turma atribuída por UE."""
+    return cast(dict, TurmaAtribuidaUeIn(*row).to_domain().to_dict())
+
+
+def _row_to_disciplina_turma_atribuida_ue(row: tuple) -> dict:
+    """Monta o dicionário da linha de disciplina atribuída por UE."""
+    return cast(dict, DisciplinaTurmaAtribuidaUeIn(*row).to_domain().to_dict())
 
 
 def _full_refresh_por_lote(
@@ -312,6 +334,8 @@ _TABELAS_FULL_REFRESH: frozenset[str] = frozenset(
         "cargo_sobreposto_servidor",
         "funcao_atividade_cargo_servidor",
         "laudo_medico",
+        "turma_atribuida_ue",
+        "disciplina_turma_atribuida_ue",
     }
 )
 
@@ -327,6 +351,8 @@ _ORDEM_TABELAS: tuple[str, ...] = (
     "atribuicao_aula",
     "atribuicao_externo",
     "funcionario_unidade_educacional",
+    "turma_atribuida_ue",
+    "disciplina_turma_atribuida_ue",
 )
 
 
@@ -366,6 +392,12 @@ class EtlProfessoresService:
                 ),
                 "/*FILTRO_ANO_LETIVO_ATRIBUICAO_EXTERNO*/": (
                     f"AND ae.an_atribuicao >= {ano}"
+                ),
+                "/*FILTRO_ANO_LETIVO_TURMAS_ATRIBUIDAS_UE*/": (
+                    f"AND AnoLetivo >= {ano}"
+                ),
+                "/*FILTRO_ANO_LETIVO_DISCIPLINAS_TURMAS_ATRIBUIDAS_UE*/": (
+                    f"AND tau.AnoLetivo >= {ano}"
                 ),
             }
         for marcador, filtro in filtros.items():
@@ -679,6 +711,40 @@ class EtlProfessoresService:
                 )
         return total
 
+    def popular_turmas_atribuidas_ue(self) -> int:
+        """Popula turmas atribuídas por vínculo do funcionário com UE."""
+        return _full_refresh_por_lote(
+            TurmaAtribuidaUe,
+            (
+                [
+                    TurmaAtribuidaUe(**_row_to_turma_atribuida_ue(row))
+                    for row in chunk
+                ]
+                for chunk in self.eol.iter_query(
+                    self._sql_com_filtro_ano_letivo(SQL_TURMAS_ATRIBUIDAS_UE)
+                )
+            ),
+        )
+
+    def popular_disciplinas_turmas_atribuidas_ue(self) -> int:
+        """Popula disciplinas atribuídas por vínculo do funcionário com UE."""
+        return _full_refresh_por_lote(
+            DisciplinaTurmaAtribuidaUe,
+            (
+                [
+                    DisciplinaTurmaAtribuidaUe(
+                        **_row_to_disciplina_turma_atribuida_ue(row)
+                    )
+                    for row in chunk
+                ]
+                for chunk in self.eol.iter_query(
+                    self._sql_com_filtro_ano_letivo(
+                        SQL_DISCIPLINAS_TURMAS_ATRIBUIDAS_UE
+                    )
+                )
+            ),
+        )
+
     def _fase_1(
         self,
         executar_tabela: Callable[[str, Callable[[], int]], None],
@@ -733,6 +799,13 @@ class EtlProfessoresService:
         logger.info("[ETL PROF] === Fase 4: Funcionarios ===")
         executar_tabela(
             "funcionario_unidade_educacional", self.popular_funcionarios
+        )
+        executar_tabela(
+            "turma_atribuida_ue", self.popular_turmas_atribuidas_ue
+        )
+        executar_tabela(
+            "disciplina_turma_atribuida_ue",
+            self.popular_disciplinas_turmas_atribuidas_ue,
         )
         self.ultima_fase_concluida = 4
         logger.info("[ETL PROF] Fase 4 concluida.")

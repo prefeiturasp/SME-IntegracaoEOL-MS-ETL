@@ -548,6 +548,7 @@ class EtlPedagogicoService(BaseEtlService):
                     "codigo_componente_territorio_saber",
                     "desc_territorio_saber",
                     "desc_experiencia_pedagogica",
+                    "tipo_escola",
                     "transferido_em",
                 ),
                 unique_fields=("turma_codigo", "componente_codigo"),

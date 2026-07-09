@@ -38,6 +38,7 @@ class ComponenteTurma(ModeloBase):
         null=True,
         blank=True,
     )
+    tipo_escola = models.CharField(max_length=10, null=True, blank=True)
 
     class Meta:
         db_table = "componente_turma"
