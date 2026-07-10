@@ -85,10 +85,7 @@ class Command(BaseCommand):
             "--ano-letivo",
             type=int,
             default=None,
-            help=(
-                "Processa apenas anos letivos "
-                "a partir deste valor (inclusive)."
-            ),
+            help="Processa apenas o ano letivo informado.",
         )
         parser.add_argument(
             "--skip-audit-hash",

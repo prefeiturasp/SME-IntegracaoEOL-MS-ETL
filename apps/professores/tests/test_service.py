@@ -12,7 +12,10 @@ from apps.professores.dtos.model_in import FuncionarioUnidadeEducacionalIn
 from apps.professores.models import FuncionarioUnidadeEducacional, Professor
 from apps.professores.queries import (
     CARGOS_PROFESSOR,
+    SQL_ATRIBUICOES_AULA,
+    SQL_DISCIPLINAS_TURMAS_ATRIBUIDAS_UE,
     SQL_FUNCIONARIOS_UNIDADE_EDUCACIONAL,
+    SQL_TURMAS_ATRIBUIDAS_UE,
 )
 from apps.professores.services import (
     EtlProfessoresService,
@@ -64,6 +67,36 @@ def _capturar_bulk_create_funcionario() -> tuple[_BulkCreateChamadas, Any]:
         autospec=True,
         side_effect=fake_bulk_create,
     )
+
+
+class EtlProfessoresServiceFiltroAnoLetivoTest(TestCase):
+    """Testes do filtro de ano letivo nas consultas."""
+
+    def test_sem_ano_letivo_remove_marcadores(self) -> None:
+        """Valida consulta sem restrição quando ano não é informado."""
+        srv = EtlProfessoresService(eol=MagicMock())
+
+        sql = srv._sql_com_filtro_ano_letivo(SQL_TURMAS_ATRIBUIDAS_UE)
+
+        self.assertNotIn("FILTRO_ANO_LETIVO_TURMAS_ATRIBUIDAS_UE", sql)
+        self.assertNotIn("AnoLetivo IN (2025, 2026)", sql)
+        self.assertNotIn("AnoLetivo =", sql)
+
+    def test_ano_letivo_aplica_igualdade(self) -> None:
+        """Valida filtro pelo ano informado."""
+        srv = EtlProfessoresService(eol=MagicMock(), ano_letivo=2026)
+
+        sql_turmas = srv._sql_com_filtro_ano_letivo(SQL_TURMAS_ATRIBUIDAS_UE)
+        sql_disciplinas = srv._sql_com_filtro_ano_letivo(
+            SQL_DISCIPLINAS_TURMAS_ATRIBUIDAS_UE
+        )
+        sql_atribuicoes = srv._sql_com_filtro_ano_letivo(SQL_ATRIBUICOES_AULA)
+
+        self.assertIn("AND AnoLetivo = 2026", sql_turmas)
+        self.assertIn("AND tau.AnoLetivo = 2026", sql_disciplinas)
+        self.assertIn("AND aa.an_atribuicao = 2026", sql_atribuicoes)
+        self.assertNotIn("AnoLetivo IN (2025, 2026)", sql_turmas)
+        self.assertNotIn("AnoLetivo >= 2026", sql_turmas)
 
 
 class RowToProfessorTest(TestCase):

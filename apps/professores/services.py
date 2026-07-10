@@ -72,12 +72,8 @@ logger = logging.getLogger(__name__)
 _MARCADORES_ANO_LETIVO = {
     "/*FILTRO_ANO_LETIVO_ATRIBUICAO_AULA*/": "",
     "/*FILTRO_ANO_LETIVO_ATRIBUICAO_EXTERNO*/": "",
-    "/*FILTRO_ANO_LETIVO_TURMAS_ATRIBUIDAS_UE*/": (
-        "AND AnoLetivo IN (2025, 2026)"
-    ),
-    "/*FILTRO_ANO_LETIVO_DISCIPLINAS_TURMAS_ATRIBUIDAS_UE*/": (
-        "AND tau.AnoLetivo IN (2025, 2026)"
-    ),
+    "/*FILTRO_ANO_LETIVO_TURMAS_ATRIBUIDAS_UE*/": "",
+    "/*FILTRO_ANO_LETIVO_DISCIPLINAS_TURMAS_ATRIBUIDAS_UE*/": "",
 }
 
 
@@ -368,7 +364,7 @@ class EtlProfessoresService:
 
         Args:
             eol: Cliente EOL; instanciado sob demanda quando omitido.
-            ano_letivo: Ano letivo mínimo aplicado ao filtro incremental.
+            ano_letivo: Ano letivo aplicado ao filtro incremental.
         """
         self.eol = eol or EOLService()
         self._ano_letivo = ano_letivo
@@ -388,16 +384,16 @@ class EtlProfessoresService:
             ano = int(self._ano_letivo)
             filtros = {
                 "/*FILTRO_ANO_LETIVO_ATRIBUICAO_AULA*/": (
-                    f"AND aa.an_atribuicao >= {ano}"
+                    f"AND aa.an_atribuicao = {ano}"
                 ),
                 "/*FILTRO_ANO_LETIVO_ATRIBUICAO_EXTERNO*/": (
-                    f"AND ae.an_atribuicao >= {ano}"
+                    f"AND ae.an_atribuicao = {ano}"
                 ),
                 "/*FILTRO_ANO_LETIVO_TURMAS_ATRIBUIDAS_UE*/": (
-                    f"AND AnoLetivo >= {ano}"
+                    f"AND AnoLetivo = {ano}"
                 ),
                 "/*FILTRO_ANO_LETIVO_DISCIPLINAS_TURMAS_ATRIBUIDAS_UE*/": (
-                    f"AND tau.AnoLetivo >= {ano}"
+                    f"AND tau.AnoLetivo = {ano}"
                 ),
             }
         for marcador, filtro in filtros.items():
