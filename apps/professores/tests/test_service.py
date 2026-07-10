@@ -986,6 +986,18 @@ class EtlProfessoresServiceFase3Test(TestCase):
                     dt,
                     None,
                     None,
+                    None,
+                    "108600",
+                    "DRE PENHA",
+                    "PE",
+                    "EMEF TESTE",
+                    1,
+                    2,
+                    "Fundamental",
+                    5,
+                    0,
+                    5,
+                    1,
                 )
             ]
         ]
