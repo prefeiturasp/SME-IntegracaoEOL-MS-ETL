@@ -163,6 +163,38 @@ class RowToCargoBaseTest(TestCase):
         r = _row_to_cargo_base(row)
         self.assertIsNone(r["situacao_funcional"])
 
+    def test_ignora_campos_excedentes(self) -> None:
+        """Verifica leitura de linha com campos complementares."""
+        dt = datetime.date(2020, 1, 1)
+        row = (
+            1001,
+            "012345",
+            3239,
+            "PROF DE EDUC BASICA I",
+            6,
+            dt,
+            None,
+            None,
+            "extra-1",
+            "extra-2",
+            "extra-3",
+            "extra-4",
+            "extra-5",
+            "extra-6",
+            "extra-7",
+            "extra-8",
+            "extra-9",
+            "extra-10",
+            "extra-11",
+            "extra-12",
+        )
+
+        r = _row_to_cargo_base(row)
+
+        self.assertEqual(r["id"], 1001)
+        self.assertEqual(r["professor_id"], "012345")
+        self.assertEqual(r["codigo_cargo"], 3239)
+
 
 class RowToLotacaoTest(TestCase):
     """Testes para a função _row_to_lotacao."""

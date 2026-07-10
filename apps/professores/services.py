@@ -73,6 +73,7 @@ _QTD_CAMPOS_ATRIBUICAO_AULA_LEGADO = 18
 _QTD_CAMPOS_ATRIBUICAO_AULA_ATUAL = 30
 _QTD_CAMPOS_ATRIBUICAO_EXTERNO_LEGADO = 18
 _QTD_CAMPOS_ATRIBUICAO_EXTERNO_ATUAL = 19
+_QTD_CAMPOS_CARGO_BASE = 8
 
 _MARCADORES_ANO_LETIVO = {
     "/*FILTRO_ANO_LETIVO_ATRIBUICAO_AULA*/": "",
@@ -87,7 +88,11 @@ def _row_to_professor(row: tuple) -> dict:
 
 
 def _row_to_cargo_base(row: tuple) -> dict:
-    return CargoBaseServidorIn(*row).to_domain().to_dict()
+    return _cargo_base_in(row).to_domain().to_dict()
+
+
+def _cargo_base_in(row: tuple) -> CargoBaseServidorIn:
+    return CargoBaseServidorIn(*row[:_QTD_CAMPOS_CARGO_BASE])
 
 
 def _row_to_lotacao(row: tuple) -> dict:
@@ -460,7 +465,7 @@ class EtlProfessoresService:
             for chunk in self.eol.iter_query(SQL_CARGOS_BASE, _params_cargo()):
                 out_objs: list[CargoBaseServidorOut] = proc.processar(
                     chunk,
-                    lambda r: CargoBaseServidorIn(*r).to_domain(),
+                    lambda r: _cargo_base_in(r).to_domain(),
                 )
                 total += _upsert_incremental(
                     CargoBaseServidor,
