@@ -267,6 +267,7 @@ class RowToAtribuicaoExternoTest(TestCase):
             dt,
             None,
             None,
+            None,
         )
         r = _row_to_atribuicao_externo(row)
         self.assertEqual(r["id"], 9002)
@@ -278,6 +279,7 @@ class RowToAtribuicaoExternoTest(TestCase):
         self.assertEqual(r["ano_escolar"], "2")
         self.assertEqual(r["codigo_etapa_ensino"], 1)
         self.assertEqual(r["dt_inicio_turma"], dt_inicio_turma)
+        self.assertIsNone(r["dt_cancelamento"])
 
     def test_codigo_turma_escola_none(self) -> None:
         """Verifica que codigo_turma_escola None é preservado."""
@@ -301,9 +303,11 @@ class RowToAtribuicaoExternoTest(TestCase):
             dt,
             None,
             None,
+            None,
         )
         r = _row_to_atribuicao_externo(row)
         self.assertIsNone(r["codigo_turma_escola"])
+        self.assertIsNone(r["dt_cancelamento"])
 
 
 class RowToFuncionarioTest(TestCase):
