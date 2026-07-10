@@ -261,6 +261,18 @@ class RowToAtribuicaoAulaTest(TestCase):
             dt,
             None,
             None,
+            None,
+            "108600",
+            "DRE PENHA",
+            "PE",
+            "EMEF TESTE",
+            1,
+            2,
+            "Fundamental",
+            5,
+            0,
+            5,
+            1,
         )
         r = _row_to_atribuicao_aula(row)
         self.assertEqual(r["id"], 9001)
@@ -272,6 +284,18 @@ class RowToAtribuicaoAulaTest(TestCase):
         self.assertEqual(r["ano_escolar"], "1")
         self.assertEqual(r["codigo_etapa_ensino"], 1)
         self.assertEqual(r["dt_inicio_turma"], dt_inicio_turma)
+        self.assertIsNone(r["dt_cancelamento"])
+        self.assertEqual(r["codigo_dre"], "108600")
+        self.assertEqual(r["nome_dre"], "DRE PENHA")
+        self.assertEqual(r["abreviacao_dre"], "PE")
+        self.assertEqual(r["nome_unidade_educacional"], "EMEF TESTE")
+        self.assertEqual(r["codigo_tipo_escola"], 1)
+        self.assertEqual(r["codigo_tipo_turma"], 2)
+        self.assertEqual(r["modalidade"], "Fundamental")
+        self.assertEqual(r["codigo_modalidade"], 5)
+        self.assertEqual(r["semestre"], 0)
+        self.assertEqual(r["duracao_turno"], 5)
+        self.assertEqual(r["tipo_turno"], 1)
 
 
 class RowToAtribuicaoExternoTest(TestCase):
@@ -856,6 +880,18 @@ class EtlProfessoresServiceFase2Test(TestCase):
                     dt,
                     None,
                     None,
+                    None,
+                    "108600",
+                    "DRE PENHA",
+                    "PE",
+                    "EMEF TESTE",
+                    1,
+                    2,
+                    "Fundamental",
+                    5,
+                    0,
+                    5,
+                    1,
                 )
             ]
         ]
