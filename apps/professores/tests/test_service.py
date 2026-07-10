@@ -399,6 +399,35 @@ class RowToAtribuicaoExternoTest(TestCase):
         self.assertIsNone(r["codigo_turma_escola"])
         self.assertIsNone(r["dt_cancelamento"])
 
+    def test_campos_sem_cancelamento(self) -> None:
+        """Verifica leitura da linha sem cancelamento."""
+        dt = datetime.date(2024, 2, 1)
+        row = (
+            9002,
+            800,
+            "000001",
+            5555,
+            "EXT",
+            100,
+            10,
+            "PORTUGUES",
+            200,
+            None,
+            "2",
+            2024,
+            1,
+            dt,
+            None,
+            dt,
+            None,
+            None,
+        )
+
+        r = _row_to_atribuicao_externo(row)
+
+        self.assertEqual(r["id"], 9002)
+        self.assertIsNone(r["dt_cancelamento"])
+
 
 class RowToFuncionarioTest(TestCase):
     """Testes para a funcao _row_to_funcionario."""
@@ -1175,13 +1204,20 @@ class EtlProfessoresServiceExecutarTest(TestCase):
         self.assertIn("atribuicao_aula", resultado)
 
     def test_executar_fase4_pula_fases_anteriores(self) -> None:
-        """Verifica que fase 4 executa apenas funcionario."""
+        """Verifica que fase 4 executa apenas tabelas finais."""
         srv = self._make_service_com_populares_mockados(1)
 
         resultado = srv.executar(fase_inicial=4)
 
         self.assertEqual(srv.ultima_fase_concluida, 4)
-        self.assertEqual(resultado, {"funcionario_unidade_educacional": 1})
+        self.assertEqual(
+            resultado,
+            {
+                "funcionario_unidade_educacional": 1,
+                "turma_atribuida_ue": 1,
+                "disciplina_turma_atribuida_ue": 1,
+            },
+        )
 
     def test_executar_retorna_soma_de_registros(self) -> None:
         """Verifica que executar retorna a soma de registros por tabela."""

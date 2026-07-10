@@ -71,6 +71,8 @@ logger = logging.getLogger(__name__)
 
 _QTD_CAMPOS_ATRIBUICAO_AULA_LEGADO = 18
 _QTD_CAMPOS_ATRIBUICAO_AULA_ATUAL = 30
+_QTD_CAMPOS_ATRIBUICAO_EXTERNO_LEGADO = 18
+_QTD_CAMPOS_ATRIBUICAO_EXTERNO_ATUAL = 19
 
 _MARCADORES_ANO_LETIVO = {
     "/*FILTRO_ANO_LETIVO_ATRIBUICAO_AULA*/": "",
@@ -113,13 +115,23 @@ def _row_to_contrato_externo(row: tuple) -> dict:
 
 
 def _row_to_atribuicao_aula(row: tuple) -> dict:
+    return _atribuicao_aula_in(row).to_domain().to_dict()
+
+
+def _atribuicao_aula_in(row: tuple) -> AtribuicaoAulaIn:
     if len(row) == _QTD_CAMPOS_ATRIBUICAO_AULA_LEGADO:
         row = row + (None,) * (_QTD_CAMPOS_ATRIBUICAO_AULA_ATUAL - len(row))
-    return AtribuicaoAulaIn(*row).to_domain().to_dict()
+    return AtribuicaoAulaIn(*row)
 
 
 def _row_to_atribuicao_externo(row: tuple) -> dict:
-    return AtribuicaoExternoIn(*row).to_domain().to_dict()
+    return _atribuicao_externo_in(row).to_domain().to_dict()
+
+
+def _atribuicao_externo_in(row: tuple) -> AtribuicaoExternoIn:
+    if len(row) == _QTD_CAMPOS_ATRIBUICAO_EXTERNO_LEGADO:
+        row = row + (None,) * (_QTD_CAMPOS_ATRIBUICAO_EXTERNO_ATUAL - len(row))
+    return AtribuicaoExternoIn(*row)
 
 
 def _row_to_funcionario(row: tuple) -> dict:
@@ -579,7 +591,7 @@ class EtlProfessoresService:
             ):
                 out_objs: list[AtribuicaoAulaOut] = proc.processar(
                     chunk,
-                    lambda r: AtribuicaoAulaIn(*r).to_domain(),
+                    lambda r: _atribuicao_aula_in(r).to_domain(),
                 )
                 total += _upsert_incremental(
                     AtribuicaoAula,
@@ -630,7 +642,7 @@ class EtlProfessoresService:
             ):
                 out_objs: list[AtribuicaoExternoOut] = proc.processar(
                     chunk,
-                    lambda r: AtribuicaoExternoIn(*r).to_domain(),
+                    lambda r: _atribuicao_externo_in(r).to_domain(),
                 )
                 total += _upsert_incremental(
                     AtribuicaoExterno,
