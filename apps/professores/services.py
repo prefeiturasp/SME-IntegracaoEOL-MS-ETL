@@ -69,6 +69,9 @@ from apps.professores.queries import (
 
 logger = logging.getLogger(__name__)
 
+_QTD_CAMPOS_ATRIBUICAO_AULA_LEGADO = 18
+_QTD_CAMPOS_ATRIBUICAO_AULA_ATUAL = 30
+
 _MARCADORES_ANO_LETIVO = {
     "/*FILTRO_ANO_LETIVO_ATRIBUICAO_AULA*/": "",
     "/*FILTRO_ANO_LETIVO_ATRIBUICAO_EXTERNO*/": "",
@@ -110,6 +113,8 @@ def _row_to_contrato_externo(row: tuple) -> dict:
 
 
 def _row_to_atribuicao_aula(row: tuple) -> dict:
+    if len(row) == _QTD_CAMPOS_ATRIBUICAO_AULA_LEGADO:
+        row = row + (None,) * (_QTD_CAMPOS_ATRIBUICAO_AULA_ATUAL - len(row))
     return AtribuicaoAulaIn(*row).to_domain().to_dict()
 
 

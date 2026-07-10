@@ -297,6 +297,39 @@ class RowToAtribuicaoAulaTest(TestCase):
         self.assertEqual(r["duracao_turno"], 5)
         self.assertEqual(r["tipo_turno"], 1)
 
+    def test_campos_sem_dados_de_abrangencia(self) -> None:
+        """Verifica leitura da linha sem dados complementares."""
+        dt = datetime.date(2024, 2, 1)
+        dt_inicio_turma = datetime.date(2024, 2, 5)
+        row = (
+            9001,
+            1001,
+            "000001",
+            9999,
+            "1A",
+            None,
+            100,
+            10,
+            "MATEMATICA",
+            200,
+            "1",
+            2024,
+            1,
+            dt,
+            dt_inicio_turma,
+            dt,
+            None,
+            None,
+        )
+
+        r = _row_to_atribuicao_aula(row)
+
+        self.assertEqual(r["id"], 9001)
+        self.assertEqual(r["codigo_turma_escola"], 9999)
+        self.assertIsNone(r["dt_cancelamento"])
+        self.assertIsNone(r["codigo_dre"])
+        self.assertIsNone(r["codigo_tipo_turma"])
+
 
 class RowToAtribuicaoExternoTest(TestCase):
     """Testes para a função _row_to_atribuicao_externo."""
