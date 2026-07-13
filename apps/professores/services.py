@@ -104,7 +104,7 @@ def _row_to_atribuicao_externo(row: tuple) -> dict:
 
 
 def _row_to_funcionario(row: tuple) -> dict:
-    """Converte linha de funcionario para dicionario de destino.
+    """Converta linha de funcionario para dicionario de destino.
 
     Args:
         row: Linha retornada pela query consolidada.
@@ -512,13 +512,18 @@ class EtlProfessoresService:
                         "cargo_base_id",
                         "codigo_unidade_educacao",
                         "codigo_turma_escola",
+                        "descricao_turma_escola",
                         "codigo_turma_escola_grade_programa",
                         "codigo_grade",
                         "codigo_componente_curricular",
+                        "descricao_componente_curricular",
                         "codigo_serie_grade",
+                        "ano_escolar",
                         "ano_atribuicao",
+                        "codigo_etapa_ensino",
                         "dt_atribuicao_aula",
                         "dt_disponibilizacao_aulas",
+                        "dt_inicio_turma",
                         "codigo_motivo_disponibilizacao",
                         "dt_cancelamento",
                     ],
@@ -544,13 +549,18 @@ class EtlProfessoresService:
                         "contrato_externo_id",
                         "codigo_unidade_educacao",
                         "codigo_turma_escola",
+                        "descricao_turma_escola",
                         "codigo_grade",
                         "codigo_componente_curricular",
+                        "descricao_componente_curricular",
                         "codigo_serie_grade",
                         "codigo_turma_escola_grade_programa",
+                        "ano_escolar",
                         "ano_atribuicao",
+                        "codigo_etapa_ensino",
                         "dt_atribuicao",
                         "dt_disponibilizacao",
+                        "dt_inicio_turma",
                         "codigo_motivo_disponibilizacao_externo",
                         "dt_cancelamento",
                     ],

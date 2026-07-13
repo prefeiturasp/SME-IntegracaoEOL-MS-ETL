@@ -284,20 +284,35 @@ class AtribuicaoAula(models.Model):
         blank=True,
         help_text="ID da grade/programa da turma.",
     )
+    descricao_turma_escola = models.CharField(
+        max_length=200,
+        null=True,
+        blank=True,
+        help_text="Descrição da turma escolar.",
+    )
     codigo_grade = models.IntegerField(
         help_text=_HELP_GRADE,
     )
     codigo_componente_curricular = models.IntegerField(
         help_text=_HELP_COMP,
     )
+    descricao_componente_curricular = models.CharField(
+        max_length=200,
+        null=True,
+        blank=True,
+        help_text="Descrição do componente curricular.",
+    )
     codigo_serie_grade = models.IntegerField(
         null=True,
         blank=True,
         help_text="ID de série-grade — ref. domínio pedagógico.",
     )
+    ano_escolar = models.CharField(max_length=5, null=True, blank=True)
     ano_atribuicao = models.IntegerField()
+    codigo_etapa_ensino = models.IntegerField(null=True, blank=True)
     dt_atribuicao_aula = models.DateField()
     dt_disponibilizacao_aulas = models.DateField(null=True, blank=True)
+    dt_inicio_turma = models.DateField(null=True, blank=True)
     codigo_motivo_disponibilizacao = models.IntegerField(null=True, blank=True)
     dt_cancelamento = models.DateField(null=True, blank=True)
 
@@ -341,11 +356,23 @@ class AtribuicaoExterno(models.Model):
         blank=True,
         help_text=_HELP_TURMA,
     )
+    descricao_turma_escola = models.CharField(
+        max_length=200,
+        null=True,
+        blank=True,
+        help_text="Descrição da turma escolar.",
+    )
     codigo_grade = models.IntegerField(
         help_text=_HELP_GRADE,
     )
     codigo_componente_curricular = models.IntegerField(
         help_text=_HELP_COMP,
+    )
+    descricao_componente_curricular = models.CharField(
+        max_length=200,
+        null=True,
+        blank=True,
+        help_text="Descrição do componente curricular.",
     )
     codigo_serie_grade = models.IntegerField(
         null=True,
@@ -357,9 +384,12 @@ class AtribuicaoExterno(models.Model):
         blank=True,
         help_text="ID da grade/programa da turma.",
     )
+    ano_escolar = models.CharField(max_length=5, null=True, blank=True)
     ano_atribuicao = models.IntegerField()
+    codigo_etapa_ensino = models.IntegerField(null=True, blank=True)
     dt_atribuicao = models.DateField()
     dt_disponibilizacao = models.DateField(null=True, blank=True)
+    dt_inicio_turma = models.DateField(null=True, blank=True)
     codigo_motivo_disponibilizacao_externo = models.IntegerField(
         null=True, blank=True
     )

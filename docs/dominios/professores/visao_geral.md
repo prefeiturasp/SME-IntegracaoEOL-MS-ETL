@@ -22,24 +22,19 @@ Expõe métodos `popular_*` por tabela e um método `executar(fase_inicial=1)` q
 
 ## Total de modelos do app
 
-O código atual define **16 modelos** em `apps/professores/models.py`.
+O código atual define **11 modelos** em `apps/professores/models.py`.
 
 ## Fases implementadas
 
 ### Fase 1 — sem dependências internas
-- `UnidadeEducacional` — IDs de DRE e tipo escola
-- `TurmaEscola` — campos para filtros de atribuição
 - `Professor` — servidores com cargo de professor
 - `Pessoa` — pessoas físicas (externos ativos)
 
 ### Fase 2 — dependem da Fase 1
-- `SerieTurmaGrade` — liga TurmaEscola a escola_grade (ID externo)
-- `TurmaEscolaGradePrograma` — liga TurmaEscola a escola_grade para turmas Programa
 - `CargoBaseServidor` — cargo base do Professor (código cargo como ID)
 - `ContratoExterno` — contrato da Pessoa (tipo funcao como ID)
 
 ### Fase 3 — dependem da Fase 2
-- `TurmaGradeTerritorioExperiencia` — IDs de componente, território e experiência
 - `LotacaoServidor` — lotação do CargoBaseServidor
 - `CargoSobrepostoServidor` — cargo sobreposto do CargoBaseServidor (código cargo como ID)
 - `FuncaoAtividadeCargoServidor` — função de atividade do CargoBaseServidor
@@ -48,7 +43,7 @@ O código atual define **16 modelos** em `apps/professores/models.py`.
 - `AtribuicaoExterno` — atribuição de aulas ao ContratoExterno
 
 ### Fase 4 — dependem das Fases 1–3
-- `AgrupamentoAtribuicaoTerritorioSaber` — agrega atribuições por (turma, território, experiência, professor, data); apenas grupos com 2+ componentes; inclui SME (RF) e externos (CPF)
+- `FuncionarioUnidadeEducacional` — consulta consolidada por unidade educacional
 
 ## Fluxo
 
@@ -57,10 +52,10 @@ digraph G {
     rankdir=TB;
     node [shape=box, style="rounded"];
 
-    F1 [label="Fase 1\nUE / Turma / Professor / Pessoa"];
-    F2 [label="Fase 2\nSerie / TEGP / CargoBase / Contrato"];
+    F1 [label="Fase 1\nProfessor / Pessoa"];
+    F2 [label="Fase 2\nCargoBase / Contrato"];
     F3 [label="Fase 3\nVinculos / Atribuicoes"];
-    F4 [label="Fase 4\nAgrupamentoTerritorioSaber"];
+    F4 [label="Fase 4\nFuncionarioUE"];
 
     F1 -> F2 -> F3 -> F4;
 }

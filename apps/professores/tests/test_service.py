@@ -99,7 +99,14 @@ class RowToCargoBaseTest(TestCase):
         """Verifica que os campos do cargo base são extraídos corretamente."""
         dt = datetime.date(2020, 1, 1)
         row = (
-            1001, "012345", 3239, "PROF DE EDUC BASICA I", 6, dt, None, None
+            1001,
+            "012345",
+            3239,
+            "PROF DE EDUC BASICA I",
+            6,
+            dt,
+            None,
+            None,
         )
         r = _row_to_cargo_base(row)
         self.assertEqual(r["id"], 1001)
@@ -201,17 +208,23 @@ class RowToAtribuicaoAulaTest(TestCase):
     def test_campos(self) -> None:
         """Verifica que os campos da atribuição de aula são extraídos."""
         dt = datetime.date(2024, 2, 1)
+        dt_inicio_turma = datetime.date(2024, 2, 5)
         row = (
             9001,
             1001,
             "000001",
             9999,
+            "1A",
             None,
             100,
             10,
+            "MATEMATICA",
             200,
+            "1",
             2024,
+            1,
             dt,
+            dt_inicio_turma,
             dt,
             None,
             None,
@@ -221,6 +234,11 @@ class RowToAtribuicaoAulaTest(TestCase):
         self.assertEqual(r["cargo_base_id"], 1001)
         self.assertEqual(r["codigo_turma_escola"], 9999)
         self.assertEqual(r["ano_atribuicao"], 2024)
+        self.assertEqual(r["descricao_turma_escola"], "1A")
+        self.assertEqual(r["descricao_componente_curricular"], "MATEMATICA")
+        self.assertEqual(r["ano_escolar"], "1")
+        self.assertEqual(r["codigo_etapa_ensino"], 1)
+        self.assertEqual(r["dt_inicio_turma"], dt_inicio_turma)
 
 
 class RowToAtribuicaoExternoTest(TestCase):
@@ -229,17 +247,23 @@ class RowToAtribuicaoExternoTest(TestCase):
     def test_campos(self) -> None:
         """Verifica que os campos da atribuição externo são extraídos."""
         dt = datetime.date(2024, 2, 1)
+        dt_inicio_turma = datetime.date(2024, 2, 5)
         row = (
             9002,
             800,
             "000001",
             5555,
+            "EXT",
             100,
             10,
+            "PORTUGUES",
             200,
             None,
+            "2",
             2024,
+            1,
             dt,
+            dt_inicio_turma,
             dt,
             None,
             None,
@@ -249,6 +273,11 @@ class RowToAtribuicaoExternoTest(TestCase):
         self.assertEqual(r["contrato_externo_id"], 800)
         self.assertEqual(r["codigo_turma_escola"], 5555)
         self.assertEqual(r["ano_atribuicao"], 2024)
+        self.assertEqual(r["descricao_turma_escola"], "EXT")
+        self.assertEqual(r["descricao_componente_curricular"], "PORTUGUES")
+        self.assertEqual(r["ano_escolar"], "2")
+        self.assertEqual(r["codigo_etapa_ensino"], 1)
+        self.assertEqual(r["dt_inicio_turma"], dt_inicio_turma)
 
     def test_codigo_turma_escola_none(self) -> None:
         """Verifica que codigo_turma_escola None é preservado."""
@@ -258,12 +287,17 @@ class RowToAtribuicaoExternoTest(TestCase):
             801,
             "000002",
             None,
+            None,
             101,
             11,
+            "CIENCIAS",
             201,
             None,
+            "2",
             2024,
+            1,
             dt,
+            None,
             dt,
             None,
             None,
@@ -463,9 +497,7 @@ class UpsertIncrementalTest(TestCase):
         mock_hash_bulk_create.assert_called_once()
 
     @patch("apps.professores.services.EtlAuditoriaLinha.objects.bulk_create")
-    @patch(
-        "apps.professores.services.FuncionarioUnidadeEducacional.objects"
-    )
+    @patch("apps.professores.services.FuncionarioUnidadeEducacional.objects")
     def test_usa_chave_natural_composta_para_funcionario(
         self,
         mock_manager: MagicMock,
@@ -779,8 +811,14 @@ class EtlProfessoresServiceFase2Test(TestCase):
         mock_eol.return_value.iter_query.return_value = [
             [
                 (
-                    1001, "012345", 3239, "PROF DE EDUC BASICA I",
-                    6, dt, None, None,
+                    1001,
+                    "012345",
+                    3239,
+                    "PROF DE EDUC BASICA I",
+                    6,
+                    dt,
+                    None,
+                    None,
                 )
             ]
         ]
@@ -861,11 +899,16 @@ class EtlProfessoresServiceFase3Test(TestCase):
                     1001,
                     "000001",
                     9999,
+                    "1A",
                     None,
                     100,
                     10,
+                    "MATEMATICA",
                     200,
+                    "1",
                     2024,
+                    1,
+                    dt,
                     dt,
                     dt,
                     None,
@@ -891,11 +934,16 @@ class EtlProfessoresServiceFase3Test(TestCase):
                     800,
                     "000001",
                     5555,
+                    "EXT",
                     100,
                     10,
+                    "PORTUGUES",
                     200,
                     None,
+                    "2",
                     2024,
+                    1,
+                    dt,
                     dt,
                     dt,
                     None,
