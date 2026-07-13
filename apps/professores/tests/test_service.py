@@ -12,7 +12,10 @@ from apps.professores.dtos.model_in import FuncionarioUnidadeEducacionalIn
 from apps.professores.models import FuncionarioUnidadeEducacional, Professor
 from apps.professores.queries import (
     CARGOS_PROFESSOR,
+    SQL_ATRIBUICOES_AULA,
+    SQL_DISCIPLINAS_TURMAS_ATRIBUIDAS_UE,
     SQL_FUNCIONARIOS_UNIDADE_EDUCACIONAL,
+    SQL_TURMAS_ATRIBUIDAS_UE,
 )
 from apps.professores.services import (
     EtlProfessoresService,
@@ -64,6 +67,36 @@ def _capturar_bulk_create_funcionario() -> tuple[_BulkCreateChamadas, Any]:
         autospec=True,
         side_effect=fake_bulk_create,
     )
+
+
+class EtlProfessoresServiceFiltroAnoLetivoTest(TestCase):
+    """Testes do filtro de ano letivo nas consultas."""
+
+    def test_sem_ano_letivo_remove_marcadores(self) -> None:
+        """Valida consulta sem restrição quando ano não é informado."""
+        srv = EtlProfessoresService(eol=MagicMock())
+
+        sql = srv._sql_com_filtro_ano_letivo(SQL_TURMAS_ATRIBUIDAS_UE)
+
+        self.assertNotIn("FILTRO_ANO_LETIVO_TURMAS_ATRIBUIDAS_UE", sql)
+        self.assertNotIn("AnoLetivo IN (2025, 2026)", sql)
+        self.assertNotIn("AnoLetivo =", sql)
+
+    def test_ano_letivo_aplica_igualdade(self) -> None:
+        """Valida filtro pelo ano informado."""
+        srv = EtlProfessoresService(eol=MagicMock(), ano_letivo=2026)
+
+        sql_turmas = srv._sql_com_filtro_ano_letivo(SQL_TURMAS_ATRIBUIDAS_UE)
+        sql_disciplinas = srv._sql_com_filtro_ano_letivo(
+            SQL_DISCIPLINAS_TURMAS_ATRIBUIDAS_UE
+        )
+        sql_atribuicoes = srv._sql_com_filtro_ano_letivo(SQL_ATRIBUICOES_AULA)
+
+        self.assertIn("AND AnoLetivo = 2026", sql_turmas)
+        self.assertIn("AND tau.AnoLetivo = 2026", sql_disciplinas)
+        self.assertIn("AND aa.an_atribuicao = 2026", sql_atribuicoes)
+        self.assertNotIn("AnoLetivo IN (2025, 2026)", sql_turmas)
+        self.assertNotIn("AnoLetivo >= 2026", sql_turmas)
 
 
 class RowToProfessorTest(TestCase):
@@ -129,6 +162,38 @@ class RowToCargoBaseTest(TestCase):
         row = (1002, "012346", 3247, "PROF BASICA II", None, dt, None, None)
         r = _row_to_cargo_base(row)
         self.assertIsNone(r["situacao_funcional"])
+
+    def test_ignora_campos_excedentes(self) -> None:
+        """Verifica leitura de linha com campos complementares."""
+        dt = datetime.date(2020, 1, 1)
+        row = (
+            1001,
+            "012345",
+            3239,
+            "PROF DE EDUC BASICA I",
+            6,
+            dt,
+            None,
+            None,
+            "extra-1",
+            "extra-2",
+            "extra-3",
+            "extra-4",
+            "extra-5",
+            "extra-6",
+            "extra-7",
+            "extra-8",
+            "extra-9",
+            "extra-10",
+            "extra-11",
+            "extra-12",
+        )
+
+        r = _row_to_cargo_base(row)
+
+        self.assertEqual(r["id"], 1001)
+        self.assertEqual(r["professor_id"], "012345")
+        self.assertEqual(r["codigo_cargo"], 3239)
 
 
 class RowToLotacaoTest(TestCase):
@@ -228,6 +293,18 @@ class RowToAtribuicaoAulaTest(TestCase):
             dt,
             None,
             None,
+            None,
+            "108600",
+            "DRE PENHA",
+            "PE",
+            "EMEF TESTE",
+            1,
+            2,
+            "Fundamental",
+            5,
+            0,
+            5,
+            1,
         )
         r = _row_to_atribuicao_aula(row)
         self.assertEqual(r["id"], 9001)
@@ -239,6 +316,51 @@ class RowToAtribuicaoAulaTest(TestCase):
         self.assertEqual(r["ano_escolar"], "1")
         self.assertEqual(r["codigo_etapa_ensino"], 1)
         self.assertEqual(r["dt_inicio_turma"], dt_inicio_turma)
+        self.assertIsNone(r["dt_cancelamento"])
+        self.assertEqual(r["codigo_dre"], "108600")
+        self.assertEqual(r["nome_dre"], "DRE PENHA")
+        self.assertEqual(r["abreviacao_dre"], "PE")
+        self.assertEqual(r["nome_unidade_educacional"], "EMEF TESTE")
+        self.assertEqual(r["codigo_tipo_escola"], 1)
+        self.assertEqual(r["codigo_tipo_turma"], 2)
+        self.assertEqual(r["modalidade"], "Fundamental")
+        self.assertEqual(r["codigo_modalidade"], 5)
+        self.assertEqual(r["semestre"], 0)
+        self.assertEqual(r["duracao_turno"], 5)
+        self.assertEqual(r["tipo_turno"], 1)
+
+    def test_campos_sem_dados_de_abrangencia(self) -> None:
+        """Verifica leitura da linha sem dados complementares."""
+        dt = datetime.date(2024, 2, 1)
+        dt_inicio_turma = datetime.date(2024, 2, 5)
+        row = (
+            9001,
+            1001,
+            "000001",
+            9999,
+            "1A",
+            None,
+            100,
+            10,
+            "MATEMATICA",
+            200,
+            "1",
+            2024,
+            1,
+            dt,
+            dt_inicio_turma,
+            dt,
+            None,
+            None,
+        )
+
+        r = _row_to_atribuicao_aula(row)
+
+        self.assertEqual(r["id"], 9001)
+        self.assertEqual(r["codigo_turma_escola"], 9999)
+        self.assertIsNone(r["dt_cancelamento"])
+        self.assertIsNone(r["codigo_dre"])
+        self.assertIsNone(r["codigo_tipo_turma"])
 
 
 class RowToAtribuicaoExternoTest(TestCase):
@@ -267,6 +389,7 @@ class RowToAtribuicaoExternoTest(TestCase):
             dt,
             None,
             None,
+            None,
         )
         r = _row_to_atribuicao_externo(row)
         self.assertEqual(r["id"], 9002)
@@ -278,6 +401,7 @@ class RowToAtribuicaoExternoTest(TestCase):
         self.assertEqual(r["ano_escolar"], "2")
         self.assertEqual(r["codigo_etapa_ensino"], 1)
         self.assertEqual(r["dt_inicio_turma"], dt_inicio_turma)
+        self.assertIsNone(r["dt_cancelamento"])
 
     def test_codigo_turma_escola_none(self) -> None:
         """Verifica que codigo_turma_escola None é preservado."""
@@ -301,9 +425,40 @@ class RowToAtribuicaoExternoTest(TestCase):
             dt,
             None,
             None,
+            None,
         )
         r = _row_to_atribuicao_externo(row)
         self.assertIsNone(r["codigo_turma_escola"])
+        self.assertIsNone(r["dt_cancelamento"])
+
+    def test_campos_sem_cancelamento(self) -> None:
+        """Verifica leitura da linha sem cancelamento."""
+        dt = datetime.date(2024, 2, 1)
+        row = (
+            9002,
+            800,
+            "000001",
+            5555,
+            "EXT",
+            100,
+            10,
+            "PORTUGUES",
+            200,
+            None,
+            "2",
+            2024,
+            1,
+            dt,
+            None,
+            dt,
+            None,
+            None,
+        )
+
+        r = _row_to_atribuicao_externo(row)
+
+        self.assertEqual(r["id"], 9002)
+        self.assertIsNone(r["dt_cancelamento"])
 
 
 class RowToFuncionarioTest(TestCase):
@@ -819,6 +974,18 @@ class EtlProfessoresServiceFase2Test(TestCase):
                     dt,
                     None,
                     None,
+                    None,
+                    "108600",
+                    "DRE PENHA",
+                    "PE",
+                    "EMEF TESTE",
+                    1,
+                    2,
+                    "Fundamental",
+                    5,
+                    0,
+                    5,
+                    1,
                 )
             ]
         ]
@@ -913,6 +1080,18 @@ class EtlProfessoresServiceFase3Test(TestCase):
                     dt,
                     None,
                     None,
+                    None,
+                    "108600",
+                    "DRE PENHA",
+                    "PE",
+                    "EMEF TESTE",
+                    1,
+                    2,
+                    "Fundamental",
+                    5,
+                    0,
+                    5,
+                    1,
                 )
             ]
         ]
@@ -1057,13 +1236,20 @@ class EtlProfessoresServiceExecutarTest(TestCase):
         self.assertIn("atribuicao_aula", resultado)
 
     def test_executar_fase4_pula_fases_anteriores(self) -> None:
-        """Verifica que fase 4 executa apenas funcionario."""
+        """Verifica que fase 4 executa apenas tabelas finais."""
         srv = self._make_service_com_populares_mockados(1)
 
         resultado = srv.executar(fase_inicial=4)
 
         self.assertEqual(srv.ultima_fase_concluida, 4)
-        self.assertEqual(resultado, {"funcionario_unidade_educacional": 1})
+        self.assertEqual(
+            resultado,
+            {
+                "funcionario_unidade_educacional": 1,
+                "turma_atribuida_ue": 1,
+                "disciplina_turma_atribuida_ue": 1,
+            },
+        )
 
     def test_executar_retorna_soma_de_registros(self) -> None:
         """Verifica que executar retorna a soma de registros por tabela."""

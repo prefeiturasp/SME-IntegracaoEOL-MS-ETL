@@ -1,6 +1,6 @@
 # Ordem de Carga
 
-A ordem abaixo é exatamente a que o método `executar` aplica no serviço.
+A ordem abaixo preserva as dependencias entre os grupos de dados do dominio.
 
 ## Fase 1 — sem dependências internas
 1. `professor`
@@ -20,6 +20,8 @@ A ordem abaixo é exatamente a que o método `executar` aplica no serviço.
 
 ## Fase 4 — dependem das Fases 1–3
 11. `funcionario_unidade_educacional`
+12. `turma_atribuida_ue`
+13. `disciplina_turma_atribuida_ue`
 
 ## Diagrama
 
@@ -39,6 +41,15 @@ digraph G {
 
 ## FuncionarioUnidadeEducacional
 
-A tabela `funcionario_unidade_educacional` e carregada na fase final, apos as
-tabelas que alimentam a consulta consolidada de servidores, vinculos,
-afastamentos, atribuicoes e externos.
+O vinculo do funcionario com a unidade e consolidado depois dos dados de
+servidor, cargo, afastamento, atribuicao e contrato externo.
+
+## TurmaAtribuidaUe
+
+As turmas sob abrangencia de unidade sao consolidadas na fase final. Esse grupo
+representa a visao de turmas que nasce do vinculo com a unidade educacional.
+
+## DisciplinaTurmaAtribuidaUe
+
+Os componentes das turmas abrangidas tambem sao consolidados na fase final,
+depois que a relacao entre funcionario e turma esta definida.

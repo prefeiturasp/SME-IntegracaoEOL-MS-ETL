@@ -176,9 +176,21 @@ class AtribuicaoAulaOut:
     codigo_etapa_ensino: int | None
     dt_atribuicao_aula: Any
     dt_inicio_turma: Any
+    dt_fim_turma: Any
     dt_disponibilizacao_aulas: Any
     codigo_motivo_disponibilizacao: int | None
     dt_cancelamento: Any
+    codigo_dre: str | None
+    nome_dre: str | None
+    abreviacao_dre: str | None
+    nome_unidade_educacional: str | None
+    codigo_tipo_escola: int | None
+    codigo_tipo_turma: int | None
+    modalidade: str | None
+    codigo_modalidade: int | None
+    semestre: int | None
+    duracao_turno: int | None
+    tipo_turno: int | None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -201,11 +213,37 @@ class AtribuicaoAulaOut:
             "codigo_etapa_ensino": self.codigo_etapa_ensino,
             "dt_atribuicao_aula": self.dt_atribuicao_aula,
             "dt_inicio_turma": self.dt_inicio_turma,
+            "dt_fim_turma": self.dt_fim_turma,
             "dt_disponibilizacao_aulas": self.dt_disponibilizacao_aulas,
             "codigo_motivo_disponibilizacao": (
                 self.codigo_motivo_disponibilizacao
             ),
             "dt_cancelamento": self.dt_cancelamento,
+            "codigo_dre": (
+                str(self.codigo_dre).strip() if self.codigo_dre else None
+            ),
+            "nome_dre": (
+                str(self.nome_dre).strip() if self.nome_dre else None
+            ),
+            "abreviacao_dre": (
+                str(self.abreviacao_dre).strip()
+                if self.abreviacao_dre
+                else None
+            ),
+            "nome_unidade_educacional": (
+                str(self.nome_unidade_educacional).strip()
+                if self.nome_unidade_educacional
+                else None
+            ),
+            "codigo_tipo_escola": self.codigo_tipo_escola,
+            "codigo_tipo_turma": self.codigo_tipo_turma,
+            "modalidade": (
+                str(self.modalidade).strip() if self.modalidade else None
+            ),
+            "codigo_modalidade": self.codigo_modalidade,
+            "semestre": self.semestre,
+            "duracao_turno": self.duracao_turno,
+            "tipo_turno": self.tipo_turno,
         }
 
 
@@ -228,6 +266,7 @@ class AtribuicaoExternoOut:
     codigo_etapa_ensino: int | None
     dt_atribuicao: Any
     dt_inicio_turma: Any
+    dt_fim_turma: Any
     dt_disponibilizacao: Any
     codigo_motivo_disponibilizacao_externo: int | None
     dt_cancelamento: Any
@@ -253,6 +292,7 @@ class AtribuicaoExternoOut:
             "codigo_etapa_ensino": self.codigo_etapa_ensino,
             "dt_atribuicao": self.dt_atribuicao,
             "dt_inicio_turma": self.dt_inicio_turma,
+            "dt_fim_turma": self.dt_fim_turma,
             "dt_disponibilizacao": self.dt_disponibilizacao,
             "codigo_motivo_disponibilizacao_externo": (
                 self.codigo_motivo_disponibilizacao_externo
@@ -318,7 +358,7 @@ def _normalizar_int_opcional(valor: Any) -> int | None:
 
 
 def _normalizar_bool(valor: Any) -> bool:
-    """Converte indicadores SQL para booleano.
+    """Retorna booleano a partir de indicadores SQL.
 
     Args:
         valor: Valor recebido da origem.
@@ -332,7 +372,7 @@ def _normalizar_bool(valor: Any) -> bool:
 
 
 def _normalizar_datetime(valor: Any) -> Any:
-    """Converte datetime naive para aware.
+    """Garante datetime com timezone (aware).
 
     Args:
         valor: Valor de data/hora recebido da origem.
@@ -391,7 +431,7 @@ class FuncionarioUnidadeEducacionalOut:
         )
 
     def to_dict(self) -> dict[str, Any]:
-        """Converte para dicionario de persistencia.
+        """Monta o dicionario de persistencia.
 
         Returns:
             Campos compatíveis com o model `FuncionarioUnidadeEducacional`.
@@ -413,4 +453,118 @@ class FuncionarioUnidadeEducacionalOut:
             "esta_afastado": self.esta_afastado,
             "funcao_externo": _normalizar_int(self.funcao_externo),
             "tipo_funcao_externo": _normalizar_int(self.tipo_funcao_externo),
+        }
+
+
+@dataclass(slots=True)
+class TurmaAtribuidaUeOut:
+    """Estrutura para o model ``TurmaAtribuidaUe``."""
+
+    codigo_escola: str
+    codigo_turma: int
+    ano_letivo: int
+    modalidade: str | None
+    semestre: int | None
+    codigo_modalidade: int | None
+    codigo_dre: str | None
+    dre: str | None
+    dre_abreviacao: str | None
+    ue: str | None
+    ue_abreviacao: str | None
+    nome_turma: str | None
+    ano: str | None
+    tipo_ue: str | None
+    codigo_tipo_ue: int | None
+    codigo_tipo_escola: int | None
+    tipo_escola: str | None
+    duracao_turno: int | None
+    tipo_turno: int | None
+    usuario_rf: str
+    cargo: int | None
+    cargo_sobreposto: int | None
+
+    def to_dict(self) -> dict[str, Any]:
+        """Monta o dicionario de persistencia."""
+        return {
+            "codigo_escola": self.codigo_escola,
+            "codigo_turma": self.codigo_turma,
+            "ano_letivo": self.ano_letivo,
+            "modalidade": _normalizar_texto_opcional(self.modalidade),
+            "semestre": _normalizar_int_opcional(self.semestre),
+            "codigo_modalidade": _normalizar_int_opcional(
+                self.codigo_modalidade
+            ),
+            "codigo_dre": _normalizar_texto_opcional(self.codigo_dre),
+            "dre": _normalizar_texto_opcional(self.dre),
+            "dre_abreviacao": _normalizar_texto_opcional(self.dre_abreviacao),
+            "ue": _normalizar_texto_opcional(self.ue),
+            "ue_abreviacao": _normalizar_texto_opcional(self.ue_abreviacao),
+            "nome_turma": _normalizar_texto_opcional(self.nome_turma),
+            "ano": _normalizar_texto_opcional(self.ano),
+            "tipo_ue": _normalizar_texto_opcional(self.tipo_ue),
+            "codigo_tipo_ue": _normalizar_int_opcional(self.codigo_tipo_ue),
+            "codigo_tipo_escola": _normalizar_int_opcional(
+                self.codigo_tipo_escola
+            ),
+            "tipo_escola": _normalizar_texto_opcional(self.tipo_escola),
+            "duracao_turno": _normalizar_int_opcional(self.duracao_turno),
+            "tipo_turno": _normalizar_int_opcional(self.tipo_turno),
+            "usuario_rf": self.usuario_rf,
+            "cargo": _normalizar_int_opcional(self.cargo),
+            "cargo_sobreposto": _normalizar_int_opcional(
+                self.cargo_sobreposto
+            ),
+        }
+
+
+@dataclass(slots=True)
+class DisciplinaTurmaAtribuidaUeOut:
+    """Estrutura para o model ``DisciplinaTurmaAtribuidaUe``."""
+
+    codigo_escola: str
+    codigo_turma: int
+    ano_letivo: int
+    usuario_rf: str
+    codigo_componente_curricular: int
+    descricao_componente_curricular: str
+    codigo_componente_curricular_pai: int | None
+    regencia: bool
+    codigo_componente_territorio_saber: int | None
+    territorio_saber: bool
+    codigo_dre: str | None
+    codigo_tipo_escola: int | None
+    tipo_escola: str | None
+    cargo: int | None
+    cargo_sobreposto: int | None
+
+    def to_dict(self) -> dict[str, Any]:
+        """Monta o dicionario de persistencia."""
+        return {
+            "codigo_escola": self.codigo_escola,
+            "codigo_turma": _normalizar_int(self.codigo_turma),
+            "ano_letivo": _normalizar_int(self.ano_letivo),
+            "usuario_rf": self.usuario_rf,
+            "codigo_componente_curricular": _normalizar_int(
+                self.codigo_componente_curricular
+            ),
+            "descricao_componente_curricular": _normalizar_texto(
+                self.descricao_componente_curricular
+            ),
+            "codigo_componente_curricular_pai": _normalizar_int_opcional(
+                self.codigo_componente_curricular_pai
+            ),
+            "regencia": _normalizar_bool(self.regencia),
+            "codigo_componente_territorio_saber": _normalizar_int_opcional(
+                self.codigo_componente_territorio_saber
+            ),
+            "territorio_saber": _normalizar_bool(self.territorio_saber),
+            "codigo_dre": _normalizar_texto_opcional(self.codigo_dre),
+            "codigo_tipo_escola": _normalizar_int_opcional(
+                self.codigo_tipo_escola
+            ),
+            "tipo_escola": _normalizar_texto_opcional(self.tipo_escola),
+            "cargo": _normalizar_int_opcional(self.cargo),
+            "cargo_sobreposto": _normalizar_int_opcional(
+                self.cargo_sobreposto
+            ),
         }
