@@ -358,6 +358,7 @@ class EtlAlunosService(BaseEtlService):
                     "modalidade",
                     "componente_curricular_id",
                     "ano",
+                    "turma",
                 ],
                 update_fields=("quantidade",),
                 unique_fields=(
@@ -367,6 +368,7 @@ class EtlAlunosService(BaseEtlService):
                     "modalidade",
                     "componente_curricular_id",
                     "ano",
+                    "turma",
                 ),
                 suporta_bulk_insert=True,
             ),
@@ -405,6 +407,9 @@ class EtlAlunosService(BaseEtlService):
                     "descricao_ciclo_ensino",
                     "serie_resumida",
                     "codigo_modalidade_turma",
+                    "data_situacao_matricula_data_hora",
+                    "data_fim_vinculo_responsavel",
+                    "tipo_sigilo",
                 ),
                 unique_fields=(
                     "codigo_aluno",
