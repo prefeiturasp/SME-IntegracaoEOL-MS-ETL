@@ -413,7 +413,10 @@ SELECT aluno.cd_aluno                        codigo_aluno,
        etapa_ensino.dc_etapa_ensino AS descricao_etapa_ensino,
        ciclo_ensino.dc_ciclo_ensino AS descricao_ciclo_ensino,
        serie_ensino.sg_resumida_serie AS serie_resumida,
-       etapa_ensino.cd_etapa_ensino as codigo_modalidade_turma
+       etapa_ensino.cd_etapa_ensino as codigo_modalidade_turma,
+       mte.dt_situacao_aluno AS data_situacao_matricula_data_hora,
+       responsavel.dt_fim AS data_fim_vinculo_responsavel,
+       aluno.cd_tipo_sigilo AS tipo_sigilo
 FROM   v_aluno_cotic aluno
        INNER JOIN responsavel_aluno responsavel
                ON aluno.cd_aluno = responsavel.cd_aluno
