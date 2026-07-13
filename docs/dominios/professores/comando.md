@@ -7,6 +7,11 @@ Arquivo: `apps/professores/management/commands/etl_professores.py`
 - `--volume`
 - `--offset`
 - `--continuar`
+- `--ano-letivo N` — processa apenas atribuições (SME e externas) a partir do ano
+  letivo N. Sem o argumento, faz carga completa.
+- `--skip-audit-hash` (alias `--skip-salvar-dados-auditoria`) — pula a gravação dos
+  hashes de auditoria por linha. Útil em recargas amplas em que a auditoria por
+  linha não é necessária.
 
 ## Comportamento real
 

@@ -1,30 +1,27 @@
 # Ordem de Carga
 
-A ordem abaixo é exatamente a que o método `executar` aplica no serviço.
+A ordem abaixo preserva as dependencias entre os grupos de dados do dominio.
 
 ## Fase 1 — sem dependências internas
-1. `unidade_educacional`
-2. `turma_escola`
-3. `professor`
-4. `pessoa`
+1. `professor`
+2. `pessoa`
 
 ## Fase 2 — dependem da Fase 1
-5. `serie_turma_grade`
-6. `turma_escola_grade_programa`
-7. `cargo_base_servidor`
-8. `contrato_externo`
+3. `cargo_base_servidor`
+4. `contrato_externo`
 
 ## Fase 3 — dependem da Fase 2
-9. `turma_grade_territorio_experiencia`
-10. `lotacao_servidor`
-11. `cargo_sobreposto_servidor`
-12. `funcao_atividade_cargo_servidor`
-13. `laudo_medico`
-14. `atribuicao_aula`
-15. `atribuicao_externo`
+5. `lotacao_servidor`
+6. `cargo_sobreposto_servidor`
+7. `funcao_atividade_cargo_servidor`
+8. `laudo_medico`
+9. `atribuicao_aula`
+10. `atribuicao_externo`
 
 ## Fase 4 — dependem das Fases 1–3
-16. `agrupamento_atribuicao_territorio_saber`
+11. `funcionario_unidade_educacional`
+12. `turma_atribuida_ue`
+13. `disciplina_turma_atribuida_ue`
 
 ## Diagrama
 
@@ -42,9 +39,17 @@ digraph G {
 }
 ```
 
-## Atualizacao - FuncionarioUnidadeEducacional
+## FuncionarioUnidadeEducacional
 
-A tabela `funcionario_unidade_educacional` e carregada na fase final, apos as
-tabelas que
-alimentam a consulta consolidada de servidores, vinculos, afastamentos,
-atribuicoes e externos.
+O vinculo do funcionario com a unidade e consolidado depois dos dados de
+servidor, cargo, afastamento, atribuicao e contrato externo.
+
+## TurmaAtribuidaUe
+
+As turmas sob abrangencia de unidade sao consolidadas na fase final. Esse grupo
+representa a visao de turmas que nasce do vinculo com a unidade educacional.
+
+## DisciplinaTurmaAtribuidaUe
+
+Os componentes das turmas abrangidas tambem sao consolidados na fase final,
+depois que a relacao entre funcionario e turma esta definida.

@@ -29,6 +29,9 @@ A ordem abaixo é exatamente a que o método `executar` aplica em `EtlPedagogico
 ## Fase 11 — sem dependências internas
 11. `turma`
 
+## Fase 12 — sem dependências internas
+12. `turma_atribuida_dre_ue`
+
 ---
 
 > **Nota:** as fases 2 a 11 são independentes entre si no banco de destino. A ordem é mantida por conveniência operacional e por compatibilidade com a auditoria por fase.
@@ -49,7 +52,8 @@ digraph G {
     F9 [label="Fase 9\nagrupamentos TS\nAPI EOL"];
     F10 [label="Fase 10\ngrade_componente_curricular"];
     F11 [label="Fase 11\nturma"];
+    F12 [label="Fase 12\nturma_atribuida_dre_ue"];
 
-    F1 -> F2 -> F3 -> F4 -> F5 -> F9 -> F10 -> F11;
+    F1 -> F2 -> F3 -> F4 -> F5 -> F9 -> F10 -> F11 -> F12;
 }
 ```

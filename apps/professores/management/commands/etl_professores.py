@@ -18,6 +18,7 @@ Formato de indice_sincronizacao:
     None                — execução concluída ou nunca iniciada
 """
 
+import os
 from typing import Any
 from uuid import UUID
 
@@ -80,10 +81,26 @@ class Command(BaseCommand):
                 "do zero para processar alterações incrementais."
             ),
         )
+        parser.add_argument(
+            "--ano-letivo",
+            type=int,
+            default=None,
+            help="Processa apenas o ano letivo informado.",
+        )
+        parser.add_argument(
+            "--skip-audit-hash",
+            "--skip-salvar-dados-auditoria",
+            action="store_true",
+            dest="skip_audit_hash",
+            help="Não grava hashes em etl_auditoria_linha.",
+        )
 
     def handle(self, *args: Any, **options: Any) -> None:
         """Executa o ETL e registra auditoria e checkpoint."""
         continuar: bool = options["continuar"]
+        ano_letivo: int | None = options.get("ano_letivo")
+        if options.get("skip_audit_hash"):
+            os.environ["ETL_SKIP_AUDIT_HASH"] = "1"
 
         repositorio = RepositorioAuditoriaPostgres()
 
@@ -95,7 +112,7 @@ class Command(BaseCommand):
         # Executar ETL
         # ------------------------------------------------------------------
         id_execucao: UUID = repositorio.iniciar_execucao("professores")
-        servico = EtlProfessoresService()
+        servico = EtlProfessoresService(ano_letivo=ano_letivo)
         ultimo_indice_salvo: str | None = None
 
         def _salvar_checkpoint_lote(tabela: str, lote: int) -> None:

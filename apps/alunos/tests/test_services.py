@@ -517,12 +517,12 @@ class TestAlunosService(TestCase):
         self.assertEqual(len(h), 64)
 
     def test_criar_transform_fase_8_pk_composta(self) -> None:
-        """Valida PK composta de 6 campos na fase 8."""
+        """Valida PK composta de 7 campos (com turma) na fase 8."""
         config = self.service._fases[7]
         transform = self.service._criar_transform(config)
         row = ("UE01", "DRE01", 2024, "EF", 3, 100, "3A", "T A", 50)
         pk, h, _ = transform(row)
-        self.assertEqual(pk, "UE01-DRE01-2024-EF-100-3A")
+        self.assertEqual(pk, "UE01-DRE01-2024-EF-100-3A-T A")
         self.assertEqual(len(h), 64)
 
     def test_executar_pula_fases_1_a_6(self) -> None:
