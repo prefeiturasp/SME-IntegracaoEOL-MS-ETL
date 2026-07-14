@@ -396,3 +396,17 @@ class EtlInstitucionalServiceTestCase(TestCase):
         dto.codigo_ue_integracao = "INT-001"
         data = dto.to_domain()
         self.assertEqual(data["codigo_ue_integracao"], "INT-001")
+
+    def test_to_domain_ue_in_fk_zero_vira_null(self) -> None:
+        """FKs opcionais (tipo_escola, subprefeitura) com 0 viram NULL."""
+        dto = UnidadeEducacionalIn(*_ROW_UE)
+        # _ROW_UE traz códigos válidos (1) -> passam direto.
+        data = dto.to_domain()
+        self.assertEqual(data["subprefeitura_id"], 1)
+        self.assertEqual(data["tipo_escola_id"], 1)
+        # 0 é o sentinela do EOL para "sem vínculo" -> NULL (FK nullable).
+        dto.codigo_sub_prefeitura = 0
+        dto.codigo_tipo_escola = 0
+        data = dto.to_domain()
+        self.assertIsNone(data["subprefeitura_id"])
+        self.assertIsNone(data["tipo_escola_id"])
