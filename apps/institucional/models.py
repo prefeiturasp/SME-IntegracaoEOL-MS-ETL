@@ -50,7 +50,7 @@ class DRE(models.Model):
 
     codigo_dre = models.CharField(max_length=20, primary_key=True)
     nome = models.CharField(max_length=200)
-    sigla = models.CharField(max_length=20, null=True, blank=True)  # NOSONAR
+    sigla = models.CharField(max_length=100, null=True, blank=True)  # NOSONAR
     tipo_unidade_adm = models.IntegerField(null=True, blank=True)
     descricao_unidade_adm = models.CharField(
         max_length=200, null=True, blank=True  # NOSONAR
