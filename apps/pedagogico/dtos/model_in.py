@@ -50,6 +50,7 @@ class ComponenteTurmaIn:
     codigo_componente_territorio_saber: Any
     desc_territorio_saber: Any = None
     desc_experiencia_pedagogica: Any = None
+    tipo_escola: Any = None
 
     def to_domain(self, transferido_em: Any) -> dict:
         return {
@@ -66,6 +67,7 @@ class ComponenteTurmaIn:
             ),
             "desc_territorio_saber": self.desc_territorio_saber,
             "desc_experiencia_pedagogica": self.desc_experiencia_pedagogica,
+            "tipo_escola": str_or_none(self.tipo_escola),
             "transferido_em": transferido_em,
         }
 
@@ -235,6 +237,55 @@ class TurmaIn:
             "codigo_tipo_periodicidade": int_or_none(
                 self.codigo_tipo_periodicidade
             ),
+            "transferido_em": transferido_em,
+        }
+
+
+@dataclass
+class TurmaAtribuidaDreUeIn:
+    """Linha bruta da tabela turmas_atribuidas_dre_ue."""
+
+    codigo_escola: Any
+    codigo_turma: Any
+    ano_letivo: Any
+    modalidade: Any
+    semestre: Any
+    codigo_modalidade: Any
+    codigo_dre: Any
+    dre: Any
+    dre_abreviacao: Any
+    ue: Any
+    ue_abreviacao: Any
+    nome_turma: Any
+    ano: Any
+    tipo_ue: Any
+    codigo_tipo_ue: Any
+    codigo_tipo_escola: Any
+    tipo_escola: Any
+    duracao_turno: Any
+    tipo_turno: Any
+
+    def to_domain(self, transferido_em: Any) -> dict:
+        return {
+            "codigo_escola": strip_str(self.codigo_escola),
+            "codigo_turma": int(self.codigo_turma),
+            "ano_letivo": int(self.ano_letivo),
+            "modalidade": strip_or_none(self.modalidade),
+            "semestre": int_or_none(self.semestre),
+            "codigo_modalidade": int_or_none(self.codigo_modalidade),
+            "codigo_dre": strip_str(self.codigo_dre),
+            "dre": strip_or_none(self.dre),
+            "dre_abreviacao": strip_or_none(self.dre_abreviacao),
+            "ue": strip_or_none(self.ue),
+            "ue_abreviacao": strip_or_none(self.ue_abreviacao),
+            "nome_turma": strip_or_none(self.nome_turma),
+            "ano": strip_or_none(self.ano),
+            "tipo_ue": strip_or_none(self.tipo_ue),
+            "codigo_tipo_ue": int_or_none(self.codigo_tipo_ue),
+            "codigo_tipo_escola": int_or_none(self.codigo_tipo_escola),
+            "tipo_escola": strip_or_none(self.tipo_escola),
+            "duracao_turno": int_or_none(self.duracao_turno),
+            "tipo_turno": int_or_none(self.tipo_turno),
             "transferido_em": transferido_em,
         }
 

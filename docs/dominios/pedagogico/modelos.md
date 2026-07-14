@@ -134,3 +134,17 @@ Tabela de apoio com os IDs de componentes PAP (Programa de Apoio e Acompanhament
 - **Unique:** `id_componente_curricular`
 - **Origem:** `componentecurricularpap` no `API_EOL_DB`, via `full_refresh`
 - **Alimenta:** validações e regras ligadas a PAP
+
+## 12. TurmaAtribuidaDreUe
+
+Turma consolidada por DRE e UE, já entregue pronta pela origem. Existe para
+responder à abrangência de turmas de um funcionário por unidade sem recompor a
+hierarquia DRE → UE → turma no serviço de consumo.
+
+- **Tabela:** `turma_atribuida_dre_ue`
+- **Origem:** turmas atribuídas por DRE/UE no EOL, por ano letivo
+- **Identidade:** turma dentro de escola e ano letivo. A origem repete a mesma
+  turma legitimamente, então não há unicidade imposta no banco.
+- **Estratégia:** recarga completa por ano letivo — a origem já entrega a linha
+  final, sem detecção de mudança por linha.
+- **Alimenta:** consulta de abrangência de turmas por DRE/UE do Transition Gateway.

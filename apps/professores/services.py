@@ -2,8 +2,9 @@
 
 import hashlib
 import logging
+import os
 from collections.abc import Callable, Iterator
-from typing import Any
+from typing import Any, cast
 
 from django.db.models import Q
 
@@ -16,12 +17,14 @@ from apps.professores.dtos.model_in import (
     CargoBaseServidorIn,
     CargoSobrepostoServidorIn,
     ContratoExternoIn,
+    DisciplinaTurmaAtribuidaUeIn,
     FuncaoAtividadeCargoServidorIn,
     FuncionarioUnidadeEducacionalIn,
     LaudoMedicoIn,
     LotacaoServidorIn,
     PessoaIn,
     ProfessorIn,
+    TurmaAtribuidaUeIn,
 )
 from apps.professores.dtos.model_out import (
     AtribuicaoAulaOut,
@@ -38,12 +41,14 @@ from apps.professores.models import (
     CargoBaseServidor,
     CargoSobrepostoServidor,
     ContratoExterno,
+    DisciplinaTurmaAtribuidaUe,
     FuncaoAtividadeCargoServidor,
     FuncionarioUnidadeEducacional,
     LaudoMedico,
     LotacaoServidor,
     Pessoa,
     Professor,
+    TurmaAtribuidaUe,
 )
 from apps.professores.queries import (
     CARGOS_PROFESSOR,
@@ -52,15 +57,30 @@ from apps.professores.queries import (
     SQL_CARGOS_BASE,
     SQL_CARGOS_SOBREPOSTOS,
     SQL_CONTRATOS_EXTERNOS,
+    SQL_DISCIPLINAS_TURMAS_ATRIBUIDAS_UE,
     SQL_FUNCIONARIOS_UNIDADE_EDUCACIONAL,
     SQL_FUNCOES_ATIVIDADE,
     SQL_LAUDOS,
     SQL_LOTACOES,
     SQL_PESSOAS,
     SQL_PROFESSORES,
+    SQL_TURMAS_ATRIBUIDAS_UE,
 )
 
 logger = logging.getLogger(__name__)
+
+_QTD_CAMPOS_ATRIBUICAO_AULA_LEGADO = 18
+_QTD_CAMPOS_ATRIBUICAO_AULA_ATUAL = 30
+_QTD_CAMPOS_ATRIBUICAO_EXTERNO_LEGADO = 18
+_QTD_CAMPOS_ATRIBUICAO_EXTERNO_ATUAL = 19
+_QTD_CAMPOS_CARGO_BASE = 8
+
+_MARCADORES_ANO_LETIVO = {
+    "/*FILTRO_ANO_LETIVO_ATRIBUICAO_AULA*/": "",
+    "/*FILTRO_ANO_LETIVO_ATRIBUICAO_EXTERNO*/": "",
+    "/*FILTRO_ANO_LETIVO_TURMAS_ATRIBUIDAS_UE*/": "",
+    "/*FILTRO_ANO_LETIVO_DISCIPLINAS_TURMAS_ATRIBUIDAS_UE*/": "",
+}
 
 
 def _row_to_professor(row: tuple) -> dict:
@@ -68,7 +88,11 @@ def _row_to_professor(row: tuple) -> dict:
 
 
 def _row_to_cargo_base(row: tuple) -> dict:
-    return CargoBaseServidorIn(*row).to_domain().to_dict()
+    return _cargo_base_in(row).to_domain().to_dict()
+
+
+def _cargo_base_in(row: tuple) -> CargoBaseServidorIn:
+    return CargoBaseServidorIn(*row[:_QTD_CAMPOS_CARGO_BASE])
 
 
 def _row_to_lotacao(row: tuple) -> dict:
@@ -96,15 +120,27 @@ def _row_to_contrato_externo(row: tuple) -> dict:
 
 
 def _row_to_atribuicao_aula(row: tuple) -> dict:
-    return AtribuicaoAulaIn(*row).to_domain().to_dict()
+    return _atribuicao_aula_in(row).to_domain().to_dict()
+
+
+def _atribuicao_aula_in(row: tuple) -> AtribuicaoAulaIn:
+    if len(row) == _QTD_CAMPOS_ATRIBUICAO_AULA_LEGADO:
+        row = row + (None,) * (_QTD_CAMPOS_ATRIBUICAO_AULA_ATUAL - len(row))
+    return AtribuicaoAulaIn(*row)
 
 
 def _row_to_atribuicao_externo(row: tuple) -> dict:
-    return AtribuicaoExternoIn(*row).to_domain().to_dict()
+    return _atribuicao_externo_in(row).to_domain().to_dict()
+
+
+def _atribuicao_externo_in(row: tuple) -> AtribuicaoExternoIn:
+    if len(row) == _QTD_CAMPOS_ATRIBUICAO_EXTERNO_LEGADO:
+        row = row + (None,) * (_QTD_CAMPOS_ATRIBUICAO_EXTERNO_ATUAL - len(row))
+    return AtribuicaoExternoIn(*row)
 
 
 def _row_to_funcionario(row: tuple) -> dict:
-    """Converte linha de funcionario para dicionario de destino.
+    """Converta linha de funcionario para dicionario de destino.
 
     Args:
         row: Linha retornada pela query consolidada.
@@ -113,6 +149,16 @@ def _row_to_funcionario(row: tuple) -> dict:
         Dados prontos para persistencia no destino.
     """
     return FuncionarioUnidadeEducacionalIn(*row).to_domain().to_dict()
+
+
+def _row_to_turma_atribuida_ue(row: tuple) -> dict:
+    """Monta o dicionário da linha de turma atribuída por UE."""
+    return cast(dict, TurmaAtribuidaUeIn(*row).to_domain().to_dict())
+
+
+def _row_to_disciplina_turma_atribuida_ue(row: tuple) -> dict:
+    """Monta o dicionário da linha de disciplina atribuída por UE."""
+    return cast(dict, DisciplinaTurmaAtribuidaUeIn(*row).to_domain().to_dict())
 
 
 def _full_refresh_por_lote(
@@ -286,6 +332,9 @@ def _upsert_incremental(
         EtlAuditoriaLinha(id_destino=id_d, hash_controle=h)
         for id_d, h in novos_hashes.items()
     ]
+    if os.getenv("ETL_SKIP_AUDIT_HASH") == "1":
+        return len(objs_para_salvar)
+
     EtlAuditoriaLinha.objects.bulk_create(
         hash_objs,
         update_conflicts=True,
@@ -303,6 +352,8 @@ _TABELAS_FULL_REFRESH: frozenset[str] = frozenset(
         "cargo_sobreposto_servidor",
         "funcao_atividade_cargo_servidor",
         "laudo_medico",
+        "turma_atribuida_ue",
+        "disciplina_turma_atribuida_ue",
     }
 )
 
@@ -318,16 +369,58 @@ _ORDEM_TABELAS: tuple[str, ...] = (
     "atribuicao_aula",
     "atribuicao_externo",
     "funcionario_unidade_educacional",
+    "turma_atribuida_ue",
+    "disciplina_turma_atribuida_ue",
 )
 
 
 class EtlProfessoresService:
     """Orquestra o ETL completo do dominio PROFESSORES_DB."""
 
-    def __init__(self, eol: EOLService | None = None) -> None:
-        """Inicializa o serviço com instância de EOLService."""
+    def __init__(
+        self,
+        eol: EOLService | None = None,
+        ano_letivo: int | None = None,
+    ) -> None:
+        """Inicializa o serviço.
+
+        Args:
+            eol: Cliente EOL; instanciado sob demanda quando omitido.
+            ano_letivo: Ano letivo aplicado ao filtro incremental.
+        """
         self.eol = eol or EOLService()
+        self._ano_letivo = ano_letivo
         self.ultima_fase_concluida: int = 0
+
+    def _sql_com_filtro_ano_letivo(self, sql: str) -> str:
+        """Aplica filtro de ano letivo nas consultas compatíveis.
+
+        Args:
+            sql: Consulta usada na carga.
+
+        Returns:
+            Consulta com marcadores resolvidos.
+        """
+        filtros = _MARCADORES_ANO_LETIVO
+        if self._ano_letivo is not None:
+            ano = int(self._ano_letivo)
+            filtros = {
+                "/*FILTRO_ANO_LETIVO_ATRIBUICAO_AULA*/": (
+                    f"AND aa.an_atribuicao = {ano}"
+                ),
+                "/*FILTRO_ANO_LETIVO_ATRIBUICAO_EXTERNO*/": (
+                    f"AND ae.an_atribuicao = {ano}"
+                ),
+                "/*FILTRO_ANO_LETIVO_TURMAS_ATRIBUIDAS_UE*/": (
+                    f"AND AnoLetivo = {ano}"
+                ),
+                "/*FILTRO_ANO_LETIVO_DISCIPLINAS_TURMAS_ATRIBUIDAS_UE*/": (
+                    f"AND tau.AnoLetivo = {ano}"
+                ),
+            }
+        for marcador, filtro in filtros.items():
+            sql = sql.replace(marcador, filtro)
+        return sql
 
     def popular_professores(self) -> int:
         """Popula a tabela Professor."""
@@ -372,7 +465,7 @@ class EtlProfessoresService:
             for chunk in self.eol.iter_query(SQL_CARGOS_BASE, _params_cargo()):
                 out_objs: list[CargoBaseServidorOut] = proc.processar(
                     chunk,
-                    lambda r: CargoBaseServidorIn(*r).to_domain(),
+                    lambda r: _cargo_base_in(r).to_domain(),
                 )
                 total += _upsert_incremental(
                     CargoBaseServidor,
@@ -498,11 +591,12 @@ class EtlProfessoresService:
         total = 0
         with ThreadPoolProcessor(prefixo_log="PROF:atribuicao_aula") as proc:
             for chunk in self.eol.iter_query(
-                SQL_ATRIBUICOES_AULA, _params_cargo()
+                self._sql_com_filtro_ano_letivo(SQL_ATRIBUICOES_AULA),
+                _params_cargo(),
             ):
                 out_objs: list[AtribuicaoAulaOut] = proc.processar(
                     chunk,
-                    lambda r: AtribuicaoAulaIn(*r).to_domain(),
+                    lambda r: _atribuicao_aula_in(r).to_domain(),
                 )
                 total += _upsert_incremental(
                     AtribuicaoAula,
@@ -512,15 +606,32 @@ class EtlProfessoresService:
                         "cargo_base_id",
                         "codigo_unidade_educacao",
                         "codigo_turma_escola",
+                        "descricao_turma_escola",
                         "codigo_turma_escola_grade_programa",
                         "codigo_grade",
                         "codigo_componente_curricular",
+                        "descricao_componente_curricular",
                         "codigo_serie_grade",
+                        "ano_escolar",
                         "ano_atribuicao",
+                        "codigo_etapa_ensino",
                         "dt_atribuicao_aula",
                         "dt_disponibilizacao_aulas",
+                        "dt_inicio_turma",
+                        "dt_fim_turma",
                         "codigo_motivo_disponibilizacao",
                         "dt_cancelamento",
+                        "codigo_dre",
+                        "nome_dre",
+                        "abreviacao_dre",
+                        "nome_unidade_educacional",
+                        "codigo_tipo_escola",
+                        "codigo_tipo_turma",
+                        "modalidade",
+                        "codigo_modalidade",
+                        "semestre",
+                        "duracao_turno",
+                        "tipo_turno",
                     ],
                 )
         return total
@@ -531,10 +642,12 @@ class EtlProfessoresService:
         with ThreadPoolProcessor(
             prefixo_log="PROF:atribuicao_externo"
         ) as proc:
-            for chunk in self.eol.iter_query(SQL_ATRIBUICOES_EXTERNO):
+            for chunk in self.eol.iter_query(
+                self._sql_com_filtro_ano_letivo(SQL_ATRIBUICOES_EXTERNO)
+            ):
                 out_objs: list[AtribuicaoExternoOut] = proc.processar(
                     chunk,
-                    lambda r: AtribuicaoExternoIn(*r).to_domain(),
+                    lambda r: _atribuicao_externo_in(r).to_domain(),
                 )
                 total += _upsert_incremental(
                     AtribuicaoExterno,
@@ -544,13 +657,19 @@ class EtlProfessoresService:
                         "contrato_externo_id",
                         "codigo_unidade_educacao",
                         "codigo_turma_escola",
+                        "descricao_turma_escola",
                         "codigo_grade",
                         "codigo_componente_curricular",
+                        "descricao_componente_curricular",
                         "codigo_serie_grade",
                         "codigo_turma_escola_grade_programa",
+                        "ano_escolar",
                         "ano_atribuicao",
+                        "codigo_etapa_ensino",
                         "dt_atribuicao",
                         "dt_disponibilizacao",
+                        "dt_inicio_turma",
+                        "dt_fim_turma",
                         "codigo_motivo_disponibilizacao_externo",
                         "dt_cancelamento",
                     ],
@@ -610,6 +729,40 @@ class EtlProfessoresService:
                 )
         return total
 
+    def popular_turmas_atribuidas_ue(self) -> int:
+        """Popula turmas atribuídas por vínculo do funcionário com UE."""
+        return _full_refresh_por_lote(
+            TurmaAtribuidaUe,
+            (
+                [
+                    TurmaAtribuidaUe(**_row_to_turma_atribuida_ue(row))
+                    for row in chunk
+                ]
+                for chunk in self.eol.iter_query(
+                    self._sql_com_filtro_ano_letivo(SQL_TURMAS_ATRIBUIDAS_UE)
+                )
+            ),
+        )
+
+    def popular_disciplinas_turmas_atribuidas_ue(self) -> int:
+        """Popula disciplinas atribuídas por vínculo do funcionário com UE."""
+        return _full_refresh_por_lote(
+            DisciplinaTurmaAtribuidaUe,
+            (
+                [
+                    DisciplinaTurmaAtribuidaUe(
+                        **_row_to_disciplina_turma_atribuida_ue(row)
+                    )
+                    for row in chunk
+                ]
+                for chunk in self.eol.iter_query(
+                    self._sql_com_filtro_ano_letivo(
+                        SQL_DISCIPLINAS_TURMAS_ATRIBUIDAS_UE
+                    )
+                )
+            ),
+        )
+
     def _fase_1(
         self,
         executar_tabela: Callable[[str, Callable[[], int]], None],
@@ -664,6 +817,13 @@ class EtlProfessoresService:
         logger.info("[ETL PROF] === Fase 4: Funcionarios ===")
         executar_tabela(
             "funcionario_unidade_educacional", self.popular_funcionarios
+        )
+        executar_tabela(
+            "turma_atribuida_ue", self.popular_turmas_atribuidas_ue
+        )
+        executar_tabela(
+            "disciplina_turma_atribuida_ue",
+            self.popular_disciplinas_turmas_atribuidas_ue,
         )
         self.ultima_fase_concluida = 4
         logger.info("[ETL PROF] Fase 4 concluida.")

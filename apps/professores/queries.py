@@ -133,24 +133,193 @@ SQL_CONTRATOS_EXTERNOS = """
     FROM contrato_externo
 """
 
+SQL_TURMAS_ATRIBUIDAS_UE = """
+    SELECT
+        CodEscola,
+        CodTurma,
+        AnoLetivo,
+        Modalidade,
+        Semestre,
+        CodModalidade,
+        CodDre,
+        Dre,
+        DreAbrev,
+        UE,
+        UEAbrev,
+        NomeTurma,
+        Ano,
+        TipoUE,
+        CodTipoUE,
+        CodTipoEscola,
+        TipoEscola,
+        DuracaoTurno,
+        TipoTurno,
+        usuario_rf,
+        cargo,
+        cargo_sobreposto
+    FROM turmas_atribuidas_ue WITH (NOLOCK)
+    WHERE 1 = 1
+      /*FILTRO_ANO_LETIVO_TURMAS_ATRIBUIDAS_UE*/
+"""
+
+SQL_DISCIPLINAS_TURMAS_ATRIBUIDAS_UE = """
+    SELECT DISTINCT
+        tau.CodEscola AS codigo_escola,
+        tau.CodTurma AS codigo_turma,
+        tau.AnoLetivo AS ano_letivo,
+        tau.usuario_rf,
+        componente_curricular.cd_componente_curricular
+            AS codigo_componente_curricular,
+        componente_curricular.dc_componente_curricular
+            AS descricao_componente_curricular,
+        CAST(NULL AS int) AS codigo_componente_curricular_pai,
+        CAST(0 AS bit) AS regencia,
+        CAST(NULL AS int) AS codigo_componente_territorio_saber,
+        CAST(0 AS bit) AS territorio_saber,
+        tau.CodDre AS codigo_dre,
+        tau.CodTipoEscola AS codigo_tipo_escola,
+        tau.TipoEscola AS tipo_escola,
+        tau.cargo,
+        tau.cargo_sobreposto
+    FROM turmas_atribuidas_ue tau WITH (NOLOCK)
+    INNER JOIN turma_escola
+        ON turma_escola.cd_turma_escola = tau.CodTurma
+    INNER JOIN escola esc
+        ON turma_escola.cd_escola = esc.cd_escola
+    INNER JOIN serie_turma_escola
+        ON serie_turma_escola.cd_turma_escola =
+            turma_escola.cd_turma_escola
+    INNER JOIN serie_turma_grade
+        ON serie_turma_grade.cd_turma_escola =
+            serie_turma_escola.cd_turma_escola
+    INNER JOIN escola_grade
+        ON serie_turma_grade.cd_escola_grade =
+            escola_grade.cd_escola_grade
+    INNER JOIN grade
+        ON escola_grade.cd_grade = grade.cd_grade
+    INNER JOIN serie_ensino
+        ON grade.cd_serie_ensino = serie_ensino.cd_serie_ensino
+    INNER JOIN etapa_ensino
+        ON serie_ensino.cd_etapa_ensino =
+            etapa_ensino.cd_etapa_ensino
+    INNER JOIN atribuicao_aula
+        ON grade.cd_grade = atribuicao_aula.cd_grade
+        AND atribuicao_aula.an_atribuicao = turma_escola.an_letivo
+        AND atribuicao_aula.cd_serie_grade =
+            serie_turma_grade.cd_serie_grade
+        AND atribuicao_aula.cd_grade = grade.cd_grade
+    INNER JOIN componente_curricular
+        ON atribuicao_aula.cd_componente_curricular =
+            componente_curricular.cd_componente_curricular
+    WHERE atribuicao_aula.dt_cancelamento IS NULL
+      AND componente_curricular.dt_cancelamento IS NULL
+      AND esc.tp_escola IN (1, 3, 4, 16)
+      AND etapa_ensino.cd_etapa_ensino IN (
+          2, 3, 7, 11, 4, 5, 12, 13, 6, 7, 8, 9, 17, 14
+      )
+      AND turma_escola.st_turma_escola IN ('A', 'O', 'C')
+      /*FILTRO_ANO_LETIVO_DISCIPLINAS_TURMAS_ATRIBUIDAS_UE*/
+
+    UNION
+
+    SELECT DISTINCT
+        tau.CodEscola AS codigo_escola,
+        tau.CodTurma AS codigo_turma,
+        tau.AnoLetivo AS ano_letivo,
+        tau.usuario_rf,
+        componente_curricular.cd_componente_curricular
+            AS codigo_componente_curricular,
+        componente_curricular.dc_componente_curricular
+            AS descricao_componente_curricular,
+        CAST(NULL AS int) AS codigo_componente_curricular_pai,
+        CAST(0 AS bit) AS regencia,
+        CAST(NULL AS int) AS codigo_componente_territorio_saber,
+        CAST(0 AS bit) AS territorio_saber,
+        tau.CodDre AS codigo_dre,
+        tau.CodTipoEscola AS codigo_tipo_escola,
+        tau.TipoEscola AS tipo_escola,
+        tau.cargo,
+        tau.cargo_sobreposto
+    FROM turmas_atribuidas_ue tau WITH (NOLOCK)
+    INNER JOIN turma_escola
+        ON turma_escola.cd_turma_escola = tau.CodTurma
+    INNER JOIN turma_escola_grade_programa
+        ON turma_escola_grade_programa.cd_turma_escola =
+            turma_escola.cd_turma_escola
+    INNER JOIN escola esc
+        ON turma_escola.cd_escola = esc.cd_escola
+    INNER JOIN escola_grade
+        ON escola_grade.cd_escola = esc.cd_escola
+        AND turma_escola_grade_programa.cd_escola_grade =
+            escola_grade.cd_escola_grade
+    INNER JOIN grade
+        ON grade.cd_grade = escola_grade.cd_grade
+    INNER JOIN grade_componente_curricular
+        ON grade.cd_grade = grade_componente_curricular.cd_grade
+    INNER JOIN componente_curricular
+        ON grade_componente_curricular.cd_componente_curricular =
+            componente_curricular.cd_componente_curricular
+    WHERE esc.tp_escola IN (1, 3, 4, 16)
+      AND turma_escola.st_turma_escola IN ('O', 'A', 'C')
+      AND turma_escola.cd_tipo_turma IN (2, 3, 5)
+      /*FILTRO_ANO_LETIVO_DISCIPLINAS_TURMAS_ATRIBUIDAS_UE*/
+"""
+
+
 SQL_ATRIBUICOES_AULA = f"""
     SELECT
         aa.cd_atribuicao_aula,
         aa.cd_cargo_base_servidor,
         aa.cd_unidade_educacao,
         COALESCE(stg.cd_turma_escola, tegp.cd_turma_escola) AS cd_turma_escola,
+        te.dc_turma_escola,
         aa.cd_turma_escola_grade_programa,
         aa.cd_grade,
         aa.cd_componente_curricular,
+        cc.dc_componente_curricular,
         aa.cd_serie_grade,
+        se.sg_resumida_serie as ano_escolar,
         aa.an_atribuicao,
+        se.cd_etapa_ensino,
         aa.dt_atribuicao_aula,
+        te.dt_inicio_turma,
+        te.dt_fim_turma,
         COALESCE(
             aa.dt_disponibilizacao_aulas,
             te.dt_fim_turma
         ) AS dt_disponibilizacao_aulas,
         aa.cd_motivo_disponibilizacao,
-        aa.dt_cancelamento
+        aa.dt_cancelamento,
+        dre.cd_unidade_educacao AS codigo_dre,
+        dre.nm_unidade_educacao AS nome_dre,
+        dre.nm_exibicao_unidade AS abreviacao_dre,
+        ue.nm_unidade_educacao AS nome_unidade_educacional,
+        esc.tp_escola AS codigo_tipo_escola,
+        te.cd_tipo_turma AS codigo_tipo_turma,
+        CASE
+            WHEN te.cd_tipo_turma IN (2, 3, 4, 5) THEN 'Fundamental'
+            WHEN etapa.cd_etapa_ensino IN (2, 3, 7, 11) THEN 'EJA'
+            WHEN etapa.cd_etapa_ensino IN (4, 5, 12, 13)
+                THEN 'Fundamental'
+            WHEN etapa.cd_etapa_ensino IN (6, 7, 8, 9, 14, 17)
+                THEN 'Médio'
+        END AS modalidade,
+        CASE
+            WHEN te.cd_tipo_turma IN (2, 3, 4, 5) THEN 5
+            WHEN etapa.cd_etapa_ensino IN (2, 3, 7, 11) THEN 3
+            WHEN etapa.cd_etapa_ensino IN (4, 5, 12, 13) THEN 5
+            WHEN etapa.cd_etapa_ensino IN (6, 7, 8, 9, 14, 17) THEN 6
+        END AS codigo_modalidade,
+        CASE
+            WHEN etapa.cd_etapa_ensino IN (2, 3, 7, 11)
+            THEN CASE
+                WHEN DATEPART(MONTH, te.dt_inicio_turma) > 6 THEN 2
+                ELSE 1
+            END
+            ELSE 0
+        END AS semestre,
+        dtt.qt_hora_duracao AS duracao_turno,
+        tt.cd_tipo_turno AS tipo_turno
     FROM atribuicao_aula aa
     INNER JOIN v_cargo_base_cotic cbs
         ON cbs.cd_cargo_base_servidor = aa.cd_cargo_base_servidor
@@ -160,8 +329,27 @@ SQL_ATRIBUICOES_AULA = f"""
         ON tegp.cd_turma_escola_grade_programa
             = aa.cd_turma_escola_grade_programa
     LEFT JOIN turma_escola te
-        ON te.cd_turma_escola = tegp.cd_turma_escola
+        ON te.cd_turma_escola = COALESCE(stg.cd_turma_escola,
+        tegp.cd_turma_escola)
+    LEFT JOIN componente_curricular cc
+        ON cc.cd_componente_curricular = aa.cd_componente_curricular
+    LEFT JOIN serie_ensino se
+        ON se.cd_serie_ensino = stg.cd_serie_ensino
+    LEFT JOIN etapa_ensino etapa
+        ON etapa.cd_etapa_ensino = se.cd_etapa_ensino
+    LEFT JOIN v_cadastro_unidade_educacao ue
+        ON ue.cd_unidade_educacao = te.cd_escola
+    LEFT JOIN v_cadastro_unidade_educacao dre
+        ON dre.cd_unidade_educacao = ue.cd_unidade_administrativa_referencia
+    LEFT JOIN escola esc
+        ON esc.cd_escola = te.cd_escola
+    LEFT JOIN tipo_turno tt
+        ON tt.cd_tipo_turno = te.cd_tipo_turno
+    LEFT JOIN duracao_tipo_turno dtt
+        ON dtt.cd_tipo_turno = tt.cd_tipo_turno
+       AND dtt.cd_duracao = te.cd_duracao
     WHERE cbs.cd_cargo IN ({_PLACEHOLDERS_CARGO})
+      /*FILTRO_ANO_LETIVO_ATRIBUICAO_AULA*/
 """
 
 SQL_ATRIBUICOES_EXTERNO = """
@@ -170,12 +358,18 @@ SQL_ATRIBUICOES_EXTERNO = """
         ae.cd_contrato_externo,
         ae.cd_unidade_educacao,
         COALESCE(stg.cd_turma_escola, tegp.cd_turma_escola) AS cd_turma_escola,
+        te.dc_turma_escola,
         ae.cd_grade,
         ae.cd_componente_curricular,
+        cc.dc_componente_curricular,
         ae.cd_serie_grade,
         ae.cd_turma_escola_grade_programa,
+        se.sg_resumida_serie as ano_escolar,
         ae.an_atribuicao,
+        se.cd_etapa_ensino,
         ae.dt_atribuicao,
+        te.dt_inicio_turma,
+        te.dt_fim_turma,
         COALESCE(
             ae.dt_disponibilizacao,
             te.dt_fim_turma
@@ -191,8 +385,14 @@ SQL_ATRIBUICOES_EXTERNO = """
         ON tegp.cd_turma_escola_grade_programa
             = ae.cd_turma_escola_grade_programa
     LEFT JOIN turma_escola te
-        ON te.cd_turma_escola = tegp.cd_turma_escola
+        ON te.cd_turma_escola = COALESCE(stg.cd_turma_escola,
+        tegp.cd_turma_escola)
+    LEFT JOIN componente_curricular cc
+        ON cc.cd_componente_curricular = ae.cd_componente_curricular
+	LEFT JOIN serie_ensino se
+		ON se.cd_serie_ensino = stg.cd_serie_ensino
     WHERE ce.dt_cancelamento IS NULL
+      /*FILTRO_ANO_LETIVO_ATRIBUICAO_EXTERNO*/
 """
 
 SQL_FUNCIONARIOS_UNIDADE_EDUCACIONAL = f"""
