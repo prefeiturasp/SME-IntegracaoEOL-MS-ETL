@@ -49,7 +49,7 @@ SQL_DRE = """
 SELECT DISTINCT
     ua.cd_unidade_administrativa AS codigo_dre
   , vcue.nm_unidade_educacao AS nome
-  , LEFT(vcue.nm_exibicao_unidade, 20) AS sigla
+    , LEFT(vcue.nm_exibicao_unidade, 100) AS sigla
   , ua.tp_unidade_administrativa AS tipo_unidade_adm
   , tua.dc_tipo_unidade_administrativa AS descricao_unidade_adm
 FROM unidade_administrativa ua
