@@ -589,7 +589,8 @@ SELECT DISTINCT
     esc.tp_escola                                                              AS TipoEscola,
     tur_prog_grade.cd_grade                                                    AS CodigoGradePrograma,
     tur_prog_grade.dc_grade                                                    AS DescricaoGradePrograma,
-    tur_prog_grade.cd_tipo_grade                                               AS TipoGradePrograma
+    tur_prog_grade.cd_tipo_grade                                               AS TipoGradePrograma,
+    tur.cd_tipo_periodicidade                                                  AS CodigoTipoPeriodicidade
 FROM turma_escola (NOLOCK) tur
 INNER JOIN escola (NOLOCK) esc
     ON esc.cd_escola = tur.cd_escola
