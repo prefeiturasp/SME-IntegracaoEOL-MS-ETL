@@ -143,6 +143,14 @@ Ranked AS (
             PARTITION BY cd_matricula
             ORDER BY prioridade
         ) AS rn
+      , MAX(prioridade) OVER (
+            PARTITION BY cd_matricula
+        ) AS tem_origem_historica
+      , MAX(CASE
+            WHEN prioridade = 1 THEN data_situacao_matricula_data_hora
+        END) OVER (
+            PARTITION BY cd_matricula
+        ) AS dt_situacao_historica
     FROM Combined
 )
 SELECT
@@ -155,6 +163,8 @@ SELECT
   , ano_letivo
   , codigo_situacao_matricula
   , origem_atual
+  , CAST(tem_origem_historica AS bit) AS origem_historica
+  , dt_situacao_historica AS data_situacao_matricula_historica
 FROM Ranked
 WHERE rn = 1
 """
