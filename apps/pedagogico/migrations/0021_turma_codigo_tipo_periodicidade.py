@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("pedagogico", "0018_remove_unique_agrupamento_api_eol"),
+        ("pedagogico", "0020_componenteturma_tipo_escola"),
     ]
 
     operations = [
