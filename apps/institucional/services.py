@@ -49,7 +49,7 @@ SQL_DRE = """
 SELECT DISTINCT
     ua.cd_unidade_administrativa AS codigo_dre
   , vcue.nm_unidade_educacao AS nome
-  , LEFT(vcue.nm_exibicao_unidade, 20) AS sigla
+    , LEFT(vcue.nm_exibicao_unidade, 100) AS sigla
   , ua.tp_unidade_administrativa AS tipo_unidade_adm
   , tua.dc_tipo_unidade_administrativa AS descricao_unidade_adm
 FROM unidade_administrativa ua
@@ -265,14 +265,14 @@ SELECT DISTINCT
         )
         AND NOT (
             COALESCE(
-                vuedg.tp_escola,
-                escola.tp_escola,
                 CASE
                     WHEN uadm_ue.tp_unidade_administrativa = 19
                     AND dre_vcue.nm_exibicao_unidade LIKE 'DRE %'
                     THEN 5
                     ELSE NULL
-                END
+                END,
+                vuedg.tp_escola,
+                escola.tp_escola
             ) = 11
             AND vuedg.tp_forma_ocupacao_predio = 3
             AND vuedg.tp_proprietario = 4
@@ -287,14 +287,14 @@ SELECT DISTINCT
         ELSE CAST(0 AS BIT)
     END AS organizacao_parceira
   , CASE WHEN COALESCE(
-             vuedg.tp_escola,
-             escola.tp_escola,
              CASE
                  WHEN uadm_ue.tp_unidade_administrativa = 19
                  AND dre_vcue.nm_exibicao_unidade LIKE 'DRE %'
                  THEN 5
                  ELSE NULL
-             END
+             END,
+             vuedg.tp_escola,
+             escola.tp_escola
          ) = 5
          THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT) END AS eh_ceu
   , vcue.dt_atualizacao_endereco AS data_atualizacao
@@ -322,15 +322,15 @@ SELECT DISTINCT
   , vuedg.sg_tipo_situacao_unidade AS status
   , vcue.cd_unidade_administrativa_referencia AS codigo_dre
   , te.tp_escola AS codigo_tipo_escola
-    , COALESCE(
-                vuedg.tp_escola,
-                escola.tp_escola,
-                CASE
-                        WHEN uadm_ue.tp_unidade_administrativa = 19
-                        AND dre_vcue.nm_exibicao_unidade LIKE 'DRE %'
-                        THEN 5
-                        ELSE NULL
-                END
+        , COALESCE(
+            CASE
+                WHEN uadm_ue.tp_unidade_administrativa = 19
+                AND dre_vcue.nm_exibicao_unidade LIKE 'DRE %'
+                THEN 5
+                ELSE NULL
+            END,
+            vuedg.tp_escola,
+            escola.tp_escola
         ) AS codigo_tp_equipamento
   , vcue.cd_sub_prefeitura AS codigo_sub_prefeitura
 FROM v_cadastro_unidade_educacao vcue
@@ -348,14 +348,14 @@ LEFT JOIN v_cadastro_unidade_educacao dre_vcue
     = vcue.cd_unidade_administrativa_referencia
 LEFT JOIN tipo_escola te
     ON te.tp_escola = COALESCE(
-        vuedg.tp_escola,
-        escola.tp_escola,
         CASE
             WHEN uadm_ue.tp_unidade_administrativa = 19
             AND dre_vcue.nm_exibicao_unidade LIKE 'DRE %'
             THEN 5
             ELSE NULL
-        END
+        END,
+        vuedg.tp_escola,
+        escola.tp_escola
     )
 LEFT JOIN tipo_unidade_educacao tpue
     ON tpue.tp_unidade_educacao = vcue.tp_unidade_educacao
