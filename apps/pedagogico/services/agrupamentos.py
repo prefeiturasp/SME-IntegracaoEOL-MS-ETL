@@ -26,10 +26,6 @@ AgrupamentoHistoricoKey = tuple[str, int, int, str]
 
 _AGRUPAMENTO_ID_INICIAL = 800_000
 
-# Códigos de Território do Saber que não representam território efetivo:
-# 0/None (sem território) e 1 (território não utilizado).
-TERRITORIO_SABER_NAO_UTILIZADO = 1
-
 
 def _normalizar_data_atribuicao(data_atribuicao: Any) -> Any:
     if hasattr(data_atribuicao, "date"):
@@ -218,130 +214,6 @@ def chave_agrupamento_persistido(
     )
 
 
-def _calcular_datas_agrupamento(
-    primeiro: AtribuicaoTerritorioSaberIn,
-    grupo_list: list[AtribuicaoTerritorioSaberIn],
-) -> tuple[datetime | None, datetime | None, datetime | None]:
-    """Resolve as datas de início, fim e fim de turma de um agrupamento.
-
-    Args:
-        primeiro: Primeira atribuição do grupo (fonte das datas base).
-        grupo_list: Todas as atribuições do grupo.
-
-    Returns:
-        Tupla (dt_inicio, dt_fim, dt_fim_turma); None quando ausente.
-    """
-    dt_inicio = (
-        make_aware(primeiro.data_atribuicao)
-        if primeiro.data_atribuicao
-        else None
-    )
-    dt_fim_raw = max(
-        (
-            row.data_disponibilizacao
-            for row in grupo_list
-            if row.data_disponibilizacao
-        ),
-        default=None,
-    )
-    dt_fim = make_aware(dt_fim_raw) if dt_fim_raw else None
-    dt_fim_turma = (
-        make_aware(primeiro.data_fim_turma)
-        if primeiro.data_fim_turma
-        else None
-    )
-    return dt_inicio, dt_fim, dt_fim_turma
-
-
-def _montar_agrupamento_do_grupo(
-    chave: tuple,
-    grupo_list: list[AtribuicaoTerritorioSaberIn],
-    transferido_em: Any,
-    agrupamentos_exatos: dict[AgrupamentoExatoKey, int],
-    agrupamentos_historicos: dict[AgrupamentoHistoricoKey, int],
-    ultimo_id_gerado: int,
-) -> (
-    tuple[
-        AgrupamentoAtribuicaoTerritorioSaber,
-        list[ComponenteCurricularAgrupamento],
-        int,
-    ]
-    | None
-):
-    """Monta o agrupamento e seus itens para um grupo de atribuições.
-
-    Args:
-        chave: Chave normalizada do grupo (território no índice 1).
-        grupo_list: Atribuições do grupo.
-        transferido_em: Carimbo de carga aplicado às entidades.
-        agrupamentos_exatos: Índice de agrupamentos por chave exata.
-        agrupamentos_historicos: Índice de agrupamentos por chave histórica.
-        ultimo_id_gerado: Maior id gerado até aqui.
-
-    Returns:
-        Tupla (agrupamento, itens, ultimo_id_gerado); None quando o grupo
-        não forma agrupamento (território não utilizado ou componente único).
-    """
-    # Agrupamento só existe para Território do Saber efetivamente utilizado;
-    # código 0/None (sem território) e 1 (não utilizado) permanecem como
-    # componentes individuais.
-    if chave[1] <= TERRITORIO_SABER_NAO_UTILIZADO:
-        return None
-    componentes = sorted(
-        {int(r.codigo_componente_curricular) for r in grupo_list}
-    )
-    if len(componentes) <= 1:
-        return None
-
-    primeiro = grupo_list[0]
-    cod_agrupamento, ultimo_id_gerado = resolver_cod_agrupamento(
-        primeiro.codigo_turma,
-        primeiro.codigo_territorio_saber,
-        primeiro.codigo_experiencia_pedagogica,
-        primeiro.rf_professor,
-        primeiro.data_atribuicao,
-        componentes,
-        agrupamentos_exatos,
-        agrupamentos_historicos,
-        ultimo_id_gerado,
-    )
-    dt_inicio, dt_fim, dt_fim_turma = _calcular_datas_agrupamento(
-        primeiro, grupo_list
-    )
-    agrupamento = AgrupamentoAtribuicaoTerritorioSaber(
-        cod_agrupamento=cod_agrupamento,
-        cod_territorio_saber=primeiro.codigo_territorio_saber,
-        cod_experiencia_pedagogica=primeiro.codigo_experiencia_pedagogica,
-        dt_inicio_atribuicao=dt_inicio,
-        ano_atribuicao=dt_inicio.year if dt_inicio else None,
-        dt_fim_atribuicao=dt_fim,
-        dt_fim_turma=dt_fim_turma,
-        rf_professor=primeiro.rf_professor,
-        cod_turma=str(primeiro.codigo_turma),
-        cod_componentes_curriculares=",".join(
-            str(codigo) for codigo in componentes
-        ),
-        ano_letivo=primeiro.ano_letivo,
-        cod_motivo_disponibilizacao=primeiro.codigo_motivo_disponibilizacao,
-        desc_territorio_saber=primeiro.descricao_territorio_saber,
-        desc_experiencia_pedagogica=primeiro.descricao_experiencia_pedagogica,
-        encerramento_atribuicao_agrupamento_atualizado=None,
-        transferido_em=transferido_em,
-    )
-    itens = [
-        ComponenteCurricularAgrupamento(
-            componente_codigo=codigo,
-            turma_codigo=str(primeiro.codigo_turma),
-            codigo_agrupamento=cod_agrupamento,
-            rf_professor=primeiro.rf_professor,
-            ano_letivo=primeiro.ano_letivo,
-            transferido_em=transferido_em,
-        )
-        for codigo in componentes
-    ]
-    return agrupamento, itens, ultimo_id_gerado
-
-
 def agrupar_atribuicoes_territorio_saber(
     rows: list[AtribuicaoTerritorioSaberIn],
     transferido_em: Any,
@@ -364,20 +236,87 @@ def agrupar_atribuicoes_territorio_saber(
             key=chave_grupo_atribuicao,
         )
     )
-    for chave, grupo in grupos:
-        resultado = _montar_agrupamento_do_grupo(
-            chave,
-            list(grupo),
-            transferido_em,
+    for _, grupo in grupos:
+        grupo_list = list(grupo)
+        componentes = sorted(
+            {int(r.codigo_componente_curricular) for r in grupo_list}
+        )
+        if len(componentes) <= 1:
+            continue
+
+        primeiro = grupo_list[0]
+        cod_agrupamento, ultimo_id_gerado = resolver_cod_agrupamento(
+            primeiro.codigo_turma,
+            primeiro.codigo_territorio_saber,
+            primeiro.codigo_experiencia_pedagogica,
+            primeiro.rf_professor,
+            primeiro.data_atribuicao,
+            componentes,
             agrupamentos_exatos,
             agrupamentos_historicos,
             ultimo_id_gerado,
         )
-        if resultado is None:
-            continue
-        agrupamento, novos_itens, ultimo_id_gerado = resultado
-        agrupamentos.append(agrupamento)
-        itens.extend(novos_itens)
+
+        dt_inicio = (
+            make_aware(primeiro.data_atribuicao)
+            if primeiro.data_atribuicao
+            else None
+        )
+        dt_fim_raw = max(
+            (
+                row.data_disponibilizacao
+                for row in grupo_list
+                if row.data_disponibilizacao
+            ),
+            default=None,
+        )
+        dt_fim = make_aware(dt_fim_raw) if dt_fim_raw else None
+        dt_fim_turma = (
+            make_aware(primeiro.data_fim_turma)
+            if primeiro.data_fim_turma
+            else None
+        )
+
+        agrupamentos.append(
+            AgrupamentoAtribuicaoTerritorioSaber(
+                cod_agrupamento=cod_agrupamento,
+                cod_territorio_saber=primeiro.codigo_territorio_saber,
+                cod_experiencia_pedagogica=(
+                    primeiro.codigo_experiencia_pedagogica
+                ),
+                dt_inicio_atribuicao=dt_inicio,
+                ano_atribuicao=dt_inicio.year if dt_inicio else None,
+                dt_fim_atribuicao=dt_fim,
+                dt_fim_turma=dt_fim_turma,
+                rf_professor=primeiro.rf_professor,
+                cod_turma=str(primeiro.codigo_turma),
+                cod_componentes_curriculares=",".join(
+                    str(codigo) for codigo in componentes
+                ),
+                ano_letivo=primeiro.ano_letivo,
+                cod_motivo_disponibilizacao=(
+                    primeiro.codigo_motivo_disponibilizacao
+                ),
+                desc_territorio_saber=primeiro.descricao_territorio_saber,
+                desc_experiencia_pedagogica=(
+                    primeiro.descricao_experiencia_pedagogica
+                ),
+                encerramento_atribuicao_agrupamento_atualizado=None,
+                transferido_em=transferido_em,
+            )
+        )
+
+        for codigo in componentes:
+            itens.append(
+                ComponenteCurricularAgrupamento(
+                    componente_codigo=codigo,
+                    turma_codigo=str(primeiro.codigo_turma),
+                    codigo_agrupamento=cod_agrupamento,
+                    rf_professor=primeiro.rf_professor,
+                    ano_letivo=primeiro.ano_letivo,
+                    transferido_em=transferido_em,
+                )
+            )
 
     agrupamentos = list(
         {
