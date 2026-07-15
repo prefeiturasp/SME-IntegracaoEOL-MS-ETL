@@ -181,7 +181,7 @@ SELECT DISTINCT
     te.cd_turma_escola                                                                  AS turma_codigo,
     cc.cd_componente_curricular                                                         AS componente_codigo,
     CASE
-        WHEN tgt.cd_componente_curricular IS NULL THEN NULL
+        WHEN ter_existe.cd_territorio_saber IS NULL THEN NULL
         WHEN cc.cd_componente_curricular IN (1214, 1215, 1216, 1217, 1218, 1219, 1220, 1221, 1222, 1223, 1519, 1520, 1521, 1522) THEN cc.cd_componente_curricular
         ELSE tgt.cd_componente_curricular
     END AS codigo_componente_territorio_saber,
@@ -200,7 +200,9 @@ INNER JOIN componente_curricular (NOLOCK) cc
     ON cc.cd_componente_curricular = gcc.cd_componente_curricular AND cc.dt_cancelamento IS NULL
 LEFT JOIN turma_grade_territorio_experiencia (NOLOCK) tgt
     ON tgt.cd_serie_grade = stg.cd_serie_grade
-   AND tgt.cd_componente_curricular = cc.cd_componente_curricular
+   AND tgt.cd_componente_curricular = cc.cd_componente_curricular.
+LEFT JOIN território_saber (NOLOCK) ter_existe
+    ON ter_existe.cd_territorio_saber = tgt.cd_territorio_saber
 LEFT JOIN território_saber (NOLOCK) ter
     ON ter.cd_territorio_saber = tgt.cd_territorio_saber
    AND tgt.cd_territorio_saber <> 1
