@@ -271,6 +271,7 @@ class EtlAlunosService(BaseEtlService):
                     "codigo_situacao_matricula",
                     "situacao_matricula",
                     "origem_atual",
+                    "presente_historico",
                 ),
                 unique_fields=("codigo_matricula",),
                 suporta_bulk_insert=False,

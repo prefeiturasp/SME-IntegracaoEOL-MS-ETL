@@ -143,6 +143,9 @@ Ranked AS (
             PARTITION BY cd_matricula
             ORDER BY prioridade
         ) AS rn
+      , MAX(prioridade) OVER (
+            PARTITION BY cd_matricula
+        ) AS max_prioridade
     FROM Combined
 )
 SELECT
@@ -155,6 +158,12 @@ SELECT
   , ano_letivo
   , codigo_situacao_matricula
   , origem_atual
+  -- A matricula pode existir nas fontes atual E historica ao mesmo tempo;
+  -- a linha materializada e a da fonte atual, mas a presenca na fonte
+  -- historica precisa ser preservada para os consumidores que so
+  -- consideram vinculos historicos de matriculas presentes nessa fonte.
+  , CAST(CASE WHEN max_prioridade = 1 THEN 1 ELSE 0 END AS bit)
+        AS presente_historico
 FROM Ranked
 WHERE rn = 1
 """

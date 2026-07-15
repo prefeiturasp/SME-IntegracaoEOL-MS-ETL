@@ -160,6 +160,10 @@ class Matricula(models.Model):
     codigo_situacao_matricula = models.SmallIntegerField()
     situacao_matricula = models.CharField(max_length=100)
     origem_atual = models.BooleanField(default=True)
+    # A matrícula pode existir nas fontes atual e histórica ao mesmo tempo;
+    # quando as duas existem, a linha materializada é a da fonte atual e
+    # esta flag preserva a presença na fonte histórica.
+    presente_historico = models.BooleanField(default=False)
 
     class Meta:
         app_label = "alunos"

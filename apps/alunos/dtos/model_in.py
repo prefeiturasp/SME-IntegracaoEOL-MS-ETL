@@ -166,6 +166,7 @@ class MatriculaIn:
     ano_letivo: int
     codigo_situacao_matricula: int
     origem_atual: bool
+    presente_historico: bool = False
 
     def to_domain(self) -> dict:
         from apps.alunos.enums import SituacaoMatricula
@@ -187,6 +188,7 @@ class MatriculaIn:
                 self.codigo_situacao_matricula
             ),
             "origem_atual": self.origem_atual,
+            "presente_historico": bool(self.presente_historico),
         }
 
 
