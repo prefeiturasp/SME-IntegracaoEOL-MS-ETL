@@ -26,6 +26,10 @@ AgrupamentoHistoricoKey = tuple[str, int, int, str]
 
 _AGRUPAMENTO_ID_INICIAL = 800_000
 
+# Códigos de Território do Saber que não representam território efetivo:
+# 0/None (sem território) e 1 (território não utilizado).
+TERRITORIO_SABER_NAO_UTILIZADO = 1
+
 
 def _normalizar_data_atribuicao(data_atribuicao: Any) -> Any:
     if hasattr(data_atribuicao, "date"):
@@ -236,8 +240,13 @@ def agrupar_atribuicoes_territorio_saber(
             key=chave_grupo_atribuicao,
         )
     )
-    for _, grupo in grupos:
+    for chave, grupo in grupos:
         grupo_list = list(grupo)
+        # Agrupamento só existe para Território do Saber efetivamente
+        # utilizado; código 0/None (sem território) e 1 (não utilizado)
+        # permanecem como componentes individuais.
+        if chave[1] <= TERRITORIO_SABER_NAO_UTILIZADO:
+            continue
         componentes = sorted(
             {int(r.codigo_componente_curricular) for r in grupo_list}
         )
