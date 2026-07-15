@@ -200,7 +200,7 @@ INNER JOIN componente_curricular (NOLOCK) cc
     ON cc.cd_componente_curricular = gcc.cd_componente_curricular AND cc.dt_cancelamento IS NULL
 LEFT JOIN turma_grade_territorio_experiencia (NOLOCK) tgt
     ON tgt.cd_serie_grade = stg.cd_serie_grade
-   AND tgt.cd_componente_curricular = cc.cd_componente_curricular.
+   AND tgt.cd_componente_curricular = cc.cd_componente_curricular
 LEFT JOIN território_saber (NOLOCK) ter_existe
     ON ter_existe.cd_territorio_saber = tgt.cd_territorio_saber
 LEFT JOIN território_saber (NOLOCK) ter
