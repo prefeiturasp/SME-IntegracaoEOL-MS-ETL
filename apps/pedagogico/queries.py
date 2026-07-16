@@ -175,11 +175,16 @@ WITH cte_territorio AS (
         ON ter.cd_territorio_saber = tgt.cd_territorio_saber
     INNER JOIN tipo_experiencia_pedagogica (NOLOCK) exp
         ON exp.cd_experiencia_pedagogica = tgt.cd_experiencia_pedagogica
+    WHERE tgt.cd_territorio_saber <> 1
 )
 SELECT DISTINCT
     te.cd_turma_escola                                                                  AS turma_codigo,
     cc.cd_componente_curricular                                                         AS componente_codigo,
-    CASE WHEN cc.cd_componente_curricular IN (1214, 1215, 1216, 1217, 1218, 1219, 1220, 1221, 1222, 1223, 1519, 1520, 1521, 1522) THEN cc.cd_componente_curricular ELSE tgt.cd_componente_curricular END AS codigo_componente_territorio_saber,
+    CASE
+        WHEN ter_existe.cd_territorio_saber IS NULL THEN NULL
+        WHEN cc.cd_componente_curricular IN (1214, 1215, 1216, 1217, 1218, 1219, 1220, 1221, 1222, 1223, 1519, 1520, 1521, 1522) THEN cc.cd_componente_curricular
+        ELSE tgt.cd_componente_curricular
+    END AS codigo_componente_territorio_saber,
     ter.dc_territorio_saber                                                             AS desc_territorio_saber,
     exp.dc_experiencia_pedagogica                                                       AS desc_experiencia_pedagogica,
     esc.tp_escola                                                                        AS tipo_escola
@@ -196,10 +201,14 @@ INNER JOIN componente_curricular (NOLOCK) cc
 LEFT JOIN turma_grade_territorio_experiencia (NOLOCK) tgt
     ON tgt.cd_serie_grade = stg.cd_serie_grade
    AND tgt.cd_componente_curricular = cc.cd_componente_curricular
+LEFT JOIN território_saber (NOLOCK) ter_existe
+    ON ter_existe.cd_territorio_saber = tgt.cd_territorio_saber
 LEFT JOIN território_saber (NOLOCK) ter
     ON ter.cd_territorio_saber = tgt.cd_territorio_saber
+   AND tgt.cd_territorio_saber <> 1
 LEFT JOIN tipo_experiencia_pedagogica (NOLOCK) exp
     ON exp.cd_experiencia_pedagogica = tgt.cd_experiencia_pedagogica
+   AND tgt.cd_territorio_saber <> 1
 WHERE te.an_letivo = ?
   AND te.st_turma_escola IN ('O', 'A', 'C', 'E')
 UNION ALL
@@ -207,13 +216,18 @@ UNION ALL
 SELECT DISTINCT
     te.cd_turma_escola,
     cc.cd_componente_curricular,
-    CASE WHEN cc.cd_componente_curricular IN (1214, 1215, 1216, 1217, 1218, 1219, 1220, 1221, 1222, 1223, 1519, 1520, 1521, 1522) THEN cc.cd_componente_curricular ELSE tgt.cd_componente_curricular END,
+    CASE
+        WHEN tgt.cd_componente_curricular IS NULL THEN NULL
+        WHEN cc.cd_componente_curricular IN (1214, 1215, 1216, 1217, 1218, 1219, 1220, 1221, 1222, 1223, 1519, 1520, 1521, 1522) THEN cc.cd_componente_curricular
+        ELSE tgt.cd_componente_curricular
+    END,
     tgt.dc_territorio_saber,
     tgt.dc_experiencia_pedagogica,
     esc.tp_escola                                                                        AS tipo_escola
 FROM turma_escola (NOLOCK) te
 INNER JOIN escola (NOLOCK) esc ON esc.cd_escola = te.cd_escola
-INNER JOIN turma_escola_grade_programa (NOLOCK) tegp ON tegp.cd_turma_escola = te.cd_turma_escola
+INNER JOIN turma_escola_grade_programa (NOLOCK) tegp
+    ON tegp.cd_turma_escola = te.cd_turma_escola AND tegp.dt_fim IS NULL
 INNER JOIN escola_grade (NOLOCK) teg    ON teg.cd_escola_grade = tegp.cd_escola_grade
 INNER JOIN grade (NOLOCK) pg            ON pg.cd_grade = teg.cd_grade
 INNER JOIN grade_componente_curricular (NOLOCK) pgcc ON pgcc.cd_grade = teg.cd_grade
