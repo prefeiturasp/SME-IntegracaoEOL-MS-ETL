@@ -143,6 +143,14 @@ Ranked AS (
             PARTITION BY cd_matricula
             ORDER BY prioridade
         ) AS rn
+      , MAX(prioridade) OVER (
+            PARTITION BY cd_matricula
+        ) AS tem_origem_historica
+      , MAX(CASE
+            WHEN prioridade = 1 THEN data_situacao_matricula_data_hora
+        END) OVER (
+            PARTITION BY cd_matricula
+        ) AS dt_situacao_historica
     FROM Combined
 )
 SELECT
@@ -155,6 +163,8 @@ SELECT
   , ano_letivo
   , codigo_situacao_matricula
   , origem_atual
+  , CAST(tem_origem_historica AS bit) AS origem_historica
+  , dt_situacao_historica AS data_situacao_matricula_historica
 FROM Ranked
 WHERE rn = 1
 """
@@ -413,7 +423,10 @@ SELECT aluno.cd_aluno                        codigo_aluno,
        etapa_ensino.dc_etapa_ensino AS descricao_etapa_ensino,
        ciclo_ensino.dc_ciclo_ensino AS descricao_ciclo_ensino,
        serie_ensino.sg_resumida_serie AS serie_resumida,
-       etapa_ensino.cd_etapa_ensino as codigo_modalidade_turma
+       etapa_ensino.cd_etapa_ensino as codigo_modalidade_turma,
+       mte.dt_situacao_aluno AS data_situacao_matricula_data_hora,
+       responsavel.dt_fim AS data_fim_vinculo_responsavel,
+       aluno.cd_tipo_sigilo AS tipo_sigilo
 FROM   v_aluno_cotic aluno
        INNER JOIN responsavel_aluno responsavel
                ON aluno.cd_aluno = responsavel.cd_aluno

@@ -157,11 +157,11 @@ class UnidadeEducacionalIn:
             "codigo_inep": _int(self.codigo_inep),
             "status": strip_str(self.status),
             "dre_id": str(self.codigo_dre) if self.codigo_dre else None,
-            "tipo_escola_id": _int(self.codigo_tipo_escola),
+            "tipo_escola_id": _int(self.codigo_tipo_escola) or None,
             "codigo_tp_equipamento": _int(self.codigo_tp_equipamento),
             "codigo_tipo_unidade_educacao": _int(
                 self.codigo_tipo_unidade_educacao
             ),
-            "subprefeitura_id": _int(self.codigo_sub_prefeitura),
+            "subprefeitura_id": _int(self.codigo_sub_prefeitura) or None,
             "codigo_ue_integracao": self.codigo_ue_integracao,
         }

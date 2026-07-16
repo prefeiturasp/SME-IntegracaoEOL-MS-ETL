@@ -264,6 +264,7 @@ def _turma_in_completa(**overrides: object) -> TurmaIn:
         "codigo_grade_programa": 42,
         "descricao_grade_programa": " Programa Mais Educação ",
         "tipo_grade_programa": 7,
+        "codigo_tipo_periodicidade": 3,
     }
     defaults.update(overrides)
     return TurmaIn(**defaults)
@@ -391,7 +392,7 @@ class TurmaInTest(SimpleTestCase):
         self.assertEqual(data["descricao_grade_programa"], "NAO INFORMADA")
 
     def test_ordem_posicional_alinha_com_select(self) -> None:
-        """As 4 últimas colunas do SELECT mapeiam os campos corretos."""
+        """As últimas colunas do SELECT mapeiam os campos corretos."""
         row = (
             123456,
             2025,
@@ -421,6 +422,7 @@ class TurmaInTest(SimpleTestCase):
             42,
             " Programa Mais Educação ",
             9,
+            3,
         )
 
         dto = TurmaIn(*row)
@@ -432,3 +434,4 @@ class TurmaInTest(SimpleTestCase):
             data["descricao_grade_programa"], "Programa Mais Educação"
         )
         self.assertEqual(data["tipo_grade_programa"], 9)
+        self.assertEqual(data["codigo_tipo_periodicidade"], 3)

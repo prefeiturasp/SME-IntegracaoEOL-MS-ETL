@@ -256,6 +256,8 @@ class MatriculaInTest(SimpleTestCase):
             ano_letivo=2023,
             codigo_situacao_matricula=1,
             origem_atual=True,
+            origem_historica=False,
+            data_situacao_matricula_historica=None,
         )
         data = dto.to_domain()
         self.assertEqual(data["codigo_matricula"], 1000)
@@ -277,6 +279,8 @@ class MatriculaInTest(SimpleTestCase):
             ano_letivo=2023,
             codigo_situacao_matricula=99,
             origem_atual=False,
+            origem_historica=True,
+            data_situacao_matricula_historica=None,
         )
         data = dto.to_domain()
         self.assertEqual(data["codigo_dre"], "DRE02")

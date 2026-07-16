@@ -166,6 +166,8 @@ class MatriculaIn:
     ano_letivo: int
     codigo_situacao_matricula: int
     origem_atual: bool
+    origem_historica: bool
+    data_situacao_matricula_historica: datetime | None
 
     def to_domain(self) -> dict:
         from apps.alunos.enums import SituacaoMatricula
@@ -187,6 +189,10 @@ class MatriculaIn:
                 self.codigo_situacao_matricula
             ),
             "origem_atual": self.origem_atual,
+            "origem_historica": bool(self.origem_historica),
+            "data_situacao_matricula_historica": aware_or_none(
+                self.data_situacao_matricula_historica
+            ),
         }
 
 
@@ -327,6 +333,9 @@ class DadosAlunoAcompanhamentoEscolarIn:
     descricao_ciclo_ensino: str | None
     serie_resumida: str | None
     codigo_modalidade_turma: int | None
+    data_situacao_matricula_data_hora: datetime | None = None
+    data_fim_vinculo_responsavel: datetime | None = None
+    tipo_sigilo: int | None = None
 
     def to_domain(self) -> dict:
         _texto_nao_informado = "NÃO INFORMADO"
@@ -363,4 +372,11 @@ class DadosAlunoAcompanhamentoEscolarIn:
             "descricao_ciclo_ensino": strip_str(self.descricao_ciclo_ensino),
             "serie_resumida": strip_str(self.serie_resumida),
             "codigo_modalidade_turma": self.codigo_modalidade_turma,
+            "data_situacao_matricula_data_hora": aware_or_none(
+                self.data_situacao_matricula_data_hora
+            ),
+            "data_fim_vinculo_responsavel": aware_or_none(
+                self.data_fim_vinculo_responsavel
+            ),
+            "tipo_sigilo": self.tipo_sigilo,
         }

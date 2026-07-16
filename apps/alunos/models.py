@@ -160,6 +160,11 @@ class Matricula(models.Model):
     codigo_situacao_matricula = models.SmallIntegerField()
     situacao_matricula = models.CharField(max_length=100)
     origem_atual = models.BooleanField(default=True)
+    origem_historica = models.BooleanField(default=False)
+    data_situacao_matricula_historica = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
 
     class Meta:
         app_label = "alunos"
@@ -299,6 +304,7 @@ class MatriculaComponenteCurricularAnoLetivo(models.Model):
                 "modalidade",
                 "componente_curricular_id",
                 "ano",
+                "turma",
             )
         ]
 
@@ -344,6 +350,15 @@ class DadosAlunoAcompanhamentoEscolar(models.Model):
     )
     serie_resumida = models.CharField(max_length=20, null=True, blank=True)
     codigo_modalidade_turma = models.SmallIntegerField(null=True, blank=True)
+    data_situacao_matricula_data_hora = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+    data_fim_vinculo_responsavel = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+    tipo_sigilo = models.SmallIntegerField(null=True, blank=True)
 
     class Meta:
         app_label = "alunos"
