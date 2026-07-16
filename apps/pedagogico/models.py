@@ -38,6 +38,7 @@ class ComponenteTurma(ModeloBase):
         null=True,
         blank=True,
     )
+    tipo_escola = models.CharField(max_length=10, null=True, blank=True)
 
     class Meta:
         db_table = "componente_turma"
@@ -102,6 +103,11 @@ class AtribuicaoComponente(ModeloBase):
                     dt_cancelamento__isnull=True,
                     dt_disponibilizacao__isnull=True,
                 ),
+            ),
+            models.Index(
+                fields=["professor", "ano_letivo", "componente_codigo"],
+                name="idx_ac_prof_ano_comp_vig",
+                condition=models.Q(dt_cancelamento__isnull=True),
             ),
             models.Index(
                 fields=[
@@ -405,6 +411,46 @@ class Turma(ModeloBase):
 
     def __str__(self) -> str:
         return f"{self.codigo} - {self.nome_turma}"
+
+
+class TurmaAtribuidaDreUe(ModeloBase):
+    """Turma consolidada por DRE e UE."""
+
+    codigo_escola = models.CharField(max_length=6)
+    codigo_turma = models.BigIntegerField()
+    ano_letivo = models.IntegerField()
+    modalidade = models.CharField(max_length=15, null=True, blank=True)
+    semestre = models.IntegerField(null=True, blank=True)
+    codigo_modalidade = models.IntegerField(null=True, blank=True)
+    codigo_dre = models.CharField(max_length=6)
+    dre = models.CharField(max_length=60, null=True, blank=True)
+    dre_abreviacao = models.CharField(max_length=60, null=True, blank=True)
+    ue = models.CharField(max_length=60, null=True, blank=True)
+    ue_abreviacao = models.CharField(max_length=60, null=True, blank=True)
+    nome_turma = models.CharField(max_length=15, null=True, blank=True)
+    ano = models.CharField(max_length=18, null=True, blank=True)
+    tipo_ue = models.CharField(max_length=25, null=True, blank=True)
+    codigo_tipo_ue = models.IntegerField(null=True, blank=True)
+    codigo_tipo_escola = models.IntegerField(null=True, blank=True)
+    tipo_escola = models.CharField(max_length=12, null=True, blank=True)
+    duracao_turno = models.IntegerField(null=True, blank=True)
+    tipo_turno = models.IntegerField(null=True, blank=True)
+
+    class Meta:
+        db_table = "turma_atribuida_dre_ue"
+        verbose_name = "turma atribuída DRE UE"
+        verbose_name_plural = "turmas atribuídas DRE UE"
+        indexes = [
+            models.Index(
+                fields=["codigo_escola"], name="idx_tadu_codigo_escola"
+            ),
+            models.Index(fields=["codigo_dre"], name="idx_tadu_codigo_dre"),
+            models.Index(fields=["ano_letivo"], name="idx_tadu_ano_letivo"),
+            models.Index(fields=["codigo_turma"], name="idx_tadu_turma"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.codigo_turma} - {self.codigo_escola}"
 
 
 class TurmaItinerarioEnsinoMedio(ModeloBase):

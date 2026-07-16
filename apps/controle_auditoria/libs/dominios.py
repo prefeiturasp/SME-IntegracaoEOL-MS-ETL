@@ -9,7 +9,7 @@ COMANDOS_POR_DOMINIO: dict[str, str] = {
 }
 
 DOMINIOS_VALIDOS = [*COMANDOS_POR_DOMINIO.keys()]
-DOMINIOS_COM_ANO_LETIVO = frozenset({"pedagogico"})
+DOMINIOS_COM_ANO_LETIVO = frozenset({"pedagogico", "professores"})
 DOMINIOS_COM_ANOS_LETIVOS = frozenset({"alunos"})
 DOMINIOS_COM_FASES = frozenset({"alunos", "pedagogico"})
 
@@ -24,8 +24,8 @@ def validar_parametros_dominio(
 
     Args:
         dominio: Nome do domínio ETL a executar.
-        ano_letivo: Filtro de ano letivo; aceito apenas pelo
-            domínio pedagógico.
+        ano_letivo: Filtro de ano letivo; aceito pelos domínios
+            compatíveis.
         fases: Fases a executar; aceito pelos domínios alunos e pedagógico.
         anos_letivos: Lista de anos letivos; aceita apenas pelo domínio alunos.
 
