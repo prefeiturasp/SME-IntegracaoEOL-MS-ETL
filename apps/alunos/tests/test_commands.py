@@ -25,7 +25,7 @@ class EtlAlunosCommandTest(TestCase):
         """Valida configuração básica do comando."""
         cmd = Command()
         self.assertEqual(cmd.dominio, "alunos")
-        self.assertEqual(cmd.fase_final, 9)
+        self.assertEqual(cmd.fase_final, 11)
         self.assertEqual(cmd.get_modo_escrita("aluno"), "upsert")
         self.assertEqual(cmd.get_modo_escrita("unknown"), "full_refresh")
 
@@ -42,6 +42,12 @@ class EtlAlunosCommandTest(TestCase):
         self.assertEqual(
             cmd.get_modo_escrita("dados_aluno_acompanhamento_escolar"),
             "upsert",
+        )
+        self.assertEqual(
+            cmd.get_modo_escrita("responsavel_aluno_turma"), "full_refresh"
+        )
+        self.assertEqual(
+            cmd.get_modo_escrita("matricula_ano_anterior"), "full_refresh"
         )
 
     def test_extra_service_kwargs_com_anos_letivos(self) -> None:

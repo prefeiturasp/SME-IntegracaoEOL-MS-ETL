@@ -380,3 +380,63 @@ class DadosAlunoAcompanhamentoEscolarIn:
             ),
             "tipo_sigilo": self.tipo_sigilo,
         }
+
+
+@dataclass(slots=True)
+class ResponsavelAlunoTurmaIn:
+    """Dados de responsáveis aptos ao acompanhamento por turma."""
+
+    codigo_responsavel: int
+    codigo_matricula: int
+    ano_letivo: int
+    codigo_dre: str
+    dre: str | None
+    codigo_ue: str
+    ue: str | None
+    codigo_turma: int
+    turma: str | None
+    cpf_responsavel: int
+    codigo_aluno: int
+    codigo_tipo_escola: int
+    codigo_etapa_ensino: int
+    codigo_ciclo_ensino: int
+    serie_resumida: str | None
+    codigo_modalidade_turma: int
+
+    def to_domain(self) -> dict:
+        return {
+            "codigo_responsavel": self.codigo_responsavel,
+            "codigo_matricula": self.codigo_matricula,
+            "ano_letivo": self.ano_letivo,
+            "codigo_dre": strip_str(self.codigo_dre),
+            "dre": strip_str(self.dre),
+            "codigo_ue": strip_str(self.codigo_ue),
+            "ue": strip_str(self.ue),
+            "codigo_turma": self.codigo_turma,
+            "turma": strip_str(self.turma),
+            "cpf_responsavel": self.cpf_responsavel,
+            "codigo_aluno": self.codigo_aluno,
+            "codigo_tipo_escola": self.codigo_tipo_escola,
+            "codigo_etapa_ensino": self.codigo_etapa_ensino,
+            "codigo_ciclo_ensino": self.codigo_ciclo_ensino,
+            "serie_resumida": strip_str(self.serie_resumida),
+            "codigo_modalidade_turma": self.codigo_modalidade_turma,
+        }
+
+
+@dataclass(slots=True)
+class MatriculaAnoAnteriorIn:
+    """Contagem histórica de matrículas por turma."""
+
+    ano_letivo: int
+    codigo_ue: str
+    codigo_turma: int
+    quantidade: int
+
+    def to_domain(self) -> dict:
+        return {
+            "ano_letivo": self.ano_letivo,
+            "codigo_ue": strip_str(self.codigo_ue),
+            "codigo_turma": self.codigo_turma,
+            "quantidade": self.quantidade,
+        }
