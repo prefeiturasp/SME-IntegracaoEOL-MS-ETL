@@ -2,7 +2,7 @@ from datetime import date, datetime
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
-from django.test import TestCase
+from django.test import SimpleTestCase
 
 from apps.alunos.dtos.model_in import (
     MatriculaTurmaIn,
@@ -28,22 +28,19 @@ from apps.alunos.services import EtlAlunosService, PhaseConfig
 from apps.core.libs.base_etl_service import PipelineMetrics
 
 
-class TestAlunosService(TestCase):
-    """Testes para EtlAlunosService (Arquitetura Turbo/PhaseConfig)."""
+class TestAlunosService(SimpleTestCase):
+    """Testes do serviço de alunos."""
 
     def setUp(self) -> None:
-        """Inicializa service com EOL mockado.
-
-        _truncar_tabela é mockado para evitar UndefinedTable do psycopg.
-        """
+        """Inicializa o serviço com as dependências de banco mockadas."""
         self.mock_eol = MagicMock()
         self.service = EtlAlunosService(
             db_alias="default",
             eol=self.mock_eol,
             id_execucao=uuid4(),
         )
-        # Evita UndefinedTable em testes SimpleTestCase/TestCase.
-        self.service._truncar_tabela = MagicMock()
+        # Impede que fases full refresh acessem o banco.
+        self.service._truncar_tabela = MagicMock()  # type: ignore[method-assign]
 
     def test_phase_config_e_imutavel(self) -> None:
         """Valida que PhaseConfig é frozen."""
@@ -246,9 +243,7 @@ class TestAlunosService(TestCase):
         for fase in fases.values():
             self.assertNotIn("/*FILTRO_ANO_LETIVO", fase.sql)
 
-        self.assertIn(
-            f"AND an_letivo IN ({anos})", fases["matricula"].sql
-        )
+        self.assertIn(f"AND an_letivo IN ({anos})", fases["matricula"].sql)
         self.assertIn(
             f"AND te.an_letivo IN ({anos})", fases["matricula_turma"].sql
         )
@@ -346,10 +341,11 @@ class TestAlunosService(TestCase):
             mock_fase.return_value = PipelineMetrics(total_escritos=1)
 
             res = self.service.executar(fase_inicial=6)
+            total_fases_executadas = len(self.service._fases) - 5
 
-            self.assertEqual(len(res), 4)
+            self.assertEqual(len(res), total_fases_executadas)
             self.assertIn("matricula_turma", res)
-            self.assertEqual(mock_fase.call_count, 4)
+            self.assertEqual(mock_fase.call_count, total_fases_executadas)
 
     def test_executar_completo_acumula_resultados(self) -> None:
         """Valida execução completa."""
@@ -357,10 +353,11 @@ class TestAlunosService(TestCase):
             mock_fase.return_value = PipelineMetrics(total_escritos=10)
 
             res = self.service.executar(fase_inicial=1)
+            total_fases = len(self.service._fases)
 
-            self.assertEqual(len(res), 9)
+            self.assertEqual(len(res), total_fases)
             self.assertEqual(res["aluno"], 10)
-            self.assertEqual(mock_fase.call_count, 9)
+            self.assertEqual(mock_fase.call_count, total_fases)
 
     @patch.object(EtlAlunosService, "sync_batch")
     def test_executar_fase_passa_batch_num_correto(
@@ -622,9 +619,7 @@ class TestAlunosService(TestCase):
         self.assertIn(
             "matricula.st_matricula = 1", SQL_RESPONSAVEL_ALUNO_TURMA
         )
-        self.assertIn(
-            "MAX(mte.dt_situacao_aluno)", SQL_MATRICULA_ANO_ANTERIOR
-        )
+        self.assertIn("MAX(mte.dt_situacao_aluno)", SQL_MATRICULA_ANO_ANTERIOR)
         self.assertIn(
             "mte.nr_chamada_aluno <> '0'", SQL_MATRICULA_ANO_ANTERIOR
         )
