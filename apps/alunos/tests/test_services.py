@@ -2,7 +2,7 @@ from datetime import date, datetime
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
-from django.test import TestCase
+from django.test import SimpleTestCase
 
 from apps.alunos.dtos.model_in import (
     MatriculaTurmaIn,
@@ -10,36 +10,37 @@ from apps.alunos.dtos.model_in import (
 )
 from apps.alunos.models import (
     DadosAlunoAcompanhamentoEscolar,
+    MatriculaAnoAnterior,
     MatriculaAnoLetivo,
     MatriculaComponenteCurricularAnoLetivo,
+    ResponsavelAlunoTurma,
 )
 from apps.alunos.queries import (
     SQL_ALUNO,
     SQL_MATRICULA,
+    SQL_MATRICULA_ANO_ANTERIOR,
     SQL_MATRICULA_TURMA,
     SQL_NEE_ALUNO,
     SQL_RESPONSAVEL,
+    SQL_RESPONSAVEL_ALUNO_TURMA,
 )
 from apps.alunos.services import EtlAlunosService, PhaseConfig
 from apps.core.libs.base_etl_service import PipelineMetrics
 
 
-class TestAlunosService(TestCase):
-    """Testes para EtlAlunosService (Arquitetura Turbo/PhaseConfig)."""
+class TestAlunosService(SimpleTestCase):
+    """Testes do serviço de alunos."""
 
     def setUp(self) -> None:
-        """Inicializa service com EOL mockado.
-
-        _truncar_tabela é mockado para evitar UndefinedTable do psycopg.
-        """
+        """Inicializa o serviço com as dependências de banco mockadas."""
         self.mock_eol = MagicMock()
         self.service = EtlAlunosService(
             db_alias="default",
             eol=self.mock_eol,
             id_execucao=uuid4(),
         )
-        # Evita UndefinedTable em testes SimpleTestCase/TestCase.
-        self.service._truncar_tabela = MagicMock()
+        # Impede que fases full refresh acessem o banco.
+        self.service._truncar_tabela = MagicMock()  # type: ignore[method-assign]
 
     def test_phase_config_e_imutavel(self) -> None:
         """Valida que PhaseConfig é frozen."""
@@ -56,9 +57,9 @@ class TestAlunosService(TestCase):
         with self.assertRaises(AttributeError):
             config.nome = "mudar"  # type: ignore[misc]
 
-    def test_fases_contem_9_configs(self) -> None:
-        """Valida que o service define as 9 fases esperadas."""
-        self.assertEqual(len(self.service._fases), 9)
+    def test_fases_contem_11_configs(self) -> None:
+        """Valida que o service define as 11 fases esperadas."""
+        self.assertEqual(len(self.service._fases), 11)
         nomes = [f.nome for f in self.service._fases]
         self.assertEqual(
             nomes,
@@ -72,6 +73,8 @@ class TestAlunosService(TestCase):
                 "matricula_ano_letivo",
                 "matricula_componente_curricular_ano_letivo",
                 "dados_aluno_acompanhamento_escolar",
+                "responsavel_aluno_turma",
+                "matricula_ano_anterior",
             ],
         )
 
@@ -217,6 +220,14 @@ class TestAlunosService(TestCase):
             "and an_letivo = year(getdate())",
             fases["dados_aluno_acompanhamento_escolar"].sql,
         )
+        self.assertIn(
+            "matricula.an_letivo = YEAR(GETDATE())",
+            fases["responsavel_aluno_turma"].sql,
+        )
+        self.assertIn(
+            "te.an_letivo = YEAR(GETDATE()) - 1",
+            fases["matricula_ano_anterior"].sql,
+        )
 
     def test_anos_letivos_aplica_filtro_in_nas_fases(self) -> None:
         """Valida que anos_letivos gera filtro IN e remove marcadores."""
@@ -232,9 +243,7 @@ class TestAlunosService(TestCase):
         for fase in fases.values():
             self.assertNotIn("/*FILTRO_ANO_LETIVO", fase.sql)
 
-        self.assertIn(
-            f"AND an_letivo IN ({anos})", fases["matricula"].sql
-        )
+        self.assertIn(f"AND an_letivo IN ({anos})", fases["matricula"].sql)
         self.assertIn(
             f"AND te.an_letivo IN ({anos})", fases["matricula_turma"].sql
         )
@@ -246,6 +255,14 @@ class TestAlunosService(TestCase):
         self.assertNotIn(
             "year(getdate())",
             fases["dados_aluno_acompanhamento_escolar"].sql,
+        )
+        self.assertIn(
+            f"matricula.an_letivo IN ({anos})",
+            fases["responsavel_aluno_turma"].sql,
+        )
+        self.assertIn(
+            f"te.an_letivo IN ({anos})",
+            fases["matricula_ano_anterior"].sql,
         )
 
     def test_fases_selecionadas_sao_repassadas_para_base(self) -> None:
@@ -324,10 +341,11 @@ class TestAlunosService(TestCase):
             mock_fase.return_value = PipelineMetrics(total_escritos=1)
 
             res = self.service.executar(fase_inicial=6)
+            total_fases_executadas = len(self.service._fases) - 5
 
-            self.assertEqual(len(res), 4)
+            self.assertEqual(len(res), total_fases_executadas)
             self.assertIn("matricula_turma", res)
-            self.assertEqual(mock_fase.call_count, 4)
+            self.assertEqual(mock_fase.call_count, total_fases_executadas)
 
     def test_executar_completo_acumula_resultados(self) -> None:
         """Valida execução completa."""
@@ -335,10 +353,11 @@ class TestAlunosService(TestCase):
             mock_fase.return_value = PipelineMetrics(total_escritos=10)
 
             res = self.service.executar(fase_inicial=1)
+            total_fases = len(self.service._fases)
 
-            self.assertEqual(len(res), 9)
+            self.assertEqual(len(res), total_fases)
             self.assertEqual(res["aluno"], 10)
-            self.assertEqual(mock_fase.call_count, 9)
+            self.assertEqual(mock_fase.call_count, total_fases)
 
     @patch.object(EtlAlunosService, "sync_batch")
     def test_executar_fase_passa_batch_num_correto(
@@ -526,15 +545,17 @@ class TestAlunosService(TestCase):
         self.assertEqual(len(h), 64)
 
     def test_executar_pula_fases_1_a_6(self) -> None:
-        """Valida que executar(fase_inicial=7) retorna exatamente 3 chaves."""
+        """Valida que executar(fase_inicial=7) retorna as fases restantes."""
         with patch.object(EtlAlunosService, "_executar_fase") as mock_fase:
             mock_fase.return_value = PipelineMetrics(total_escritos=1)
             res = self.service.executar(fase_inicial=7)
-            self.assertEqual(len(res), 3)
+            self.assertEqual(len(res), 5)
             self.assertIn("matricula_ano_letivo", res)
             self.assertIn("matricula_componente_curricular_ano_letivo", res)
             self.assertIn("dados_aluno_acompanhamento_escolar", res)
-            self.assertEqual(mock_fase.call_count, 3)
+            self.assertIn("responsavel_aluno_turma", res)
+            self.assertIn("matricula_ano_anterior", res)
+            self.assertEqual(mock_fase.call_count, 5)
 
     @patch.object(EtlAlunosService, "sync_batch")
     def test_fase_7_chama_sync_batch_por_chunk(
@@ -575,6 +596,68 @@ class TestAlunosService(TestCase):
     def test_fase_9_suporta_bulk_insert(self) -> None:
         """Valida que fase 9 tem suporta_bulk_insert=True."""
         self.assertTrue(self.service._fases[8].suporta_bulk_insert)
+
+    def test_fases_lote_5_sao_full_refresh(self) -> None:
+        """Valida as fases materializadas do lote 5."""
+        responsaveis = self.service._fases[9]
+        historico = self.service._fases[10]
+
+        self.assertEqual(responsaveis.nome, "responsavel_aluno_turma")
+        self.assertEqual(responsaveis.model_class, ResponsavelAlunoTurma)
+        self.assertEqual(historico.nome, "matricula_ano_anterior")
+        self.assertEqual(historico.model_class, MatriculaAnoAnterior)
+        self.assertEqual(responsaveis.modo_escrita, "full_refresh")
+        self.assertEqual(historico.modo_escrita, "full_refresh")
+        self.assertTrue(responsaveis.truncate_on_full_sync)
+        self.assertTrue(historico.truncate_on_full_sync)
+
+    def test_queries_lote_5_replicam_filtros_legados(self) -> None:
+        """Valida os filtros estruturais das queries materializadas."""
+        self.assertIn(
+            "aluno.cd_tipo_sigilo IS NULL", SQL_RESPONSAVEL_ALUNO_TURMA
+        )
+        self.assertIn(
+            "matricula.st_matricula = 1", SQL_RESPONSAVEL_ALUNO_TURMA
+        )
+        self.assertIn("MAX(mte.dt_situacao_aluno)", SQL_MATRICULA_ANO_ANTERIOR)
+        self.assertIn(
+            "mte.nr_chamada_aluno <> '0'", SQL_MATRICULA_ANO_ANTERIOR
+        )
+        self.assertIn(
+            "mte.nr_chamada_aluno <> 'NULL'",
+            SQL_MATRICULA_ANO_ANTERIOR,
+        )
+
+    def test_criar_transform_fases_lote_5(self) -> None:
+        """Valida transformação e chaves naturais das fases do lote 5."""
+        responsaveis = self.service._criar_transform(self.service._fases[9])
+        pk_responsavel, _, obj_responsavel = responsaveis(
+            (
+                10,
+                20,
+                2026,
+                "DRE01 ",
+                "DRE TESTE ",
+                "UE01 ",
+                "UE TESTE ",
+                30,
+                "5A ",
+                12345678901,
+                40,
+                1,
+                5,
+                2,
+                "5 ",
+                5,
+            )
+        )
+        historico = self.service._criar_transform(self.service._fases[10])
+        pk_historico, _, obj_historico = historico((2025, "UE01 ", 30, 27))
+
+        self.assertEqual(pk_responsavel, "10-20-30")
+        self.assertEqual(obj_responsavel.codigo_ue, "UE01")
+        self.assertEqual(pk_historico, "2025-UE01 -30")
+        self.assertEqual(obj_historico.codigo_ue, "UE01")
 
     def test_criar_transform_fase_9_pk_composta(self) -> None:
         """Valida PK composta de 3 campos na fase 9."""

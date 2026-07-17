@@ -480,3 +480,161 @@ FROM   v_aluno_cotic aluno
        LEFT JOIN ciclo_ensino
                ON serie_ensino.cd_ciclo_ensino = ciclo_ensino.cd_ciclo_ensino;
 """
+
+SQL_RESPONSAVEL_ALUNO_TURMA = """
+SELECT DISTINCT
+       responsavel.cd_identificador_responsavel AS codigo_responsavel,
+       matricula.cd_matricula AS codigo_matricula,
+       matricula.an_letivo AS ano_letivo,
+       dre.cd_unidade_educacao AS codigo_dre,
+       dre.nm_exibicao_unidade AS dre,
+       vue.cd_unidade_educacao AS codigo_ue,
+       vue.nm_exibicao_unidade AS ue,
+       te.cd_turma_escola AS codigo_turma,
+       te.dc_turma_escola AS turma,
+       CAST(responsavel.cd_cpf_responsavel AS BIGINT) AS cpf_responsavel,
+       aluno.cd_aluno AS codigo_aluno,
+       tesc.tp_escola AS codigo_tipo_escola,
+       etapa_ensino.cd_etapa_ensino AS codigo_etapa_ensino,
+       ciclo_ensino.cd_ciclo_ensino AS codigo_ciclo_ensino,
+       serie_ensino.sg_resumida_serie AS serie_resumida,
+       etapa_ensino.cd_etapa_ensino AS codigo_modalidade_turma
+FROM v_aluno_cotic aluno
+INNER JOIN responsavel_aluno responsavel
+        ON responsavel.cd_aluno = aluno.cd_aluno
+INNER JOIN v_matricula_cotic matricula
+        ON matricula.cd_aluno = aluno.cd_aluno
+       AND matricula.st_matricula = 1
+       AND matricula.cd_serie_ensino IS NOT NULL
+INNER JOIN matricula_turma_escola mte
+        ON mte.cd_matricula = matricula.cd_matricula
+       AND mte.cd_situacao_aluno IN (1, 6, 10, 13)
+INNER JOIN v_cadastro_unidade_educacao vue
+        ON vue.cd_unidade_educacao = matricula.cd_escola
+INNER JOIN escola esc
+        ON esc.cd_escola = vue.cd_unidade_educacao
+INNER JOIN tipo_escola tesc
+        ON tesc.tp_escola = esc.tp_escola
+       AND tesc.tp_escola IN (
+            1, 2, 3, 4, 10, 11, 12, 13, 14, 15, 16, 17,
+            18, 19, 20, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31
+       )
+INNER JOIN v_cadastro_unidade_educacao dre
+        ON dre.cd_unidade_educacao =
+           vue.cd_unidade_administrativa_referencia
+INNER JOIN turma_escola te
+        ON te.cd_turma_escola = mte.cd_turma_escola
+INNER JOIN serie_ensino
+        ON serie_ensino.cd_serie_ensino = matricula.cd_serie_ensino
+INNER JOIN etapa_ensino
+        ON etapa_ensino.cd_etapa_ensino = serie_ensino.cd_etapa_ensino
+INNER JOIN ciclo_ensino
+        ON ciclo_ensino.cd_ciclo_ensino = serie_ensino.cd_ciclo_ensino
+WHERE responsavel.dt_fim IS NULL
+  AND responsavel.cd_cpf_responsavel IS NOT NULL
+  AND aluno.cd_tipo_sigilo IS NULL
+  /*FILTRO_ANO_LETIVO_RESPONSAVEL_TURMA*/
+"""
+
+SQL_MATRICULA_ANO_ANTERIOR = """
+WITH TurmasFiltradas AS (
+    SELECT DISTINCT
+           te.cd_turma_escola,
+           te.cd_escola,
+           te.an_letivo
+      FROM turma_escola te
+     INNER JOIN tipo_turno tipo_turno
+             ON tipo_turno.cd_tipo_turno = te.cd_tipo_turno
+     INNER JOIN duracao_tipo_turno duracao_turno
+             ON duracao_turno.cd_tipo_turno = tipo_turno.cd_tipo_turno
+            AND duracao_turno.cd_duracao = te.cd_duracao
+     INNER JOIN tipo_periodicidade periodicidade
+             ON periodicidade.cd_tipo_periodicidade =
+                te.cd_tipo_periodicidade
+     INNER JOIN v_cadastro_unidade_educacao vue
+             ON vue.cd_unidade_educacao = te.cd_escola
+     INNER JOIN escola escola_turma
+             ON escola_turma.cd_escola = vue.cd_unidade_educacao
+     INNER JOIN (
+            SELECT v_dre.cd_unidade_educacao
+              FROM unidade_administrativa unidade
+             INNER JOIN v_cadastro_unidade_educacao v_dre
+                     ON v_dre.cd_unidade_educacao =
+                        unidade.cd_unidade_administrativa
+             WHERE unidade.tp_unidade_administrativa = 24
+     ) dre
+             ON dre.cd_unidade_educacao =
+                vue.cd_unidade_administrativa_referencia
+     INNER JOIN tipo_escola tipo_escola
+             ON tipo_escola.tp_escola = escola_turma.tp_escola
+            AND tipo_escola.tp_dependencia_administrativa =
+                escola_turma.tp_dependencia_administrativa
+     INNER JOIN tipo_unidade_educacao tipo_unidade
+             ON tipo_unidade.tp_unidade_educacao =
+                vue.tp_unidade_educacao
+     WHERE te.cd_tipo_turma <> 4
+       -- O ramo legado de turma-programa/CC 1322 sem histórico não gera
+       -- saída: a contagem posterior exige matrícula-turma histórica.
+       AND EXISTS (
+            SELECT 1
+              FROM historico_matricula_turma_escola historico
+             WHERE historico.cd_turma_escola = te.cd_turma_escola
+       )
+       /*FILTRO_ANO_LETIVO_MATRICULA_ANTERIOR*/
+),
+UltimaSituacaoAluno AS (
+    SELECT mte.cd_turma_escola,
+           matricula.cd_aluno,
+           MAX(mte.dt_situacao_aluno) AS ultima_data_situacao
+      FROM v_historico_matricula_cotic matricula
+     INNER JOIN historico_matricula_turma_escola mte
+             ON mte.cd_matricula = matricula.cd_matricula
+     INNER JOIN TurmasFiltradas turma
+             ON turma.cd_turma_escola = mte.cd_turma_escola
+     WHERE mte.nr_chamada_aluno <> '0'
+       AND mte.nr_chamada_aluno <> 'NULL'
+       AND mte.nr_chamada_aluno IS NOT NULL
+     GROUP BY mte.cd_turma_escola, matricula.cd_aluno
+),
+MatriculasValidas AS (
+    SELECT DISTINCT
+           turma.an_letivo AS ano_letivo,
+           turma.cd_escola AS codigo_ue,
+           turma.cd_turma_escola AS codigo_turma,
+           matricula.cd_matricula AS codigo_matricula,
+           matricula.st_matricula AS codigo_situacao_matricula
+      FROM v_historico_matricula_cotic matricula
+     INNER JOIN historico_matricula_turma_escola mte
+             ON mte.cd_matricula = matricula.cd_matricula
+     INNER JOIN TurmasFiltradas turma
+             ON turma.cd_turma_escola = mte.cd_turma_escola
+     INNER JOIN UltimaSituacaoAluno ultima
+             ON ultima.cd_turma_escola = mte.cd_turma_escola
+            AND ultima.cd_aluno = matricula.cd_aluno
+            AND ultima.ultima_data_situacao = mte.dt_situacao_aluno
+     INNER JOIN escola e
+             ON e.cd_escola = turma.cd_escola
+      LEFT JOIN serie_turma_escola ste
+             ON ste.cd_turma_escola = turma.cd_turma_escola
+      LEFT JOIN serie_ensino se
+             ON se.cd_serie_ensino = ste.cd_serie_ensino
+      LEFT JOIN etapa_ensino ee
+             ON ee.cd_etapa_ensino = se.cd_etapa_ensino
+     WHERE mte.nr_chamada_aluno <> '0'
+       AND mte.nr_chamada_aluno <> 'NULL'
+       AND mte.nr_chamada_aluno IS NOT NULL
+       AND (
+            ee.cd_etapa_ensino IN (
+                1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 17
+            )
+            OR ee.cd_etapa_ensino IS NULL
+       )
+)
+SELECT ano_letivo,
+       codigo_ue,
+       codigo_turma,
+       COUNT(codigo_matricula) AS quantidade
+  FROM MatriculasValidas
+ WHERE codigo_situacao_matricula IN (1, 5, 6, 10, 13)
+ GROUP BY ano_letivo, codigo_ue, codigo_turma
+"""

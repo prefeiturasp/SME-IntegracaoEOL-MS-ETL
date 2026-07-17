@@ -4,15 +4,13 @@ from typing import Any
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
-from django.test import TestCase
+from django.test import SimpleTestCase
 
 from apps.alunos.orquestrador import EtlAlunosOrquestrador
 
 
-class TestEtlAlunosOrquestrador(TestCase):
+class TestEtlAlunosOrquestrador(SimpleTestCase):
     """Testes para o orquestrador assíncrono de Alunos."""
-
-    databases = {"default", "eol_db", "alunos_db"}
 
     def _make_orquestrador(self, **kwargs: Any) -> EtlAlunosOrquestrador:
         mock_eol = MagicMock()
@@ -60,7 +58,7 @@ class TestEtlAlunosOrquestrador(TestCase):
         mock_proc: MagicMock,
         mock_finalizar: MagicMock,
     ) -> None:
-        """Valida que todas as 9 fases são passadas ao callback do chord."""
+        """Valida que todas as fases são passadas ao callback do chord."""
         mock_leitor = MagicMock()
         mock_leitor.criar_grupo.return_value = ["task1"]
         mock_leitor_cls.return_value = mock_leitor
@@ -71,7 +69,7 @@ class TestEtlAlunosOrquestrador(TestCase):
         self.assertTrue(mock_finalizar.s.called)
         args, _ = mock_finalizar.s.call_args
         meta_dict = args[0]
-        self.assertEqual(meta_dict["total_fases"], 9)
+        self.assertEqual(meta_dict["total_fases"], len(orq.service._fases))
 
     @patch("apps.core.libs.base_etl_orquestrador.finalizar_fase")
     @patch("apps.core.libs.base_etl_orquestrador.processar_chunk")

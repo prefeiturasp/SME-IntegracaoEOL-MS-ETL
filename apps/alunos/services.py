@@ -7,34 +7,40 @@ from uuid import UUID
 from apps.alunos.dtos.model_in import (
     AlunoIn,
     DadosAlunoAcompanhamentoEscolarIn,
+    MatriculaAnoAnteriorIn,
     MatriculaAnoLetivoIn,
     MatriculaComponenteCurricularAnoLetivoIn,
     MatriculaIn,
     MatriculaTurmaIn,
     NecessidadeEspecialAlunoIn,
     ResponsavelAlunoIn,
+    ResponsavelAlunoTurmaIn,
     TipoNecessidadeEspecialIn,
 )
 from apps.alunos.models import (
     Aluno,
     DadosAlunoAcompanhamentoEscolar,
     Matricula,
+    MatriculaAnoAnterior,
     MatriculaAnoLetivo,
     MatriculaComponenteCurricularAnoLetivo,
     MatriculaTurma,
     NecessidadeEspecialAluno,
     ResponsavelAluno,
+    ResponsavelAlunoTurma,
     TipoNecessidadeEspecial,
 )
 from apps.alunos.queries import (
     SQL_ALUNO,
     SQL_DADOS_ALUNO_ACOMPANHAMENTO_ESCOLAR,
     SQL_MATRICULA,
+    SQL_MATRICULA_ANO_ANTERIOR,
     SQL_MATRICULA_ANO_LETIVO,
     SQL_MATRICULA_COMPONENTE_CURRICULAR_ANO_LETIVO,
     SQL_MATRICULA_TURMA,
     SQL_NEE_ALUNO,
     SQL_RESPONSAVEL,
+    SQL_RESPONSAVEL_ALUNO_TURMA,
     SQL_TIPO_NEE,
 )
 from apps.core.libs.base_etl_service import BaseEtlService, PhaseConfig
@@ -52,6 +58,12 @@ _FILTROS_ANO_VAZIOS = {
     "/*FILTRO_ANO_LETIVO_MATRICULA_COMPONENTE*/": "",
     "/*FILTRO_ANO_LETIVO_ACOMPANHAMENTO*/": (
         "and an_letivo = year(getdate())"
+    ),
+    "/*FILTRO_ANO_LETIVO_RESPONSAVEL_TURMA*/": (
+        "AND matricula.an_letivo = YEAR(GETDATE())"
+    ),
+    "/*FILTRO_ANO_LETIVO_MATRICULA_ANTERIOR*/": (
+        "AND te.an_letivo = YEAR(GETDATE()) - 1"
     ),
 }
 
@@ -135,6 +147,12 @@ class EtlAlunosService(BaseEtlService):
             ),
             "/*FILTRO_ANO_LETIVO_ACOMPANHAMENTO*/": (
                 f"and an_letivo IN ({anos})"
+            ),
+            "/*FILTRO_ANO_LETIVO_RESPONSAVEL_TURMA*/": (
+                f"AND matricula.an_letivo IN ({anos})"
+            ),
+            "/*FILTRO_ANO_LETIVO_MATRICULA_ANTERIOR*/": (
+                f"AND te.an_letivo IN ({anos})"
             ),
         }
 
@@ -419,5 +437,59 @@ class EtlAlunosService(BaseEtlService):
                     "tipo_responsavel",
                 ),
                 suporta_bulk_insert=True,
+            ),
+            PhaseConfig(
+                nome="responsavel_aluno_turma",
+                sql=self._sql_com_filtro_ano_letivo(
+                    SQL_RESPONSAVEL_ALUNO_TURMA
+                ),
+                table_name="responsavel_aluno_turma",
+                source_table="responsavel_aluno",
+                model_class=ResponsavelAlunoTurma,
+                dto_in=ResponsavelAlunoTurmaIn,
+                pk_field=[
+                    "codigo_responsavel",
+                    "codigo_matricula",
+                    "codigo_turma",
+                ],
+                update_fields=(
+                    "ano_letivo",
+                    "codigo_dre",
+                    "dre",
+                    "codigo_ue",
+                    "ue",
+                    "turma",
+                    "cpf_responsavel",
+                    "codigo_aluno",
+                    "codigo_tipo_escola",
+                    "codigo_etapa_ensino",
+                    "codigo_ciclo_ensino",
+                    "serie_resumida",
+                    "codigo_modalidade_turma",
+                ),
+                unique_fields=(
+                    "codigo_responsavel",
+                    "codigo_matricula",
+                    "codigo_turma",
+                ),
+                suporta_bulk_insert=True,
+                truncate_on_full_sync=True,
+                modo_escrita="full_refresh",
+            ),
+            PhaseConfig(
+                nome="matricula_ano_anterior",
+                sql=self._sql_com_filtro_ano_letivo(
+                    SQL_MATRICULA_ANO_ANTERIOR
+                ),
+                table_name="matricula_ano_anterior",
+                source_table="v_historico_matricula_cotic",
+                model_class=MatriculaAnoAnterior,
+                dto_in=MatriculaAnoAnteriorIn,
+                pk_field=["ano_letivo", "codigo_ue", "codigo_turma"],
+                update_fields=("quantidade",),
+                unique_fields=("ano_letivo", "codigo_ue", "codigo_turma"),
+                suporta_bulk_insert=True,
+                truncate_on_full_sync=True,
+                modo_escrita="full_refresh",
             ),
         ]
