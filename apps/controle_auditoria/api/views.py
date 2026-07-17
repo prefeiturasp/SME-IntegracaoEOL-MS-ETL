@@ -295,7 +295,9 @@ class ExecutarDominioView(APIView):
                             "responsavel_aluno, nee_aluno, matricula, "
                             "matricula_turma, matricula_ano_letivo, "
                             "matricula_componente_curricular_ano_letivo, "
-                            "dados_aluno_acompanhamento_escolar."
+                            "dados_aluno_acompanhamento_escolar, "
+                            "responsavel_aluno_turma, "
+                            "matricula_ano_anterior."
                         ),
                         "example": ["aluno", "matricula"],
                     },

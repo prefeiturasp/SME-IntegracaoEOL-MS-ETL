@@ -6,11 +6,13 @@ from apps.alunos.models import (
     Aluno,
     DadosAlunoAcompanhamentoEscolar,
     Matricula,
+    MatriculaAnoAnterior,
     MatriculaAnoLetivo,
     MatriculaComponenteCurricularAnoLetivo,
     MatriculaTurma,
     NecessidadeEspecialAluno,
     ResponsavelAluno,
+    ResponsavelAlunoTurma,
     TipoNecessidadeEspecial,
 )
 
@@ -76,3 +78,26 @@ class AlunosModelsTest(TestCase):
             codigo_ue="UE01",
         )
         self.assertEqual(str(obj), "12345 - ALUNO TESTE (UE01)")
+
+    def test_responsavel_aluno_turma_str(self) -> None:
+        obj = ResponsavelAlunoTurma(
+            codigo_aluno=12345,
+            codigo_turma=54321,
+            ano_letivo=2026,
+        )
+        self.assertEqual(str(obj), "12345 - 54321 (2026)")
+
+    def test_responsavel_aluno_turma_possui_indices_de_filtro(self) -> None:
+        nomes_indices = {
+            indice.name for indice in ResponsavelAlunoTurma._meta.indexes
+        }
+        self.assertIn("idx_resp_turma_ano_dre_ue", nomes_indices)
+        self.assertIn("idx_resp_turma_ano_ue", nomes_indices)
+
+    def test_matricula_ano_anterior_str(self) -> None:
+        obj = MatriculaAnoAnterior(
+            codigo_ue="UE01",
+            codigo_turma=54321,
+            ano_letivo=2025,
+        )
+        self.assertEqual(str(obj), "UE01 - 54321 (2025)")

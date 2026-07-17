@@ -369,3 +369,72 @@ class DadosAlunoAcompanhamentoEscolar(models.Model):
 
     def __str__(self) -> str:
         return f"{self.codigo_aluno} - {self.nome} ({self.codigo_ue})"
+
+
+class ResponsavelAlunoTurma(models.Model):
+    """Responsáveis aptos ao acompanhamento escolar por turma."""
+
+    id = models.BigAutoField(primary_key=True)
+    codigo_responsavel = models.BigIntegerField()
+    codigo_matricula = models.BigIntegerField()
+    ano_letivo = models.SmallIntegerField()
+    codigo_dre = models.CharField(max_length=20)
+    dre = models.CharField(max_length=300, null=True, blank=True)
+    codigo_ue = models.CharField(max_length=20)
+    ue = models.CharField(max_length=300, null=True, blank=True)
+    codigo_turma = models.BigIntegerField()
+    turma = models.CharField(max_length=100, null=True, blank=True)
+    cpf_responsavel = models.BigIntegerField()
+    codigo_aluno = models.BigIntegerField()
+    codigo_tipo_escola = models.SmallIntegerField()
+    codigo_etapa_ensino = models.SmallIntegerField()
+    codigo_ciclo_ensino = models.SmallIntegerField()
+    serie_resumida = models.CharField(max_length=20, null=True, blank=True)
+    codigo_modalidade_turma = models.SmallIntegerField()
+
+    class Meta:
+        app_label = "alunos"
+        db_table = "responsavel_aluno_turma"
+        unique_together = [
+            ("codigo_responsavel", "codigo_matricula", "codigo_turma")
+        ]
+        indexes = [
+            models.Index(
+                fields=["ano_letivo", "codigo_dre", "codigo_ue"],
+                name="idx_resp_turma_ano_dre_ue",
+            ),
+            models.Index(
+                fields=["ano_letivo", "codigo_ue"],
+                name="idx_resp_turma_ano_ue",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return (
+            f"{self.codigo_aluno} - {self.codigo_turma} "
+            f"({self.ano_letivo})"
+        )
+
+
+class MatriculaAnoAnterior(models.Model):
+    """Contagem histórica de matrículas por turma e ano letivo."""
+
+    id = models.BigAutoField(primary_key=True)
+    ano_letivo = models.SmallIntegerField()
+    codigo_ue = models.CharField(max_length=20)
+    codigo_turma = models.BigIntegerField()
+    quantidade = models.IntegerField()
+
+    class Meta:
+        app_label = "alunos"
+        db_table = "matricula_ano_anterior"
+        unique_together = [("ano_letivo", "codigo_ue", "codigo_turma")]
+        indexes = [
+            models.Index(
+                fields=["ano_letivo", "codigo_ue"],
+                name="idx_matr_ant_ano_ue",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.codigo_ue} - {self.codigo_turma} ({self.ano_letivo})"
