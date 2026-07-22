@@ -12,6 +12,7 @@ if TYPE_CHECKING:
         ContratoExternoOut,
         DisciplinaTurmaAtribuidaUeOut,
         FuncaoAtividadeCargoServidorOut,
+        FuncionarioCargoOut,
         FuncionarioUnidadeEducacionalOut,
         LaudoMedicoOut,
         LotacaoServidorOut,
@@ -69,6 +70,30 @@ class CargoBaseServidorIn:
             dt_posse=self.dt_posse,
             dt_fim_nomeacao=self.dt_fim_nomeacao,
             dt_cancelamento=self.dt_cancelamento,
+        )
+
+
+@dataclass(slots=True)
+class FuncionarioCargoIn:
+    """Dados de funcionário por cargo."""
+
+    nm_pessoa: Any
+    cd_registro_funcional: Any
+    dt_posse: Any
+    dt_fim_nomeacao: Any
+    dc_cargo: Any
+    cd_cargo: Any
+
+    def to_domain(self) -> "FuncionarioCargoOut":
+        from apps.professores.dtos.model_out import FuncionarioCargoOut
+
+        return FuncionarioCargoOut(
+            nome=self.nm_pessoa,
+            codigo_rf=self.cd_registro_funcional,
+            data_inicio=self.dt_posse,
+            data_fim=self.dt_fim_nomeacao,
+            cargo=self.dc_cargo,
+            codigo_cargo=self.cd_cargo,
         )
 
 

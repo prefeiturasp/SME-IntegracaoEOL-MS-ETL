@@ -19,6 +19,7 @@ from apps.professores.dtos.model_in import (
     ContratoExternoIn,
     DisciplinaTurmaAtribuidaUeIn,
     FuncaoAtividadeCargoServidorIn,
+    FuncionarioCargoIn,
     FuncionarioUnidadeEducacionalIn,
     LaudoMedicoIn,
     LotacaoServidorIn,
@@ -43,6 +44,7 @@ from apps.professores.models import (
     ContratoExterno,
     DisciplinaTurmaAtribuidaUe,
     FuncaoAtividadeCargoServidor,
+    FuncionarioCargo,
     FuncionarioUnidadeEducacional,
     LaudoMedico,
     LotacaoServidor,
@@ -58,6 +60,7 @@ from apps.professores.queries import (
     SQL_CARGOS_SOBREPOSTOS,
     SQL_CONTRATOS_EXTERNOS,
     SQL_DISCIPLINAS_TURMAS_ATRIBUIDAS_UE,
+    SQL_FUNCIONARIOS_CARGOS,
     SQL_FUNCIONARIOS_UNIDADE_EDUCACIONAL,
     SQL_FUNCOES_ATIVIDADE,
     SQL_LAUDOS,
@@ -149,6 +152,11 @@ def _row_to_funcionario(row: tuple) -> dict:
         Dados prontos para persistencia no destino.
     """
     return FuncionarioUnidadeEducacionalIn(*row).to_domain().to_dict()
+
+
+def _row_to_funcionario_cargo(row: tuple) -> dict:
+    """Monta o dicionário da linha de funcionário por cargo."""
+    return cast(dict, FuncionarioCargoIn(*row).to_domain().to_dict())
 
 
 def _row_to_turma_atribuida_ue(row: tuple) -> dict:
@@ -353,6 +361,7 @@ _TABELAS_FULL_REFRESH: frozenset[str] = frozenset(
         "cargo_sobreposto_servidor",
         "funcao_atividade_cargo_servidor",
         "laudo_medico",
+        "funcionario_cargo",
         "turma_atribuida_ue",
         "disciplina_turma_atribuida_ue",
     }
@@ -736,6 +745,19 @@ class EtlProfessoresService:
                 )
         return total
 
+    def popular_funcionarios_cargos(self) -> int:
+        """Popula funcionários por cargo."""
+        return _full_refresh_por_lote(
+            FuncionarioCargo,
+            (
+                [
+                    FuncionarioCargo(**_row_to_funcionario_cargo(row))
+                    for row in chunk
+                ]
+                for chunk in self.eol.iter_query(SQL_FUNCIONARIOS_CARGOS)
+            ),
+        )
+
     def popular_turmas_atribuidas_ue(self) -> int:
         """Popula turmas atribuídas por vínculo do funcionário com UE."""
         return _full_refresh_por_lote(
@@ -825,6 +847,7 @@ class EtlProfessoresService:
         executar_tabela(
             "funcionario_unidade_educacional", self.popular_funcionarios
         )
+        executar_tabela("funcionario_cargo", self.popular_funcionarios_cargos)
         executar_tabela(
             "turma_atribuida_ue", self.popular_turmas_atribuidas_ue
         )

@@ -126,6 +126,45 @@ class LotacaoServidor(models.Model):
         ]
 
 
+class FuncionarioCargo(models.Model):
+    """Funcionário por cargo."""
+
+    id = models.BigAutoField(primary_key=True)
+    codigo_rf = models.CharField(max_length=20)
+    nome = models.CharField(max_length=200)
+    data_inicio = models.DateTimeField(null=True, blank=True)
+    data_fim = models.DateTimeField(null=True, blank=True)
+    cargo = models.CharField(max_length=100)
+    codigo_cargo = models.IntegerField()
+
+    class Meta:
+        app_label = "professores"
+        db_table = "funcionario_cargo"
+        verbose_name = "funcionario por cargo"
+        verbose_name_plural = "funcionarios por cargo"
+        indexes = [
+            models.Index(
+                fields=["codigo_cargo"], name="idx_funcionario_cargo_codigo"
+            ),
+            models.Index(
+                fields=["codigo_rf"], name="idx_funcionario_cargo_rf"
+            ),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "codigo_rf",
+                    "codigo_cargo",
+                    "data_inicio",
+                    "data_fim",
+                    "cargo",
+                ],
+                name="uq_funcionario_cargo_vinculo",
+                nulls_distinct=False,
+            ),
+        ]
+
+
 class CargoSobrepostoServidor(models.Model):
     """Cargo sobreposto exercido sobre o cargo base."""
 

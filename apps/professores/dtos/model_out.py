@@ -54,6 +54,38 @@ class CargoBaseServidorOut:
 
 
 @dataclass(slots=True)
+class FuncionarioCargoOut:
+    """Estrutura para o model ``FuncionarioCargo``."""
+
+    nome: str
+    codigo_rf: str
+    data_inicio: Any
+    data_fim: Any
+    cargo: str
+    codigo_cargo: int
+
+    def __post_init__(self) -> None:
+        """Normaliza campos do funcionário por cargo."""
+        self.nome = _normalizar_texto(self.nome)
+        self.codigo_rf = _normalizar_texto(self.codigo_rf)
+        self.data_inicio = _normalizar_datetime(self.data_inicio)
+        self.data_fim = _normalizar_datetime(self.data_fim)
+        self.cargo = _normalizar_texto(self.cargo)
+        self.codigo_cargo = _normalizar_int(self.codigo_cargo)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Monta o dicionário de persistência."""
+        return {
+            "nome": self.nome,
+            "codigo_rf": self.codigo_rf,
+            "data_inicio": self.data_inicio,
+            "data_fim": self.data_fim,
+            "cargo": self.cargo,
+            "codigo_cargo": self.codigo_cargo,
+        }
+
+
+@dataclass(slots=True)
 class LotacaoServidorOut:
     """Estrutura para o model ``LotacaoServidor``."""
 

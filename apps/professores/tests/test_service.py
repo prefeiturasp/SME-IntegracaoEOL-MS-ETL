@@ -28,6 +28,7 @@ from apps.professores.services import (
     _row_to_contrato_externo,
     _row_to_funcao_atividade,
     _row_to_funcionario,
+    _row_to_funcionario_cargo,
     _row_to_laudo,
     _row_to_lotacao,
     _row_to_pessoa,
@@ -254,6 +255,29 @@ class RowToPessoaTest(TestCase):
         self.assertIsNone(r["nome_social"])
 
 
+class RowToFuncionarioCargoTest(TestCase):
+    """Testes para a função _row_to_funcionario_cargo."""
+
+    def test_campos(self) -> None:
+        """Verifica que os campos do funcionário por cargo são extraídos."""
+        dt = datetime.date(2024, 2, 1)
+        row = (
+            "MARIA",
+            "1234567",
+            dt,
+            None,
+            "PROFESSOR",
+            3239,
+        )
+        r = _row_to_funcionario_cargo(row)
+        self.assertEqual(r["nome"], "MARIA")
+        self.assertEqual(r["codigo_rf"], "1234567")
+        self.assertEqual(r["data_inicio"], dt)
+        self.assertIsNone(r["data_fim"])
+        self.assertEqual(r["cargo"], "PROFESSOR")
+        self.assertEqual(r["codigo_cargo"], 3239)
+
+
 class RowToContratoExternoTest(TestCase):
     """Testes para a função _row_to_contrato_externo."""
 
@@ -475,8 +499,8 @@ class RowToFuncionarioTest(TestCase):
             timezone.now(),
             None,
             None,
-            "lotacao",
             None,
+            "lotacao",
             None,
             None,
             None,
@@ -549,11 +573,11 @@ class RowToFuncionarioTest(TestCase):
             dt,
             None,
             None,
+            None,
             "lotacao",
             None,
             None,
             None,
-            "",
             "sim",
             "false",
             "",
@@ -1175,6 +1199,9 @@ class EtlProfessoresServiceFase4Test(TestCase):
                     "019372",
                     dt,
                     None,
+                    None,
+                    None,
+                    "lotacao",
                     3239,
                     "PROFESSOR",
                     0,
@@ -1264,6 +1291,7 @@ class EtlProfessoresServiceExecutarTest(TestCase):
             resultado,
             {
                 "funcionario_unidade_educacional": 1,
+                "funcionario_cargo": 1,
                 "turma_atribuida_ue": 1,
                 "disciplina_turma_atribuida_ue": 1,
             },

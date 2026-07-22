@@ -66,6 +66,22 @@ SQL_CARGOS_BASE = f"""
     WHERE cbs.cd_cargo IN ({_PLACEHOLDERS_CARGO})
 """
 
+SQL_FUNCIONARIOS_CARGOS = """
+    SELECT DISTINCT
+        sc.nm_pessoa,
+        sc.cd_registro_funcional,
+        cbs.dt_posse,
+        cbs.dt_fim_nomeacao,
+        LTRIM(RTRIM(c.dc_cargo)) AS dc_cargo,
+        cbs.cd_cargo
+    FROM v_servidor_cotic sc
+    INNER JOIN v_cargo_base_cotic cbs
+        ON cbs.cd_servidor = sc.cd_servidor
+    INNER JOIN cargo c
+        ON c.cd_cargo = cbs.cd_cargo
+    WHERE sc.cd_registro_funcional IS NOT NULL
+"""
+
 SQL_LOTACOES = """
     SELECT
         ls.cd_cargo_base_servidor,
