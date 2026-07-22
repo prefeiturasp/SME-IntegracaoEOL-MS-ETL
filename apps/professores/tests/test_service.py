@@ -475,6 +475,9 @@ class RowToFuncionarioTest(TestCase):
             timezone.now(),
             None,
             None,
+            "lotacao",
+            None,
+            None,
             None,
             None,
             0,
@@ -484,6 +487,9 @@ class RowToFuncionarioTest(TestCase):
         ).to_domain()
 
         self.assertIsNone(dto.data_fim)
+        self.assertIsNone(dto.dt_fim_nomeacao)
+        self.assertIsNone(dto.dt_fim_funcao_atividade)
+        self.assertEqual(dto.origem_vinculo, "lotacao")
         self.assertIsNone(dto.codigo_cargo)
         self.assertIsNone(dto.codigo_tipo_funcao_atividade)
 
@@ -498,6 +504,9 @@ class RowToFuncionarioTest(TestCase):
             " 019372 ",
             dt,
             None,
+            None,
+            None,
+            "lotacao",
             3239,
             " PROFESSOR ",
             None,
@@ -517,6 +526,9 @@ class RowToFuncionarioTest(TestCase):
         self.assertEqual(r["codigo_ue"], "019372")
         self.assertTrue(timezone.is_aware(r["data_inicio"]))
         self.assertIsNone(r["data_fim"])
+        self.assertIsNone(r["dt_fim_nomeacao"])
+        self.assertIsNone(r["dt_fim_funcao_atividade"])
+        self.assertEqual(r["origem_vinculo"], "lotacao")
         self.assertEqual(r["codigo_cargo"], 3239)
         self.assertEqual(r["cargo"], "PROFESSOR")
         self.assertEqual(r["codigo_tipo_funcao_atividade"], 0)
@@ -537,6 +549,9 @@ class RowToFuncionarioTest(TestCase):
             dt,
             None,
             None,
+            "lotacao",
+            None,
+            None,
             None,
             "",
             "sim",
@@ -549,6 +564,9 @@ class RowToFuncionarioTest(TestCase):
 
         self.assertIs(r["data_inicio"], dt)
         self.assertIsNone(r["data_fim"])
+        self.assertIsNone(r["dt_fim_nomeacao"])
+        self.assertIsNone(r["dt_fim_funcao_atividade"])
+        self.assertEqual(r["origem_vinculo"], "lotacao")
         self.assertIsNone(r["codigo_cargo"])
         self.assertTrue(r["eh_professor"])
         self.assertFalse(r["esta_afastado"])

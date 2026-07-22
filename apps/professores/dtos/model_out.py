@@ -401,6 +401,9 @@ class FuncionarioUnidadeEducacionalOut:
     codigo_ue: str
     data_inicio: Any
     data_fim: Any
+    dt_fim_nomeacao: Any
+    dt_fim_funcao_atividade: Any
+    origem_vinculo: str | None
     codigo_cargo: int | None
     cargo: str | None
     codigo_tipo_funcao_atividade: int | None
@@ -418,6 +421,11 @@ class FuncionarioUnidadeEducacionalOut:
         self.codigo_ue = _normalizar_texto(self.codigo_ue)
         self.data_inicio = _normalizar_data_chave_funcionario(self.data_inicio)
         self.data_fim = _normalizar_datetime(self.data_fim)
+        self.dt_fim_nomeacao = _normalizar_datetime(self.dt_fim_nomeacao)
+        self.dt_fim_funcao_atividade = _normalizar_datetime(
+            self.dt_fim_funcao_atividade
+        )
+        self.origem_vinculo = _normalizar_texto_opcional(self.origem_vinculo)
         self.codigo_cargo = _normalizar_int_opcional(self.codigo_cargo)
         self.cargo = _normalizar_texto_opcional(self.cargo)
         self.codigo_tipo_funcao_atividade = _normalizar_int_opcional(
@@ -444,6 +452,9 @@ class FuncionarioUnidadeEducacionalOut:
             "codigo_ue": self.codigo_ue,
             "data_inicio": self.data_inicio,
             "data_fim": self.data_fim,
+            "dt_fim_nomeacao": self.dt_fim_nomeacao,
+            "dt_fim_funcao_atividade": self.dt_fim_funcao_atividade,
+            "origem_vinculo": self.origem_vinculo,
             "codigo_cargo": self.codigo_cargo,
             "cargo": self.cargo,
             "codigo_tipo_funcao_atividade": (

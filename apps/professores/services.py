@@ -276,13 +276,14 @@ def _upsert_incremental(
 
     ids_destino = [item[0] for item in linhas]
     hashes_existentes: dict[str, str] = {}
-    for i in range(0, len(ids_destino), _HASH_LOOKUP_BATCH):
-        lote = ids_destino[i : i + _HASH_LOOKUP_BATCH]
-        hashes_existentes.update(
-            EtlAuditoriaLinha.objects.filter(id_destino__in=lote).values_list(
-                "id_destino", "hash_controle"
+    if os.getenv("ETL_SKIP_AUDIT_HASH") != "1":
+        for i in range(0, len(ids_destino), _HASH_LOOKUP_BATCH):
+            lote = ids_destino[i : i + _HASH_LOOKUP_BATCH]
+            hashes_existentes.update(
+                EtlAuditoriaLinha.objects.filter(
+                    id_destino__in=lote
+                ).values_list("id_destino", "hash_controle")
             )
-        )
 
     objs_para_salvar: list[Any] = []
     novos_hashes: dict[str, str] = {}
@@ -677,12 +678,15 @@ class EtlProfessoresService:
         return total
 
     def popular_funcionarios(self) -> int:
-        """Popula funcionario por UE via hash incremental.
+        """Popula funcionario por UE.
 
         Returns:
-            Quantidade de linhas inseridas ou atualizadas.
+            Quantidade de linhas inseridas.
         """
         total = 0
+        FuncionarioUnidadeEducacional.objects.using(
+            "professores_db"
+        ).all().delete()
         with ThreadPoolProcessor(
             prefixo_log="PROF:funcionario_unidade_educacional"
         ) as proc:
@@ -708,6 +712,9 @@ class EtlProfessoresService:
                         "codigo_ue",
                         "data_inicio",
                         "data_fim",
+                        "dt_fim_nomeacao",
+                        "dt_fim_funcao_atividade",
+                        "origem_vinculo",
                         "codigo_cargo",
                         "cargo",
                         "codigo_tipo_funcao_atividade",

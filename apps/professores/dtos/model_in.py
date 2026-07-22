@@ -333,6 +333,9 @@ class FuncionarioUnidadeEducacionalIn:
     codigo_ue: Any
     data_inicio: Any
     data_fim: Any
+    dt_fim_nomeacao: Any
+    dt_fim_funcao_atividade: Any
+    origem_vinculo: Any
     cd_cargo: Any
     cargo: Any
     cd_tipo_funcao_atividade: Any
@@ -359,6 +362,9 @@ class FuncionarioUnidadeEducacionalIn:
             codigo_ue=str(self.codigo_ue).strip(),
             data_inicio=self.data_inicio,
             data_fim=self.data_fim,
+            dt_fim_nomeacao=self.dt_fim_nomeacao,
+            dt_fim_funcao_atividade=self.dt_fim_funcao_atividade,
+            origem_vinculo=self.origem_vinculo,
             codigo_cargo=self.cd_cargo,
             cargo=self.cargo or None,
             codigo_tipo_funcao_atividade=self.cd_tipo_funcao_atividade,

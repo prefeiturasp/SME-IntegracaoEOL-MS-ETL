@@ -37,6 +37,9 @@ class ProfessoresModelsTest(TestCase):
         self.assertEqual(meta.get_field("codigo_rf").max_length, 20)
         self.assertFalse(meta.get_field("data_inicio").null)
         self.assertTrue(meta.get_field("data_fim").null)
+        self.assertTrue(meta.get_field("dt_fim_nomeacao").null)
+        self.assertTrue(meta.get_field("dt_fim_funcao_atividade").null)
+        self.assertTrue(meta.get_field("origem_vinculo").null)
         self.assertFalse(meta.get_field("codigo_tipo_funcao_atividade").null)
         self.assertTrue(meta.get_field("codigo_cargo").null)
         nomes_indices = {indice.name for indice in meta.indexes}
