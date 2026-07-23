@@ -111,6 +111,7 @@ class LotacaoServidor(models.Model):
         max_length=20,
         help_text=_HELP_UE,
     )
+    codigo_dre = models.CharField(max_length=20, null=True, blank=True)
     dt_inicio = models.DateField(null=True, blank=True)
     dt_fim = models.DateField(null=True, blank=True)
 
@@ -122,6 +123,7 @@ class LotacaoServidor(models.Model):
         verbose_name_plural = "lotações dos servidores"
         indexes = [
             models.Index(fields=["codigo_unidade_educacao"], name="idx_ls_ue"),
+            models.Index(fields=["codigo_dre"], name="idx_ls_dre"),
             models.Index(fields=["dt_fim"], name="idx_ls_dt_fim"),
         ]
 

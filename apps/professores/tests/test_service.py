@@ -202,10 +202,11 @@ class RowToLotacaoTest(TestCase):
 
     def test_campos(self) -> None:
         """Verifica que os campos da lotação são extraídos corretamente."""
-        row = (1001, "000001", datetime.date(2020, 1, 1), None)
+        row = (1001, "000001", "108100", datetime.date(2020, 1, 1), None)
         r = _row_to_lotacao(row)
         self.assertEqual(r["cargo_base_id"], 1001)
         self.assertEqual(r["codigo_unidade_educacao"], "000001")
+        self.assertEqual(r["codigo_dre"], "108100")
         self.assertIsNone(r["dt_fim"])
 
 

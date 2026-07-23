@@ -86,11 +86,14 @@ SQL_LOTACOES = """
     SELECT
         ls.cd_cargo_base_servidor,
         ls.cd_unidade_educacao,
+        ue.cd_unidade_administrativa_referencia AS codigo_dre,
         ls.dt_inicio,
         ls.dt_fim
     FROM lotacao_servidor ls
     INNER JOIN v_cargo_base_cotic cbs
         ON cbs.cd_cargo_base_servidor = ls.cd_cargo_base_servidor
+    LEFT JOIN v_cadastro_unidade_educacao ue
+        ON ue.cd_unidade_educacao = ls.cd_unidade_educacao
 """
 
 SQL_CARGOS_SOBREPOSTOS = f"""
@@ -280,7 +283,6 @@ SQL_DISCIPLINAS_TURMAS_ATRIBUIDAS_UE = """
       AND turma_escola.cd_tipo_turma IN (2, 3, 5)
       /*FILTRO_ANO_LETIVO_DISCIPLINAS_TURMAS_ATRIBUIDAS_UE*/
 """
-
 
 SQL_ATRIBUICOES_AULA = f"""
     SELECT

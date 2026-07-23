@@ -103,6 +103,7 @@ class LotacaoServidorIn:
 
     cd_cargo_base_servidor: Any
     cd_unidade_educacao: Any
+    codigo_dre: Any
     dt_inicio: Any
     dt_fim: Any
 
@@ -112,6 +113,9 @@ class LotacaoServidorIn:
         return LotacaoServidorOut(
             cargo_base_id=self.cd_cargo_base_servidor,
             codigo_unidade_educacao=str(self.cd_unidade_educacao).strip(),
+            codigo_dre=(
+                str(self.codigo_dre).strip() if self.codigo_dre else None
+            ),
             dt_inicio=self.dt_inicio,
             dt_fim=self.dt_fim,
         )

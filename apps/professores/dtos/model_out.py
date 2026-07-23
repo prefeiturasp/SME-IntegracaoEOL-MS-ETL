@@ -91,6 +91,7 @@ class LotacaoServidorOut:
 
     cargo_base_id: int
     codigo_unidade_educacao: str
+    codigo_dre: str | None
     dt_inicio: Any
     dt_fim: Any
 
@@ -98,6 +99,7 @@ class LotacaoServidorOut:
         return {
             "cargo_base_id": self.cargo_base_id,
             "codigo_unidade_educacao": self.codigo_unidade_educacao,
+            "codigo_dre": self.codigo_dre,
             "dt_inicio": self.dt_inicio,
             "dt_fim": self.dt_fim,
         }
