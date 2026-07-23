@@ -360,6 +360,7 @@ class FuncionarioUnidadeEducacionalIn:
     cpf: Any
     codigo_rf: Any
     codigo_ue: Any
+    codigo_dre: Any
     data_inicio: Any
     data_fim: Any
     dt_fim_nomeacao: Any
@@ -389,6 +390,9 @@ class FuncionarioUnidadeEducacionalIn:
             cpf=str(self.cpf).strip() if self.cpf else None,
             codigo_rf=str(self.codigo_rf).strip(),
             codigo_ue=str(self.codigo_ue).strip(),
+            codigo_dre=(
+                str(self.codigo_dre).strip() if self.codigo_dre else None
+            ),
             data_inicio=self.data_inicio,
             data_fim=self.data_fim,
             dt_fim_nomeacao=self.dt_fim_nomeacao,

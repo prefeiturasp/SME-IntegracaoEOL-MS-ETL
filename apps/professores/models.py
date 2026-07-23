@@ -485,6 +485,7 @@ class FuncionarioUnidadeEducacional(models.Model):
         blank=True,
     )
     codigo_ue = models.CharField(max_length=20)
+    codigo_dre = models.CharField(max_length=20, null=True, blank=True)
     data_inicio = models.DateTimeField(default=_data_chave_padrao)
     data_fim = models.DateTimeField(null=True, blank=True)
     dt_fim_nomeacao = models.DateTimeField(null=True, blank=True)
@@ -506,6 +507,7 @@ class FuncionarioUnidadeEducacional(models.Model):
         verbose_name_plural = "funcionarios"
         indexes = [
             models.Index(fields=["codigo_ue"], name="idx_funcionario_ue"),
+            models.Index(fields=["codigo_dre"], name="idx_funcionario_dre"),
             models.Index(
                 fields=["codigo_cargo"], name="idx_funcionario_cargo"
             ),
@@ -513,6 +515,10 @@ class FuncionarioUnidadeEducacional(models.Model):
             models.Index(
                 fields=["codigo_ue", "codigo_cargo"],
                 name="idx_funcionario_ue_cargo",
+            ),
+            models.Index(
+                fields=["codigo_dre", "codigo_cargo"],
+                name="idx_funcionario_dre_cargo",
             ),
         ]
         constraints = [

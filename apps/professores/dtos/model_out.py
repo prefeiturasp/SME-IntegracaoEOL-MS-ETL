@@ -433,6 +433,7 @@ class FuncionarioUnidadeEducacionalOut:
     cpf: str | None
     codigo_rf: str
     codigo_ue: str
+    codigo_dre: str | None
     data_inicio: Any
     data_fim: Any
     dt_fim_nomeacao: Any
@@ -453,6 +454,7 @@ class FuncionarioUnidadeEducacionalOut:
         self.cpf = _normalizar_texto_opcional(self.cpf)
         self.codigo_rf = _normalizar_texto(self.codigo_rf)
         self.codigo_ue = _normalizar_texto(self.codigo_ue)
+        self.codigo_dre = _normalizar_texto_opcional(self.codigo_dre)
         self.data_inicio = _normalizar_data_chave_funcionario(self.data_inicio)
         self.data_fim = _normalizar_datetime(self.data_fim)
         self.dt_fim_nomeacao = _normalizar_datetime(self.dt_fim_nomeacao)
@@ -484,6 +486,7 @@ class FuncionarioUnidadeEducacionalOut:
             "cpf": self.cpf,
             "codigo_rf": self.codigo_rf,
             "codigo_ue": self.codigo_ue,
+            "codigo_dre": self.codigo_dre,
             "data_inicio": self.data_inicio,
             "data_fim": self.data_fim,
             "dt_fim_nomeacao": self.dt_fim_nomeacao,

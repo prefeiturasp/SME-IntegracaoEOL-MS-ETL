@@ -719,6 +719,7 @@ class EtlProfessoresService:
                         "nome_social",
                         "cpf",
                         "codigo_ue",
+                        "codigo_dre",
                         "data_inicio",
                         "data_fim",
                         "dt_fim_nomeacao",

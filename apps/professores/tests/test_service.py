@@ -497,6 +497,7 @@ class RowToFuncionarioTest(TestCase):
             None,
             "7506988",
             "019372",
+            None,
             timezone.now(),
             None,
             None,
@@ -527,6 +528,7 @@ class RowToFuncionarioTest(TestCase):
             " 123 ",
             " 7506988 ",
             " 019372 ",
+            " 108100 ",
             dt,
             None,
             None,
@@ -549,6 +551,7 @@ class RowToFuncionarioTest(TestCase):
         self.assertEqual(r["cpf"], "123")
         self.assertEqual(r["codigo_rf"], "7506988")
         self.assertEqual(r["codigo_ue"], "019372")
+        self.assertEqual(r["codigo_dre"], "108100")
         self.assertTrue(timezone.is_aware(r["data_inicio"]))
         self.assertIsNone(r["data_fim"])
         self.assertIsNone(r["dt_fim_nomeacao"])
@@ -571,6 +574,7 @@ class RowToFuncionarioTest(TestCase):
             None,
             "7506988",
             "019372",
+            None,
             dt,
             None,
             None,
@@ -1198,6 +1202,7 @@ class EtlProfessoresServiceFase4Test(TestCase):
                     None,
                     "7506988",
                     "019372",
+                    "108100",
                     dt,
                     None,
                     None,
