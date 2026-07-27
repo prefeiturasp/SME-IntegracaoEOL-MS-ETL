@@ -19,6 +19,11 @@ class ProfessorOut:
     cpf: str | None
 
     def to_dict(self) -> dict[str, Any]:
+        """Retorna dados do professor.
+
+        Returns:
+            Dados prontos para persistência.
+        """
         return {
             "codigo_rf": self.codigo_rf,
             "nome": self.nome,
@@ -41,6 +46,11 @@ class CargoBaseServidorOut:
     dt_cancelamento: Any
 
     def to_dict(self) -> dict[str, Any]:
+        """Retorna dados do cargo base.
+
+        Returns:
+            Dados prontos para persistência.
+        """
         return {
             "id": self.id,
             "professor_id": self.professor_id,
@@ -74,7 +84,11 @@ class FuncionarioCargoOut:
         self.codigo_cargo = _normalizar_int(self.codigo_cargo)
 
     def to_dict(self) -> dict[str, Any]:
-        """Monta o dicionário de persistência."""
+        """Retorna dados do funcionário por cargo.
+
+        Returns:
+            Dados prontos para persistência.
+        """
         return {
             "nome": self.nome,
             "codigo_rf": self.codigo_rf,
@@ -96,6 +110,11 @@ class LotacaoServidorOut:
     dt_fim: Any
 
     def to_dict(self) -> dict[str, Any]:
+        """Retorna dados da lotação.
+
+        Returns:
+            Dados prontos para persistência.
+        """
         return {
             "cargo_base_id": self.cargo_base_id,
             "codigo_unidade_educacao": self.codigo_unidade_educacao,
@@ -115,6 +134,11 @@ class CargoSobrepostoServidorOut:
     dt_fim_cargo_sobreposto: Any
 
     def to_dict(self) -> dict[str, Any]:
+        """Retorna dados do cargo sobreposto.
+
+        Returns:
+            Dados prontos para persistência.
+        """
         return {
             "cargo_base_id": self.cargo_base_id,
             "codigo_cargo": self.codigo_cargo,
@@ -132,6 +156,11 @@ class FuncaoAtividadeCargoServidorOut:
     dt_fim_funcao_atividade: Any
 
     def to_dict(self) -> dict[str, Any]:
+        """Retorna dados da função atividade.
+
+        Returns:
+            Dados prontos para persistência.
+        """
         return {
             "cargo_base_id": self.cargo_base_id,
             "codigo_unidade_local_servico": self.codigo_unidade_local_servico,
@@ -146,6 +175,11 @@ class LaudoMedicoOut:
     cargo_base_id: int
 
     def to_dict(self) -> dict[str, Any]:
+        """Retorna dados do laudo médico.
+
+        Returns:
+            Dados prontos para persistência.
+        """
         return {
             "cargo_base_id": self.cargo_base_id,
         }
@@ -161,6 +195,11 @@ class PessoaOut:
     nome_social: str | None
 
     def to_dict(self) -> dict[str, Any]:
+        """Retorna dados da pessoa.
+
+        Returns:
+            Dados prontos para persistência.
+        """
         return {
             "codigo_pessoa": self.codigo_pessoa,
             "cpf": self.cpf,
@@ -181,6 +220,11 @@ class ContratoExternoOut:
     codigo_motivo_desligamento: int | None
 
     def to_dict(self) -> dict[str, Any]:
+        """Retorna dados do contrato externo.
+
+        Returns:
+            Dados prontos para persistência.
+        """
         return {
             "codigo_contrato": self.codigo_contrato,
             "pessoa_id": self.pessoa_id,
@@ -227,6 +271,11 @@ class AtribuicaoAulaOut:
     tipo_turno: int | None
 
     def to_dict(self) -> dict[str, Any]:
+        """Retorna dados da atribuição de aula.
+
+        Returns:
+            Dados prontos para persistência.
+        """
         return {
             "id": self.id,
             "cargo_base_id": self.cargo_base_id,
@@ -306,6 +355,11 @@ class AtribuicaoExternoOut:
     dt_cancelamento: Any
 
     def to_dict(self) -> dict[str, Any]:
+        """Retorna dados da atribuição externa.
+
+        Returns:
+            Dados prontos para persistência.
+        """
         return {
             "id": self.id,
             "contrato_externo_id": self.contrato_externo_id,
@@ -420,7 +474,14 @@ def _normalizar_datetime(valor: Any) -> Any:
 
 
 def _normalizar_data_chave_funcionario(valor: Any) -> Any:
-    """Normaliza data usada na chave natural."""
+    """Normaliza data usada na chave do funcionário.
+
+    Args:
+        valor: Data recebida para normalização.
+
+    Returns:
+        Data normalizada para persistência.
+    """
     return _normalizar_datetime(valor or _DATA_CHAVE_PADRAO)
 
 
@@ -448,7 +509,7 @@ class FuncionarioUnidadeEducacionalOut:
     tipo_funcao_externo: int | None
 
     def __post_init__(self) -> None:
-        """Normaliza campos do contrato de funcionario."""
+        """Normaliza campos do funcionário por unidade."""
         self.nome = _normalizar_texto(self.nome)
         self.nome_social = _normalizar_texto_opcional(self.nome_social)
         self.cpf = _normalizar_texto_opcional(self.cpf)
@@ -475,10 +536,10 @@ class FuncionarioUnidadeEducacionalOut:
         )
 
     def to_dict(self) -> dict[str, Any]:
-        """Monta o dicionario de persistencia.
+        """Retorna dados do funcionário por unidade.
 
         Returns:
-            Campos compatíveis com o model `FuncionarioUnidadeEducacional`.
+            Dados prontos para persistência.
         """
         return {
             "nome": self.nome,
@@ -532,7 +593,11 @@ class TurmaAtribuidaUeOut:
     cargo_sobreposto: int | None
 
     def to_dict(self) -> dict[str, Any]:
-        """Monta o dicionario de persistencia."""
+        """Retorna dados da turma atribuída por UE.
+
+        Returns:
+            Dados prontos para persistência.
+        """
         return {
             "codigo_escola": self.codigo_escola,
             "codigo_turma": self.codigo_turma,
@@ -586,7 +651,11 @@ class DisciplinaTurmaAtribuidaUeOut:
     cargo_sobreposto: int | None
 
     def to_dict(self) -> dict[str, Any]:
-        """Monta o dicionario de persistencia."""
+        """Retorna dados da disciplina atribuída por UE.
+
+        Returns:
+            Dados prontos para persistência.
+        """
         return {
             "codigo_escola": self.codigo_escola,
             "codigo_turma": _normalizar_int(self.codigo_turma),
