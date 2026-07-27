@@ -254,6 +254,80 @@ def _reinsere_se_ausente(
             hashes[id_dest] = novo_h
 
 
+def _linhas_com_hash(
+    tabela: str,
+    rows: list[dict[str, Any]],
+    campos_unique: list[str],
+    campos_hash: list[str],
+) -> list[tuple[str, str, dict[str, Any]]]:
+    """Monta linhas com identificador e hash de controle.
+
+    Args:
+        tabela: Nome da tabela processada.
+        rows: Registros recebidos para carga.
+        campos_unique: Campos usados para identificar o registro.
+        campos_hash: Campos usados no controle de mudança.
+
+    Returns:
+        Linhas com identificador, hash e dados originais.
+    """
+    linhas: list[tuple[str, str, dict[str, Any]]] = []
+    for row_dict in rows:
+        chave = tuple(row_dict[campo] for campo in campos_unique)
+        chave_serializada = tuple(str(valor) for valor in chave)
+        id_destino = f"{tabela}:{'|'.join(chave_serializada)}"
+        valores_hash = {k: row_dict.get(k) for k in campos_hash}
+        linhas.append((id_destino, _calcular_hash(valores_hash), row_dict))
+    return linhas
+
+
+def _buscar_hashes_existentes(ids_destino: list[str]) -> dict[str, str]:
+    """Retorna hashes existentes para os registros informados.
+
+    Args:
+        ids_destino: Identificadores dos registros.
+
+    Returns:
+        Hashes encontrados por identificador.
+    """
+    if os.getenv("ETL_SKIP_AUDIT_HASH") == "1":
+        return {}
+
+    hashes_existentes: dict[str, str] = {}
+    for i in range(0, len(ids_destino), _HASH_LOOKUP_BATCH):
+        lote = ids_destino[i : i + _HASH_LOOKUP_BATCH]
+        hashes_existentes.update(
+            EtlAuditoriaLinha.objects.filter(id_destino__in=lote).values_list(
+                "id_destino", "hash_controle"
+            )
+        )
+    return hashes_existentes
+
+
+def _deduplicar_objetos(
+    objs: list[Any],
+    campos_unique: list[str],
+) -> list[Any]:
+    """Remove objetos repetidos pela chave da carga.
+
+    Args:
+        objs: Objetos preparados para gravação.
+        campos_unique: Campos usados para identificar o objeto.
+
+    Returns:
+        Objetos sem repetição pela chave informada.
+    """
+    vistos: set[tuple[Any, ...]] = set()
+    deduplicados: list[Any] = []
+    for obj in objs:
+        chave = tuple(getattr(obj, campo) for campo in campos_unique)
+        if chave in vistos:
+            continue
+        vistos.add(chave)
+        deduplicados.append(obj)
+    return deduplicados
+
+
 def _upsert_incremental(
     model_class: Any,
     tabela: str,
@@ -274,24 +348,9 @@ def _upsert_incremental(
     ]
     campos_hash = list(dict.fromkeys([*campos_unique, *update_fields]))
 
-    linhas: list[tuple[str, str, dict[str, Any]]] = []
-    for row_dict in rows:
-        chave = tuple(row_dict[campo] for campo in campos_unique)
-        chave_serializada = tuple(str(valor) for valor in chave)
-        id_destino = f"{tabela}:{'|'.join(chave_serializada)}"
-        valores_hash = {k: row_dict.get(k) for k in campos_hash}
-        linhas.append((id_destino, _calcular_hash(valores_hash), row_dict))
-
+    linhas = _linhas_com_hash(tabela, rows, campos_unique, campos_hash)
     ids_destino = [item[0] for item in linhas]
-    hashes_existentes: dict[str, str] = {}
-    if os.getenv("ETL_SKIP_AUDIT_HASH") != "1":
-        for i in range(0, len(ids_destino), _HASH_LOOKUP_BATCH):
-            lote = ids_destino[i : i + _HASH_LOOKUP_BATCH]
-            hashes_existentes.update(
-                EtlAuditoriaLinha.objects.filter(
-                    id_destino__in=lote
-                ).values_list("id_destino", "hash_controle")
-            )
+    hashes_existentes = _buscar_hashes_existentes(ids_destino)
 
     objs_para_salvar: list[Any] = []
     novos_hashes: dict[str, str] = {}
@@ -320,14 +379,7 @@ def _upsert_incremental(
     if not objs_para_salvar:
         return 0
 
-    seen_chaves: set[tuple[Any, ...]] = set()
-    objs_dedup: list[Any] = []
-    for obj in objs_para_salvar:
-        chave = tuple(getattr(obj, campo) for campo in campos_unique)
-        if chave not in seen_chaves:
-            seen_chaves.add(chave)
-            objs_dedup.append(obj)
-    objs_para_salvar = objs_dedup
+    objs_para_salvar = _deduplicar_objetos(objs_para_salvar, campos_unique)
 
     model_class.objects.using("professores_db").bulk_create(
         objs_para_salvar,
