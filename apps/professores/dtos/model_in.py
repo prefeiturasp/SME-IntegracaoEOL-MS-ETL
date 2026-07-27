@@ -12,6 +12,7 @@ if TYPE_CHECKING:
         ContratoExternoOut,
         DisciplinaTurmaAtribuidaUeOut,
         FuncaoAtividadeCargoServidorOut,
+        FuncionarioCargoOut,
         FuncionarioUnidadeEducacionalOut,
         LaudoMedicoOut,
         LotacaoServidorOut,
@@ -31,6 +32,11 @@ class ProfessorIn:
     cd_cpf_pessoa: Any
 
     def to_domain(self) -> "ProfessorOut":
+        """Retorna dados normalizados do professor.
+
+        Returns:
+            Dados do professor para persistência.
+        """
         from apps.professores.dtos.model_out import ProfessorOut
 
         return ProfessorOut(
@@ -57,6 +63,11 @@ class CargoBaseServidorIn:
     dt_cancelamento: Any
 
     def to_domain(self) -> "CargoBaseServidorOut":
+        """Retorna dados normalizados do cargo base.
+
+        Returns:
+            Dados do cargo base para persistência.
+        """
         from apps.professores.dtos.model_out import CargoBaseServidorOut
 
         dc = str(self.dc_cargo).strip() if self.dc_cargo else None
@@ -73,20 +84,58 @@ class CargoBaseServidorIn:
 
 
 @dataclass(slots=True)
+class FuncionarioCargoIn:
+    """Dados de funcionário por cargo."""
+
+    nm_pessoa: Any
+    cd_registro_funcional: Any
+    dt_posse: Any
+    dt_fim_nomeacao: Any
+    dc_cargo: Any
+    cd_cargo: Any
+
+    def to_domain(self) -> "FuncionarioCargoOut":
+        """Retorna dados normalizados do funcionário por cargo.
+
+        Returns:
+            Dados do funcionário por cargo para persistência.
+        """
+        from apps.professores.dtos.model_out import FuncionarioCargoOut
+
+        return FuncionarioCargoOut(
+            nome=self.nm_pessoa,
+            codigo_rf=self.cd_registro_funcional,
+            data_inicio=self.dt_posse,
+            data_fim=self.dt_fim_nomeacao,
+            cargo=self.dc_cargo,
+            codigo_cargo=self.cd_cargo,
+        )
+
+
+@dataclass(slots=True)
 class LotacaoServidorIn:
     """Dados da tabela `lotacao_servidor`."""
 
     cd_cargo_base_servidor: Any
     cd_unidade_educacao: Any
+    codigo_dre: Any
     dt_inicio: Any
     dt_fim: Any
 
     def to_domain(self) -> "LotacaoServidorOut":
+        """Retorna dados normalizados da lotação.
+
+        Returns:
+            Dados da lotação para persistência.
+        """
         from apps.professores.dtos.model_out import LotacaoServidorOut
 
         return LotacaoServidorOut(
             cargo_base_id=self.cd_cargo_base_servidor,
             codigo_unidade_educacao=str(self.cd_unidade_educacao).strip(),
+            codigo_dre=(
+                str(self.codigo_dre).strip() if self.codigo_dre else None
+            ),
             dt_inicio=self.dt_inicio,
             dt_fim=self.dt_fim,
         )
@@ -102,6 +151,11 @@ class CargoSobrepostoServidorIn:
     dt_fim_cargo_sobreposto: Any
 
     def to_domain(self) -> "CargoSobrepostoServidorOut":
+        """Retorna dados normalizados do cargo sobreposto.
+
+        Returns:
+            Dados do cargo sobreposto para persistência.
+        """
         from apps.professores.dtos.model_out import CargoSobrepostoServidorOut
 
         return CargoSobrepostoServidorOut(
@@ -123,6 +177,11 @@ class FuncaoAtividadeCargoServidorIn:
     dt_fim_funcao_atividade: Any
 
     def to_domain(self) -> "FuncaoAtividadeCargoServidorOut":
+        """Retorna dados normalizados da função atividade.
+
+        Returns:
+            Dados da função atividade para persistência.
+        """
         from apps.professores.dtos.model_out import (
             FuncaoAtividadeCargoServidorOut,
         )
@@ -143,6 +202,11 @@ class LaudoMedicoIn:
     cd_cargo_base_servidor: Any
 
     def to_domain(self) -> "LaudoMedicoOut":
+        """Retorna dados normalizados do laudo médico.
+
+        Returns:
+            Dados do laudo médico para persistência.
+        """
         from apps.professores.dtos.model_out import LaudoMedicoOut
 
         return LaudoMedicoOut(
@@ -160,6 +224,11 @@ class PessoaIn:
     nm_social: Any
 
     def to_domain(self) -> "PessoaOut":
+        """Retorna dados normalizados da pessoa.
+
+        Returns:
+            Dados da pessoa para persistência.
+        """
         from apps.professores.dtos.model_out import PessoaOut
 
         return PessoaOut(
@@ -182,6 +251,11 @@ class ContratoExternoIn:
     cd_motivo_desligamento_externo: Any
 
     def to_domain(self) -> "ContratoExternoOut":
+        """Retorna dados normalizados do contrato externo.
+
+        Returns:
+            Dados do contrato externo para persistência.
+        """
         from apps.professores.dtos.model_out import ContratoExternoOut
 
         return ContratoExternoOut(
@@ -230,6 +304,11 @@ class AtribuicaoAulaIn:
     tipo_turno: Any
 
     def to_domain(self) -> "AtribuicaoAulaOut":
+        """Retorna dados normalizados da atribuição de aula.
+
+        Returns:
+            Dados da atribuição de aula para persistência.
+        """
         from apps.professores.dtos.model_out import AtribuicaoAulaOut
 
         return AtribuicaoAulaOut(
@@ -293,6 +372,11 @@ class AtribuicaoExternoIn:
     dt_cancelamento: Any
 
     def to_domain(self) -> "AtribuicaoExternoOut":
+        """Retorna dados normalizados da atribuição externa.
+
+        Returns:
+            Dados da atribuição externa para persistência.
+        """
         from apps.professores.dtos.model_out import AtribuicaoExternoOut
 
         return AtribuicaoExternoOut(
@@ -331,8 +415,12 @@ class FuncionarioUnidadeEducacionalIn:
     cpf: Any
     codigo_rf: Any
     codigo_ue: Any
+    codigo_dre: Any
     data_inicio: Any
     data_fim: Any
+    dt_fim_nomeacao: Any
+    dt_fim_funcao_atividade: Any
+    origem_vinculo: Any
     cd_cargo: Any
     cargo: Any
     cd_tipo_funcao_atividade: Any
@@ -342,10 +430,10 @@ class FuncionarioUnidadeEducacionalIn:
     tipo_funcao_externo: Any
 
     def to_domain(self) -> "FuncionarioUnidadeEducacionalOut":
-        """Monta o DTO de destino a partir da linha de origem.
+        """Retorna dados normalizados do funcionário por unidade.
 
         Returns:
-            Dados normalizados do funcionario.
+            Dados do funcionário por unidade para persistência.
         """
         from apps.professores.dtos.model_out import (
             FuncionarioUnidadeEducacionalOut,
@@ -357,8 +445,14 @@ class FuncionarioUnidadeEducacionalIn:
             cpf=str(self.cpf).strip() if self.cpf else None,
             codigo_rf=str(self.codigo_rf).strip(),
             codigo_ue=str(self.codigo_ue).strip(),
+            codigo_dre=(
+                str(self.codigo_dre).strip() if self.codigo_dre else None
+            ),
             data_inicio=self.data_inicio,
             data_fim=self.data_fim,
+            dt_fim_nomeacao=self.dt_fim_nomeacao,
+            dt_fim_funcao_atividade=self.dt_fim_funcao_atividade,
+            origem_vinculo=self.origem_vinculo,
             codigo_cargo=self.cd_cargo,
             cargo=self.cargo or None,
             codigo_tipo_funcao_atividade=self.cd_tipo_funcao_atividade,
@@ -397,7 +491,11 @@ class TurmaAtribuidaUeIn:
     cargo_sobreposto: Any
 
     def to_domain(self) -> "TurmaAtribuidaUeOut":
-        """Monta o DTO de destino a partir da linha de origem."""
+        """Retorna dados normalizados da turma atribuída por UE.
+
+        Returns:
+            Dados da turma atribuída por UE para persistência.
+        """
         from apps.professores.dtos.model_out import TurmaAtribuidaUeOut
 
         return TurmaAtribuidaUeOut(
@@ -447,7 +545,11 @@ class DisciplinaTurmaAtribuidaUeIn:
     cargo_sobreposto: Any
 
     def to_domain(self) -> "DisciplinaTurmaAtribuidaUeOut":
-        """Monta o DTO de destino a partir da linha de origem."""
+        """Retorna dados normalizados da disciplina atribuída por UE.
+
+        Returns:
+            Dados da disciplina atribuída por UE para persistência.
+        """
         from apps.professores.dtos.model_out import (
             DisciplinaTurmaAtribuidaUeOut,
         )

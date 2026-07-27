@@ -112,21 +112,7 @@ _UNIQUE_AGRUP = (
 
 
 class EtlPedagogicoService(BaseEtlService):
-    """Orquestra o ETL completo do dominio PEDAGOGICO_DB.
-
-    Herda de ``BaseEtlService`` para reutilizar o pipeline
-    Producer-Consumer com ThreadPool, auditoria incremental via SHA-256
-    (``pg_engine``), controle de ``primeiro_run`` e retry em deadlock.
-
-    Customizações em relação ao padrão base:
-        - ``_iter_chunks``: suporta templates com ``?`` para iteração
-          por ano letivo e encaminha SQLs da API EOL para ``ApiEOLService``.
-        - ``_criar_transform``: injeta ``_agora`` via closure, sem
-          alocação extra a cada linha.
-        - ``_executar_fase``: trata atribuições de território e a fase
-          opcional de agrupamento gerado.
-        - ``executar``: respeita execução parcial por nome de fase.
-    """
+    """Orquestra a carga do domínio pedagógico."""
 
     _dominio = "PEDAGOGICO"
 
@@ -164,21 +150,23 @@ class EtlPedagogicoService(BaseEtlService):
     # Contrato BaseEtlService
     # ------------------------------------------------------------------
 
-    def _iter_chunks(self, sql: str) -> Iterator[list[tuple]]:
-        """Itera chunks do SQL Server via EOLService.
+    def _iter_chunks(self, consulta: str) -> Iterator[list[tuple]]:
+        """Itera registros de origem em lotes.
 
-        Quando o SQL contém ``?``, itera para cada ano letivo
-        substituindo o placeholder — permite o Producer-Consumer operar
-        de forma transparente sobre queries parametrizadas por ano.
+        Args:
+            consulta: Texto base usado na carga.
+
+        Yields:
+            Lotes de registros retornados pela origem.
         """
-        if sql in _API_EOL_SQLS:
-            yield from self.api_eol.iter_query(sql)
+        if consulta in _API_EOL_SQLS:
+            yield from self.api_eol.iter_query(consulta)
             return
-        if "?" in sql:
+        if "?" in consulta:
             for ano in self._anos_letivos():
-                yield from self.eol.iter_query(sql.replace("?", str(ano)))
+                yield from self.eol.iter_query(consulta.replace("?", str(ano)))
         else:
-            yield from self.eol.iter_query(sql)
+            yield from self.eol.iter_query(consulta)
 
     def _criar_transform(  # type: ignore[override]
         self, config: PhaseConfig

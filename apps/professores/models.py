@@ -111,6 +111,7 @@ class LotacaoServidor(models.Model):
         max_length=20,
         help_text=_HELP_UE,
     )
+    codigo_dre = models.CharField(max_length=20, null=True, blank=True)
     dt_inicio = models.DateField(null=True, blank=True)
     dt_fim = models.DateField(null=True, blank=True)
 
@@ -122,7 +123,47 @@ class LotacaoServidor(models.Model):
         verbose_name_plural = "lotações dos servidores"
         indexes = [
             models.Index(fields=["codigo_unidade_educacao"], name="idx_ls_ue"),
+            models.Index(fields=["codigo_dre"], name="idx_ls_dre"),
             models.Index(fields=["dt_fim"], name="idx_ls_dt_fim"),
+        ]
+
+
+class FuncionarioCargo(models.Model):
+    """Funcionário por cargo."""
+
+    id = models.BigAutoField(primary_key=True)
+    codigo_rf = models.CharField(max_length=20)
+    nome = models.CharField(max_length=200)
+    data_inicio = models.DateTimeField(null=True, blank=True)
+    data_fim = models.DateTimeField(null=True, blank=True)
+    cargo = models.CharField(max_length=100)
+    codigo_cargo = models.IntegerField()
+
+    class Meta:
+        app_label = "professores"
+        db_table = "funcionario_cargo"
+        verbose_name = "funcionario por cargo"
+        verbose_name_plural = "funcionarios por cargo"
+        indexes = [
+            models.Index(
+                fields=["codigo_cargo"], name="idx_funcionario_cargo_codigo"
+            ),
+            models.Index(
+                fields=["codigo_rf"], name="idx_funcionario_cargo_rf"
+            ),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "codigo_rf",
+                    "codigo_cargo",
+                    "data_inicio",
+                    "data_fim",
+                    "cargo",
+                ],
+                name="uq_funcionario_cargo_vinculo",
+                nulls_distinct=False,
+            ),
         ]
 
 
@@ -444,8 +485,12 @@ class FuncionarioUnidadeEducacional(models.Model):
         blank=True,
     )
     codigo_ue = models.CharField(max_length=20)
+    codigo_dre = models.CharField(max_length=20, null=True, blank=True)
     data_inicio = models.DateTimeField(default=_data_chave_padrao)
     data_fim = models.DateTimeField(null=True, blank=True)
+    dt_fim_nomeacao = models.DateTimeField(null=True, blank=True)
+    dt_fim_funcao_atividade = models.DateTimeField(null=True, blank=True)
+    origem_vinculo = models.CharField(max_length=30, null=True, blank=True)
     codigo_cargo = models.IntegerField(null=True, blank=True)
     cargo = models.CharField(max_length=100, null=True, blank=True)
     codigo_tipo_funcao_atividade = models.IntegerField(default=0)
@@ -462,6 +507,7 @@ class FuncionarioUnidadeEducacional(models.Model):
         verbose_name_plural = "funcionarios"
         indexes = [
             models.Index(fields=["codigo_ue"], name="idx_funcionario_ue"),
+            models.Index(fields=["codigo_dre"], name="idx_funcionario_dre"),
             models.Index(
                 fields=["codigo_cargo"], name="idx_funcionario_cargo"
             ),
@@ -469,6 +515,10 @@ class FuncionarioUnidadeEducacional(models.Model):
             models.Index(
                 fields=["codigo_ue", "codigo_cargo"],
                 name="idx_funcionario_ue_cargo",
+            ),
+            models.Index(
+                fields=["codigo_dre", "codigo_cargo"],
+                name="idx_funcionario_dre_cargo",
             ),
         ]
         constraints = [

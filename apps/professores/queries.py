@@ -66,15 +66,34 @@ SQL_CARGOS_BASE = f"""
     WHERE cbs.cd_cargo IN ({_PLACEHOLDERS_CARGO})
 """
 
+SQL_FUNCIONARIOS_CARGOS = """
+    SELECT DISTINCT
+        sc.nm_pessoa,
+        sc.cd_registro_funcional,
+        cbs.dt_posse,
+        cbs.dt_fim_nomeacao,
+        LTRIM(RTRIM(c.dc_cargo)) AS dc_cargo,
+        cbs.cd_cargo
+    FROM v_servidor_cotic sc
+    INNER JOIN v_cargo_base_cotic cbs
+        ON cbs.cd_servidor = sc.cd_servidor
+    INNER JOIN cargo c
+        ON c.cd_cargo = cbs.cd_cargo
+    WHERE sc.cd_registro_funcional IS NOT NULL
+"""
+
 SQL_LOTACOES = """
     SELECT
         ls.cd_cargo_base_servidor,
         ls.cd_unidade_educacao,
+        ue.cd_unidade_administrativa_referencia AS codigo_dre,
         ls.dt_inicio,
         ls.dt_fim
     FROM lotacao_servidor ls
     INNER JOIN v_cargo_base_cotic cbs
         ON cbs.cd_cargo_base_servidor = ls.cd_cargo_base_servidor
+    LEFT JOIN v_cadastro_unidade_educacao ue
+        ON ue.cd_unidade_educacao = ls.cd_unidade_educacao
 """
 
 SQL_CARGOS_SOBREPOSTOS = f"""
@@ -265,7 +284,6 @@ SQL_DISCIPLINAS_TURMAS_ATRIBUIDAS_UE = """
       /*FILTRO_ANO_LETIVO_DISCIPLINAS_TURMAS_ATRIBUIDAS_UE*/
 """
 
-
 SQL_ATRIBUICOES_AULA = f"""
     SELECT
         aa.cd_atribuicao_aula,
@@ -418,8 +436,12 @@ SQL_FUNCIONARIOS_UNIDADE_EDUCACIONAL = f"""
         funcionarios.cpf,
         funcionarios.codigo_rf,
         funcionarios.codigo_ue,
+        funcionarios.codigo_dre,
         funcionarios.data_inicio,
         funcionarios.data_fim,
+        funcionarios.dt_fim_nomeacao,
+        funcionarios.dt_fim_funcao_atividade,
+        funcionarios.origem_vinculo,
         funcionarios.cd_cargo,
         funcionarios.cargo,
         funcionarios.cd_tipo_funcao_atividade,
@@ -448,8 +470,12 @@ SQL_FUNCIONARIOS_UNIDADE_EDUCACIONAL = f"""
             servidor.cd_cpf_pessoa AS cpf,
             servidor.cd_registro_funcional AS codigo_rf,
             ue.cd_unidade_educacao AS codigo_ue,
+            ue.cd_unidade_administrativa_referencia AS codigo_dre,
             cargoServidor.dt_posse AS data_inicio,
             cargoServidor.dt_fim_nomeacao AS data_fim,
+            cargoServidor.dt_fim_nomeacao AS dt_fim_nomeacao,
+            funcao.dt_fim_funcao_atividade AS dt_fim_funcao_atividade,
+            'lotacao' AS origem_vinculo,
             CASE
                 WHEN cargoSobreposto.dc_cargo IS NOT NULL
                 THEN cargoSobreposto.dc_cargo
@@ -460,7 +486,7 @@ SQL_FUNCIONARIOS_UNIDADE_EDUCACIONAL = f"""
                 THEN cargoSobreposto.cd_cargo
                 ELSE cargo.cd_cargo
             END AS cd_cargo,
-            0 AS cd_tipo_funcao_atividade,
+            funcao.cd_tipo_funcao AS cd_tipo_funcao_atividade,
             cargoServidor.cd_cargo_base_servidor,
             0 AS funcao_externo,
             0 AS tipo_funcao_externo
@@ -472,6 +498,10 @@ SQL_FUNCIONARIOS_UNIDADE_EDUCACIONAL = f"""
         LEFT JOIN lotacao_servidor AS lotacao_servidor
             ON cargoServidor.cd_cargo_base_servidor
                 = lotacao_servidor.cd_cargo_base_servidor
+        LEFT JOIN funcao_atividade_cargo_servidor funcao
+            ON cargoServidor.cd_cargo_base_servidor
+                = funcao.cd_cargo_base_servidor
+            AND funcao.dt_fim_funcao_atividade IS NULL
         INNER JOIN v_cadastro_unidade_educacao ue
             ON lotacao_servidor.cd_unidade_educacao
                 = ue.cd_unidade_educacao
@@ -506,11 +536,15 @@ SQL_FUNCIONARIOS_UNIDADE_EDUCACIONAL = f"""
             servidor.cd_cpf_pessoa AS cpf,
             servidor.cd_registro_funcional AS codigo_rf,
             ue.cd_unidade_educacao AS codigo_ue,
+            ue.cd_unidade_administrativa_referencia AS codigo_dre,
             cargoServidor.dt_posse AS data_inicio,
             cargoServidor.dt_fim_nomeacao AS data_fim,
+            cargoServidor.dt_fim_nomeacao AS dt_fim_nomeacao,
+            funcao.dt_fim_funcao_atividade AS dt_fim_funcao_atividade,
+            'cargo_sobreposto' AS origem_vinculo,
             RTRIM(LTRIM(cargo.dc_cargo)) AS cargo,
             cargo.cd_cargo,
-            0 AS cd_tipo_funcao_atividade,
+            funcao.cd_tipo_funcao AS cd_tipo_funcao_atividade,
             cargoServidor.cd_cargo_base_servidor,
             0 AS funcao_externo,
             0 AS tipo_funcao_externo
@@ -520,6 +554,10 @@ SQL_FUNCIONARIOS_UNIDADE_EDUCACIONAL = f"""
         LEFT JOIN lotacao_servidor AS lotacao_servidor
             ON cargoServidor.cd_cargo_base_servidor
                 = lotacao_servidor.cd_cargo_base_servidor
+        LEFT JOIN funcao_atividade_cargo_servidor funcao
+            ON cargoServidor.cd_cargo_base_servidor
+                = funcao.cd_cargo_base_servidor
+            AND funcao.dt_fim_funcao_atividade IS NULL
         INNER JOIN cargo_sobreposto_servidor AS cargo_sobreposto_servidor
             ON cargo_sobreposto_servidor.cd_cargo_base_servidor
                 = cargoServidor.cd_cargo_base_servidor
@@ -543,11 +581,15 @@ SQL_FUNCIONARIOS_UNIDADE_EDUCACIONAL = f"""
             servidor.cd_cpf_pessoa AS cpf,
             servidor.cd_registro_funcional AS codigo_rf,
             ue.cd_unidade_educacao AS codigo_ue,
+            ue.cd_unidade_administrativa_referencia AS codigo_dre,
             cargoServidor.dt_posse AS data_inicio,
             cargoServidor.dt_fim_nomeacao AS data_fim,
+            cargoServidor.dt_fim_nomeacao AS dt_fim_nomeacao,
+            funcao.dt_fim_funcao_atividade AS dt_fim_funcao_atividade,
+            'atribuicao_aula' AS origem_vinculo,
             RTRIM(LTRIM(cargo.dc_cargo)) AS cargo,
             cargo.cd_cargo,
-            0 AS cd_tipo_funcao_atividade,
+            funcao.cd_tipo_funcao AS cd_tipo_funcao_atividade,
             cargoServidor.cd_cargo_base_servidor,
             0 AS funcao_externo,
             0 AS tipo_funcao_externo
@@ -556,6 +598,10 @@ SQL_FUNCIONARIOS_UNIDADE_EDUCACIONAL = f"""
             ON cargoServidor.cd_servidor = servidor.cd_servidor
         INNER JOIN cargo AS cargo
             ON cargoServidor.cd_cargo = cargo.cd_cargo
+        LEFT JOIN funcao_atividade_cargo_servidor funcao
+            ON cargoServidor.cd_cargo_base_servidor
+                = funcao.cd_cargo_base_servidor
+            AND funcao.dt_fim_funcao_atividade IS NULL
         INNER JOIN atribuicao_aula atribuicao
             ON atribuicao.cd_cargo_base_servidor
                 = cargoServidor.cd_cargo_base_servidor
@@ -574,8 +620,12 @@ SQL_FUNCIONARIOS_UNIDADE_EDUCACIONAL = f"""
             servidor.cd_cpf_pessoa AS cpf,
             servidor.cd_registro_funcional AS codigo_rf,
             ue.cd_unidade_educacao AS codigo_ue,
+            ue.cd_unidade_administrativa_referencia AS codigo_dre,
             cargoServidor.dt_posse AS data_inicio,
             cargoServidor.dt_fim_nomeacao AS data_fim,
+            cargoServidor.dt_fim_nomeacao AS dt_fim_nomeacao,
+            atividade.dt_fim_funcao_atividade AS dt_fim_funcao_atividade,
+            'funcao_atividade' AS origem_vinculo,
             RTRIM(LTRIM(cargo.dc_cargo)) AS cargo,
             cargo.cd_cargo,
             atividade.cd_tipo_funcao AS cd_tipo_funcao_atividade,
@@ -615,8 +665,12 @@ SQL_FUNCIONARIOS_UNIDADE_EDUCACIONAL = f"""
             p.cd_cpf_pessoa AS cpf,
             p.cd_cpf_pessoa AS codigo_rf,
             ue.cd_unidade_educacao AS codigo_ue,
+            ue.cd_unidade_administrativa_referencia AS codigo_dre,
             ce.dt_inicio AS data_inicio,
             ce.dt_cancelamento AS data_fim,
+            CAST(NULL AS DATETIME) AS dt_fim_nomeacao,
+            CAST(NULL AS DATETIME) AS dt_fim_funcao_atividade,
+            'externo' AS origem_vinculo,
             '' AS cargo,
             CAST(NULL AS INT) AS cd_cargo,
             0 AS cd_tipo_funcao_atividade,

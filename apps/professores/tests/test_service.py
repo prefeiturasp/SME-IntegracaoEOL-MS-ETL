@@ -28,6 +28,7 @@ from apps.professores.services import (
     _row_to_contrato_externo,
     _row_to_funcao_atividade,
     _row_to_funcionario,
+    _row_to_funcionario_cargo,
     _row_to_laudo,
     _row_to_lotacao,
     _row_to_pessoa,
@@ -201,10 +202,11 @@ class RowToLotacaoTest(TestCase):
 
     def test_campos(self) -> None:
         """Verifica que os campos da lotação são extraídos corretamente."""
-        row = (1001, "000001", datetime.date(2020, 1, 1), None)
+        row = (1001, "000001", "108100", datetime.date(2020, 1, 1), None)
         r = _row_to_lotacao(row)
         self.assertEqual(r["cargo_base_id"], 1001)
         self.assertEqual(r["codigo_unidade_educacao"], "000001")
+        self.assertEqual(r["codigo_dre"], "108100")
         self.assertIsNone(r["dt_fim"])
 
 
@@ -252,6 +254,29 @@ class RowToPessoaTest(TestCase):
         self.assertEqual(r["cpf"], "123.456.789-00")
         self.assertEqual(r["nome"], "JOSE")
         self.assertIsNone(r["nome_social"])
+
+
+class RowToFuncionarioCargoTest(TestCase):
+    """Testes para a função _row_to_funcionario_cargo."""
+
+    def test_campos(self) -> None:
+        """Verifica que os campos do funcionário por cargo são extraídos."""
+        dt = datetime.date(2024, 2, 1)
+        row = (
+            "MARIA",
+            "1234567",
+            dt,
+            None,
+            "PROFESSOR",
+            3239,
+        )
+        r = _row_to_funcionario_cargo(row)
+        self.assertEqual(r["nome"], "MARIA")
+        self.assertEqual(r["codigo_rf"], "1234567")
+        self.assertEqual(r["data_inicio"], dt)
+        self.assertIsNone(r["data_fim"])
+        self.assertEqual(r["cargo"], "PROFESSOR")
+        self.assertEqual(r["codigo_cargo"], 3239)
 
 
 class RowToContratoExternoTest(TestCase):
@@ -472,8 +497,12 @@ class RowToFuncionarioTest(TestCase):
             None,
             "7506988",
             "019372",
+            None,
             timezone.now(),
             None,
+            None,
+            None,
+            "lotacao",
             None,
             None,
             None,
@@ -484,6 +513,9 @@ class RowToFuncionarioTest(TestCase):
         ).to_domain()
 
         self.assertIsNone(dto.data_fim)
+        self.assertIsNone(dto.dt_fim_nomeacao)
+        self.assertIsNone(dto.dt_fim_funcao_atividade)
+        self.assertEqual(dto.origem_vinculo, "lotacao")
         self.assertIsNone(dto.codigo_cargo)
         self.assertIsNone(dto.codigo_tipo_funcao_atividade)
 
@@ -496,8 +528,12 @@ class RowToFuncionarioTest(TestCase):
             " 123 ",
             " 7506988 ",
             " 019372 ",
+            " 108100 ",
             dt,
             None,
+            None,
+            None,
+            "lotacao",
             3239,
             " PROFESSOR ",
             None,
@@ -515,8 +551,12 @@ class RowToFuncionarioTest(TestCase):
         self.assertEqual(r["cpf"], "123")
         self.assertEqual(r["codigo_rf"], "7506988")
         self.assertEqual(r["codigo_ue"], "019372")
+        self.assertEqual(r["codigo_dre"], "108100")
         self.assertTrue(timezone.is_aware(r["data_inicio"]))
         self.assertIsNone(r["data_fim"])
+        self.assertIsNone(r["dt_fim_nomeacao"])
+        self.assertIsNone(r["dt_fim_funcao_atividade"])
+        self.assertEqual(r["origem_vinculo"], "lotacao")
         self.assertEqual(r["codigo_cargo"], 3239)
         self.assertEqual(r["cargo"], "PROFESSOR")
         self.assertEqual(r["codigo_tipo_funcao_atividade"], 0)
@@ -534,11 +574,15 @@ class RowToFuncionarioTest(TestCase):
             None,
             "7506988",
             "019372",
+            None,
             dt,
             None,
             None,
             None,
-            "",
+            "lotacao",
+            None,
+            None,
+            None,
             "sim",
             "false",
             "",
@@ -549,6 +593,9 @@ class RowToFuncionarioTest(TestCase):
 
         self.assertIs(r["data_inicio"], dt)
         self.assertIsNone(r["data_fim"])
+        self.assertIsNone(r["dt_fim_nomeacao"])
+        self.assertIsNone(r["dt_fim_funcao_atividade"])
+        self.assertEqual(r["origem_vinculo"], "lotacao")
         self.assertIsNone(r["codigo_cargo"])
         self.assertTrue(r["eh_professor"])
         self.assertFalse(r["esta_afastado"])
@@ -1155,8 +1202,12 @@ class EtlProfessoresServiceFase4Test(TestCase):
                     None,
                     "7506988",
                     "019372",
+                    "108100",
                     dt,
                     None,
+                    None,
+                    None,
+                    "lotacao",
                     3239,
                     "PROFESSOR",
                     0,
@@ -1246,6 +1297,7 @@ class EtlProfessoresServiceExecutarTest(TestCase):
             resultado,
             {
                 "funcionario_unidade_educacional": 1,
+                "funcionario_cargo": 1,
                 "turma_atribuida_ue": 1,
                 "disciplina_turma_atribuida_ue": 1,
             },

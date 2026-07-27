@@ -19,6 +19,7 @@ from apps.professores.dtos.model_in import (
     ContratoExternoIn,
     DisciplinaTurmaAtribuidaUeIn,
     FuncaoAtividadeCargoServidorIn,
+    FuncionarioCargoIn,
     FuncionarioUnidadeEducacionalIn,
     LaudoMedicoIn,
     LotacaoServidorIn,
@@ -43,6 +44,7 @@ from apps.professores.models import (
     ContratoExterno,
     DisciplinaTurmaAtribuidaUe,
     FuncaoAtividadeCargoServidor,
+    FuncionarioCargo,
     FuncionarioUnidadeEducacional,
     LaudoMedico,
     LotacaoServidor,
@@ -58,6 +60,7 @@ from apps.professores.queries import (
     SQL_CARGOS_SOBREPOSTOS,
     SQL_CONTRATOS_EXTERNOS,
     SQL_DISCIPLINAS_TURMAS_ATRIBUIDAS_UE,
+    SQL_FUNCIONARIOS_CARGOS,
     SQL_FUNCIONARIOS_UNIDADE_EDUCACIONAL,
     SQL_FUNCOES_ATIVIDADE,
     SQL_LAUDOS,
@@ -149,6 +152,11 @@ def _row_to_funcionario(row: tuple) -> dict:
         Dados prontos para persistencia no destino.
     """
     return FuncionarioUnidadeEducacionalIn(*row).to_domain().to_dict()
+
+
+def _row_to_funcionario_cargo(row: tuple) -> dict:
+    """Monta o dicionário da linha de funcionário por cargo."""
+    return cast(dict, FuncionarioCargoIn(*row).to_domain().to_dict())
 
 
 def _row_to_turma_atribuida_ue(row: tuple) -> dict:
@@ -246,6 +254,80 @@ def _reinsere_se_ausente(
             hashes[id_dest] = novo_h
 
 
+def _linhas_com_hash(
+    tabela: str,
+    rows: list[dict[str, Any]],
+    campos_unique: list[str],
+    campos_hash: list[str],
+) -> list[tuple[str, str, dict[str, Any]]]:
+    """Monta linhas com identificador e hash de controle.
+
+    Args:
+        tabela: Nome da tabela processada.
+        rows: Registros recebidos para carga.
+        campos_unique: Campos usados para identificar o registro.
+        campos_hash: Campos usados no controle de mudança.
+
+    Returns:
+        Linhas com identificador, hash e dados originais.
+    """
+    linhas: list[tuple[str, str, dict[str, Any]]] = []
+    for row_dict in rows:
+        chave = tuple(row_dict[campo] for campo in campos_unique)
+        chave_serializada = tuple(str(valor) for valor in chave)
+        id_destino = f"{tabela}:{'|'.join(chave_serializada)}"
+        valores_hash = {k: row_dict.get(k) for k in campos_hash}
+        linhas.append((id_destino, _calcular_hash(valores_hash), row_dict))
+    return linhas
+
+
+def _buscar_hashes_existentes(ids_destino: list[str]) -> dict[str, str]:
+    """Retorna hashes existentes para os registros informados.
+
+    Args:
+        ids_destino: Identificadores dos registros.
+
+    Returns:
+        Hashes encontrados por identificador.
+    """
+    if os.getenv("ETL_SKIP_AUDIT_HASH") == "1":
+        return {}
+
+    hashes_existentes: dict[str, str] = {}
+    for i in range(0, len(ids_destino), _HASH_LOOKUP_BATCH):
+        lote = ids_destino[i : i + _HASH_LOOKUP_BATCH]
+        hashes_existentes.update(
+            EtlAuditoriaLinha.objects.filter(id_destino__in=lote).values_list(
+                "id_destino", "hash_controle"
+            )
+        )
+    return hashes_existentes
+
+
+def _deduplicar_objetos(
+    objs: list[Any],
+    campos_unique: list[str],
+) -> list[Any]:
+    """Remove objetos repetidos pela chave da carga.
+
+    Args:
+        objs: Objetos preparados para gravação.
+        campos_unique: Campos usados para identificar o objeto.
+
+    Returns:
+        Objetos sem repetição pela chave informada.
+    """
+    vistos: set[tuple[Any, ...]] = set()
+    deduplicados: list[Any] = []
+    for obj in objs:
+        chave = tuple(getattr(obj, campo) for campo in campos_unique)
+        if chave in vistos:
+            continue
+        vistos.add(chave)
+        deduplicados.append(obj)
+    return deduplicados
+
+
 def _upsert_incremental(
     model_class: Any,
     tabela: str,
@@ -266,23 +348,9 @@ def _upsert_incremental(
     ]
     campos_hash = list(dict.fromkeys([*campos_unique, *update_fields]))
 
-    linhas: list[tuple[str, str, dict[str, Any]]] = []
-    for row_dict in rows:
-        chave = tuple(row_dict[campo] for campo in campos_unique)
-        chave_serializada = tuple(str(valor) for valor in chave)
-        id_destino = f"{tabela}:{'|'.join(chave_serializada)}"
-        valores_hash = {k: row_dict.get(k) for k in campos_hash}
-        linhas.append((id_destino, _calcular_hash(valores_hash), row_dict))
-
+    linhas = _linhas_com_hash(tabela, rows, campos_unique, campos_hash)
     ids_destino = [item[0] for item in linhas]
-    hashes_existentes: dict[str, str] = {}
-    for i in range(0, len(ids_destino), _HASH_LOOKUP_BATCH):
-        lote = ids_destino[i : i + _HASH_LOOKUP_BATCH]
-        hashes_existentes.update(
-            EtlAuditoriaLinha.objects.filter(id_destino__in=lote).values_list(
-                "id_destino", "hash_controle"
-            )
-        )
+    hashes_existentes = _buscar_hashes_existentes(ids_destino)
 
     objs_para_salvar: list[Any] = []
     novos_hashes: dict[str, str] = {}
@@ -311,14 +379,7 @@ def _upsert_incremental(
     if not objs_para_salvar:
         return 0
 
-    seen_chaves: set[tuple[Any, ...]] = set()
-    objs_dedup: list[Any] = []
-    for obj in objs_para_salvar:
-        chave = tuple(getattr(obj, campo) for campo in campos_unique)
-        if chave not in seen_chaves:
-            seen_chaves.add(chave)
-            objs_dedup.append(obj)
-    objs_para_salvar = objs_dedup
+    objs_para_salvar = _deduplicar_objetos(objs_para_salvar, campos_unique)
 
     model_class.objects.using("professores_db").bulk_create(
         objs_para_salvar,
@@ -352,6 +413,7 @@ _TABELAS_FULL_REFRESH: frozenset[str] = frozenset(
         "cargo_sobreposto_servidor",
         "funcao_atividade_cargo_servidor",
         "laudo_medico",
+        "funcionario_cargo",
         "turma_atribuida_ue",
         "disciplina_turma_atribuida_ue",
     }
@@ -392,14 +454,14 @@ class EtlProfessoresService:
         self._ano_letivo = ano_letivo
         self.ultima_fase_concluida: int = 0
 
-    def _sql_com_filtro_ano_letivo(self, sql: str) -> str:
-        """Aplica filtro de ano letivo nas consultas compatíveis.
+    def _sql_com_filtro_ano_letivo(self, consulta: str) -> str:
+        """Aplica o recorte de ano letivo quando informado.
 
         Args:
-            sql: Consulta usada na carga.
+            consulta: Texto base usado na carga.
 
         Returns:
-            Consulta com marcadores resolvidos.
+            Texto com recorte aplicado quando houver ano letivo.
         """
         filtros = _MARCADORES_ANO_LETIVO
         if self._ano_letivo is not None:
@@ -419,8 +481,8 @@ class EtlProfessoresService:
                 ),
             }
         for marcador, filtro in filtros.items():
-            sql = sql.replace(marcador, filtro)
-        return sql
+            consulta = consulta.replace(marcador, filtro)
+        return consulta
 
     def popular_professores(self) -> int:
         """Popula a tabela Professor."""
@@ -677,12 +739,15 @@ class EtlProfessoresService:
         return total
 
     def popular_funcionarios(self) -> int:
-        """Popula funcionario por UE via hash incremental.
+        """Popula funcionario por UE.
 
         Returns:
-            Quantidade de linhas inseridas ou atualizadas.
+            Quantidade de linhas inseridas.
         """
         total = 0
+        FuncionarioUnidadeEducacional.objects.using(
+            "professores_db"
+        ).all().delete()
         with ThreadPoolProcessor(
             prefixo_log="PROF:funcionario_unidade_educacional"
         ) as proc:
@@ -706,8 +771,12 @@ class EtlProfessoresService:
                         "nome_social",
                         "cpf",
                         "codigo_ue",
+                        "codigo_dre",
                         "data_inicio",
                         "data_fim",
+                        "dt_fim_nomeacao",
+                        "dt_fim_funcao_atividade",
+                        "origem_vinculo",
                         "codigo_cargo",
                         "cargo",
                         "codigo_tipo_funcao_atividade",
@@ -728,6 +797,19 @@ class EtlProfessoresService:
                     ],
                 )
         return total
+
+    def popular_funcionarios_cargos(self) -> int:
+        """Popula funcionários por cargo."""
+        return _full_refresh_por_lote(
+            FuncionarioCargo,
+            (
+                [
+                    FuncionarioCargo(**_row_to_funcionario_cargo(row))
+                    for row in chunk
+                ]
+                for chunk in self.eol.iter_query(SQL_FUNCIONARIOS_CARGOS)
+            ),
+        )
 
     def popular_turmas_atribuidas_ue(self) -> int:
         """Popula turmas atribuídas por vínculo do funcionário com UE."""
@@ -818,6 +900,7 @@ class EtlProfessoresService:
         executar_tabela(
             "funcionario_unidade_educacional", self.popular_funcionarios
         )
+        executar_tabela("funcionario_cargo", self.popular_funcionarios_cargos)
         executar_tabela(
             "turma_atribuida_ue", self.popular_turmas_atribuidas_ue
         )
