@@ -392,7 +392,7 @@ def _normalizar_int_opcional(valor: Any) -> int | None:
 
 
 def _normalizar_bool(valor: Any) -> bool:
-    """Retorna booleano a partir de indicadores SQL.
+    """Retorna booleano a partir de indicadores de origem.
 
     Args:
         valor: Valor recebido da origem.

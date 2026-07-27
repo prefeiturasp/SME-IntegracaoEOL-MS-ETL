@@ -402,14 +402,14 @@ class EtlProfessoresService:
         self._ano_letivo = ano_letivo
         self.ultima_fase_concluida: int = 0
 
-    def _sql_com_filtro_ano_letivo(self, sql: str) -> str:
-        """Aplica filtro de ano letivo nas consultas compatíveis.
+    def _sql_com_filtro_ano_letivo(self, consulta: str) -> str:
+        """Aplica o recorte de ano letivo quando informado.
 
         Args:
-            sql: Consulta usada na carga.
+            consulta: Texto base usado na carga.
 
         Returns:
-            Consulta com marcadores resolvidos.
+            Texto com recorte aplicado quando houver ano letivo.
         """
         filtros = _MARCADORES_ANO_LETIVO
         if self._ano_letivo is not None:
@@ -429,8 +429,8 @@ class EtlProfessoresService:
                 ),
             }
         for marcador, filtro in filtros.items():
-            sql = sql.replace(marcador, filtro)
-        return sql
+            consulta = consulta.replace(marcador, filtro)
+        return consulta
 
     def popular_professores(self) -> int:
         """Popula a tabela Professor."""

@@ -39,10 +39,9 @@ class ComponenteCurricularSimplesIn:
 
 @dataclass
 class ComponenteTurmaIn:
-    """Linha de SQL_COMPONENTE_TURMA.
+    """Dados de componente de turma recebidos para carga.
 
-    Estrutura turma x componente sem professor. A ordem das colunas deve
-    corresponder exatamente ao SELECT de SQL_COMPONENTE_TURMA.
+    A ordem dos valores deve corresponder à estrutura esperada pela carga.
     """
 
     turma_codigo: Any
@@ -162,7 +161,7 @@ class GradeComponenteCurricularIn:
 
 @dataclass
 class TurmaIn:
-    """Linha bruta da query SQL_TURMAS."""
+    """Dados de turma recebidos para carga."""
 
     codigo: Any
     ano_letivo: Any
@@ -292,10 +291,9 @@ class TurmaAtribuidaDreUeIn:
 
 @dataclass
 class AtribuicaoTerritorioSaberIn:
-    """Linha bruta da query SQL_ATRIBUICOES_TERRITORIO_SABER.
+    """Dados de atribuição de Território do Saber recebidos para carga.
 
-    Cada linha representa um componente atribuído por turma com território
-    saber e é transformada para a tabela de atribuições granulares.
+    Cada item representa uma relação entre turma, componente e território.
     """
 
     codigo_componente_curricular: Any
