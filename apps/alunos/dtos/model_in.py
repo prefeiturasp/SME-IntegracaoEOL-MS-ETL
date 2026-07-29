@@ -42,6 +42,7 @@ class AlunoIn:
     cns: str | None
     data_atualizacao_contato: datetime | None
     possui_deficiencia: bool
+    tipo_sigilo: int | None = None
 
     def to_domain(self) -> dict:
         return {
@@ -60,6 +61,7 @@ class AlunoIn:
                 self.data_atualizacao_contato
             ),
             "possui_deficiencia": bool(self.possui_deficiencia),
+            "tipo_sigilo": self.tipo_sigilo,
         }
 
 
@@ -93,6 +95,13 @@ class ResponsavelAlunoIn:
     tipo_logradouro: str | None
     data_atualizacao_tabela: datetime | None
     data_fim_vinculo_aluno: date | None
+    numero_rg: str | None = None
+    digito_rg: str | None = None
+    uf_rg: str | None = None
+    cpf_confere: str | None = None
+    tipo_turno_celular: int | None = None
+    tipo_turno_fixo: int | None = None
+    tipo_turno_comercial: int | None = None
 
     def to_domain(self) -> dict:
         return {
@@ -124,6 +133,13 @@ class ResponsavelAlunoIn:
                 self.data_atualizacao_tabela
             ),
             "data_fim_vinculo": parse_date(self.data_fim_vinculo_aluno),
+            "numero_rg": self.numero_rg,
+            "digito_rg": self.digito_rg,
+            "uf_rg": strip_str(self.uf_rg),
+            "cpf_confere": strip_str(self.cpf_confere),
+            "tipo_turno_celular": self.tipo_turno_celular,
+            "tipo_turno_fixo": self.tipo_turno_fixo,
+            "tipo_turno_comercial": self.tipo_turno_comercial,
         }
 
 
@@ -168,6 +184,8 @@ class MatriculaIn:
     origem_atual: bool
     origem_historica: bool
     data_situacao_matricula_historica: datetime | None
+    codigo_serie_ensino: int | None = None
+    codigo_tipo_escola: int | None = None
 
     def to_domain(self) -> dict:
         from apps.alunos.enums import SituacaoMatricula
@@ -193,6 +211,8 @@ class MatriculaIn:
             "data_situacao_matricula_historica": aware_or_none(
                 self.data_situacao_matricula_historica
             ),
+            "codigo_serie_ensino": self.codigo_serie_ensino,
+            "codigo_tipo_escola": self.codigo_tipo_escola,
         }
 
 
