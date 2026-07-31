@@ -153,6 +153,7 @@ class TestAlunosService(SimpleTestCase):
     def test_sql_aluno_expoe_cns_antes_de_data_atualizacao(self) -> None:
         """Valida que a query segue a ordem esperada pelo AlunoIn."""
         self.assertIn("cns.nr_cns AS cns", SQL_ALUNO)
+        self.assertIn("a.cd_tipo_sigilo AS tipo_sigilo", SQL_ALUNO)
         self.assertIn("OUTER APPLY", SQL_ALUNO)
         self.assertIn("WHERE nee.cd_aluno = a.cd_aluno", SQL_ALUNO)
         self.assertLess(
@@ -176,6 +177,18 @@ class TestAlunosService(SimpleTestCase):
             SQL_RESPONSAVEL,
         )
         self.assertIn(
+            "ra.nr_rg_responsavel AS numero_rg",
+            SQL_RESPONSAVEL,
+        )
+        self.assertIn(
+            "ra.cd_digito_rg_responsavel AS digito_rg",
+            SQL_RESPONSAVEL,
+        )
+        self.assertIn(
+            "ra.cd_tipo_turno_comercial AS tipo_turno_comercial",
+            SQL_RESPONSAVEL,
+        )
+        self.assertIn(
             "ra.cd_tipo_recurso AS codigo_tipo_recurso", SQL_NEE_ALUNO
         )
         self.assertIn(
@@ -185,6 +198,11 @@ class TestAlunosService(SimpleTestCase):
         self.assertIn("recurso_aluno", SQL_NEE_ALUNO)
         self.assertIn("tipo_recurso_aluno", SQL_NEE_ALUNO)
         self.assertIn("data_situacao_matricula_data_hora", SQL_MATRICULA)
+        self.assertIn(
+            "vmc.cd_serie_ensino AS codigo_serie_ensino",
+            SQL_MATRICULA,
+        )
+        self.assertIn("esc.tp_escola AS codigo_tipo_escola", SQL_MATRICULA)
         self.assertIn("CAST(1 AS bit) AS origem_atual", SQL_MATRICULA)
         self.assertIn("ROW_NUMBER() OVER", SQL_MATRICULA)
         self.assertIn(

@@ -173,6 +173,13 @@ class ResponsavelAlunoInTest(SimpleTestCase):
             tipo_logradouro="Rua",
             data_atualizacao_tabela=None,
             data_fim_vinculo_aluno=None,
+            numero_rg="000000037112360",
+            digito_rg="4   ",
+            uf_rg="SP",
+            cpf_confere="S",
+            tipo_turno_celular=1,
+            tipo_turno_fixo=None,
+            tipo_turno_comercial=None,
         )
         data = dto.to_domain()
         self.assertEqual(data["codigo_responsavel"], 100)
@@ -182,6 +189,9 @@ class ResponsavelAlunoInTest(SimpleTestCase):
         self.assertEqual(data["nr_telefone_fixo"], "33334444")
         self.assertEqual(data["data_nascimento"], date(1980, 5, 20))
         self.assertEqual(data["nome_mae"], "Mae do Responsavel")
+        self.assertEqual(data["numero_rg"], "000000037112360")
+        self.assertEqual(data["digito_rg"], "4   ")
+        self.assertEqual(data["tipo_turno_celular"], 1)
 
     def test_mapeamento_posicional_compatibilidade_query(self) -> None:
         dto = ResponsavelAlunoIn(
@@ -220,6 +230,8 @@ class ResponsavelAlunoInTest(SimpleTestCase):
         self.assertEqual(data["nr_telefone_comercial"], "55556666")
         self.assertEqual(data["data_nascimento"], date(1980, 5, 20))
         self.assertEqual(data["nome_mae"], "Mae do Responsavel")
+        self.assertIsNone(data["numero_rg"])
+        self.assertIsNone(data["tipo_turno_celular"])
 
 
 class NecessidadeEspecialAlunoInTest(SimpleTestCase):
@@ -258,6 +270,8 @@ class MatriculaInTest(SimpleTestCase):
             origem_atual=True,
             origem_historica=False,
             data_situacao_matricula_historica=None,
+            codigo_serie_ensino=100,
+            codigo_tipo_escola=1,
         )
         data = dto.to_domain()
         self.assertEqual(data["codigo_matricula"], 1000)
@@ -267,6 +281,8 @@ class MatriculaInTest(SimpleTestCase):
         self.assertFalse(
             timezone.is_naive(data["data_situacao_matricula_data_hora"])
         )
+        self.assertEqual(data["codigo_serie_ensino"], 100)
+        self.assertEqual(data["codigo_tipo_escola"], 1)
 
     def test_situacao_fora_do_dominio(self) -> None:
         dto = MatriculaIn(

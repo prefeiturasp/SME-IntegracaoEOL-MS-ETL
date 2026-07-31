@@ -84,12 +84,13 @@ class ResultadoCompatibilidade:
 
 
 def _formatar_data(valor: Any) -> str | None:
-    """Normaliza datas para string ISO 'YYYY-MM-DD'.
+    """Normaliza datas para o formato de comparação.
 
-    SQL Server retorna datetime; PostgreSQL DateField retorna date.
-    Sem normalização, isoformat() produz strings incompatíveis:
-        datetime(2023,3,1).isoformat() → '2023-03-01T00:00:00'
-        date(2023,3,1).isoformat()    → '2023-03-01'
+    Args:
+        valor: Data recebida para comparação.
+
+    Returns:
+        Data normalizada quando houver valor.
     """
     if valor is None:
         return None

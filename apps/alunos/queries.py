@@ -28,6 +28,7 @@ SELECT
         FROM necessidade_especial_aluno nee
         WHERE nee.cd_aluno = a.cd_aluno
      ) THEN 1 ELSE 0 END AS possui_deficiencia
+   , a.cd_tipo_sigilo AS tipo_sigilo
 FROM aluno a
 LEFT JOIN v_aluno_cotic v ON a.cd_aluno = v.cd_aluno
 LEFT JOIN tipo_raca_cor trc ON trc.tp_raca_cor = a.tp_raca_cor
@@ -71,6 +72,13 @@ SELECT
    , e.dc_tp_logradouro AS tipo_logradouro
    , ra.dt_atualizacao_tabela AS data_atualizacao_tabela
    , ra.dt_fim AS data_fim_vinculo_aluno
+   , ra.nr_rg_responsavel AS numero_rg
+   , ra.cd_digito_rg_responsavel AS digito_rg
+   , ra.sg_uf_rg_responsavel AS uf_rg
+   , ra.in_cpf_responsavel_confere AS cpf_confere
+   , ra.cd_tipo_turno_celular AS tipo_turno_celular
+   , ra.cd_tipo_turno_fixo AS tipo_turno_fixo
+   , ra.cd_tipo_turno_comercial AS tipo_turno_comercial
 FROM responsavel_aluno ra
 LEFT JOIN endereco e ON e.ci_endereco = ra.ci_endereco
 /*FILTRO_ANO_LETIVO_RESPONSAVEL*/
@@ -113,9 +121,13 @@ WITH Combined AS (
       , st_matricula AS codigo_situacao_matricula
       , CAST(1 AS bit) AS origem_atual
       , 0 AS prioridade
+      , vmc.cd_serie_ensino AS codigo_serie_ensino
+      , esc.tp_escola AS codigo_tipo_escola
     FROM v_matricula_cotic vmc
     INNER JOIN v_cadastro_unidade_educacao vue
         ON vue.cd_unidade_educacao = vmc.cd_escola
+    INNER JOIN escola esc
+        ON esc.cd_escola = vmc.cd_escola
     WHERE 1 = 1
     /*FILTRO_ANO_LETIVO_MATRICULA_ATUAL*/
     UNION ALL
@@ -130,9 +142,13 @@ WITH Combined AS (
       , st_matricula AS codigo_situacao_matricula
       , CAST(0 AS bit) AS origem_atual
       , 1 AS prioridade
+      , vhmc.cd_serie_ensino AS codigo_serie_ensino
+      , esc.tp_escola AS codigo_tipo_escola
     FROM v_historico_matricula_cotic vhmc
     INNER JOIN v_cadastro_unidade_educacao vue
         ON vue.cd_unidade_educacao = vhmc.cd_escola
+    INNER JOIN escola esc
+        ON esc.cd_escola = vhmc.cd_escola
     WHERE 1 = 1
     /*FILTRO_ANO_LETIVO_MATRICULA_HISTORICA*/
 ),
@@ -165,6 +181,8 @@ SELECT
   , origem_atual
   , CAST(tem_origem_historica AS bit) AS origem_historica
   , dt_situacao_historica AS data_situacao_matricula_historica
+  , codigo_serie_ensino
+  , codigo_tipo_escola
 FROM Ranked
 WHERE rn = 1
 """

@@ -1,11 +1,19 @@
 """Configuracoes Django do SME-IntegracaoEOL-MS-ETL."""
 
 import os
+import sys
 import urllib.parse
 from pathlib import Path
 from typing import Any
 
 from django.core.exceptions import ImproperlyConfigured
+
+EXECUTANDO_TESTES = "test" in sys.argv
+
+_SQLITE_MEMORIA = {
+    "ENGINE": "django.db.backends.sqlite3",
+    "NAME": ":memory:",
+}
 
 DB_POOL_SIZE = int(os.getenv("DB_POOL_SIZE", "5"))
 _POOL_OPTIONS = {
@@ -123,10 +131,7 @@ def _parse_readonly_db(url: Any) -> dict[str, Any]:
     """Faz o parse de uma URL mssql+pyodbc para dict de configuração Django."""
     if not url:
         # Fallback para evitar ImproperlyConfigured no CI/Testes
-        return {
-            "ENGINE": "django.db.backends.sqlite3",
-            "NAME": ":memory:",
-        }
+        return _SQLITE_MEMORIA.copy()
 
     # Garante que a URL é uma string para evitar que urlparse retorne bytes
     if isinstance(url, bytes):
@@ -180,8 +185,16 @@ DATABASES = {
         "PORT": os.getenv("POSTGRES_PORT", "5432"),
         "POOL_OPTIONS": _POOL_OPTIONS,
     },
-    "eol_db": _parse_readonly_db(os.getenv("EOL_DB", "")),
-    "core_sso_db": _parse_readonly_db(os.getenv("CORE_SSO_DB", "")),
+    "eol_db": (
+        _SQLITE_MEMORIA.copy()
+        if EXECUTANDO_TESTES
+        else _parse_readonly_db(os.getenv("EOL_DB", ""))
+    ),
+    "core_sso_db": (
+        _SQLITE_MEMORIA.copy()
+        if EXECUTANDO_TESTES
+        else _parse_readonly_db(os.getenv("CORE_SSO_DB", ""))
+    ),
     "institucional_db": _parse_db_url(URL_BANCO_INSTITUCIONAL),
     "professores_db": _parse_db_url(URL_BANCO_PROFESSORES),
     "alunos_db": _parse_db_url(URL_BANCO_ALUNOS),

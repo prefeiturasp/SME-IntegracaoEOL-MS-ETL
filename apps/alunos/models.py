@@ -38,6 +38,7 @@ class Aluno(models.Model):
     data_atualizacao_contato = models.DateTimeField(null=True, blank=True)
     cns = models.CharField(max_length=20, null=True, blank=True)
     possui_deficiencia = models.BooleanField(default=False)
+    tipo_sigilo = models.SmallIntegerField(null=True, blank=True)
 
     class Meta:
         app_label = "alunos"
@@ -94,12 +95,25 @@ class ResponsavelAluno(models.Model):
     tipo_logradouro = models.CharField(max_length=50, null=True, blank=True)
     data_atualizacao_tabela = models.DateTimeField(null=True, blank=True)
     data_fim_vinculo = models.DateField(null=True, blank=True)
+    numero_rg = models.CharField(max_length=30, null=True, blank=True)
+    digito_rg = models.CharField(max_length=10, null=True, blank=True)
+    uf_rg = models.CharField(max_length=2, null=True, blank=True)
+    cpf_confere = models.CharField(max_length=1, null=True, blank=True)
+    tipo_turno_celular = models.SmallIntegerField(null=True, blank=True)
+    tipo_turno_fixo = models.SmallIntegerField(null=True, blank=True)
+    tipo_turno_comercial = models.SmallIntegerField(null=True, blank=True)
 
     class Meta:
         app_label = "alunos"
         db_table = "responsavel_aluno"
         verbose_name = "responsável"
         verbose_name_plural = "responsáveis"
+        indexes = [
+            models.Index(
+                fields=["cpf", "data_fim_vinculo", "aluno"],
+                name="idx_resp_cpf_fim_aluno",
+            ),
+        ]
 
     def __str__(self) -> str:
         return f"{self.nome} (Aluno: {self.aluno_id})"
@@ -165,6 +179,8 @@ class Matricula(models.Model):
         null=True,
         blank=True,
     )
+    codigo_serie_ensino = models.IntegerField(null=True, blank=True)
+    codigo_tipo_escola = models.SmallIntegerField(null=True, blank=True)
 
     class Meta:
         app_label = "alunos"
@@ -374,7 +390,6 @@ class DadosAlunoAcompanhamentoEscolar(models.Model):
 class ResponsavelAlunoTurma(models.Model):
     """Responsáveis aptos ao acompanhamento escolar por turma."""
 
-    id = models.BigAutoField(primary_key=True)
     codigo_responsavel = models.BigIntegerField()
     codigo_matricula = models.BigIntegerField()
     ano_letivo = models.SmallIntegerField()
@@ -419,7 +434,6 @@ class ResponsavelAlunoTurma(models.Model):
 class MatriculaAnoAnterior(models.Model):
     """Contagem histórica de matrículas por turma e ano letivo."""
 
-    id = models.BigAutoField(primary_key=True)
     ano_letivo = models.SmallIntegerField()
     codigo_ue = models.CharField(max_length=20)
     codigo_turma = models.BigIntegerField()
