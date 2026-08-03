@@ -1374,7 +1374,7 @@ class SincronizarAdministradoresSgpTest(TestCase):
 
     databases = ["default", "professores_db"]
 
-    @patch("apps.institucional.libs.repositorio_core_sso.RepositorioCoreSSO")
+    @patch("apps.professores.services.RepositorioCoreSSO")
     def test_sincroniza_administradores_com_sucesso(
         self, mock_repo_class: MagicMock
     ) -> None:
@@ -1402,7 +1402,7 @@ class SincronizarAdministradoresSgpTest(TestCase):
             ).exists()
         )
 
-    @patch("apps.institucional.libs.repositorio_core_sso.RepositorioCoreSSO")
+    @patch("apps.professores.services.RepositorioCoreSSO")
     def test_deleta_registros_antigos_antes_de_sincronizar(
         self, mock_repo_class: MagicMock
     ) -> None:
@@ -1430,7 +1430,7 @@ class SincronizarAdministradoresSgpTest(TestCase):
             AdministradorEscola.objects.filter(rf_login="NEW_RF").exists()
         )
 
-    @patch("apps.institucional.libs.repositorio_core_sso.RepositorioCoreSSO")
+    @patch("apps.professores.services.RepositorioCoreSSO")
     def test_erro_quando_falha_conexao_coresso(
         self, mock_repo_class: MagicMock
     ) -> None:
@@ -1449,7 +1449,7 @@ class SincronizarAdministradoresSgpTest(TestCase):
         self.assertEqual(total, 0)
 
     @patch("apps.professores.services._full_refresh", side_effect=Exception("DB Error"))
-    @patch("apps.institucional.libs.repositorio_core_sso.RepositorioCoreSSO")
+    @patch("apps.professores.services.RepositorioCoreSSO")
     def test_rollback_quando_erro_no_bulk_create(
         self, mock_repo_class: MagicMock, mock_full_refresh: MagicMock
     ) -> None:
