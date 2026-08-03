@@ -11,6 +11,7 @@ from django.db.models import Q
 from apps.controle_auditoria.models import EtlAuditoriaLinha
 from apps.core.libs.thread_processor import ThreadPoolProcessor
 from apps.eol_connection.libs.servico_eol import EOLService
+from apps.institucional.libs.repositorio_core_sso import RepositorioCoreSSO
 from apps.professores.dtos.model_in import (
     AtribuicaoAulaIn,
     AtribuicaoExternoIn,
@@ -37,6 +38,7 @@ from apps.professores.dtos.model_out import (
     ProfessorOut,
 )
 from apps.professores.models import (
+    AdministradorEscola,
     AtribuicaoAula,
     AtribuicaoExterno,
     CargoBaseServidor,
@@ -54,6 +56,7 @@ from apps.professores.models import (
 )
 from apps.professores.queries import (
     CARGOS_PROFESSOR,
+    SQL_ADMINISTRADORES_SGP,
     SQL_ATRIBUICOES_AULA,
     SQL_ATRIBUICOES_EXTERNO,
     SQL_CARGOS_BASE,
@@ -416,12 +419,14 @@ _TABELAS_FULL_REFRESH: frozenset[str] = frozenset(
         "funcionario_cargo",
         "turma_atribuida_ue",
         "disciplina_turma_atribuida_ue",
+        "administrador_escola",
     }
 )
 
 _ORDEM_TABELAS: tuple[str, ...] = (
     "professor",
     "pessoa",
+    "administrador_escola",
     "cargo_base_servidor",
     "contrato_externo",
     "lotacao_servidor",
@@ -443,14 +448,17 @@ class EtlProfessoresService:
         self,
         eol: EOLService | None = None,
         ano_letivo: int | None = None,
+        core_sso: RepositorioCoreSSO | None = None,
     ) -> None:
         """Inicializa o serviço.
 
         Args:
             eol: Cliente EOL; instanciado sob demanda quando omitido.
             ano_letivo: Ano letivo aplicado ao filtro incremental.
+            core_sso: Repositório CoreSSO; instanciado sob demanda quando omitido.
         """
         self.eol = eol or EOLService()
+        self.core_sso = core_sso or RepositorioCoreSSO()
         self._ano_letivo = ano_letivo
         self.ultima_fase_concluida: int = 0
 
@@ -845,6 +853,42 @@ class EtlProfessoresService:
             ),
         )
 
+    def popular_administradores_sgp(self) -> int:
+        """Popula administradores SGP do CoreSSO.
+
+        Returns:
+            Quantidade de registros inseridos.
+        """
+        try:
+            logger.info(
+                "Iniciando sincronização de administradores SGP do CoreSSO"
+            )
+
+            rows = self.core_sso.factory.executar_consulta(
+                SQL_ADMINISTRADORES_SGP
+            )
+
+            dados = [
+                AdministradorEscola(
+                    codigo_ue=str(row[0]), rf_login=row[1]
+                )
+                for row in rows
+            ]
+
+            total = _full_refresh(AdministradorEscola, dados)
+            total_escolas = len({d.codigo_ue for d in dados})
+
+            logger.info(
+                f"Sincronizados {total} administradores "
+                f"em {total_escolas} escolas"
+            )
+
+            return total
+
+        except Exception:
+            logger.exception("Erro ao sincronizar administradores SGP")
+            return 0
+
     def _fase_1(
         self,
         executar_tabela: Callable[[str, Callable[[], int]], None],
@@ -853,6 +897,7 @@ class EtlProfessoresService:
         logger.info("[ETL PROF] === Fase 1: Professores e Pessoas ===")
         executar_tabela("professor", self.popular_professores)
         executar_tabela("pessoa", self.popular_pessoas)
+        executar_tabela("administrador_escola", self.popular_administradores_sgp)
         self.ultima_fase_concluida = 1
         logger.info("[ETL PROF] Fase 1 concluída.")
 
@@ -1016,3 +1061,6 @@ class EtlProfessoresService:
             fase_inicial,
         )
         return r
+
+
+

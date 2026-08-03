@@ -638,3 +638,37 @@ class DisciplinaTurmaAtribuidaUe(models.Model):
                 name="uq_dtau_rf_turma_comp_cargo",
             )
         ]
+
+
+class AdministradorEscola(models.Model):
+    """Administradores SGP por escola.
+    
+    Armazena logins/RFs de usuários com perfil de administrador SGP
+    em cada unidade educacional. Dados sincronizados do CoreSSO.
+    """
+
+    codigo_ue = models.CharField(
+        max_length=20,
+        db_index=True,
+        help_text="Código EOL da unidade educacional.",
+    )
+    rf_login = models.CharField(
+        max_length=50,
+        help_text="RF/Login do administrador no sistema SGP.",
+    )
+    data_sincronizacao = models.DateTimeField(
+        auto_now=True,
+        help_text="Data/hora da última sincronização do CoreSSO.",
+    )
+
+    class Meta:
+        app_label = "professores"
+        db_table = "administrador_escola"
+        verbose_name = "administrador SGP da escola"
+        verbose_name_plural = "administradores SGP das escolas"
+        indexes = [
+            models.Index(fields=["codigo_ue"], name="idx_adm_escola_ue"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.rf_login} @ {self.codigo_ue}"
