@@ -10,14 +10,5 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.SeparateDatabaseAndState(
-            state_operations=[
-                migrations.AlterUniqueTogether(
-                    name='administradorescola',
-                    unique_together=set(),
-                ),
-            ],
-            database_operations=[
-            ],
-        ),
+        # Migration vazia - previne auto-geracao de AlterUniqueTogether
     ]
