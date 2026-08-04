@@ -23,7 +23,6 @@ class Migration(migrations.Migration):
                 'verbose_name_plural': 'administradores SGP das escolas',
                 'db_table': 'administrador_escola',
                 'indexes': [models.Index(fields=['codigo_ue'], name='idx_adm_escola_ue')],
-                'unique_together': {('codigo_ue', 'rf_login')},
             },
         ),
     ]
