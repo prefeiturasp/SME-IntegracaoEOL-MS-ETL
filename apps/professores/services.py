@@ -21,6 +21,7 @@ from apps.professores.dtos.model_in import (
     DisciplinaTurmaAtribuidaUeIn,
     FuncaoAtividadeCargoServidorIn,
     FuncionarioCargoIn,
+    FuncionarioSistemaPerfilIn,
     FuncionarioUnidadeEducacionalIn,
     LaudoMedicoIn,
     LotacaoServidorIn,
@@ -33,6 +34,7 @@ from apps.professores.dtos.model_out import (
     AtribuicaoExternoOut,
     CargoBaseServidorOut,
     ContratoExternoOut,
+    FuncionarioSistemaPerfilOut,
     FuncionarioUnidadeEducacionalOut,
     PessoaOut,
     ProfessorOut,
@@ -47,6 +49,7 @@ from apps.professores.models import (
     DisciplinaTurmaAtribuidaUe,
     FuncaoAtividadeCargoServidor,
     FuncionarioCargo,
+    FuncionarioSistemaPerfil,
     FuncionarioUnidadeEducacional,
     LaudoMedico,
     LotacaoServidor,
@@ -63,6 +66,7 @@ from apps.professores.queries import (
     SQL_CARGOS_SOBREPOSTOS,
     SQL_CONTRATOS_EXTERNOS,
     SQL_DISCIPLINAS_TURMAS_ATRIBUIDAS_UE,
+    SQL_FUNCIONARIO_SISTEMA_PERFIL,
     SQL_FUNCIONARIOS_CARGOS,
     SQL_FUNCIONARIOS_UNIDADE_EDUCACIONAL,
     SQL_FUNCOES_ATIVIDADE,
@@ -160,6 +164,11 @@ def _row_to_funcionario(row: tuple) -> dict:
 def _row_to_funcionario_cargo(row: tuple) -> dict:
     """Monta o dicionário da linha de funcionário por cargo."""
     return cast(dict, FuncionarioCargoIn(*row).to_domain().to_dict())
+
+
+def _row_to_funcionario_sistema_perfil(row: tuple) -> dict:
+    """Monta o dicionário da linha de perfil de sistema."""
+    return cast(dict, FuncionarioSistemaPerfilIn(*row).to_domain().to_dict())
 
 
 def _row_to_turma_atribuida_ue(row: tuple) -> dict:
@@ -436,6 +445,7 @@ _ORDEM_TABELAS: tuple[str, ...] = (
     "atribuicao_aula",
     "atribuicao_externo",
     "funcionario_unidade_educacional",
+    "funcionario_sistema_perfil",
     "turma_atribuida_ue",
     "disciplina_turma_atribuida_ue",
 )
@@ -834,6 +844,29 @@ class EtlProfessoresService:
             ),
         )
 
+    def popular_funcionarios_sistema_perfil(self) -> int:
+        """Popula perfis SGP para compatibilidade com a API legada.
+
+        Atualmente considera apenas `sis_id = 1000`, SGP.
+        """
+        rows = self.core_sso.factory.executar_consulta(
+            SQL_FUNCIONARIO_SISTEMA_PERFIL
+        )
+        with ThreadPoolProcessor(
+            prefixo_log="PROF:funcionario_sistema_perfil"
+        ) as proc:
+            out_objs: list[FuncionarioSistemaPerfilOut] = proc.processar(
+                rows,
+                lambda r: FuncionarioSistemaPerfilIn(*r).to_domain(),
+            )
+        return _upsert_incremental(
+            FuncionarioSistemaPerfil,
+            "funcionario_sistema_perfil",
+            [o.to_dict() for o in out_objs],
+            ["nome_servidor", "email"],
+            ["login", "perfil", "sis_id"],
+        )
+
     def popular_turmas_atribuidas_ue(self) -> int:
         """Popula turmas atribuídas por vínculo do funcionário com UE."""
         return _full_refresh_por_lote(
@@ -961,6 +994,10 @@ class EtlProfessoresService:
             "funcionario_unidade_educacional", self.popular_funcionarios
         )
         executar_tabela("funcionario_cargo", self.popular_funcionarios_cargos)
+        executar_tabela(
+            "funcionario_sistema_perfil",
+            self.popular_funcionarios_sistema_perfil,
+        )
         executar_tabela(
             "turma_atribuida_ue", self.popular_turmas_atribuidas_ue
         )

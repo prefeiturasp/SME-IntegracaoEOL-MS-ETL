@@ -13,6 +13,7 @@ if TYPE_CHECKING:
         DisciplinaTurmaAtribuidaUeOut,
         FuncaoAtividadeCargoServidorOut,
         FuncionarioCargoOut,
+        FuncionarioSistemaPerfilOut,
         FuncionarioUnidadeEducacionalOut,
         LaudoMedicoOut,
         LotacaoServidorOut,
@@ -109,6 +110,36 @@ class FuncionarioCargoIn:
             data_fim=self.dt_fim_nomeacao,
             cargo=self.dc_cargo,
             codigo_cargo=self.cd_cargo,
+        )
+
+
+@dataclass(slots=True)
+class FuncionarioSistemaPerfilIn:
+    """Dados de perfil de sistema do funcionário."""
+
+    login: Any
+    nome_servidor: Any
+    email: Any
+    perfil: Any
+    uad_codigo: Any
+    sis_id: Any
+
+    def to_domain(self) -> "FuncionarioSistemaPerfilOut":
+        """Retorna dados normalizados do perfil de sistema.
+
+        Returns:
+            Dados do perfil para persistência.
+        """
+        from apps.professores.dtos.model_out import (
+            FuncionarioSistemaPerfilOut,
+        )
+
+        return FuncionarioSistemaPerfilOut(
+            login=self.login,
+            nome_servidor=self.nome_servidor,
+            email=self.email,
+            perfil=self.perfil,
+            sis_id=self.sis_id,
         )
 
 

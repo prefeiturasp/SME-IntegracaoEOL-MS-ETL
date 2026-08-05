@@ -774,3 +774,56 @@ SQL_ADMINISTRADORES_SGP = """
         AND G.sis_id = 1000  -- Sistema SGP
     ORDER BY U.uad_codigo, US.usu_login
 """
+
+SQL_FUNCIONARIO_SISTEMA_PERFIL = """
+    SELECT
+        login,
+        MAX(nome_servidor) AS nome_servidor,
+        MAX(email) AS email,
+        CAST(
+            MAX(CAST(perfil AS varchar(36))) AS uniqueidentifier
+        ) AS perfil,
+        MAX(uad_codigo) AS uad_codigo,
+        MAX(sis_id) AS sis_id
+    FROM (
+        SELECT
+            US.usu_login AS login,
+            PP.pes_nome AS nome_servidor,
+            US.usu_email AS email,
+            G.gru_id AS perfil,
+            U.uad_codigo AS uad_codigo,
+            G.sis_id AS sis_id
+        FROM SYS_UsuarioGrupoUA UGA
+        INNER JOIN SYS_UnidadeAdministrativa U
+            ON UGA.uad_id = U.uad_id
+        INNER JOIN SYS_Usuario US
+            ON UGA.usu_id = US.usu_id
+        INNER JOIN SYS_Grupo G
+            ON UGA.gru_id = G.gru_id
+        INNER JOIN PES_Pessoa PP
+            ON PP.pes_id = US.pes_id
+        INNER JOIN SYS_UsuarioGrupo UG
+            ON US.usu_id = UG.usu_id
+            AND G.gru_id = UG.gru_id
+        WHERE US.usu_situacao = 1
+          AND UG.usg_situacao = 1
+        UNION ALL
+        SELECT
+            US.usu_login AS login,
+            PP.pes_nome AS nome_servidor,
+            US.usu_email AS email,
+            G.gru_id AS perfil,
+            NULL AS uad_codigo,
+            G.sis_id AS sis_id
+        FROM SYS_Usuario US
+        INNER JOIN SYS_UsuarioGrupo UG
+            ON UG.usu_id = US.usu_id
+        INNER JOIN SYS_Grupo G
+            ON UG.gru_id = G.gru_id
+        LEFT JOIN PES_Pessoa PP
+            ON PP.pes_id = US.pes_id
+        WHERE US.usu_situacao = 1
+          AND G.sis_id = 1000
+    ) AS Funcionarios
+    GROUP BY login;
+"""

@@ -5,6 +5,7 @@ from django.test import TestCase
 from apps.professores.models import (
     CargoBaseServidor,
     FuncionarioCargo,
+    FuncionarioSistemaPerfil,
     FuncionarioUnidadeEducacional,
     Pessoa,
     Professor,
@@ -110,3 +111,28 @@ class ProfessoresModelsTest(TestCase):
             if constraint.name == "uq_funcionario_cargo_vinculo"
         )
         self.assertFalse(constraint.nulls_distinct)
+
+    def test_funcionario_sistema_perfil_meta(self) -> None:
+        """Valida metadados de FuncionarioSistemaPerfil."""
+        meta = FuncionarioSistemaPerfil._meta
+        self.assertEqual(meta.db_table, "funcionario_sistema_perfil")
+        self.assertEqual(meta.pk.name, "id")
+        self.assertEqual(meta.get_field("login").max_length, 500)
+        self.assertEqual(meta.get_field("nome_servidor").max_length, 200)
+        self.assertTrue(meta.get_field("nome_servidor").null)
+        self.assertEqual(meta.get_field("email").max_length, 500)
+        self.assertTrue(meta.get_field("email").null)
+        self.assertEqual(
+            meta.get_field("perfil").get_internal_type(), "UUIDField"
+        )
+        self.assertEqual(
+            meta.get_field("sis_id").get_internal_type(), "IntegerField"
+        )
+        nomes_indices = {indice.name for indice in meta.indexes}
+        self.assertIn("idx_fsp_login", nomes_indices)
+        self.assertIn("idx_fsp_sis_id", nomes_indices)
+        self.assertIn("idx_fsp_perfil", nomes_indices)
+        nomes_constraints = {
+            constraint.name for constraint in meta.constraints
+        }
+        self.assertIn("uq_fsp_login_perfil_sis", nomes_constraints)

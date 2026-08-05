@@ -3,17 +3,26 @@
 import datetime
 from typing import Any, cast
 from unittest.mock import MagicMock, patch
+from uuid import UUID
 
 from django.db.models.query import QuerySet
 from django.test import TestCase
 from django.utils import timezone
 
-from apps.professores.dtos.model_in import FuncionarioUnidadeEducacionalIn
-from apps.professores.models import FuncionarioUnidadeEducacional, Professor
+from apps.professores.dtos.model_in import (
+    FuncionarioSistemaPerfilIn,
+    FuncionarioUnidadeEducacionalIn,
+)
+from apps.professores.models import (
+    FuncionarioSistemaPerfil,
+    FuncionarioUnidadeEducacional,
+    Professor,
+)
 from apps.professores.queries import (
     CARGOS_PROFESSOR,
     SQL_ATRIBUICOES_AULA,
     SQL_DISCIPLINAS_TURMAS_ATRIBUIDAS_UE,
+    SQL_FUNCIONARIO_SISTEMA_PERFIL,
     SQL_FUNCIONARIOS_UNIDADE_EDUCACIONAL,
     SQL_TURMAS_ATRIBUIDAS_UE,
 )
@@ -29,6 +38,7 @@ from apps.professores.services import (
     _row_to_funcao_atividade,
     _row_to_funcionario,
     _row_to_funcionario_cargo,
+    _row_to_funcionario_sistema_perfil,
     _row_to_laudo,
     _row_to_lotacao,
     _row_to_pessoa,
@@ -118,6 +128,70 @@ class RowToProfessorTest(TestCase):
         r = _row_to_professor(row)
         self.assertIsNone(r["nome_social"])
         self.assertIsNone(r["cpf"])
+
+
+class FuncionarioSistemaPerfilDtoTest(TestCase):
+    """Testes de DTO de perfil de sistema do funcionario."""
+
+    def test_normaliza_campos(self) -> None:
+        """Normaliza texto, UUID e inteiro."""
+        dto = FuncionarioSistemaPerfilIn(
+            "  123456  ",
+            "  ANA SILVA  ",
+            "  ana@sme.prefeitura.sp.gov.br  ",
+            "11111111-1111-1111-1111-111111111111",
+            "000001",
+            "1000",
+        ).to_domain()
+
+        self.assertEqual(dto.login, "123456")
+        self.assertEqual(dto.nome_servidor, "ANA SILVA")
+        self.assertEqual(dto.email, "ana@sme.prefeitura.sp.gov.br")
+        self.assertEqual(
+            dto.perfil, UUID("11111111-1111-1111-1111-111111111111")
+        )
+        self.assertEqual(dto.sis_id, 1000)
+
+    def test_nome_servidor_nulo(self) -> None:
+        """Preserva nome do servidor como nulo."""
+        dto = FuncionarioSistemaPerfilIn(
+            "123456",
+            None,
+            None,
+            UUID("11111111-1111-1111-1111-111111111111"),
+            None,
+            1000,
+        ).to_domain()
+
+        self.assertIsNone(dto.nome_servidor)
+        self.assertIsNone(dto.email)
+
+
+class RowToFuncionarioSistemaPerfilTest(TestCase):
+    """Testes para a função _row_to_funcionario_sistema_perfil."""
+
+    def test_remove_uad_codigo_da_saida(self) -> None:
+        """Mapeia a linha sem persistir uad_codigo."""
+        row = (
+            "123456",
+            "ANA SILVA",
+            "ana@sme.prefeitura.sp.gov.br",
+            "11111111-1111-1111-1111-111111111111",
+            "000001",
+            1000,
+        )
+
+        resultado = _row_to_funcionario_sistema_perfil(row)
+
+        self.assertEqual(resultado["login"], "123456")
+        self.assertEqual(resultado["nome_servidor"], "ANA SILVA")
+        self.assertEqual(resultado["email"], "ana@sme.prefeitura.sp.gov.br")
+        self.assertEqual(
+            resultado["perfil"],
+            UUID("11111111-1111-1111-1111-111111111111"),
+        )
+        self.assertEqual(resultado["sis_id"], 1000)
+        self.assertNotIn("uad_codigo", resultado)
 
     def test_rf_stripped(self) -> None:
         """Verifica que o código RF tem espaços removidos."""
@@ -1349,6 +1423,59 @@ class EtlProfessoresServiceFase4Test(TestCase):
             ],
         )
 
+    @patch(_UPSERT_PATCH, return_value=1)
+    def test_popular_funcionarios_sistema_perfil(
+        self, mock_upsert: MagicMock
+    ) -> None:
+        """Verifica CoreSSO e upsert dos perfis de sistema."""
+        mock_eol = MagicMock()
+        mock_core_sso = MagicMock()
+        mock_core_sso.factory.executar_consulta.return_value = [
+            [
+                "123456",
+                "ANA SILVA",
+                "ana@sme.prefeitura.sp.gov.br",
+                "11111111-1111-1111-1111-111111111111",
+                "000001",
+                1000,
+            ]
+        ]
+        srv = EtlProfessoresService(eol=mock_eol, core_sso=mock_core_sso)
+
+        resultado = srv.popular_funcionarios_sistema_perfil()
+
+        self.assertEqual(resultado, 1)
+        mock_core_sso.factory.executar_consulta.assert_called_once_with(
+            SQL_FUNCIONARIO_SISTEMA_PERFIL
+        )
+        mock_eol.iter_query.assert_not_called()
+        self.assertEqual(
+            mock_upsert.call_args.args[0], FuncionarioSistemaPerfil
+        )
+        self.assertEqual(
+            mock_upsert.call_args.args[1],
+            "funcionario_sistema_perfil",
+        )
+        self.assertEqual(
+            mock_upsert.call_args.args[2],
+            [
+                {
+                    "login": "123456",
+                    "nome_servidor": "ANA SILVA",
+                    "email": "ana@sme.prefeitura.sp.gov.br",
+                    "perfil": UUID("11111111-1111-1111-1111-111111111111"),
+                    "sis_id": 1000,
+                }
+            ],
+        )
+        self.assertEqual(
+            mock_upsert.call_args.args[3], ["nome_servidor", "email"]
+        )
+        self.assertEqual(
+            mock_upsert.call_args.args[4],
+            ["login", "perfil", "sis_id"],
+        )
+
 
 class EtlProfessoresServiceExecutarTest(TestCase):
     """Testes para o método executar do EtlProfessoresService."""
@@ -1403,6 +1530,7 @@ class EtlProfessoresServiceExecutarTest(TestCase):
             {
                 "funcionario_unidade_educacional": 1,
                 "funcionario_cargo": 1,
+                "funcionario_sistema_perfil": 1,
                 "turma_atribuida_ue": 1,
                 "disciplina_turma_atribuida_ue": 1,
             },

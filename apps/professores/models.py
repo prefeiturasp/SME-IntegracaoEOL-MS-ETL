@@ -167,6 +167,42 @@ class FuncionarioCargo(models.Model):
         ]
 
 
+class FuncionarioSistemaPerfil(models.Model):
+    """Perfil de sistema associado ao login do funcionário."""
+
+    id = models.BigAutoField(primary_key=True)
+    login = models.CharField(max_length=500)
+    nome_servidor = models.CharField(
+        max_length=200,
+        null=True,
+        blank=True,
+    )
+    email = models.CharField(
+        max_length=500,
+        null=True,
+        blank=True,
+    )
+    perfil = models.UUIDField()
+    sis_id = models.IntegerField()
+
+    class Meta:
+        app_label = "professores"
+        db_table = "funcionario_sistema_perfil"
+        verbose_name = "perfil de sistema do funcionario"
+        verbose_name_plural = "perfis de sistema dos funcionarios"
+        indexes = [
+            models.Index(fields=["login"], name="idx_fsp_login"),
+            models.Index(fields=["sis_id"], name="idx_fsp_sis_id"),
+            models.Index(fields=["perfil"], name="idx_fsp_perfil"),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["login", "perfil", "sis_id"],
+                name="uq_fsp_login_perfil_sis",
+            ),
+        ]
+
+
 class CargoSobrepostoServidor(models.Model):
     """Cargo sobreposto exercido sobre o cargo base."""
 

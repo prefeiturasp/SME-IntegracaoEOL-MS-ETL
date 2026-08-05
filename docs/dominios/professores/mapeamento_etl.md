@@ -33,6 +33,7 @@ dependencias conceituais.
 | Grupo | Destino | Estratégia | Origem |
 |---|---|---|---|
 | Funcionarios por unidade | `funcionario_unidade_educacional` | incremental | vinculos de servidor com unidade |
+| Perfis de sistema por funcionario | `funcionario_sistema_perfil` | incremental | atualmente somente perfis SGP por login no CoreSSO |
 | Turmas por abrangencia de unidade | `turma_atribuida_ue` | completa | turmas associadas ao vinculo de unidade |
 | Componentes por abrangencia de unidade | `disciplina_turma_atribuida_ue` | completa | componentes disponiveis nas turmas abrangidas |
 

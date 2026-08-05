@@ -3,6 +3,7 @@
 import datetime
 from dataclasses import dataclass
 from typing import Any
+from uuid import UUID
 
 from apps.core.libs.helpers import make_aware
 
@@ -96,6 +97,39 @@ class FuncionarioCargoOut:
             "data_fim": self.data_fim,
             "cargo": self.cargo,
             "codigo_cargo": self.codigo_cargo,
+        }
+
+
+@dataclass(slots=True)
+class FuncionarioSistemaPerfilOut:
+    """Estrutura para o model ``FuncionarioSistemaPerfil``."""
+
+    login: str
+    nome_servidor: str | None
+    email: str | None
+    perfil: UUID
+    sis_id: int
+
+    def __post_init__(self) -> None:
+        """Normaliza campos do perfil de sistema."""
+        self.login = _normalizar_texto(self.login)
+        self.nome_servidor = _normalizar_texto_opcional(self.nome_servidor)
+        self.email = _normalizar_texto_opcional(self.email)
+        self.perfil = _normalizar_uuid(self.perfil)
+        self.sis_id = _normalizar_int(self.sis_id)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Retorna dados do perfil de sistema.
+
+        Returns:
+            Dados prontos para persistência.
+        """
+        return {
+            "login": self.login,
+            "nome_servidor": self.nome_servidor,
+            "email": self.email,
+            "perfil": self.perfil,
+            "sis_id": self.sis_id,
         }
 
 
@@ -469,6 +503,20 @@ def _normalizar_int_opcional(valor: Any) -> int | None:
     if valor in (None, ""):
         return None
     return int(valor)
+
+
+def _normalizar_uuid(valor: Any) -> UUID:
+    """Normaliza valor recebido para UUID.
+
+    Args:
+        valor: Valor recebido da origem.
+
+    Returns:
+        UUID normalizado.
+    """
+    if isinstance(valor, UUID):
+        return valor
+    return UUID(str(valor).strip())
 
 
 def _normalizar_bool(valor: Any) -> bool:
