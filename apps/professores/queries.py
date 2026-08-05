@@ -132,7 +132,13 @@ SQL_PESSOAS = """
         cd_pessoa,
         cd_cpf_pessoa,
         nm_pessoa,
-        nm_social
+        nm_social,
+        nm_pai_pessoa,
+        nm_mae_pessoa,
+        dt_nascimento_pessoa,
+        nr_rg_pessoa,
+        nr_titulo_eleitor_pessoa,
+        cd_pis_pasep
     FROM pessoa
     WHERE cd_pessoa IN (
         SELECT DISTINCT cd_pessoa
@@ -462,7 +468,12 @@ SQL_FUNCIONARIOS_UNIDADE_EDUCACIONAL = f"""
             ELSE 0
         END AS esta_afastado,
         funcionarios.funcao_externo,
-        funcionarios.tipo_funcao_externo
+        funcionarios.tipo_funcao_externo,
+        funcionarios.pessoa_id,
+        funcionarios.nome_ue,
+        funcionarios.tipo_funcionario_externo,
+        funcionarios.dc_funcao_externo,
+        funcionarios.supervisor_dre
     FROM (
         SELECT DISTINCT
             servidor.nm_pessoa AS nome,
@@ -489,7 +500,18 @@ SQL_FUNCIONARIOS_UNIDADE_EDUCACIONAL = f"""
             funcao.cd_tipo_funcao AS cd_tipo_funcao_atividade,
             cargoServidor.cd_cargo_base_servidor,
             0 AS funcao_externo,
-            0 AS tipo_funcao_externo
+            0 AS tipo_funcao_externo,
+            p.cd_pessoa AS pessoa_id,
+            ue.nm_unidade_educacao AS nome_ue,
+            NULL AS tipo_funcionario_externo,
+            NULL AS dc_funcao_externo,
+            CASE
+                WHEN cargo.cd_cargo = 3352
+                    AND cargoServidor.dt_fim_nomeacao IS NULL
+                    AND lotacao_servidor.dt_fim IS NULL
+                THEN 1
+                ELSE 0
+            END AS supervisor_dre
         FROM v_servidor_cotic servidor
         INNER JOIN v_cargo_base_cotic AS cargoServidor
             ON cargoServidor.cd_servidor = servidor.cd_servidor
@@ -526,6 +548,8 @@ SQL_FUNCIONARIOS_UNIDADE_EDUCACIONAL = f"""
                 = cargoServidor.cd_cargo_base_servidor
             AND cargoSobreposto.cd_unidade_local_servico
                 = ue.cd_unidade_educacao
+        LEFT JOIN pessoa p
+            ON servidor.cd_cpf_pessoa = p.cd_cpf_pessoa
         WHERE lotacao_servidor.dt_fim IS NULL
 
         UNION
@@ -547,7 +571,18 @@ SQL_FUNCIONARIOS_UNIDADE_EDUCACIONAL = f"""
             funcao.cd_tipo_funcao AS cd_tipo_funcao_atividade,
             cargoServidor.cd_cargo_base_servidor,
             0 AS funcao_externo,
-            0 AS tipo_funcao_externo
+            0 AS tipo_funcao_externo,
+            p.cd_pessoa AS pessoa_id,
+            ue.nm_unidade_educacao AS nome_ue,
+            NULL AS tipo_funcionario_externo,
+            NULL AS dc_funcao_externo,
+            CASE
+                WHEN cargo_sobreposto_servidor.cd_cargo = 3352
+                    AND cargoServidor.dt_fim_nomeacao IS NULL
+                    AND lotacao_servidor.dt_fim IS NULL
+                THEN 1
+                ELSE 0
+            END AS supervisor_dre
         FROM v_servidor_cotic servidor
         INNER JOIN v_cargo_base_cotic AS cargoServidor
             ON cargoServidor.cd_servidor = servidor.cd_servidor
@@ -571,6 +606,8 @@ SQL_FUNCIONARIOS_UNIDADE_EDUCACIONAL = f"""
         INNER JOIN v_cadastro_unidade_educacao ue
             ON cargo_sobreposto_servidor.cd_unidade_local_servico
                 = ue.cd_unidade_educacao
+        LEFT JOIN pessoa p
+            ON servidor.cd_cpf_pessoa = p.cd_cpf_pessoa
         WHERE lotacao_servidor.dt_fim IS NULL
 
         UNION
@@ -592,7 +629,12 @@ SQL_FUNCIONARIOS_UNIDADE_EDUCACIONAL = f"""
             funcao.cd_tipo_funcao AS cd_tipo_funcao_atividade,
             cargoServidor.cd_cargo_base_servidor,
             0 AS funcao_externo,
-            0 AS tipo_funcao_externo
+            0 AS tipo_funcao_externo,
+            p.cd_pessoa AS pessoa_id,
+            ue.nm_unidade_educacao AS nome_ue,
+            NULL AS tipo_funcionario_externo,
+            NULL AS dc_funcao_externo,
+            0 AS supervisor_dre
         FROM v_servidor_cotic servidor
         INNER JOIN v_cargo_base_cotic AS cargoServidor
             ON cargoServidor.cd_servidor = servidor.cd_servidor
@@ -607,6 +649,8 @@ SQL_FUNCIONARIOS_UNIDADE_EDUCACIONAL = f"""
                 = cargoServidor.cd_cargo_base_servidor
         INNER JOIN v_cadastro_unidade_educacao ue
             ON atribuicao.cd_unidade_educacao = ue.cd_unidade_educacao
+        LEFT JOIN pessoa p
+            ON servidor.cd_cpf_pessoa = p.cd_cpf_pessoa
         WHERE atribuicao.dt_cancelamento IS NULL
             AND cargoServidor.dt_fim_nomeacao IS NULL
             AND atribuicao.dt_disponibilizacao_aulas IS NULL
@@ -631,7 +675,12 @@ SQL_FUNCIONARIOS_UNIDADE_EDUCACIONAL = f"""
             atividade.cd_tipo_funcao AS cd_tipo_funcao_atividade,
             cargoServidor.cd_cargo_base_servidor,
             0 AS funcao_externo,
-            0 AS tipo_funcao_externo
+            0 AS tipo_funcao_externo,
+            p.cd_pessoa AS pessoa_id,
+            ue.nm_unidade_educacao AS nome_ue,
+            NULL AS tipo_funcionario_externo,
+            NULL AS dc_funcao_externo,
+            0 AS supervisor_dre
         FROM v_servidor_cotic servidor
         INNER JOIN v_cargo_base_cotic AS cargoServidor
             ON cargoServidor.cd_servidor = servidor.cd_servidor
@@ -654,6 +703,8 @@ SQL_FUNCIONARIOS_UNIDADE_EDUCACIONAL = f"""
                     )
                     ELSE atividade.cd_unidade_local_servico
                 END
+        LEFT JOIN pessoa p
+            ON servidor.cd_cpf_pessoa = p.cd_cpf_pessoa
         WHERE cargoServidor.dt_fim_nomeacao IS NULL
             OR cargoServidor.dt_fim_nomeacao > GETDATE()
 
@@ -676,7 +727,12 @@ SQL_FUNCIONARIOS_UNIDADE_EDUCACIONAL = f"""
             0 AS cd_tipo_funcao_atividade,
             0 AS cd_cargo_base_servidor,
             ffe.cd_funcao_externo AS funcao_externo,
-            ffe.cd_tipo_funcao_funcionario_externo AS tipo_funcao_externo
+            ffe.cd_tipo_funcao_funcionario_externo AS tipo_funcao_externo,
+            p.cd_pessoa AS pessoa_id,
+            ue.nm_unidade_educacao AS nome_ue,
+            tfe.dc_tipo_funcionario_externo AS tipo_funcionario_externo,
+            fe.dc_funcao_externo AS dc_funcao_externo,
+            0 AS supervisor_dre
         FROM contrato_externo ce
         INNER JOIN pessoa p
             ON ce.cd_pessoa = p.cd_pessoa
@@ -685,6 +741,11 @@ SQL_FUNCIONARIOS_UNIDADE_EDUCACIONAL = f"""
                 = ffe.cd_tipo_funcao_funcionario_externo
         INNER JOIN v_cadastro_unidade_educacao ue
             ON ce.cd_unidade_educacao = ue.cd_unidade_educacao
+        LEFT JOIN tipo_funcionario_externo tfe
+            ON ffe.cd_tipo_funcionario_externo
+                = tfe.cd_tipo_funcionario_externo
+        LEFT JOIN funcao_externo fe
+            ON ffe.cd_funcao_externo = fe.cd_funcao_externo
         WHERE ce.dt_cancelamento IS NULL
     ) funcionarios
     LEFT JOIN laudo_ativo laudo
@@ -695,15 +756,15 @@ SQL_FUNCIONARIOS_UNIDADE_EDUCACIONAL = f"""
 
 
 SQL_ADMINISTRADORES_SGP = """
-    SELECT 
+    SELECT
         U.uad_codigo AS codigo_ue,
         US.usu_login AS rf_login
-    FROM SYS_UsuarioGrupoUA UGA 
-        INNER JOIN SYS_UnidadeAdministrativa U 
+    FROM SYS_UsuarioGrupoUA UGA
+        INNER JOIN SYS_UnidadeAdministrativa U
             ON UGA.uad_id = U.uad_id
-        INNER JOIN SYS_Usuario US 
+        INNER JOIN SYS_Usuario US
             ON UGA.usu_id = US.usu_id
-        INNER JOIN SYS_Grupo G 
+        INNER JOIN SYS_Grupo G
             ON UGA.gru_id = G.gru_id
     WHERE US.usu_situacao = 1
         AND G.gru_id IN (

@@ -193,6 +193,26 @@ class PessoaOut:
     cpf: str
     nome: str
     nome_social: str | None
+    nome_pai: str | None
+    nome_mae: str | None
+    data_nascimento: Any
+    rg: str | None
+    titulo_eleitoral: str | None
+    pis_pasep: str | None
+
+    def __post_init__(self) -> None:
+        """Normaliza dados opcionais da pessoa."""
+        self.cpf = _normalizar_texto(self.cpf)
+        self.nome = _normalizar_texto(self.nome)
+        self.nome_social = _normalizar_texto_opcional(self.nome_social)
+        self.nome_pai = _normalizar_texto_opcional(self.nome_pai)
+        self.nome_mae = _normalizar_texto_opcional(self.nome_mae)
+        self.data_nascimento = _normalizar_datetime(self.data_nascimento)
+        self.rg = _normalizar_texto_opcional(self.rg)
+        self.titulo_eleitoral = _normalizar_texto_opcional(
+            self.titulo_eleitoral
+        )
+        self.pis_pasep = _normalizar_texto_opcional(self.pis_pasep)
 
     def to_dict(self) -> dict[str, Any]:
         """Retorna dados da pessoa.
@@ -205,6 +225,12 @@ class PessoaOut:
             "cpf": self.cpf,
             "nome": self.nome,
             "nome_social": self.nome_social,
+            "nome_pai": self.nome_pai,
+            "nome_mae": self.nome_mae,
+            "data_nascimento": self.data_nascimento,
+            "rg": self.rg,
+            "titulo_eleitoral": self.titulo_eleitoral,
+            "pis_pasep": self.pis_pasep,
         }
 
 
@@ -503,6 +529,11 @@ class FuncionarioUnidadeEducacionalOut:
     codigo_cargo: int | None
     cargo: str | None
     codigo_tipo_funcao_atividade: int | None
+    pessoa_id: int | None
+    nome_ue: str | None
+    tipo_funcionario_externo: str | None
+    dc_funcao_externo: str | None
+    supervisor_dre: Any
     eh_professor: Any
     esta_afastado: Any
     funcao_externo: int | None
@@ -528,6 +559,15 @@ class FuncionarioUnidadeEducacionalOut:
         self.codigo_tipo_funcao_atividade = _normalizar_int_opcional(
             self.codigo_tipo_funcao_atividade
         )
+        self.pessoa_id = _normalizar_int_opcional(self.pessoa_id)
+        self.nome_ue = _normalizar_texto_opcional(self.nome_ue)
+        self.tipo_funcionario_externo = _normalizar_texto_opcional(
+            self.tipo_funcionario_externo
+        )
+        self.dc_funcao_externo = _normalizar_texto_opcional(
+            self.dc_funcao_externo
+        )
+        self.supervisor_dre = _normalizar_bool(self.supervisor_dre)
         self.eh_professor = _normalizar_bool(self.eh_professor)
         self.esta_afastado = _normalizar_bool(self.esta_afastado)
         self.funcao_externo = _normalizar_int_opcional(self.funcao_externo)
@@ -558,6 +598,11 @@ class FuncionarioUnidadeEducacionalOut:
             "codigo_tipo_funcao_atividade": (
                 _normalizar_int(self.codigo_tipo_funcao_atividade)
             ),
+            "pessoa_id": self.pessoa_id,
+            "nome_ue": self.nome_ue,
+            "tipo_funcionario_externo": self.tipo_funcionario_externo,
+            "dc_funcao_externo": self.dc_funcao_externo,
+            "supervisor_dre": self.supervisor_dre,
             "eh_professor": self.eh_professor,
             "esta_afastado": self.esta_afastado,
             "funcao_externo": _normalizar_int(self.funcao_externo),

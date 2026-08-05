@@ -248,12 +248,30 @@ class RowToPessoaTest(TestCase):
 
     def test_campos(self) -> None:
         """Verifica que os campos da pessoa são extraídos corretamente."""
-        row = (500, "123.456.789-00", "JOSE", None)
+        data_nascimento = datetime.date(1980, 5, 10)
+        row = (
+            500,
+            "123.456.789-00",
+            "JOSE",
+            None,
+            " PAI ",
+            " MAE ",
+            data_nascimento,
+            " 12.345.678-9 ",
+            " 123456789012 ",
+            " 123.45678.90-1 ",
+        )
         r = _row_to_pessoa(row)
         self.assertEqual(r["codigo_pessoa"], 500)
         self.assertEqual(r["cpf"], "123.456.789-00")
         self.assertEqual(r["nome"], "JOSE")
         self.assertIsNone(r["nome_social"])
+        self.assertEqual(r["nome_pai"], "PAI")
+        self.assertEqual(r["nome_mae"], "MAE")
+        self.assertEqual(r["data_nascimento"], data_nascimento)
+        self.assertEqual(r["rg"], "12.345.678-9")
+        self.assertEqual(r["titulo_eleitoral"], "123456789012")
+        self.assertEqual(r["pis_pasep"], "123.45678.90-1")
 
 
 class RowToFuncionarioCargoTest(TestCase):
@@ -510,6 +528,11 @@ class RowToFuncionarioTest(TestCase):
             0,
             None,
             None,
+            None,
+            None,
+            None,
+            None,
+            None,
         ).to_domain()
 
         self.assertIsNone(dto.data_fim)
@@ -518,6 +541,11 @@ class RowToFuncionarioTest(TestCase):
         self.assertEqual(dto.origem_vinculo, "lotacao")
         self.assertIsNone(dto.codigo_cargo)
         self.assertIsNone(dto.codigo_tipo_funcao_atividade)
+        self.assertIsNone(dto.pessoa_id)
+        self.assertIsNone(dto.nome_ue)
+        self.assertIsNone(dto.tipo_funcionario_externo)
+        self.assertIsNone(dto.dc_funcao_externo)
+        self.assertFalse(dto.supervisor_dre)
 
     def test_campos_normalizados_e_hash(self) -> None:
         """Verifica normalizacao, defaults e chave SHA-256."""
@@ -541,6 +569,11 @@ class RowToFuncionarioTest(TestCase):
             0,
             None,
             None,
+            500,
+            " EMEF TESTE ",
+            " CONTRATADO ",
+            " PROFESSOR CONTRATADO ",
+            1,
         )
 
         r = _row_to_funcionario(row)
@@ -560,6 +593,11 @@ class RowToFuncionarioTest(TestCase):
         self.assertEqual(r["codigo_cargo"], 3239)
         self.assertEqual(r["cargo"], "PROFESSOR")
         self.assertEqual(r["codigo_tipo_funcao_atividade"], 0)
+        self.assertEqual(r["pessoa_id"], 500)
+        self.assertEqual(r["nome_ue"], "EMEF TESTE")
+        self.assertEqual(r["tipo_funcionario_externo"], "CONTRATADO")
+        self.assertEqual(r["dc_funcao_externo"], "PROFESSOR CONTRATADO")
+        self.assertTrue(r["supervisor_dre"])
         self.assertTrue(r["eh_professor"])
         self.assertFalse(r["esta_afastado"])
         self.assertEqual(r["funcao_externo"], 0)
@@ -587,6 +625,11 @@ class RowToFuncionarioTest(TestCase):
             "false",
             "",
             "",
+            None,
+            None,
+            None,
+            None,
+            None,
         )
 
         r = _row_to_funcionario(row)
@@ -597,6 +640,8 @@ class RowToFuncionarioTest(TestCase):
         self.assertIsNone(r["dt_fim_funcao_atividade"])
         self.assertEqual(r["origem_vinculo"], "lotacao")
         self.assertIsNone(r["codigo_cargo"])
+        self.assertIsNone(r["pessoa_id"])
+        self.assertFalse(r["supervisor_dre"])
         self.assertTrue(r["eh_professor"])
         self.assertFalse(r["esta_afastado"])
 
@@ -990,12 +1035,40 @@ class EtlProfessoresServiceFase1Test(TestCase):
         self, mock_eol: MagicMock, mock_upsert: MagicMock
     ) -> None:
         """Verifica que popular_pessoas retorna a contagem correta."""
+        data_nascimento = datetime.date(1980, 5, 10)
         mock_eol.return_value.iter_query.return_value = [
-            [(500, "123.456.789-00", "JOSE", None)]
+            [
+                (
+                    500,
+                    "123.456.789-00",
+                    "JOSE",
+                    None,
+                    " PAI ",
+                    " MAE ",
+                    data_nascimento,
+                    " 12.345.678-9 ",
+                    " 123456789012 ",
+                    " 123.45678.90-1 ",
+                )
+            ]
         ]
         srv = EtlProfessoresService()
         resultado = srv.popular_pessoas()
         self.assertEqual(resultado, 1)
+        self.assertEqual(
+            mock_upsert.call_args.args[3],
+            [
+                "cpf",
+                "nome",
+                "nome_social",
+                "nome_pai",
+                "nome_mae",
+                "data_nascimento",
+                "rg",
+                "titulo_eleitoral",
+                "pis_pasep",
+            ],
+        )
 
 
 class EtlProfessoresServiceFase2Test(TestCase):
@@ -1215,6 +1288,11 @@ class EtlProfessoresServiceFase4Test(TestCase):
                     0,
                     0,
                     0,
+                    500,
+                    None,
+                    None,
+                    None,
+                    1,
                 )
             ]
         ]
@@ -1239,6 +1317,33 @@ class EtlProfessoresServiceFase4Test(TestCase):
                 "codigo_tipo_funcao_atividade",
                 "data_inicio",
                 "data_fim",
+                "funcao_externo",
+                "tipo_funcao_externo",
+            ],
+        )
+        self.assertEqual(
+            mock_upsert.call_args.args[3],
+            [
+                "nome",
+                "nome_social",
+                "cpf",
+                "codigo_ue",
+                "codigo_dre",
+                "data_inicio",
+                "data_fim",
+                "dt_fim_nomeacao",
+                "dt_fim_funcao_atividade",
+                "origem_vinculo",
+                "codigo_cargo",
+                "cargo",
+                "codigo_tipo_funcao_atividade",
+                "pessoa_id",
+                "nome_ue",
+                "tipo_funcionario_externo",
+                "dc_funcao_externo",
+                "supervisor_dre",
+                "eh_professor",
+                "esta_afastado",
                 "funcao_externo",
                 "tipo_funcao_externo",
             ],
@@ -1448,7 +1553,10 @@ class SincronizarAdministradoresSgpTest(TestCase):
 
         self.assertEqual(total, 0)
 
-    @patch("apps.professores.services._full_refresh", side_effect=Exception("DB Error"))
+    @patch(
+        "apps.professores.services._full_refresh",
+        side_effect=Exception("DB Error"),
+    )
     @patch("apps.professores.services.RepositorioCoreSSO")
     def test_rollback_quando_erro_no_bulk_create(
         self, mock_repo_class: MagicMock, mock_full_refresh: MagicMock

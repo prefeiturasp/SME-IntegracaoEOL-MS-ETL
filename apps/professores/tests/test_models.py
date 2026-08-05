@@ -30,6 +30,21 @@ class ProfessoresModelsTest(TestCase):
         obj = Pessoa(cpf="123.456.789-00", nome="PESSOA TESTE")
         self.assertEqual(str(obj), "123.456.789-00 - PESSOA TESTE")
 
+    def test_pessoa_meta_dados_pessoais(self) -> None:
+        """Valida campos pessoais opcionais de Pessoa."""
+        meta = Pessoa._meta
+        self.assertTrue(meta.get_field("nome_pai").null)
+        self.assertEqual(meta.get_field("nome_pai").max_length, 200)
+        self.assertTrue(meta.get_field("nome_mae").null)
+        self.assertEqual(meta.get_field("nome_mae").max_length, 200)
+        self.assertTrue(meta.get_field("data_nascimento").null)
+        self.assertTrue(meta.get_field("rg").null)
+        self.assertEqual(meta.get_field("rg").max_length, 30)
+        self.assertTrue(meta.get_field("titulo_eleitoral").null)
+        self.assertEqual(meta.get_field("titulo_eleitoral").max_length, 30)
+        self.assertTrue(meta.get_field("pis_pasep").null)
+        self.assertEqual(meta.get_field("pis_pasep").max_length, 30)
+
     def test_funcionario_meta(self) -> None:
         """Valida metadados de FuncionarioUnidadeEducacional."""
         meta = FuncionarioUnidadeEducacional._meta
@@ -43,6 +58,18 @@ class ProfessoresModelsTest(TestCase):
         self.assertTrue(meta.get_field("origem_vinculo").null)
         self.assertFalse(meta.get_field("codigo_tipo_funcao_atividade").null)
         self.assertTrue(meta.get_field("codigo_cargo").null)
+        self.assertTrue(meta.get_field("pessoa").null)
+        self.assertFalse(meta.get_field("pessoa").db_constraint)
+        self.assertTrue(meta.get_field("nome_ue").null)
+        self.assertEqual(meta.get_field("nome_ue").max_length, 200)
+        self.assertTrue(meta.get_field("tipo_funcionario_externo").null)
+        self.assertEqual(
+            meta.get_field("tipo_funcionario_externo").max_length, 100
+        )
+        self.assertTrue(meta.get_field("dc_funcao_externo").null)
+        self.assertEqual(meta.get_field("dc_funcao_externo").max_length, 100)
+        self.assertFalse(meta.get_field("supervisor_dre").null)
+        self.assertFalse(meta.get_field("supervisor_dre").default)
         nomes_indices = {indice.name for indice in meta.indexes}
         self.assertIn("idx_funcionario_ue", nomes_indices)
         self.assertIn("idx_funcionario_cargo", nomes_indices)

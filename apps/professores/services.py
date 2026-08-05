@@ -455,7 +455,7 @@ class EtlProfessoresService:
         Args:
             eol: Cliente EOL; instanciado sob demanda quando omitido.
             ano_letivo: Ano letivo aplicado ao filtro incremental.
-            core_sso: Repositório CoreSSO; instanciado sob demanda quando omitido.
+            core_sso: Repositório CoreSSO.
         """
         self.eol = eol or EOLService()
         self.core_sso = core_sso or RepositorioCoreSSO()
@@ -522,7 +522,17 @@ class EtlProfessoresService:
                     Pessoa,
                     "pessoa",
                     [o.to_dict() for o in out_objs],
-                    ["cpf", "nome", "nome_social"],
+                    [
+                        "cpf",
+                        "nome",
+                        "nome_social",
+                        "nome_pai",
+                        "nome_mae",
+                        "data_nascimento",
+                        "rg",
+                        "titulo_eleitoral",
+                        "pis_pasep",
+                    ],
                 )
         return total
 
@@ -788,6 +798,11 @@ class EtlProfessoresService:
                         "codigo_cargo",
                         "cargo",
                         "codigo_tipo_funcao_atividade",
+                        "pessoa_id",
+                        "nome_ue",
+                        "tipo_funcionario_externo",
+                        "dc_funcao_externo",
+                        "supervisor_dre",
                         "eh_professor",
                         "esta_afastado",
                         "funcao_externo",
@@ -869,9 +884,7 @@ class EtlProfessoresService:
             )
 
             dados = [
-                AdministradorEscola(
-                    codigo_ue=str(row[0]), rf_login=row[1]
-                )
+                AdministradorEscola(codigo_ue=str(row[0]), rf_login=row[1])
                 for row in rows
             ]
 
@@ -897,7 +910,9 @@ class EtlProfessoresService:
         logger.info("[ETL PROF] === Fase 1: Professores e Pessoas ===")
         executar_tabela("professor", self.popular_professores)
         executar_tabela("pessoa", self.popular_pessoas)
-        executar_tabela("administrador_escola", self.popular_administradores_sgp)
+        executar_tabela(
+            "administrador_escola", self.popular_administradores_sgp
+        )
         self.ultima_fase_concluida = 1
         logger.info("[ETL PROF] Fase 1 concluída.")
 
@@ -1061,6 +1076,3 @@ class EtlProfessoresService:
             fase_inicial,
         )
         return r
-
-
-

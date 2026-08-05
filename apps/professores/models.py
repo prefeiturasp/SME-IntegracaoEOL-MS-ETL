@@ -254,6 +254,12 @@ class Pessoa(models.Model):
         null=True,  # NOSONAR nome_social:models:Pessoa
         blank=True,
     )
+    nome_pai = models.CharField(max_length=200, null=True, blank=True)
+    nome_mae = models.CharField(max_length=200, null=True, blank=True)
+    data_nascimento = models.DateField(null=True, blank=True)
+    rg = models.CharField(max_length=30, null=True, blank=True)
+    titulo_eleitoral = models.CharField(max_length=30, null=True, blank=True)
+    pis_pasep = models.CharField(max_length=30, null=True, blank=True)
 
     class Meta:
 
@@ -498,6 +504,19 @@ class FuncionarioUnidadeEducacional(models.Model):
     esta_afastado = models.BooleanField(default=False)
     funcao_externo = models.IntegerField(default=0)
     tipo_funcao_externo = models.IntegerField(default=0)
+    nome_ue = models.CharField(max_length=200, null=True, blank=True)
+    tipo_funcionario_externo = models.CharField(
+        max_length=100, null=True, blank=True
+    )
+    dc_funcao_externo = models.CharField(max_length=100, null=True, blank=True)
+    supervisor_dre = models.BooleanField(default=False)
+    pessoa = models.ForeignKey(
+        Pessoa,
+        on_delete=models.DO_NOTHING,
+        null=True,
+        blank=True,
+        db_constraint=False,
+    )
 
     class Meta:
 
@@ -642,7 +661,7 @@ class DisciplinaTurmaAtribuidaUe(models.Model):
 
 class AdministradorEscola(models.Model):
     """Administradores SGP por escola.
-    
+
     Armazena logins/RFs de usuários com perfil de administrador SGP
     em cada unidade educacional. Dados sincronizados do CoreSSO.
     """

@@ -222,6 +222,12 @@ class PessoaIn:
     cd_cpf_pessoa: Any
     nm_pessoa: Any
     nm_social: Any
+    nm_pai_pessoa: Any
+    nm_mae_pessoa: Any
+    dt_nascimento_pessoa: Any
+    nr_rg_pessoa: Any
+    nr_titulo_eleitor_pessoa: Any
+    cd_pis_pasep: Any
 
     def to_domain(self) -> "PessoaOut":
         """Retorna dados normalizados da pessoa.
@@ -236,6 +242,12 @@ class PessoaIn:
             cpf=str(self.cd_cpf_pessoa).strip(),
             nome=self.nm_pessoa or "",
             nome_social=self.nm_social or None,
+            nome_pai=self.nm_pai_pessoa,
+            nome_mae=self.nm_mae_pessoa,
+            data_nascimento=self.dt_nascimento_pessoa,
+            rg=self.nr_rg_pessoa,
+            titulo_eleitoral=self.nr_titulo_eleitor_pessoa,
+            pis_pasep=self.cd_pis_pasep,
         )
 
 
@@ -428,6 +440,11 @@ class FuncionarioUnidadeEducacionalIn:
     esta_afastado: Any
     funcao_externo: Any
     tipo_funcao_externo: Any
+    pessoa_id: Any
+    nome_ue: Any
+    tipo_funcionario_externo: Any
+    dc_funcao_externo: Any
+    supervisor_dre: Any
 
     def to_domain(self) -> "FuncionarioUnidadeEducacionalOut":
         """Retorna dados normalizados do funcionário por unidade.
@@ -456,6 +473,11 @@ class FuncionarioUnidadeEducacionalIn:
             codigo_cargo=self.cd_cargo,
             cargo=self.cargo or None,
             codigo_tipo_funcao_atividade=self.cd_tipo_funcao_atividade,
+            pessoa_id=self.pessoa_id,
+            nome_ue=self.nome_ue,
+            tipo_funcionario_externo=self.tipo_funcionario_externo,
+            dc_funcao_externo=self.dc_funcao_externo,
+            supervisor_dre=self.supervisor_dre,
             eh_professor=self.eh_professor,
             esta_afastado=self.esta_afastado,
             funcao_externo=self.funcao_externo,
