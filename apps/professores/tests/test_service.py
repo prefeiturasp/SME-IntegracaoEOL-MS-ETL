@@ -1367,3 +1367,110 @@ class EtlProfessoresServiceExecutarTest(TestCase):
 
         self.assertNotIn("professor", resultado)
         self.assertIn("pessoa", resultado)
+
+
+class SincronizarAdministradoresSgpTest(TestCase):
+    """Testes da sincronização de administradores SGP."""
+
+    databases = ["default", "professores_db"]
+
+    @patch("apps.professores.services.RepositorioCoreSSO")
+    def test_sincroniza_administradores_com_sucesso(
+        self, mock_repo_class: MagicMock
+    ) -> None:
+        """Valida sincronização completa de administradores SGP."""
+        from apps.professores.models import AdministradorEscola
+        from apps.professores.services import EtlProfessoresService
+
+        mock_repo = MagicMock()
+        mock_repo.factory.executar_consulta.return_value = [
+            ("019465", "1234567"),
+            ("019465", "7654321"),
+            ("000191", "9999999"),
+        ]
+        mock_repo_class.return_value = mock_repo
+
+        servico = EtlProfessoresService()
+        total = servico.popular_administradores_sgp()
+
+        self.assertEqual(total, 3)
+        mock_repo.factory.executar_consulta.assert_called_once()
+        self.assertEqual(AdministradorEscola.objects.count(), 3)
+        self.assertTrue(
+            AdministradorEscola.objects.filter(
+                codigo_ue="019465", rf_login="1234567"
+            ).exists()
+        )
+
+    @patch("apps.professores.services.RepositorioCoreSSO")
+    def test_deleta_registros_antigos_antes_de_sincronizar(
+        self, mock_repo_class: MagicMock
+    ) -> None:
+        """Valida que registros antigos são deletados."""
+        from apps.professores.models import AdministradorEscola
+        from apps.professores.services import EtlProfessoresService
+
+        AdministradorEscola.objects.create(
+            codigo_ue="999999", rf_login="OLD_RF"
+        )
+
+        mock_repo = MagicMock()
+        mock_repo.factory.executar_consulta.return_value = [
+            ("019465", "NEW_RF")
+        ]
+        mock_repo_class.return_value = mock_repo
+
+        servico = EtlProfessoresService()
+        servico.popular_administradores_sgp()
+
+        self.assertFalse(
+            AdministradorEscola.objects.filter(rf_login="OLD_RF").exists()
+        )
+        self.assertTrue(
+            AdministradorEscola.objects.filter(rf_login="NEW_RF").exists()
+        )
+
+    @patch("apps.professores.services.RepositorioCoreSSO")
+    def test_erro_quando_falha_conexao_coresso(
+        self, mock_repo_class: MagicMock
+    ) -> None:
+        """Valida que retorna 0 quando há erro na conexão."""
+        from apps.professores.services import EtlProfessoresService
+
+        mock_repo = MagicMock()
+        mock_repo.factory.executar_consulta.side_effect = Exception(
+            "Connection failed"
+        )
+        mock_repo_class.return_value = mock_repo
+
+        servico = EtlProfessoresService()
+        total = servico.popular_administradores_sgp()
+
+        self.assertEqual(total, 0)
+
+    @patch("apps.professores.services._full_refresh", side_effect=Exception("DB Error"))
+    @patch("apps.professores.services.RepositorioCoreSSO")
+    def test_rollback_quando_erro_no_bulk_create(
+        self, mock_repo_class: MagicMock, mock_full_refresh: MagicMock
+    ) -> None:
+        """Valida que retorna 0 em caso de erro."""
+        from apps.professores.models import AdministradorEscola
+        from apps.professores.services import EtlProfessoresService
+
+        AdministradorEscola.objects.create(
+            codigo_ue="999999", rf_login="KEEP_ME"
+        )
+
+        mock_repo = MagicMock()
+        mock_repo.factory.executar_consulta.return_value = [
+            ("019465", "NEW_RF")
+        ]
+        mock_repo_class.return_value = mock_repo
+
+        servico = EtlProfessoresService()
+        total = servico.popular_administradores_sgp()
+
+        self.assertEqual(total, 0)
+        self.assertTrue(
+            AdministradorEscola.objects.filter(rf_login="KEEP_ME").exists()
+        )

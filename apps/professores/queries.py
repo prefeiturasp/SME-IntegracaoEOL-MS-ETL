@@ -692,3 +692,24 @@ SQL_FUNCIONARIOS_UNIDADE_EDUCACIONAL = f"""
             = funcionarios.cd_cargo_base_servidor
         AND laudo.ordem = 1
 """
+
+
+SQL_ADMINISTRADORES_SGP = """
+    SELECT 
+        U.uad_codigo AS codigo_ue,
+        US.usu_login AS rf_login
+    FROM SYS_UsuarioGrupoUA UGA 
+        INNER JOIN SYS_UnidadeAdministrativa U 
+            ON UGA.uad_id = U.uad_id
+        INNER JOIN SYS_Usuario US 
+            ON UGA.usu_id = US.usu_id
+        INNER JOIN SYS_Grupo G 
+            ON UGA.gru_id = G.gru_id
+    WHERE US.usu_situacao = 1
+        AND G.gru_id IN (
+            '48E1E074-37D6-E911-ABD6-F81654FE895D',  -- ADM UE
+            '42E1E074-37D6-E911-ABD6-F81654FE895D'   -- ADM DRE
+        )
+        AND G.sis_id = 1000  -- Sistema SGP
+    ORDER BY U.uad_codigo, US.usu_login
+"""
