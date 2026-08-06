@@ -780,11 +780,9 @@ SQL_FUNCIONARIO_SISTEMA_PERFIL = """
         login,
         MAX(nome_servidor) AS nome_servidor,
         MAX(email) AS email,
-        CAST(
-            MAX(CAST(perfil AS varchar(36))) AS uniqueidentifier
-        ) AS perfil,
+        perfil,
         MAX(uad_codigo) AS uad_codigo,
-        MAX(sis_id) AS sis_id
+        sis_id
     FROM (
         SELECT
             US.usu_login AS login,
@@ -807,7 +805,7 @@ SQL_FUNCIONARIO_SISTEMA_PERFIL = """
             AND G.gru_id = UG.gru_id
         WHERE US.usu_situacao = 1
           AND UG.usg_situacao = 1
-        UNION ALL
+        UNION
         SELECT
             US.usu_login AS login,
             PP.pes_nome AS nome_servidor,
@@ -825,5 +823,5 @@ SQL_FUNCIONARIO_SISTEMA_PERFIL = """
         WHERE US.usu_situacao = 1
           AND G.sis_id = 1000
     ) AS Funcionarios
-    GROUP BY login, perfil, uad_codigo, sis_id;
+    GROUP BY login, perfil, sis_id;
 """

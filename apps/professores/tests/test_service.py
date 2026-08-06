@@ -169,6 +169,27 @@ class FuncionarioSistemaPerfilDtoTest(TestCase):
         self.assertIsNone(dto.uad_codigo)
 
 
+class FuncionarioSistemaPerfilQueryTest(TestCase):
+    """Testes da consulta de perfis de sistema do funcionario."""
+
+    def test_consolida_uad_codigo_sem_gerar_linha_nula_duplicada(
+        self,
+    ) -> None:
+        """Agrupa por login, perfil e sistema, priorizando UAD preenchida."""
+        self.assertIn(
+            "MAX(uad_codigo) AS uad_codigo",
+            SQL_FUNCIONARIO_SISTEMA_PERFIL,
+        )
+        self.assertIn(
+            "GROUP BY login, perfil, sis_id",
+            SQL_FUNCIONARIO_SISTEMA_PERFIL,
+        )
+        self.assertNotIn(
+            "GROUP BY login, perfil, uad_codigo, sis_id",
+            SQL_FUNCIONARIO_SISTEMA_PERFIL,
+        )
+
+
 class RowToFuncionarioSistemaPerfilTest(TestCase):
     """Testes para a função _row_to_funcionario_sistema_perfil."""
 
