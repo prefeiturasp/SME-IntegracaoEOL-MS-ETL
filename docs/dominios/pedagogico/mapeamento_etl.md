@@ -101,20 +101,43 @@ Materializa a atribuição granular de Território do Saber. Cada linha represen
 
 ---
 
-## Fases 5 a 8 — tabelas auxiliares da API EOL
+## Fase 5 — ComponenteCurricularApiEol
+
+**Query:** `SQL_API_EOL_COMPONENTE_CURRICULAR`
+
+Materializa em `componente_curricular_api_eol` o resultado do `LEFT JOIN`
+entre `componentecurricular` e `componentecurricularpai` da API EOL. A carga
+preserva componentes sem pai e todas as relações históricas existentes.
+
+| Campo API EOL | Campo Destino | Transformação |
+| :--- | :--- | :--- |
+| `ccp.id` | `id_relacao_origem` | `int_or_none()` |
+| `cc.idcomponentecurricular` | `id_componente_curricular` | `int()` |
+| `cc.ehregencia` | `eh_regencia` | `bool()` |
+| `cc.ehterritorio` | `eh_territorio` | `bool()` |
+| `cc.descricao` | `descricao` | `strip_str()` ou `None` |
+| `ccp.idcomponentecurricularpai` | `id_componente_curricular_pai` | `int_or_none()` |
+| `ccp.vigencia` | `vigencia` | `aware_or_none()` |
+
+**Chave da linha:** `(id_relacao_origem, id_componente_curricular)`, com
+`nulls_distinct=False` para identificar também componentes sem pai.
+
+---
+
+## Fases 6 a 9 — tabelas auxiliares da API EOL
 
 Todas usam `full_refresh` e `truncate_on_full_sync=True`.
 
 | Fase | Origem API EOL | Destino | Observação |
 | :--- | :--- | :--- | :--- |
-| 5 | `componentecurricularpai` | `componente_curricular_hierarquia` | Hierarquia pai/filho de componentes. |
-| 6 | `componentecurricularpap` | `componente_curricular_pap` | Componentes PAP. |
-| 7 | `regenciacomponentecurricular` | `componente_curricular_planejamento_regencia` | Planejamento de regência por componente, turno e ano. |
-| 8 | `turma_tipo_itinerario` | `turma_itinerario_ensino_medio` | Itinerários do Ensino Médio. |
+| 6 | `componentecurricularpai` | `componente_curricular_hierarquia` | Hierarquia pai/filho de componentes. |
+| 7 | `componentecurricularpap` | `componente_curricular_pap` | Componentes PAP. |
+| 8 | `regenciacomponentecurricular` | `componente_curricular_planejamento_regencia` | Planejamento de regência por componente, turno e ano. |
+| 9 | `turma_tipo_itinerario` | `turma_itinerario_ensino_medio` | Itinerários do Ensino Médio. |
 
 ---
 
-## Fase 9 — AgrupamentoAtribuicaoTerritorioSaber
+## Fase 10 — AgrupamentoAtribuicaoTerritorioSaber
 
 **Query:** `SQL_API_EOL_AGRUPAMENTO_ATRIBUICAO_TERRITORIO_SABER`
 
@@ -143,7 +166,7 @@ Copia a tabela `agrupamentoatribuicaoterritoriosaber` da API EOL em modo `full_r
 
 ---
 
-## Fase 10 — GradeComponenteCurricular
+## Fase 11 — GradeComponenteCurricular
 
 **Query:** `SQL_GRADE_COMPONENTE_CURRICULAR` (parâmetro `?` por ano letivo)
 
@@ -171,7 +194,7 @@ ensino; por isso `codigo_serie_ensino` é a referência de identidade.
 
 ---
 
-## Fase 11 — Turma
+## Fase 12 — Turma
 
 **Query:** `SQL_TURMAS` (parâmetro `?` por ano letivo)
 
@@ -207,7 +230,7 @@ Origem: `turma_escola` (NOLOCK) com joins em `escola`, `serie_turma_escola`, `se
 
 ---
 
-## Fase 12 — TurmaAtribuidaDreUe
+## Fase 13 — TurmaAtribuidaDreUe
 
 **Origem:** turmas já consolidadas por DRE e UE no EOL, por ano letivo.
 

@@ -2,7 +2,36 @@
 
 from django.test import SimpleTestCase
 
-from apps.pedagogico.queries import SQL_TURMAS
+from apps.pedagogico.queries import (
+    SQL_API_EOL_COMPONENTE_CURRICULAR,
+    SQL_TURMAS,
+)
+
+
+class SqlApiEolComponenteCurricularTest(SimpleTestCase):
+    """Valida a consulta consolidada de componentes da API EOL."""
+
+    def test_preserva_left_join_e_ordem_das_colunas(self) -> None:
+        colunas = (
+            "ccp.id",
+            "cc.idcomponentecurricular",
+            "cc.ehregencia",
+            "cc.ehterritorio",
+            "cc.descricao",
+            "ccp.idcomponentecurricularpai",
+            "ccp.vigencia",
+        )
+
+        posicoes = [
+            SQL_API_EOL_COMPONENTE_CURRICULAR.index(coluna)
+            for coluna in colunas
+        ]
+
+        self.assertEqual(posicoes, sorted(posicoes))
+        self.assertIn(
+            "LEFT JOIN componentecurricularpai",
+            SQL_API_EOL_COMPONENTE_CURRICULAR,
+        )
 
 
 class SqlTurmasProjecaoTest(SimpleTestCase):

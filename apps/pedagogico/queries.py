@@ -56,6 +56,21 @@ ORDER BY an_letivo
 
 # Fonte Postgres API EOL → destino pedagogico_db.
 # Estas consultas alimentam tabelas estáticas/legadas via full refresh.
+SQL_API_EOL_COMPONENTE_CURRICULAR = """
+SELECT
+    ccp.id,
+    cc.idcomponentecurricular,
+    cc.ehregencia,
+    cc.ehterritorio,
+    cc.descricao,
+    ccp.idcomponentecurricularpai,
+    ccp.vigencia
+FROM componentecurricular cc
+LEFT JOIN componentecurricularpai ccp
+    ON cc.idcomponentecurricular = ccp.idcomponentecurricular
+ORDER BY cc.idcomponentecurricular, ccp.id
+"""
+
 SQL_API_EOL_COMPONENTE_CURRICULAR_HIERARQUIA = """
 SELECT
     id,
@@ -124,6 +139,11 @@ ORDER BY codagrupamento
 """
 
 API_EOL_PEDAGOGICO_TABLE_MAPPINGS = {
+    "componente_curricular_api_eol": {
+        "source_table": "componentecurricular, componentecurricularpai",
+        "target_table": "componente_curricular_api_eol",
+        "sql": SQL_API_EOL_COMPONENTE_CURRICULAR,
+    },
     "componentecurricularhierarquia": {
         "source_table": "componentecurricularpai",
         "target_table": "componente_curricular_hierarquia",

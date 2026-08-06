@@ -6,6 +6,7 @@ from django.utils import timezone
 from apps.pedagogico.dtos.model_in import (
     ApiEolAgrupamentoAtribuicaoTerritorioSaberIn,
     ApiEolComponenteCurricularHierarquiaIn,
+    ApiEolComponenteCurricularIn,
     ApiEolComponenteCurricularPAPIn,
     ApiEolComponenteCurricularPlanejamentoRegenciaIn,
     ApiEolTurmaItinerarioEnsinoMedioIn,
@@ -22,6 +23,10 @@ class ApiEolPedagogicoTableMappingsTest(SimpleTestCase):
 
     def test_mapeia_tabelas_origem_e_destino(self) -> None:
         esperado = {
+            "componente_curricular_api_eol": (
+                "componentecurricular, componentecurricularpai",
+                "componente_curricular_api_eol",
+            ),
             "componentecurricularhierarquia": (
                 "componentecurricularpai",
                 "componente_curricular_hierarquia",
@@ -54,6 +59,81 @@ class ApiEolPedagogicoTableMappingsTest(SimpleTestCase):
 
 class ApiEolPedagogicoDtoTest(SimpleTestCase):
     """Testes dos DTOs da fonte Postgres API EOL."""
+
+    def test_componente_curricular_api_eol_com_relacao_pai(self) -> None:
+        dto = ApiEolComponenteCurricularIn(
+            "10",
+            "513",
+            True,
+            False,
+            " Arte ",
+            "512",
+            datetime(2021, 12, 31, 0, 0, 0),
+        )
+
+        data = dto.to_domain("agora")
+
+        self.assertEqual(data["id_relacao_origem"], 10)
+        self.assertEqual(data["id_componente_curricular"], 513)
+        self.assertTrue(data["eh_regencia"])
+        self.assertFalse(data["eh_territorio"])
+        self.assertEqual(data["descricao"], "Arte")
+        self.assertEqual(data["id_componente_curricular_pai"], 512)
+        self.assertTrue(timezone.is_aware(data["vigencia"]))
+        self.assertEqual(data["transferido_em"], "agora")
+
+    def test_componente_curricular_api_eol_sem_relacao_pai(self) -> None:
+        dto = ApiEolComponenteCurricularIn(
+            None,
+            "513",
+            False,
+            True,
+            "Território do Saber",
+            None,
+            None,
+        )
+
+        data = dto.to_domain("agora")
+
+        self.assertIsNone(data["id_relacao_origem"])
+        self.assertIsNone(data["id_componente_curricular_pai"])
+        self.assertIsNone(data["vigencia"])
+        self.assertTrue(data["eh_territorio"])
+
+    def test_componente_curricular_api_eol_sem_descricao(self) -> None:
+        dto = ApiEolComponenteCurricularIn(
+            None,
+            "1",
+            False,
+            False,
+            None,
+            None,
+            None,
+        )
+
+        data = dto.to_domain("agora")
+
+        self.assertIsNone(data["descricao"])
+
+    def test_componente_curricular_api_eol_define_transferencia_atual(
+        self,
+    ) -> None:
+        dto = ApiEolComponenteCurricularIn(
+            None,
+            "1",
+            False,
+            False,
+            "Arte",
+            None,
+            None,
+        )
+
+        antes = timezone.now()
+        data = dto.to_domain()
+        depois = timezone.now()
+
+        self.assertGreaterEqual(data["transferido_em"], antes)
+        self.assertLessEqual(data["transferido_em"], depois)
 
     def test_componente_curricular_hierarquia(self) -> None:
         dto = ApiEolComponenteCurricularHierarquiaIn(

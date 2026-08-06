@@ -38,6 +38,34 @@ class ComponenteCurricularSimplesIn:
 
 
 @dataclass
+class ApiEolComponenteCurricularIn:
+    """Linha consolidada de componente curricular da API EOL."""
+
+    id_relacao_origem: Any
+    id_componente_curricular: Any
+    eh_regencia: Any
+    eh_territorio: Any
+    descricao: Any
+    id_componente_curricular_pai: Any
+    vigencia: Any
+
+    def to_domain(self, transferido_em: Any | None = None) -> dict:
+        transferido_em = transferido_em or timezone.now()
+        return {
+            "id_relacao_origem": int_or_none(self.id_relacao_origem),
+            "id_componente_curricular": int(self.id_componente_curricular),
+            "eh_regencia": bool(self.eh_regencia),
+            "eh_territorio": bool(self.eh_territorio),
+            "descricao": strip_str(self.descricao),
+            "id_componente_curricular_pai": int_or_none(
+                self.id_componente_curricular_pai
+            ),
+            "vigencia": aware_or_none(self.vigencia),
+            "transferido_em": transferido_em,
+        }
+
+
+@dataclass
 class ComponenteTurmaIn:
     """Dados de componente de turma recebidos para carga.
 
