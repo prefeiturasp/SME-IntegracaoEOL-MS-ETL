@@ -178,7 +178,7 @@ class FuncionarioSistemaPerfil(models.Model):
         blank=True,
     )
     cpf = models.CharField(
-        max_length=14,
+        max_length=50,
         null=True,
         blank=True,
     )

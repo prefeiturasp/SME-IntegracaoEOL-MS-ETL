@@ -17,7 +17,7 @@ Modelos atuais de `apps/professores/models.py`.
 | `codigo_rf` | `CharField` | max_length=20; primary_key=True |
 | `nome` | `CharField` | max_length=200 |
 | `nome_social` | `CharField` | max_length=200; null=True |
-| `cpf` | `CharField` | max_length=14; null=True |
+| `cpf` | `CharField` | max_length=50; null=True (para compatibilidade com legado) |
 
 ---
 

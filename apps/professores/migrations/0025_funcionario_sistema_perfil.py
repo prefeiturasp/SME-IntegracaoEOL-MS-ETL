@@ -24,7 +24,7 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "cpf",
-                    models.CharField(blank=True, max_length=14, null=True),
+                    models.CharField(blank=True, max_length=50, null=True),
                 ),
                 (
                     "email",
