@@ -825,5 +825,5 @@ SQL_FUNCIONARIO_SISTEMA_PERFIL = """
         WHERE US.usu_situacao = 1
           AND G.sis_id = 1000
     ) AS Funcionarios
-    GROUP BY login;
+    GROUP BY login, perfil, uad_codigo, sis_id;
 """
