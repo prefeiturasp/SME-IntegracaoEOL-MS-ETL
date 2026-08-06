@@ -282,6 +282,7 @@ resposta.
 | `id` | `BigAutoField` | primary_key=True |
 | `login` | `CharField` | max_length=500 |
 | `nome_servidor` | `CharField` | max_length=200; null=True |
+| `cpf` | `CharField` | max_length=14; null=True |
 | `email` | `CharField` | max_length=500; null=True |
 | `uad_codigo` | `CharField` | max_length=20; null=True |
 | `perfil` | `UUIDField` | grupo/perfil do sistema |
@@ -291,7 +292,8 @@ Indices: `login`, `sis_id`, `perfil`.
 Restricao unica: `(login, perfil, sis_id)`.
 
 A carga considera atualmente o SGP (`sis_id = 1000`) para manter
-compatibilidade com a API legada.
+compatibilidade com a API legada. Quando a origem retorna a mesma combinacao
+de `login`, `perfil` e `sis_id` com e sem UAD, a carga preserva a linha unica com `uad_codigo` preenchido.
 
 ---
 

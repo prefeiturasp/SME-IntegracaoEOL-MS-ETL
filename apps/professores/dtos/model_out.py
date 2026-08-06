@@ -106,6 +106,7 @@ class FuncionarioSistemaPerfilOut:
 
     login: str
     nome_servidor: str | None
+    cpf: str | None
     email: str | None
     uad_codigo: str | None
     perfil: UUID
@@ -115,6 +116,7 @@ class FuncionarioSistemaPerfilOut:
         """Normaliza campos do perfil de sistema."""
         self.login = _normalizar_texto(self.login)
         self.nome_servidor = _normalizar_texto_opcional(self.nome_servidor)
+        self.cpf = _normalizar_texto_opcional(self.cpf)
         self.email = _normalizar_texto_opcional(self.email)
         self.uad_codigo = _normalizar_texto_opcional(self.uad_codigo)
         self.perfil = _normalizar_uuid(self.perfil)
@@ -129,6 +131,7 @@ class FuncionarioSistemaPerfilOut:
         return {
             "login": self.login,
             "nome_servidor": self.nome_servidor,
+            "cpf": self.cpf,
             "email": self.email,
             "uad_codigo": self.uad_codigo,
             "perfil": self.perfil,

@@ -779,6 +779,7 @@ SQL_FUNCIONARIO_SISTEMA_PERFIL = """
     SELECT
         login,
         MAX(nome_servidor) AS nome_servidor,
+        MAX(cpf) AS cpf,
         MAX(email) AS email,
         perfil,
         MAX(uad_codigo) AS uad_codigo,
@@ -787,6 +788,7 @@ SQL_FUNCIONARIO_SISTEMA_PERFIL = """
         SELECT
             US.usu_login AS login,
             PP.pes_nome AS nome_servidor,
+            PPD.psd_numero AS cpf,
             US.usu_email AS email,
             G.gru_id AS perfil,
             U.uad_codigo AS uad_codigo,
@@ -800,6 +802,8 @@ SQL_FUNCIONARIO_SISTEMA_PERFIL = """
             ON UGA.gru_id = G.gru_id
         INNER JOIN PES_Pessoa PP
             ON PP.pes_id = US.pes_id
+        INNER JOIN PES_PessoaDocumento PPD
+            ON PPD.pes_id = PP.pes_id
         INNER JOIN SYS_UsuarioGrupo UG
             ON US.usu_id = UG.usu_id
             AND G.gru_id = UG.gru_id
@@ -809,6 +813,7 @@ SQL_FUNCIONARIO_SISTEMA_PERFIL = """
         SELECT
             US.usu_login AS login,
             PP.pes_nome AS nome_servidor,
+            PPD.psd_numero AS cpf,
             US.usu_email AS email,
             G.gru_id AS perfil,
             NULL AS uad_codigo,
@@ -820,6 +825,8 @@ SQL_FUNCIONARIO_SISTEMA_PERFIL = """
             ON UG.gru_id = G.gru_id
         LEFT JOIN PES_Pessoa PP
             ON PP.pes_id = US.pes_id
+        LEFT JOIN PES_PessoaDocumento PPD
+            ON PPD.pes_id = PP.pes_id
         WHERE US.usu_situacao = 1
           AND G.sis_id = 1000
     ) AS Funcionarios

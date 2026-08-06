@@ -177,6 +177,11 @@ class FuncionarioSistemaPerfil(models.Model):
         null=True,
         blank=True,
     )
+    cpf = models.CharField(
+        max_length=14,
+        null=True,
+        blank=True,
+    )
     email = models.CharField(
         max_length=500,
         null=True,

@@ -138,6 +138,7 @@ class FuncionarioSistemaPerfilDtoTest(TestCase):
         dto = FuncionarioSistemaPerfilIn(
             "  123456  ",
             "  ANA SILVA  ",
+            "  123.456.789-00  ",
             "  ana@sme.prefeitura.sp.gov.br  ",
             "11111111-1111-1111-1111-111111111111",
             "000001",
@@ -146,6 +147,7 @@ class FuncionarioSistemaPerfilDtoTest(TestCase):
 
         self.assertEqual(dto.login, "123456")
         self.assertEqual(dto.nome_servidor, "ANA SILVA")
+        self.assertEqual(dto.cpf, "123.456.789-00")
         self.assertEqual(dto.email, "ana@sme.prefeitura.sp.gov.br")
         self.assertEqual(dto.uad_codigo, "000001")
         self.assertEqual(
@@ -159,12 +161,14 @@ class FuncionarioSistemaPerfilDtoTest(TestCase):
             "123456",
             None,
             None,
+            None,
             UUID("11111111-1111-1111-1111-111111111111"),
             None,
             1000,
         ).to_domain()
 
         self.assertIsNone(dto.nome_servidor)
+        self.assertIsNone(dto.cpf)
         self.assertIsNone(dto.email)
         self.assertIsNone(dto.uad_codigo)
 
@@ -180,6 +184,7 @@ class FuncionarioSistemaPerfilQueryTest(TestCase):
             "MAX(uad_codigo) AS uad_codigo",
             SQL_FUNCIONARIO_SISTEMA_PERFIL,
         )
+        self.assertIn("MAX(cpf) AS cpf", SQL_FUNCIONARIO_SISTEMA_PERFIL)
         self.assertIn(
             "GROUP BY login, perfil, sis_id",
             SQL_FUNCIONARIO_SISTEMA_PERFIL,
@@ -198,6 +203,7 @@ class RowToFuncionarioSistemaPerfilTest(TestCase):
         row = (
             "123456",
             "ANA SILVA",
+            "123.456.789-00",
             "ana@sme.prefeitura.sp.gov.br",
             "11111111-1111-1111-1111-111111111111",
             "000001",
@@ -208,6 +214,7 @@ class RowToFuncionarioSistemaPerfilTest(TestCase):
 
         self.assertEqual(resultado["login"], "123456")
         self.assertEqual(resultado["nome_servidor"], "ANA SILVA")
+        self.assertEqual(resultado["cpf"], "123.456.789-00")
         self.assertEqual(resultado["email"], "ana@sme.prefeitura.sp.gov.br")
         self.assertEqual(resultado["uad_codigo"], "000001")
         self.assertEqual(
@@ -1457,6 +1464,7 @@ class EtlProfessoresServiceFase4Test(TestCase):
             [
                 "123456",
                 "ANA SILVA",
+                "123.456.789-00",
                 "ana@sme.prefeitura.sp.gov.br",
                 "11111111-1111-1111-1111-111111111111",
                 "000001",
@@ -1485,6 +1493,7 @@ class EtlProfessoresServiceFase4Test(TestCase):
                 {
                     "login": "123456",
                     "nome_servidor": "ANA SILVA",
+                    "cpf": "123.456.789-00",
                     "email": "ana@sme.prefeitura.sp.gov.br",
                     "uad_codigo": "000001",
                     "perfil": UUID("11111111-1111-1111-1111-111111111111"),
@@ -1494,7 +1503,7 @@ class EtlProfessoresServiceFase4Test(TestCase):
         )
         self.assertEqual(
             mock_upsert.call_args.args[3],
-            ["nome_servidor", "email", "uad_codigo"],
+            ["nome_servidor", "cpf", "email", "uad_codigo"],
         )
         self.assertEqual(
             mock_upsert.call_args.args[4],

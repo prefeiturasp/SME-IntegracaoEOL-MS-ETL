@@ -119,6 +119,7 @@ class FuncionarioSistemaPerfilIn:
 
     login: Any
     nome_servidor: Any
+    cpf: Any
     email: Any
     perfil: Any
     uad_codigo: Any
@@ -137,6 +138,7 @@ class FuncionarioSistemaPerfilIn:
         return FuncionarioSistemaPerfilOut(
             login=self.login,
             nome_servidor=self.nome_servidor,
+            cpf=self.cpf,
             email=self.email,
             uad_codigo=self.uad_codigo,
             perfil=self.perfil,

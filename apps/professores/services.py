@@ -863,7 +863,7 @@ class EtlProfessoresService:
             FuncionarioSistemaPerfil,
             "funcionario_sistema_perfil",
             [o.to_dict() for o in out_objs],
-            ["nome_servidor", "email", "uad_codigo"],
+            ["nome_servidor", "cpf", "email", "uad_codigo"],
             ["login", "perfil", "sis_id"],
         )
 

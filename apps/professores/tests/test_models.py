@@ -120,6 +120,8 @@ class ProfessoresModelsTest(TestCase):
         self.assertEqual(meta.get_field("login").max_length, 500)
         self.assertEqual(meta.get_field("nome_servidor").max_length, 200)
         self.assertTrue(meta.get_field("nome_servidor").null)
+        self.assertEqual(meta.get_field("cpf").max_length, 14)
+        self.assertTrue(meta.get_field("cpf").null)
         self.assertEqual(meta.get_field("email").max_length, 500)
         self.assertTrue(meta.get_field("email").null)
         self.assertEqual(meta.get_field("uad_codigo").max_length, 20)
