@@ -20,8 +20,9 @@ A ordem abaixo preserva as dependencias entre os grupos de dados do dominio.
 
 ## Fase 4 — dependem das Fases 1–3
 11. `funcionario_unidade_educacional`
-12. `turma_atribuida_ue`
-13. `disciplina_turma_atribuida_ue`
+12. `funcionario_sistema_perfil`
+13. `turma_atribuida_ue`
+14. `disciplina_turma_atribuida_ue`
 
 ## Diagrama
 
@@ -43,6 +44,11 @@ digraph G {
 
 O vinculo do funcionario com a unidade e consolidado depois dos dados de
 servidor, cargo, afastamento, atribuicao e contrato externo.
+
+## FuncionarioSistemaPerfil
+
+O perfil de sistema do funcionario e consolidado por login, perfil e sistema
+na fase final. A carga considera atualmente o SGP (`sis_id = 1000`) e preserva `cpf` e `uad_codigo` quando a origem informar, para compatibilidade com a API legada.
 
 ## TurmaAtribuidaUe
 

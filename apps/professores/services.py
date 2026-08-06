@@ -21,6 +21,7 @@ from apps.professores.dtos.model_in import (
     DisciplinaTurmaAtribuidaUeIn,
     FuncaoAtividadeCargoServidorIn,
     FuncionarioCargoIn,
+    FuncionarioSistemaPerfilIn,
     FuncionarioUnidadeEducacionalIn,
     LaudoMedicoIn,
     LotacaoServidorIn,
@@ -33,6 +34,7 @@ from apps.professores.dtos.model_out import (
     AtribuicaoExternoOut,
     CargoBaseServidorOut,
     ContratoExternoOut,
+    FuncionarioSistemaPerfilOut,
     FuncionarioUnidadeEducacionalOut,
     PessoaOut,
     ProfessorOut,
@@ -47,6 +49,7 @@ from apps.professores.models import (
     DisciplinaTurmaAtribuidaUe,
     FuncaoAtividadeCargoServidor,
     FuncionarioCargo,
+    FuncionarioSistemaPerfil,
     FuncionarioUnidadeEducacional,
     LaudoMedico,
     LotacaoServidor,
@@ -63,6 +66,7 @@ from apps.professores.queries import (
     SQL_CARGOS_SOBREPOSTOS,
     SQL_CONTRATOS_EXTERNOS,
     SQL_DISCIPLINAS_TURMAS_ATRIBUIDAS_UE,
+    SQL_FUNCIONARIO_SISTEMA_PERFIL,
     SQL_FUNCIONARIOS_CARGOS,
     SQL_FUNCIONARIOS_UNIDADE_EDUCACIONAL,
     SQL_FUNCOES_ATIVIDADE,
@@ -160,6 +164,11 @@ def _row_to_funcionario(row: tuple) -> dict:
 def _row_to_funcionario_cargo(row: tuple) -> dict:
     """Monta o dicionário da linha de funcionário por cargo."""
     return cast(dict, FuncionarioCargoIn(*row).to_domain().to_dict())
+
+
+def _row_to_funcionario_sistema_perfil(row: tuple) -> dict:
+    """Monta o dicionário da linha de perfil de sistema."""
+    return cast(dict, FuncionarioSistemaPerfilIn(*row).to_domain().to_dict())
 
 
 def _row_to_turma_atribuida_ue(row: tuple) -> dict:
@@ -436,6 +445,7 @@ _ORDEM_TABELAS: tuple[str, ...] = (
     "atribuicao_aula",
     "atribuicao_externo",
     "funcionario_unidade_educacional",
+    "funcionario_sistema_perfil",
     "turma_atribuida_ue",
     "disciplina_turma_atribuida_ue",
 )
@@ -455,7 +465,7 @@ class EtlProfessoresService:
         Args:
             eol: Cliente EOL; instanciado sob demanda quando omitido.
             ano_letivo: Ano letivo aplicado ao filtro incremental.
-            core_sso: Repositório CoreSSO; instanciado sob demanda quando omitido.
+            core_sso: Repositório CoreSSO.
         """
         self.eol = eol or EOLService()
         self.core_sso = core_sso or RepositorioCoreSSO()
@@ -522,7 +532,17 @@ class EtlProfessoresService:
                     Pessoa,
                     "pessoa",
                     [o.to_dict() for o in out_objs],
-                    ["cpf", "nome", "nome_social"],
+                    [
+                        "cpf",
+                        "nome",
+                        "nome_social",
+                        "nome_pai",
+                        "nome_mae",
+                        "data_nascimento",
+                        "rg",
+                        "titulo_eleitoral",
+                        "pis_pasep",
+                    ],
                 )
         return total
 
@@ -788,6 +808,11 @@ class EtlProfessoresService:
                         "codigo_cargo",
                         "cargo",
                         "codigo_tipo_funcao_atividade",
+                        "pessoa_id",
+                        "nome_ue",
+                        "tipo_funcionario_externo",
+                        "dc_funcao_externo",
+                        "supervisor_dre",
                         "eh_professor",
                         "esta_afastado",
                         "funcao_externo",
@@ -817,6 +842,29 @@ class EtlProfessoresService:
                 ]
                 for chunk in self.eol.iter_query(SQL_FUNCIONARIOS_CARGOS)
             ),
+        )
+
+    def popular_funcionarios_sistema_perfil(self) -> int:
+        """Popula perfis SGP para compatibilidade com a API legada.
+
+        Atualmente considera apenas `sis_id = 1000`, SGP.
+        """
+        rows = self.core_sso.factory.executar_consulta(
+            SQL_FUNCIONARIO_SISTEMA_PERFIL
+        )
+        with ThreadPoolProcessor(
+            prefixo_log="PROF:funcionario_sistema_perfil"
+        ) as proc:
+            out_objs: list[FuncionarioSistemaPerfilOut] = proc.processar(
+                rows,
+                lambda r: FuncionarioSistemaPerfilIn(*r).to_domain(),
+            )
+        return _upsert_incremental(
+            FuncionarioSistemaPerfil,
+            "funcionario_sistema_perfil",
+            [o.to_dict() for o in out_objs],
+            ["nome_servidor", "cpf", "email", "uad_codigo"],
+            ["login", "perfil", "sis_id"],
         )
 
     def popular_turmas_atribuidas_ue(self) -> int:
@@ -869,9 +917,7 @@ class EtlProfessoresService:
             )
 
             dados = [
-                AdministradorEscola(
-                    codigo_ue=str(row[0]), rf_login=row[1]
-                )
+                AdministradorEscola(codigo_ue=str(row[0]), rf_login=row[1])
                 for row in rows
             ]
 
@@ -897,7 +943,9 @@ class EtlProfessoresService:
         logger.info("[ETL PROF] === Fase 1: Professores e Pessoas ===")
         executar_tabela("professor", self.popular_professores)
         executar_tabela("pessoa", self.popular_pessoas)
-        executar_tabela("administrador_escola", self.popular_administradores_sgp)
+        executar_tabela(
+            "administrador_escola", self.popular_administradores_sgp
+        )
         self.ultima_fase_concluida = 1
         logger.info("[ETL PROF] Fase 1 concluída.")
 
@@ -946,6 +994,10 @@ class EtlProfessoresService:
             "funcionario_unidade_educacional", self.popular_funcionarios
         )
         executar_tabela("funcionario_cargo", self.popular_funcionarios_cargos)
+        executar_tabela(
+            "funcionario_sistema_perfil",
+            self.popular_funcionarios_sistema_perfil,
+        )
         executar_tabela(
             "turma_atribuida_ue", self.popular_turmas_atribuidas_ue
         )
@@ -1061,6 +1113,3 @@ class EtlProfessoresService:
             fase_inicial,
         )
         return r
-
-
-
