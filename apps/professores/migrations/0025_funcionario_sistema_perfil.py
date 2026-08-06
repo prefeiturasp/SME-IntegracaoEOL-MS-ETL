@@ -26,6 +26,10 @@ class Migration(migrations.Migration):
                     "email",
                     models.CharField(blank=True, max_length=500, null=True),
                 ),
+                (
+                    "uad_codigo",
+                    models.CharField(blank=True, max_length=20, null=True),
+                ),
                 ("perfil", models.UUIDField()),
                 ("sis_id", models.IntegerField()),
             ],

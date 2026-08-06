@@ -107,6 +107,7 @@ class FuncionarioSistemaPerfilOut:
     login: str
     nome_servidor: str | None
     email: str | None
+    uad_codigo: str | None
     perfil: UUID
     sis_id: int
 
@@ -115,6 +116,7 @@ class FuncionarioSistemaPerfilOut:
         self.login = _normalizar_texto(self.login)
         self.nome_servidor = _normalizar_texto_opcional(self.nome_servidor)
         self.email = _normalizar_texto_opcional(self.email)
+        self.uad_codigo = _normalizar_texto_opcional(self.uad_codigo)
         self.perfil = _normalizar_uuid(self.perfil)
         self.sis_id = _normalizar_int(self.sis_id)
 
@@ -128,6 +130,7 @@ class FuncionarioSistemaPerfilOut:
             "login": self.login,
             "nome_servidor": self.nome_servidor,
             "email": self.email,
+            "uad_codigo": self.uad_codigo,
             "perfil": self.perfil,
             "sis_id": self.sis_id,
         }

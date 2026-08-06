@@ -122,6 +122,8 @@ class ProfessoresModelsTest(TestCase):
         self.assertTrue(meta.get_field("nome_servidor").null)
         self.assertEqual(meta.get_field("email").max_length, 500)
         self.assertTrue(meta.get_field("email").null)
+        self.assertEqual(meta.get_field("uad_codigo").max_length, 20)
+        self.assertTrue(meta.get_field("uad_codigo").null)
         self.assertEqual(
             meta.get_field("perfil").get_internal_type(), "UUIDField"
         )

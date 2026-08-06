@@ -182,6 +182,11 @@ class FuncionarioSistemaPerfil(models.Model):
         null=True,
         blank=True,
     )
+    uad_codigo = models.CharField(
+        max_length=20,
+        null=True,
+        blank=True,
+    )
     perfil = models.UUIDField()
     sis_id = models.IntegerField()
 

@@ -138,6 +138,7 @@ class FuncionarioSistemaPerfilIn:
             login=self.login,
             nome_servidor=self.nome_servidor,
             email=self.email,
+            uad_codigo=self.uad_codigo,
             perfil=self.perfil,
             sis_id=self.sis_id,
         )

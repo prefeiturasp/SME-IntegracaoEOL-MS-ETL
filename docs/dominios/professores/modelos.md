@@ -283,6 +283,7 @@ resposta.
 | `login` | `CharField` | max_length=500 |
 | `nome_servidor` | `CharField` | max_length=200; null=True |
 | `email` | `CharField` | max_length=500; null=True |
+| `uad_codigo` | `CharField` | max_length=20; null=True |
 | `perfil` | `UUIDField` | grupo/perfil do sistema |
 | `sis_id` | `IntegerField` | sistema de origem do perfil |
 
@@ -290,8 +291,7 @@ Indices: `login`, `sis_id`, `perfil`.
 Restricao unica: `(login, perfil, sis_id)`.
 
 A carga considera atualmente o SGP (`sis_id = 1000`) para manter
-compatibilidade com a API legada. O campo `uad_codigo` retornado pela consulta
-nao e persistido nesta tabela.
+compatibilidade com a API legada.
 
 ---
 

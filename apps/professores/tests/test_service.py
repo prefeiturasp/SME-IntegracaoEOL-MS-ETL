@@ -147,6 +147,7 @@ class FuncionarioSistemaPerfilDtoTest(TestCase):
         self.assertEqual(dto.login, "123456")
         self.assertEqual(dto.nome_servidor, "ANA SILVA")
         self.assertEqual(dto.email, "ana@sme.prefeitura.sp.gov.br")
+        self.assertEqual(dto.uad_codigo, "000001")
         self.assertEqual(
             dto.perfil, UUID("11111111-1111-1111-1111-111111111111")
         )
@@ -165,13 +166,14 @@ class FuncionarioSistemaPerfilDtoTest(TestCase):
 
         self.assertIsNone(dto.nome_servidor)
         self.assertIsNone(dto.email)
+        self.assertIsNone(dto.uad_codigo)
 
 
 class RowToFuncionarioSistemaPerfilTest(TestCase):
     """Testes para a função _row_to_funcionario_sistema_perfil."""
 
-    def test_remove_uad_codigo_da_saida(self) -> None:
-        """Mapeia a linha sem persistir uad_codigo."""
+    def test_persiste_uad_codigo(self) -> None:
+        """Mapeia a linha persistindo uad_codigo."""
         row = (
             "123456",
             "ANA SILVA",
@@ -186,12 +188,12 @@ class RowToFuncionarioSistemaPerfilTest(TestCase):
         self.assertEqual(resultado["login"], "123456")
         self.assertEqual(resultado["nome_servidor"], "ANA SILVA")
         self.assertEqual(resultado["email"], "ana@sme.prefeitura.sp.gov.br")
+        self.assertEqual(resultado["uad_codigo"], "000001")
         self.assertEqual(
             resultado["perfil"],
             UUID("11111111-1111-1111-1111-111111111111"),
         )
         self.assertEqual(resultado["sis_id"], 1000)
-        self.assertNotIn("uad_codigo", resultado)
 
     def test_rf_stripped(self) -> None:
         """Verifica que o código RF tem espaços removidos."""
@@ -1463,13 +1465,15 @@ class EtlProfessoresServiceFase4Test(TestCase):
                     "login": "123456",
                     "nome_servidor": "ANA SILVA",
                     "email": "ana@sme.prefeitura.sp.gov.br",
+                    "uad_codigo": "000001",
                     "perfil": UUID("11111111-1111-1111-1111-111111111111"),
                     "sis_id": 1000,
                 }
             ],
         )
         self.assertEqual(
-            mock_upsert.call_args.args[3], ["nome_servidor", "email"]
+            mock_upsert.call_args.args[3],
+            ["nome_servidor", "email", "uad_codigo"],
         )
         self.assertEqual(
             mock_upsert.call_args.args[4],
