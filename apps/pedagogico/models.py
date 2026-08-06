@@ -34,6 +34,49 @@ class EtapaEnsino(ModeloBase):
         return f"{self.codigo} - {self.descricao}"
 
 
+class ComponenteCurricularApiEol(ModeloBase):
+    """Componente curricular disponibilizado pela API EOL."""
+
+    id_relacao_origem = models.BigIntegerField(null=True, blank=True)
+    id_componente_curricular = models.IntegerField()
+    eh_regencia = models.BooleanField()
+    eh_territorio = models.BooleanField()
+    descricao = models.CharField(max_length=300, null=True, blank=True)
+    id_componente_curricular_pai = models.IntegerField(
+        null=True,
+        blank=True,
+    )
+    vigencia = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "componente_curricular_api_eol"
+        verbose_name = "componente curricular da API EOL"
+        verbose_name_plural = "componentes curriculares da API EOL"
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "id_relacao_origem",
+                    "id_componente_curricular",
+                ],
+                name="uq_cc_api_eol_relacao_componente",
+                nulls_distinct=False,
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["id_componente_curricular"],
+                name="idx_cc_api_eol_componente",
+            ),
+            models.Index(
+                fields=["id_componente_curricular_pai"],
+                name="idx_cc_api_eol_pai",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.id_componente_curricular} - {self.descricao}"
+
+
 class ComponenteTurma(ModeloBase):
     """Vínculo curricular entre turma e componente."""
 
