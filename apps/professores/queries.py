@@ -832,7 +832,6 @@ SQL_FUNCIONARIO_SISTEMA_PERFIL = """
             AND G.gru_id = UG.gru_id
         WHERE US.usu_situacao = 1
           AND UG.usg_situacao = 1
-          AND G.sis_id = 1000
         UNION
         SELECT
             US.usu_login AS login,
