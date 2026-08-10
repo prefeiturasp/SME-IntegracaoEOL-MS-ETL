@@ -211,6 +211,9 @@ class EtlProfessoresCommandTest(TestCase):
     def test_funcionario_na_ordem_e_upsert(self) -> None:
         """Funcionario participa da ordem de carga e usa upsert."""
         self.assertIn("funcionario_unidade_educacional", _ORDEM_TABELAS)
-        self.assertIn(
-            "funcionario_unidade_educacional", _TABELAS_UPSERT
-        )
+        self.assertIn("funcionario_unidade_educacional", _TABELAS_UPSERT)
+
+    def test_funcionario_sistema_perfil_na_ordem_e_upsert(self) -> None:
+        """Perfil de sistema participa da ordem de carga e usa upsert."""
+        self.assertIn("funcionario_sistema_perfil", _ORDEM_TABELAS)
+        self.assertIn("funcionario_sistema_perfil", _TABELAS_UPSERT)

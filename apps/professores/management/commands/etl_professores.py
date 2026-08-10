@@ -48,6 +48,7 @@ _TABELAS_UPSERT = frozenset(
         "atribuicao_aula",
         "atribuicao_externo",
         "funcionario_unidade_educacional",
+        "funcionario_sistema_perfil",
         "agrupamento_atribuicao_territorio_saber",
     }
 )

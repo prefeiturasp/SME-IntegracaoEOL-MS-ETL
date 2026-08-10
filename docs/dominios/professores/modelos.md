@@ -17,7 +17,7 @@ Modelos atuais de `apps/professores/models.py`.
 | `codigo_rf` | `CharField` | max_length=20; primary_key=True |
 | `nome` | `CharField` | max_length=200 |
 | `nome_social` | `CharField` | max_length=200; null=True |
-| `cpf` | `CharField` | max_length=14; null=True |
+| `cpf` | `CharField` | max_length=50; null=True (para compatibilidade com legado) |
 
 ---
 
@@ -122,6 +122,12 @@ Modelos atuais de `apps/professores/models.py`.
 | `cpf` | `CharField` | max_length=14; unique=True |
 | `nome` | `CharField` | max_length=200 |
 | `nome_social` | `CharField` | max_length=200; null=True |
+| `nome_pai` | `CharField` | max_length=200; null=True |
+| `nome_mae` | `CharField` | max_length=200; null=True |
+| `data_nascimento` | `DateField` | null=True |
+| `rg` | `CharField` | max_length=30; null=True |
+| `titulo_eleitoral` | `CharField` | max_length=30; null=True |
+| `pis_pasep` | `CharField` | max_length=30; null=True |
 
 ---
 
@@ -243,6 +249,11 @@ Modelos atuais de `apps/professores/models.py`.
 | `codigo_cargo` | `IntegerField` | null=True |
 | `cargo` | `CharField` | max_length=100; null=True |
 | `codigo_tipo_funcao_atividade` | `IntegerField` | default=0 |
+| `pessoa` | `ForeignKey` | -> Pessoa; null=True; db_constraint=False |
+| `nome_ue` | `CharField` | max_length=200; null=True |
+| `tipo_funcionario_externo` | `CharField` | max_length=100; null=True |
+| `dc_funcao_externo` | `CharField` | max_length=100; null=True |
+| `supervisor_dre` | `BooleanField` | default=False |
 | `eh_professor` | `BooleanField` | default=False; interno |
 | `esta_afastado` | `BooleanField` | default=False |
 | `funcao_externo` | `IntegerField` | default=0 |
@@ -257,6 +268,32 @@ sobrescrever registros no upsert.
 Alimenta a consulta de funcionários por unidade educacional, filtrável por
 cargo. É a única fonte dessa consulta — não recompõe vínculos em tempo de
 resposta.
+
+---
+
+### FuncionarioSistemaPerfil
+
+- **db_table:** `funcionario_sistema_perfil`
+- **Fonte CoreSSO:** `SQL_FUNCIONARIO_SISTEMA_PERFIL`
+- **Estrategia:** `upsert_incremental`
+
+| Campo | Tipo | Detalhes |
+|---|---|---|
+| `id` | `BigAutoField` | primary_key=True |
+| `login` | `CharField` | max_length=500 |
+| `nome_servidor` | `CharField` | max_length=200; null=True |
+| `cpf` | `CharField` | max_length=14; null=True |
+| `email` | `CharField` | max_length=500; null=True |
+| `uad_codigo` | `CharField` | max_length=20; null=True |
+| `perfil` | `UUIDField` | grupo/perfil do sistema |
+| `sis_id` | `IntegerField` | sistema de origem do perfil |
+
+Indices: `login`, `sis_id`, `perfil`.
+Restricao unica: `(login, perfil, sis_id)`.
+
+A carga considera atualmente o SGP (`sis_id = 1000`) para manter
+compatibilidade com a API legada. Quando a origem retorna a mesma combinacao
+de `login`, `perfil` e `sis_id` com e sem UAD, a carga preserva a linha unica com `uad_codigo` preenchido.
 
 ---
 
