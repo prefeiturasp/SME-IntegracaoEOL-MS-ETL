@@ -11,6 +11,7 @@ from apps.pedagogico.dtos.model_in import (
     ApiEolTurmaItinerarioEnsinoMedioIn,
     ComponenteCurricularSimplesIn,
     ComponenteTurmaIn,
+    EtapaEnsinoIn,
     GradeComponenteCurricularIn,
     TurmaIn,
 )
@@ -170,6 +171,18 @@ class ComponenteCurricularSimplesInTest(SimpleTestCase):
         self.assertEqual(data["codigo"], 100)
         self.assertEqual(data["descricao"], "Arte")
         self.assertTrue(data["regencia"])
+        self.assertEqual(data["transferido_em"], "agora")
+
+
+class EtapaEnsinoInTest(SimpleTestCase):
+    """Testes de ``EtapaEnsinoIn.to_domain()``."""
+
+    def test_mapeamento_basico(self) -> None:
+        dto = EtapaEnsinoIn(codigo="1", descricao=" Infantil ")
+        data = dto.to_domain("agora")
+
+        self.assertEqual(data["codigo"], 1)
+        self.assertEqual(data["descricao"], "Infantil")
         self.assertEqual(data["transferido_em"], "agora")
 
 

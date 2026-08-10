@@ -38,6 +38,21 @@ class ComponenteCurricularSimplesIn:
 
 
 @dataclass
+class EtapaEnsinoIn:
+    """Linha bruta da query de catálogo de etapa_ensino."""
+
+    codigo: Any
+    descricao: Any
+
+    def to_domain(self, transferido_em: Any) -> dict:
+        return {
+            "codigo": int(self.codigo),
+            "descricao": strip_str(self.descricao),
+            "transferido_em": transferido_em,
+        }
+
+
+@dataclass
 class ComponenteTurmaIn:
     """Dados de componente de turma recebidos para carga.
 

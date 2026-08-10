@@ -231,3 +231,19 @@ sem detecção de mudança por linha. Linhas sem escola ou turma são descartada
 | `CodTipoEscola` / `TipoEscola` | `codigo_tipo_escola` / `tipo_escola` | `int_or_none()` / `strip_or_none()` |
 | `DuracaoTurno` / `TipoTurno` | `duracao_turno` / `tipo_turno` | `int_or_none()` |
 | — | `transferido_em` | `timezone.now()` |
+
+---
+
+## Fase 13 — EtapaEnsino
+
+**Query:** `SQL_ETAPA_ENSINO` (sem parâmetro de ano, `full_refresh` + `truncate_on_full_sync=True`)
+
+Catálogo estático de etapas de ensino (`etapa_ensino` no EOL), sem filtro
+`WHERE`. Alimenta o endpoint `modalidades_ensino` do domínio Pedagógico, que
+devolve as descrições como lista de strings.
+
+| Campo EOL | Campo Destino | Transformação |
+| :--- | :--- | :--- |
+| `cd_etapa_ensino` | `codigo` | `int()` |
+| `dc_etapa_ensino` | `descricao` | `strip_str()` (já com `LTRIM`/`RTRIM` na query) |
+| — | `transferido_em` | `timezone.now()` |

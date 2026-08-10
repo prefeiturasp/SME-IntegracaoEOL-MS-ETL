@@ -57,8 +57,8 @@ class TestPedagogicoService(TestCase):
         with self.assertRaises(AttributeError):
             config.nome = "mudar"  # type: ignore[misc]
 
-    def test_fases_contem_12_configs_esperados(self) -> None:
-        self.assertEqual(len(self.service._fases), 12)
+    def test_fases_contem_13_configs_esperados(self) -> None:
+        self.assertEqual(len(self.service._fases), 13)
         self.assertEqual(
             [fase.nome for fase in self.service._fases],
             [
@@ -74,6 +74,7 @@ class TestPedagogicoService(TestCase):
                 "grade_componente_curricular",
                 "turma",
                 "turma_atribuida_dre_ue",
+                "etapa_ensino",
             ],
         )
 
@@ -525,7 +526,7 @@ class TestPedagogicoService(TestCase):
         self.assertNotIn("componente_curricular_agrupamento", resultado)
         self.assertIn("grade_componente_curricular", resultado)
         self.assertIn("turma", resultado)
-        self.assertEqual(mock_fase.call_count, 10)
+        self.assertEqual(mock_fase.call_count, 11)
 
     def test_cod_agrupamento_gera_proximo_sequencial_quando_novo(self) -> None:
         """Novo agrupamento deve receber o próximo ID acima do piso."""
@@ -952,7 +953,7 @@ class TestPedagogicoService(TestCase):
             fases=["agrupamento_territorio_saber_gerado"],
         )
 
-        self.assertEqual(len(service._fases), 13)
+        self.assertEqual(len(service._fases), 14)
         self.assertEqual(
             service._fases[-1].nome,
             "agrupamento_territorio_saber_gerado",

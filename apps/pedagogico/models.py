@@ -19,6 +19,21 @@ class ComponenteCurricular(ModeloBase):
         return f"{self.codigo} - {self.descricao}"
 
 
+class EtapaEnsino(ModeloBase):
+    """Catálogo de etapas de ensino."""
+
+    codigo = models.IntegerField(unique=True)
+    descricao = models.CharField(max_length=300)
+
+    class Meta:
+        db_table = "etapa_ensino"
+        verbose_name = "etapa ensino"
+        verbose_name_plural = "etapas ensino"
+
+    def __str__(self) -> str:
+        return f"{self.codigo} - {self.descricao}"
+
+
 class ComponenteTurma(ModeloBase):
     """Vínculo curricular entre turma e componente."""
 

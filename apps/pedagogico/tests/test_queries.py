@@ -2,7 +2,17 @@
 
 from django.test import SimpleTestCase
 
-from apps.pedagogico.queries import SQL_TURMAS
+from apps.pedagogico.queries import SQL_ETAPA_ENSINO, SQL_TURMAS
+
+
+class SqlEtapaEnsinoProjecaoTest(SimpleTestCase):
+    """Valida que SQL_ETAPA_ENSINO projeta código e descrição sem filtro."""
+
+    def test_projeta_codigo_e_descricao(self) -> None:
+        self.assertIn("cd_etapa_ensino AS Codigo", SQL_ETAPA_ENSINO)
+        self.assertIn("AS Descricao", SQL_ETAPA_ENSINO)
+        self.assertIn("FROM etapa_ensino", SQL_ETAPA_ENSINO)
+        self.assertNotIn("WHERE", SQL_ETAPA_ENSINO)
 
 
 class SqlTurmasProjecaoTest(SimpleTestCase):
