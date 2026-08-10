@@ -101,6 +101,305 @@ class FuncionarioCargoOut:
 
 
 @dataclass(slots=True)
+class ProfessorEscolaAnoOut:
+    """Estrutura para o model ``ProfessorEscolaAno``."""
+
+    origem: str
+    codigo_escola: str
+    ano_letivo: int
+    codigo_turma: int
+    codigo_rf: str
+    codigo_componente_curricular: int
+    nome: str
+    cargo: str | None
+    cpf: str | None
+    data_inicio_exercicio: Any
+
+    def __post_init__(self) -> None:
+        """Normaliza campos de professor por escola e ano."""
+        self.origem = _normalizar_texto(self.origem)
+        self.codigo_escola = _normalizar_texto(self.codigo_escola)
+        self.ano_letivo = _normalizar_int(self.ano_letivo)
+        self.codigo_turma = _normalizar_int(self.codigo_turma)
+        self.codigo_rf = _normalizar_texto(self.codigo_rf)
+        self.codigo_componente_curricular = _normalizar_int(
+            self.codigo_componente_curricular
+        )
+        self.nome = _normalizar_texto(self.nome)
+        self.cargo = _normalizar_texto(self.cargo) if self.cargo else None
+        self.cpf = _normalizar_texto(self.cpf) if self.cpf else None
+        self.data_inicio_exercicio = _normalizar_datetime(
+            self.data_inicio_exercicio
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        """Retorna dados de professor por escola e ano.
+
+        Returns:
+            Dados prontos para persistência.
+        """
+        return {
+            "origem": self.origem,
+            "codigo_escola": self.codigo_escola,
+            "ano_letivo": self.ano_letivo,
+            "codigo_turma": self.codigo_turma,
+            "codigo_rf": self.codigo_rf,
+            "codigo_componente_curricular": (
+                self.codigo_componente_curricular
+            ),
+            "nome": self.nome,
+            "cargo": self.cargo,
+            "cpf": self.cpf,
+            "data_inicio_exercicio": self.data_inicio_exercicio,
+        }
+
+
+@dataclass(slots=True)
+class FuncionarioVinculoFuncionalOut:
+    """Estrutura para o model ``FuncionarioVinculoFuncional``."""
+
+    rf: str
+    cpf: str | None
+    cd_cargo_base: int | None
+    cargo_base: str | None
+    cd_dre_cargo_base: str | None
+    cd_ue_cargo_base: str | None
+    ue_cargo_base: str | None
+    tipo_vinculo_cargo_base: int | None
+    data_inicio_cargo_base: Any
+    cd_cargo_sobreposto: int | None
+    cargo_sobreposto: str | None
+    cd_dre_cargo_sobreposto: str | None
+    cd_ue_cargo_sobreposto: str | None
+    ue_cargo_sobreposto: str | None
+    tipo_vinculo_cargo_sobreposto: int | None
+    data_inicio_cargo_sobreposto: Any
+    cd_funcao_atividade: int | None
+    funcao_atividade: str | None
+    cd_dre_funcao_atividade: str | None
+    cd_ue_funcao_atividade: str | None
+    ue_funcao_atividade: str | None
+    tipo_vinculo_funcao_atividade: int | None
+    data_inicio_funcao_atividade: Any
+    dt_cancelamento_funcao_atividade: Any
+    dt_fim_funcao_atividade: Any
+
+    def __post_init__(self) -> None:
+        """Normaliza campos do vínculo funcional."""
+        self.rf = _normalizar_texto(self.rf)
+        self.cpf = _normalizar_texto_opcional(self.cpf)
+        self.cd_cargo_base = _normalizar_int_opcional(self.cd_cargo_base)
+        self.cargo_base = _normalizar_texto_opcional(self.cargo_base)
+        self.cd_dre_cargo_base = _normalizar_texto_opcional(
+            self.cd_dre_cargo_base
+        )
+        self.cd_ue_cargo_base = _normalizar_texto_opcional(
+            self.cd_ue_cargo_base
+        )
+        self.ue_cargo_base = _normalizar_texto_opcional(self.ue_cargo_base)
+        self.tipo_vinculo_cargo_base = _normalizar_int_opcional(
+            self.tipo_vinculo_cargo_base
+        )
+        self.data_inicio_cargo_base = _normalizar_datetime(
+            self.data_inicio_cargo_base
+        )
+        self.cd_cargo_sobreposto = _normalizar_int_opcional(
+            self.cd_cargo_sobreposto
+        )
+        self.cargo_sobreposto = _normalizar_texto_opcional(
+            self.cargo_sobreposto
+        )
+        self.cd_dre_cargo_sobreposto = _normalizar_texto_opcional(
+            self.cd_dre_cargo_sobreposto
+        )
+        self.cd_ue_cargo_sobreposto = _normalizar_texto_opcional(
+            self.cd_ue_cargo_sobreposto
+        )
+        self.ue_cargo_sobreposto = _normalizar_texto_opcional(
+            self.ue_cargo_sobreposto
+        )
+        self.tipo_vinculo_cargo_sobreposto = _normalizar_int_opcional(
+            self.tipo_vinculo_cargo_sobreposto
+        )
+        self.data_inicio_cargo_sobreposto = _normalizar_datetime(
+            self.data_inicio_cargo_sobreposto
+        )
+        self.cd_funcao_atividade = _normalizar_int_opcional(
+            self.cd_funcao_atividade
+        )
+        self.funcao_atividade = _normalizar_texto_opcional(
+            self.funcao_atividade
+        )
+        self.cd_dre_funcao_atividade = _normalizar_texto_opcional(
+            self.cd_dre_funcao_atividade
+        )
+        self.cd_ue_funcao_atividade = _normalizar_texto_opcional(
+            self.cd_ue_funcao_atividade
+        )
+        self.ue_funcao_atividade = _normalizar_texto_opcional(
+            self.ue_funcao_atividade
+        )
+        self.tipo_vinculo_funcao_atividade = _normalizar_int_opcional(
+            self.tipo_vinculo_funcao_atividade
+        )
+        self.data_inicio_funcao_atividade = _normalizar_datetime(
+            self.data_inicio_funcao_atividade
+        )
+        self.dt_cancelamento_funcao_atividade = _normalizar_datetime(
+            self.dt_cancelamento_funcao_atividade
+        )
+        self.dt_fim_funcao_atividade = _normalizar_datetime(
+            self.dt_fim_funcao_atividade
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        """Retorna dados do vínculo funcional.
+
+        Returns:
+            Dados prontos para persistência.
+        """
+        return {
+            "rf": self.rf,
+            "cpf": self.cpf,
+            "cd_cargo_base": self.cd_cargo_base,
+            "cargo_base": self.cargo_base,
+            "cd_dre_cargo_base": self.cd_dre_cargo_base,
+            "cd_ue_cargo_base": self.cd_ue_cargo_base,
+            "ue_cargo_base": self.ue_cargo_base,
+            "tipo_vinculo_cargo_base": self.tipo_vinculo_cargo_base,
+            "data_inicio_cargo_base": self.data_inicio_cargo_base,
+            "cd_cargo_sobreposto": self.cd_cargo_sobreposto,
+            "cargo_sobreposto": self.cargo_sobreposto,
+            "cd_dre_cargo_sobreposto": self.cd_dre_cargo_sobreposto,
+            "cd_ue_cargo_sobreposto": self.cd_ue_cargo_sobreposto,
+            "ue_cargo_sobreposto": self.ue_cargo_sobreposto,
+            "tipo_vinculo_cargo_sobreposto": (
+                self.tipo_vinculo_cargo_sobreposto
+            ),
+            "data_inicio_cargo_sobreposto": (
+                self.data_inicio_cargo_sobreposto
+            ),
+            "cd_funcao_atividade": self.cd_funcao_atividade,
+            "funcao_atividade": self.funcao_atividade,
+            "cd_dre_funcao_atividade": self.cd_dre_funcao_atividade,
+            "cd_ue_funcao_atividade": self.cd_ue_funcao_atividade,
+            "ue_funcao_atividade": self.ue_funcao_atividade,
+            "tipo_vinculo_funcao_atividade": (
+                self.tipo_vinculo_funcao_atividade
+            ),
+            "data_inicio_funcao_atividade": (
+                self.data_inicio_funcao_atividade
+            ),
+            "dt_cancelamento_funcao_atividade": (
+                self.dt_cancelamento_funcao_atividade
+            ),
+            "dt_fim_funcao_atividade": self.dt_fim_funcao_atividade,
+        }
+
+
+@dataclass(slots=True)
+class FuncionarioConectaFormacaoOut:
+    """Estrutura para o model ``FuncionarioConectaFormacao``."""
+
+    rf: str
+    nome: str
+    cpf: str | None
+    cargo_codigo: int | None
+    cargo: str | None
+    cargo_dre_codigo: str | None
+    cargo_ue_codigo: str | None
+    funcao_codigo: int | None
+    funcao: str | None
+    funcao_dre_codigo: str | None
+    funcao_ue_codigo: str | None
+    tipo_vinculo: int | None
+    codigo_modalidade: int | None
+    ano_turma: str | None
+    codigo_componente_curricular: int | None
+    eh_tipo_jornada_jeif: bool
+
+    def __post_init__(self) -> None:
+        """Normaliza campos do funcionário."""
+        self.rf = _normalizar_texto(self.rf)
+        self.nome = _normalizar_texto(self.nome)
+        self.cpf = _normalizar_texto_opcional(self.cpf)
+        self.cargo_codigo = _normalizar_int_opcional(self.cargo_codigo)
+        self.cargo = _normalizar_texto_opcional(self.cargo)
+        self.cargo_dre_codigo = _normalizar_texto_opcional(
+            self.cargo_dre_codigo
+        )
+        self.cargo_ue_codigo = _normalizar_texto_opcional(self.cargo_ue_codigo)
+        self.funcao_codigo = _normalizar_int_opcional(self.funcao_codigo)
+        self.funcao = _normalizar_texto_opcional(self.funcao)
+        self.funcao_dre_codigo = _normalizar_texto_opcional(
+            self.funcao_dre_codigo
+        )
+        self.funcao_ue_codigo = _normalizar_texto_opcional(
+            self.funcao_ue_codigo
+        )
+        self.tipo_vinculo = _normalizar_int_opcional(self.tipo_vinculo)
+        self.codigo_modalidade = _normalizar_int_opcional(
+            self.codigo_modalidade
+        )
+        self.ano_turma = _normalizar_texto_opcional(self.ano_turma)
+        self.codigo_componente_curricular = _normalizar_int_opcional(
+            self.codigo_componente_curricular
+        )
+        self.eh_tipo_jornada_jeif = bool(self.eh_tipo_jornada_jeif)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Retorna dados do funcionário.
+
+        Returns:
+            Dados prontos para persistência.
+        """
+        return {
+            "rf": self.rf,
+            "nome": self.nome,
+            "cpf": self.cpf,
+            "cargo_codigo": self.cargo_codigo,
+            "cargo": self.cargo,
+            "cargo_dre_codigo": self.cargo_dre_codigo,
+            "cargo_ue_codigo": self.cargo_ue_codigo,
+            "funcao_codigo": self.funcao_codigo,
+            "funcao": self.funcao,
+            "funcao_dre_codigo": self.funcao_dre_codigo,
+            "funcao_ue_codigo": self.funcao_ue_codigo,
+            "tipo_vinculo": self.tipo_vinculo,
+            "codigo_modalidade": self.codigo_modalidade,
+            "ano_turma": self.ano_turma,
+            "codigo_componente_curricular": (
+                self.codigo_componente_curricular
+            ),
+            "eh_tipo_jornada_jeif": self.eh_tipo_jornada_jeif,
+        }
+
+
+@dataclass(slots=True)
+class FuncionarioConectaModalidadeEscolaOut:
+    """Estrutura para modalidade por unidade do Conecta Formação."""
+
+    codigo_ue: str
+    codigo_modalidade: int
+
+    def __post_init__(self) -> None:
+        """Normaliza campos da modalidade por unidade."""
+        self.codigo_ue = _normalizar_texto(self.codigo_ue)
+        self.codigo_modalidade = _normalizar_int(self.codigo_modalidade)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Retorna dados da modalidade por unidade.
+
+        Returns:
+            Dados prontos para persistência.
+        """
+        return {
+            "codigo_ue": self.codigo_ue,
+            "codigo_modalidade": self.codigo_modalidade,
+        }
+
+
+@dataclass(slots=True)
 class FuncionarioSistemaPerfilOut:
     """Estrutura para o model ``FuncionarioSistemaPerfil``."""
 
@@ -335,6 +634,7 @@ class AtribuicaoAulaOut:
     semestre: int | None
     duracao_turno: int | None
     tipo_turno: int | None
+    dt_disponibilizacao_aulas_origem: Any = None
 
     def to_dict(self) -> dict[str, Any]:
         """Retorna dados da atribuição de aula.
@@ -364,6 +664,9 @@ class AtribuicaoAulaOut:
             "dt_inicio_turma": self.dt_inicio_turma,
             "dt_fim_turma": self.dt_fim_turma,
             "dt_disponibilizacao_aulas": self.dt_disponibilizacao_aulas,
+            "dt_disponibilizacao_aulas_origem": (
+                self.dt_disponibilizacao_aulas_origem
+            ),
             "codigo_motivo_disponibilizacao": (
                 self.codigo_motivo_disponibilizacao
             ),

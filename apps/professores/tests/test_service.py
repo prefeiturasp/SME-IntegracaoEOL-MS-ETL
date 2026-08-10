@@ -23,7 +23,10 @@ from apps.professores.queries import (
     SQL_ATRIBUICOES_AULA,
     SQL_DISCIPLINAS_TURMAS_ATRIBUIDAS_UE,
     SQL_FUNCIONARIO_SISTEMA_PERFIL,
+    SQL_FUNCIONARIOS_CONECTA_FORMACAO,
+    SQL_FUNCIONARIOS_CONECTA_MODALIDADE_ESCOLA,
     SQL_FUNCIONARIOS_UNIDADE_EDUCACIONAL,
+    SQL_FUNCIONARIOS_VINCULOS_FUNCIONAIS,
     SQL_TURMAS_ATRIBUIDAS_UE,
 )
 from apps.professores.services import (
@@ -38,7 +41,10 @@ from apps.professores.services import (
     _row_to_funcao_atividade,
     _row_to_funcionario,
     _row_to_funcionario_cargo,
+    _row_to_funcionario_conecta_formacao,
+    _row_to_funcionario_conecta_modalidade_escola,
     _row_to_funcionario_sistema_perfil,
+    _row_to_funcionario_vinculo_funcional,
     _row_to_laudo,
     _row_to_lotacao,
     _row_to_pessoa,
@@ -187,6 +193,10 @@ class FuncionarioSistemaPerfilQueryTest(TestCase):
         self.assertIn("MAX(cpf) AS cpf", SQL_FUNCIONARIO_SISTEMA_PERFIL)
         self.assertIn(
             "GROUP BY login, perfil, sis_id",
+            SQL_FUNCIONARIO_SISTEMA_PERFIL,
+        )
+        self.assertIn(
+            "G.sis_id IN (1000, 1007)",
             SQL_FUNCIONARIO_SISTEMA_PERFIL,
         )
         self.assertNotIn(
@@ -399,6 +409,134 @@ class RowToFuncionarioCargoTest(TestCase):
         self.assertIsNone(r["data_fim"])
         self.assertEqual(r["cargo"], "PROFESSOR")
         self.assertEqual(r["codigo_cargo"], 3239)
+
+
+class RowToFuncionarioVinculoFuncionalTest(TestCase):
+    """Testes para a função _row_to_funcionario_vinculo_funcional."""
+
+    def test_campos(self) -> None:
+        """Verifica que os campos do vínculo funcional são extraídos."""
+        dt = datetime.datetime(2024, 1, 1, 7, 30)
+        row = (
+            "7654321",
+            "12345678900",
+            3360,
+            "DIRETOR DE ESCOLA - v1",
+            "108100",
+            "000532",
+            "ESCOLA TESTE",
+            1,
+            dt,
+            3352,
+            "SUPERVISOR ESCOLAR - v1",
+            "108100",
+            "000533",
+            "ESCOLA SOBREPOSTA",
+            1,
+            dt,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+
+        resultado = _row_to_funcionario_vinculo_funcional(row)
+
+        self.assertEqual(resultado["rf"], "7654321")
+        self.assertEqual(resultado["cd_cargo_base"], 3360)
+        self.assertEqual(resultado["cargo_base"], "DIRETOR DE ESCOLA - v1")
+        self.assertEqual(resultado["cd_ue_cargo_sobreposto"], "000533")
+        self.assertIsNone(resultado["cd_funcao_atividade"])
+        self.assertIsNone(resultado["dt_cancelamento_funcao_atividade"])
+        self.assertIsNone(resultado["dt_fim_funcao_atividade"])
+
+
+class FuncionarioVinculoFuncionalQueryTest(TestCase):
+    """Testes da consulta de vínculos funcionais."""
+
+    def test_query_documentada_e_sem_filtro_de_professor(self) -> None:
+        """Verifica que a consulta materializa vínculos por RF."""
+        sql = SQL_FUNCIONARIOS_VINCULOS_FUNCIONAIS
+
+        self.assertIn("v_cargo_base_cotic", sql)
+        self.assertIn("cargo_sobreposto_servidor", sql)
+        self.assertIn("funcao_atividade_cargo_servidor", sql)
+        self.assertIn("funcao.dt_cancelamento AS DtCancelamento", sql)
+        self.assertIn("funcao.dt_fim_funcao_atividade AS DtFim", sql)
+        self.assertNotIn("cd_cargo IN", sql)
+
+
+class RowToFuncionarioConectaFormacaoTest(TestCase):
+    """Testes para a função _row_to_funcionario_conecta_formacao."""
+
+    def test_campos(self) -> None:
+        """Verifica que os campos do Conecta Formação são extraídos."""
+        row = (
+            "7654321",
+            "Ana Servidora",
+            "12345678900",
+            3360,
+            "DIRETOR DE ESCOLA",
+            "108100",
+            "000532",
+            None,
+            None,
+            None,
+            None,
+            1,
+            5,
+            "6",
+            512,
+            1,
+        )
+
+        resultado = _row_to_funcionario_conecta_formacao(row)
+
+        self.assertEqual(resultado["rf"], "7654321")
+        self.assertEqual(resultado["nome"], "Ana Servidora")
+        self.assertEqual(resultado["cargo_codigo"], 3360)
+        self.assertEqual(resultado["codigo_modalidade"], 5)
+        self.assertTrue(resultado["eh_tipo_jornada_jeif"])
+
+
+class RowToFuncionarioConectaModalidadeEscolaTest(TestCase):
+    """Testes para a função de modalidade por unidade."""
+
+    def test_campos(self) -> None:
+        """Verifica que os campos da modalidade são extraídos."""
+        resultado = _row_to_funcionario_conecta_modalidade_escola(
+            ("000532", 5)
+        )
+
+        self.assertEqual(resultado["codigo_ue"], "000532")
+        self.assertEqual(resultado["codigo_modalidade"], 5)
+
+
+class FuncionarioConectaFormacaoQueryTest(TestCase):
+    """Testes da consulta de funcionários do Conecta Formação."""
+
+    def test_query_usa_fontes_do_conecta_formacao(self) -> None:
+        """Verifica fontes usadas para consulta consolidada."""
+        sql = SQL_FUNCIONARIOS_CONECTA_FORMACAO
+
+        self.assertIn("v_cargo_base_cotic", sql)
+        self.assertIn("jornada_cargo_servidor", sql)
+        self.assertIn("atribuicao_aula", sql)
+        self.assertIn("funcao_atividade_cargo_servidor", sql)
+
+    def test_query_modalidade_escola_usa_grade_da_unidade(self) -> None:
+        """Verifica fontes da consulta de modalidade por unidade."""
+        sql = SQL_FUNCIONARIOS_CONECTA_MODALIDADE_ESCOLA
+
+        self.assertIn("turma_escola", sql)
+        self.assertIn("serie_turma_grade", sql)
+        self.assertIn("etapa_ensino", sql)
+        self.assertNotIn("atribuicao_aula", sql)
 
 
 class RowToContratoExternoTest(TestCase):

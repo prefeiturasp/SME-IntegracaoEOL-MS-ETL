@@ -167,6 +167,229 @@ class FuncionarioCargo(models.Model):
         ]
 
 
+class FuncionarioVinculoFuncional(models.Model):
+    """Vínculo funcional consolidado do servidor."""
+
+    id = models.BigAutoField(primary_key=True)
+    rf = models.CharField(max_length=20)
+    cpf = models.CharField(max_length=14, null=True, blank=True)
+    cd_cargo_base = models.IntegerField(null=True, blank=True)
+    cargo_base = models.CharField(max_length=120, null=True, blank=True)
+    cd_dre_cargo_base = models.CharField(max_length=20, null=True, blank=True)
+    cd_ue_cargo_base = models.CharField(max_length=20, null=True, blank=True)
+    ue_cargo_base = models.CharField(max_length=200, null=True, blank=True)
+    tipo_vinculo_cargo_base = models.IntegerField(null=True, blank=True)
+    data_inicio_cargo_base = models.DateTimeField(null=True, blank=True)
+    cd_cargo_sobreposto = models.IntegerField(null=True, blank=True)
+    cargo_sobreposto = models.CharField(max_length=120, null=True, blank=True)
+    cd_dre_cargo_sobreposto = models.CharField(
+        max_length=20,
+        null=True,
+        blank=True,
+    )
+    cd_ue_cargo_sobreposto = models.CharField(
+        max_length=20,
+        null=True,
+        blank=True,
+    )
+    ue_cargo_sobreposto = models.CharField(
+        max_length=200,
+        null=True,
+        blank=True,
+    )
+    tipo_vinculo_cargo_sobreposto = models.IntegerField(null=True, blank=True)
+    data_inicio_cargo_sobreposto = models.DateTimeField(null=True, blank=True)
+    cd_funcao_atividade = models.IntegerField(null=True, blank=True)
+    funcao_atividade = models.CharField(max_length=120, null=True, blank=True)
+    cd_dre_funcao_atividade = models.CharField(
+        max_length=20,
+        null=True,
+        blank=True,
+    )
+    cd_ue_funcao_atividade = models.CharField(
+        max_length=20,
+        null=True,
+        blank=True,
+    )
+    ue_funcao_atividade = models.CharField(
+        max_length=200,
+        null=True,
+        blank=True,
+    )
+    tipo_vinculo_funcao_atividade = models.IntegerField(null=True, blank=True)
+    data_inicio_funcao_atividade = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+    dt_cancelamento_funcao_atividade = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+    dt_fim_funcao_atividade = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    class Meta:
+        app_label = "professores"
+        db_table = "funcionario_vinculo_funcional"
+        verbose_name = "vínculo funcional do funcionário"
+        verbose_name_plural = "vínculos funcionais dos funcionários"
+        indexes = [
+            models.Index(
+                fields=["rf"],
+                name="idx_func_vinc_func_rf",
+            ),
+            models.Index(
+                fields=["rf", "cd_cargo_base"],
+                name="idx_func_vinc_func_rf_cb",
+            ),
+            models.Index(
+                fields=["cd_ue_cargo_base"],
+                name="idx_func_vinc_func_ue_cb",
+            ),
+            models.Index(
+                fields=["cd_dre_cargo_base"],
+                name="idx_func_vinc_func_dre_cb",
+            ),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "rf",
+                    "cd_cargo_base",
+                    "cd_ue_cargo_base",
+                    "tipo_vinculo_cargo_base",
+                    "cd_cargo_sobreposto",
+                    "cd_ue_cargo_sobreposto",
+                    "tipo_vinculo_cargo_sobreposto",
+                    "cd_funcao_atividade",
+                    "cd_ue_funcao_atividade",
+                    "tipo_vinculo_funcao_atividade",
+                ],
+                name="uq_func_vinc_func_vinculo",
+                nulls_distinct=False,
+            ),
+        ]
+
+
+class FuncionarioConectaFormacao(models.Model):
+    """Funcionário elegível para consultas do Conecta Formação."""
+
+    id = models.BigAutoField(primary_key=True)
+    rf = models.CharField(max_length=20)
+    nome = models.CharField(max_length=200)
+    cpf = models.CharField(max_length=14, null=True, blank=True)
+    cargo_codigo = models.IntegerField(null=True, blank=True)
+    cargo = models.CharField(max_length=120, null=True, blank=True)
+    cargo_dre_codigo = models.CharField(max_length=20, null=True, blank=True)
+    cargo_ue_codigo = models.CharField(max_length=20, null=True, blank=True)
+    funcao_codigo = models.IntegerField(null=True, blank=True)
+    funcao = models.CharField(max_length=120, null=True, blank=True)
+    funcao_dre_codigo = models.CharField(max_length=20, null=True, blank=True)
+    funcao_ue_codigo = models.CharField(max_length=20, null=True, blank=True)
+    tipo_vinculo = models.IntegerField(null=True, blank=True)
+    codigo_modalidade = models.IntegerField(null=True, blank=True)
+    ano_turma = models.CharField(max_length=10, null=True, blank=True)
+    codigo_componente_curricular = models.IntegerField(null=True, blank=True)
+    eh_tipo_jornada_jeif = models.BooleanField(default=False)
+
+    class Meta:
+        app_label = "professores"
+        db_table = "funcionario_conecta_formacao"
+        verbose_name = "funcionário do Conecta Formação"
+        verbose_name_plural = "funcionários do Conecta Formação"
+        indexes = [
+            models.Index(
+                fields=["rf"],
+                name="idx_func_conecta_rf",
+            ),
+            models.Index(
+                fields=["cargo_codigo"],
+                name="idx_func_conecta_cargo",
+            ),
+            models.Index(
+                fields=["funcao_codigo"],
+                name="idx_func_conecta_funcao",
+            ),
+            models.Index(
+                fields=["cargo_dre_codigo"],
+                name="idx_func_conecta_dre",
+            ),
+            models.Index(
+                fields=["codigo_modalidade", "ano_turma"],
+                name="idx_func_conecta_mod_ano",
+            ),
+            models.Index(
+                fields=["codigo_componente_curricular"],
+                name="idx_func_conecta_comp",
+            ),
+            models.Index(
+                fields=["cargo_codigo", "funcao_codigo"],
+                name="idx_func_conecta_cargo_func",
+            ),
+            models.Index(
+                fields=["cargo_ue_codigo"],
+                name="idx_func_conecta_cargo_ue",
+            ),
+            models.Index(
+                fields=["funcao_ue_codigo"],
+                name="idx_func_conecta_func_ue",
+            ),
+            models.Index(
+                fields=[
+                    "codigo_modalidade",
+                    "ano_turma",
+                    "codigo_componente_curricular",
+                ],
+                name="idx_func_conecta_mod_ano_comp",
+            ),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "rf",
+                    "cargo_codigo",
+                    "cargo_ue_codigo",
+                    "funcao_codigo",
+                    "funcao_ue_codigo",
+                    "tipo_vinculo",
+                    "codigo_modalidade",
+                    "ano_turma",
+                    "codigo_componente_curricular",
+                ],
+                name="uq_func_conecta_filtro",
+                nulls_distinct=False,
+            ),
+        ]
+
+
+class FuncionarioConectaModalidadeEscola(models.Model):
+    """Modalidade atendida por unidade para consultas do Conecta Formação."""
+
+    id = models.BigAutoField(primary_key=True)
+    codigo_ue = models.CharField(max_length=20)
+    codigo_modalidade = models.IntegerField()
+
+    class Meta:
+        app_label = "professores"
+        db_table = "funcionario_conecta_modalidade_escola"
+        verbose_name = "modalidade por unidade do Conecta Formação"
+        verbose_name_plural = "modalidades por unidade do Conecta Formação"
+        indexes = [
+            models.Index(
+                fields=["codigo_modalidade", "codigo_ue"],
+                name="idx_func_conecta_mod_ue",
+            ),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["codigo_ue", "codigo_modalidade"],
+                name="uq_func_conecta_mod_ue",
+            ),
+        ]
+
+
 class FuncionarioSistemaPerfil(models.Model):
     """Perfil de sistema associado ao login do funcionário."""
 
@@ -404,7 +627,22 @@ class AtribuicaoAula(models.Model):
     ano_atribuicao = models.IntegerField()
     codigo_etapa_ensino = models.IntegerField(null=True, blank=True)
     dt_atribuicao_aula = models.DateField()
-    dt_disponibilizacao_aulas = models.DateField(null=True, blank=True)
+    dt_disponibilizacao_aulas = models.DateField(
+        null=True,
+        blank=True,
+        help_text=(
+            "Data efetiva de fim da atribuição: quando a origem não informa "
+            "a disponibilização, assume a data de fim da turma."
+        ),
+    )
+    dt_disponibilizacao_aulas_origem = models.DateField(
+        null=True,
+        blank=True,
+        help_text=(
+            "Data de disponibilização como consta na origem, sem "
+            "substituição. O nulo distingue a atribuição ainda ativa."
+        ),
+    )
     dt_inicio_turma = models.DateField(null=True, blank=True)
     dt_fim_turma = models.DateField(null=True, blank=True)
     codigo_motivo_disponibilizacao = models.IntegerField(null=True, blank=True)
@@ -521,6 +759,52 @@ class AtribuicaoExterno(models.Model):
                 fields=["dt_cancelamento"],
                 name="idx_ae_cancelamento",
             ),
+        ]
+
+
+class ProfessorEscolaAno(models.Model):
+    """Professor vinculado à escola por turma e componente."""
+
+    id = models.BigAutoField(primary_key=True)
+    origem = models.CharField(max_length=20)
+    codigo_escola = models.CharField(max_length=20, help_text=_HELP_UE)
+    ano_letivo = models.IntegerField()
+    codigo_turma = models.BigIntegerField(help_text=_HELP_TURMA)
+    codigo_rf = models.CharField(max_length=20)
+    codigo_componente_curricular = models.IntegerField(help_text=_HELP_COMP)
+    nome = models.CharField(max_length=200)
+    cargo = models.CharField(max_length=100, null=True, blank=True)
+    cpf = models.CharField(max_length=14, null=True, blank=True)
+    data_inicio_exercicio = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+
+        app_label = "professores"
+        db_table = "professor_escola_ano"
+        verbose_name = "professor por escola e ano"
+        verbose_name_plural = "professores por escola e ano"
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "origem",
+                    "codigo_escola",
+                    "ano_letivo",
+                    "codigo_turma",
+                    "codigo_rf",
+                    "codigo_componente_curricular",
+                    "cargo",
+                    "cpf",
+                    "data_inicio_exercicio",
+                ],
+                name="uq_prof_esc_ano_legado",
+            )
+        ]
+        indexes = [
+            models.Index(
+                fields=["codigo_escola", "ano_letivo"],
+                name="idx_prof_esc_ano_ue_ano",
+            ),
+            models.Index(fields=["codigo_rf"], name="idx_prof_esc_ano_rf"),
         ]
 
 

@@ -292,6 +292,7 @@ class VerificadorBaseComparacaoTest(TestCase):
 
     def test_chave_customizada_e_usada_na_comparacao(self) -> None:
         """Verifica uso de funcao customizada para chave de comparacao."""
+
         def chave_fn(linha: dict) -> tuple:
             return (linha["codigo"],)
 
