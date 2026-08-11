@@ -4,6 +4,7 @@ from apps.pedagogico.models import (
     AgrupamentoAtribuicaoTerritorioSaber,
     ComponenteCurricular,
     ComponenteCurricularAgrupamento,
+    ComponenteCurricularApiEol,
     GradeComponenteCurricular,
     Turma,
     TurmaItinerarioEnsinoMedio,
@@ -15,6 +16,15 @@ class PedagogicoModelsTest(TestCase):
 
     def test_componente_curricular_str(self) -> None:
         obj = ComponenteCurricular(codigo=100, descricao="Arte")
+        self.assertEqual(str(obj), "100 - Arte")
+
+    def test_componente_curricular_api_eol_str(self) -> None:
+        obj = ComponenteCurricularApiEol(
+            id_componente_curricular=100,
+            descricao="Arte",
+            eh_regencia=False,
+            eh_territorio=False,
+        )
         self.assertEqual(str(obj), "100 - Arte")
 
     def test_componente_curricular_agrupamento_str(self) -> None:

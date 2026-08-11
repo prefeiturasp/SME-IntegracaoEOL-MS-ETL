@@ -23,6 +23,7 @@ from apps.eol_connection.libs.servico_eol import EOLService
 from apps.pedagogico.dtos.model_in import (
     ApiEolAgrupamentoAtribuicaoTerritorioSaberIn,
     ApiEolComponenteCurricularHierarquiaIn,
+    ApiEolComponenteCurricularIn,
     ApiEolComponenteCurricularPAPIn,
     ApiEolComponenteCurricularPlanejamentoRegenciaIn,
     ApiEolTurmaItinerarioEnsinoMedioIn,
@@ -41,6 +42,7 @@ from apps.pedagogico.models import (
     AtribuicaoTerritorioSaber,
     ComponenteCurricular,
     ComponenteCurricularAgrupamento,
+    ComponenteCurricularApiEol,
     ComponenteCurricularHierarquia,
     ComponenteCurricularPAP,
     ComponenteCurricularPlanejamentoRegencia,
@@ -55,6 +57,7 @@ from apps.pedagogico.queries import (
     API_EOL_PEDAGOGICO_TABLE_MAPPINGS,
     SQL_ANOS_LETIVOS,
     SQL_API_EOL_AGRUPAMENTO_ATRIBUICAO_TERRITORIO_SABER,
+    SQL_API_EOL_COMPONENTE_CURRICULAR,
     SQL_API_EOL_COMPONENTE_CURRICULAR_HIERARQUIA,
     SQL_API_EOL_COMPONENTE_CURRICULAR_PAP,
     SQL_API_EOL_COMPONENTE_CURRICULAR_PLANEJAMENTO_REGENCIA,
@@ -605,6 +608,32 @@ class EtlPedagogicoService(BaseEtlService):
                 ),
             ),
             PhaseConfig(
+                nome="componente_curricular_api_eol",
+                sql=SQL_API_EOL_COMPONENTE_CURRICULAR,
+                table_name="componente_curricular_api_eol",
+                source_table=("componentecurricular, componentecurricularpai"),
+                model_class=ComponenteCurricularApiEol,
+                dto_in=ApiEolComponenteCurricularIn,
+                pk_field=[
+                    "id_relacao_origem",
+                    "id_componente_curricular",
+                ],
+                update_fields=(
+                    "eh_regencia",
+                    "eh_territorio",
+                    "descricao",
+                    "id_componente_curricular_pai",
+                    "vigencia",
+                    "transferido_em",
+                ),
+                unique_fields=(
+                    "id_relacao_origem",
+                    "id_componente_curricular",
+                ),
+                modo_escrita="full_refresh",
+                truncate_on_full_sync=True,
+            ),
+            PhaseConfig(
                 nome="componentecurricularhierarquia",
                 sql=SQL_API_EOL_COMPONENTE_CURRICULAR_HIERARQUIA,
                 table_name="componente_curricular_hierarquia",
@@ -806,15 +835,16 @@ class EtlPedagogicoService(BaseEtlService):
             2 — componente_turma             (por ano letivo)
             3 — atribuicao_componente        (por ano letivo)
             4 — atribuicao_territorio_saber  (por ano letivo)
-            5 — componentecurricularhierarquia       (API EOL Postgres)
-            6 — componentecurricularpap              (API EOL Postgres)
-            7 — componentecurricularplanejamentoregencia (API EOL Postgres)
-            8 — turmaitinerarioensinomedio           (API EOL Postgres)
-            9 — agrupamento_atribuicao_territorio_saber (API EOL Postgres)
-            10 — grade_componente_curricular (por ano letivo)
-            11 — turma                       (por ano letivo)
-            12 — turma_atribuida_dre_ue      (por ano letivo)
-            13 — etapa_ensino                (catálogo)
+            5 — componente_curricular_api_eol        (API EOL Postgres)
+            6 — componentecurricularhierarquia       (API EOL Postgres)
+            7 — componentecurricularpap              (API EOL Postgres)
+            8 — componentecurricularplanejamentoregencia (API EOL Postgres)
+            9 — turmaitinerarioensinomedio           (API EOL Postgres)
+            10 — agrupamento_atribuicao_territorio_saber (API EOL Postgres)
+            11 — grade_componente_curricular (por ano letivo)
+            12 — turma                       (por ano letivo)
+            13 — turma_atribuida_dre_ue      (por ano letivo)
+            14 — etapa_ensino                (catálogo)
         """
         self._agora = timezone.now()
         self._cache_anos = None  # reseta cache de anos para o run

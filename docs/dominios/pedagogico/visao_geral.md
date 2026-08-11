@@ -35,17 +35,18 @@ No ETL, `regencia` fica no catálogo `ComponenteCurricular` e é calculada por `
 O código define os modelos em `apps/pedagogico/models.py`, incluindo:
 
 1. `ComponenteCurricular`
-2. `ComponenteTurma`
-3. `ComponenteCurricularAgrupamento` (tabela mantida para compatibilidade e para a geração backup)
-4. `AtribuicaoComponente`
-5. `GradeComponenteCurricular`
-6. `AgrupamentoAtribuicaoTerritorioSaber`
-7. `Turma`
-8. `AtribuicaoTerritorioSaber`
-9. `TurmaItinerarioEnsinoMedio`
-10. `ComponenteCurricularPlanejamentoRegencia`
-11. `ComponenteCurricularHierarquia`
-12. `ComponenteCurricularPAP`
+2. `ComponenteCurricularApiEol`
+3. `ComponenteTurma`
+4. `ComponenteCurricularAgrupamento` (tabela mantida para compatibilidade e para a geração backup)
+5. `AtribuicaoComponente`
+6. `GradeComponenteCurricular`
+7. `AgrupamentoAtribuicaoTerritorioSaber`
+8. `Turma`
+9. `AtribuicaoTerritorioSaber`
+10. `TurmaItinerarioEnsinoMedio`
+11. `ComponenteCurricularPlanejamentoRegencia`
+12. `ComponenteCurricularHierarquia`
+13. `ComponenteCurricularPAP`
 
 ## Fases implementadas
 
@@ -71,16 +72,17 @@ O código define os modelos em `apps/pedagogico/models.py`, incluindo:
 - **Query:** `SQL_ATRIBUICOES_TERRITORIO_SABER` com `?` por ano letivo.
 - Serve de apoio para componentes individuais de Território do Saber e para validação de professores atribuídos.
 
-### Fases 5 a 8 — Tabelas auxiliares da API EOL
+### Fases 5 a 9 — Tabelas auxiliares da API EOL
 
 - Cópia via `API_EOL_DB`, em modo `full_refresh`.
 - Tabelas:
+  - `componentecurricular LEFT JOIN componentecurricularpai` → `componente_curricular_api_eol`
   - `componentecurricularpai` → `componente_curricular_hierarquia`
   - `componentecurricularpap` → `componente_curricular_pap`
   - `regenciacomponentecurricular` → `componente_curricular_planejamento_regencia`
   - `turma_tipo_itinerario` → `turma_itinerario_ensino_medio`
 
-### Fase 9 — AgrupamentoAtribuicaoTerritorioSaber
+### Fase 10 — AgrupamentoAtribuicaoTerritorioSaber
 
 - Copia a tabela oficial `agrupamentoatribuicaoterritoriosaber` da API EOL para `agrupamento_atribuicao_territorio_saber`.
 - **Query:** `SQL_API_EOL_AGRUPAMENTO_ATRIBUICAO_TERRITORIO_SABER`.
@@ -93,17 +95,22 @@ O código define os modelos em `apps/pedagogico/models.py`, incluindo:
 - Recalcula agrupamentos a partir de `SQL_ATRIBUICOES_TERRITORIO_SABER` e grava também `componente_curricular_agrupamento`.
 - Mantida como contingência para comparação/recuperação, não como fonte principal.
 
-### Fase 10 — GradeComponenteCurricular
+### Fase 11 — GradeComponenteCurricular
 
 - Catálogo de oferta de componentes por série, ano letivo e modalidade.
 - Chave de upsert: componente, ano letivo, modalidade e série de ensino.
 - **Query:** `SQL_GRADE_COMPONENTE_CURRICULAR` com `?` por ano letivo.
 
-### Fase 11 — Turma
+### Fase 12 — Turma
 
 - Dados cadastrais de turmas do EOL (situação, modalidade, série, UE).
 - **Query:** `SQL_TURMAS` com `?` por ano letivo. Filtra `st_turma_escola IN ('O', 'A', 'E', 'C')`.
 - `Modalidade`, `CodigoModalidade`, `Semestre` e `Extinta` são calculados via `CASE` inline na query.
+
+### Fase 13 — TurmaAtribuidaDreUe
+
+- Consolida turmas por DRE e UE para o ano letivo.
+- A carga usa `full_refresh` na tabela `turma_atribuida_dre_ue`.
 
 ## Fluxo
 
@@ -116,11 +123,12 @@ digraph G {
     F2 [label="Fase 2\nComponenteTurma"];
     F3 [label="Fase 3\nAtribuicaoComponente"];
     F4 [label="Fase 4\nAtribuicaoTerritorioSaber"];
-    F5 [label="Fases 5-8\nApoio API EOL"];
-    F9 [label="Fase 9\nAgrupamentos TS\nAPI EOL"];
-    F10 [label="Fase 10\nGradeComponenteCurricular"];
-    F11 [label="Fase 11\nTurma"];
+    F5 [label="Fases 5-9\nApoio API EOL"];
+    F10 [label="Fase 10\nAgrupamentos TS\nAPI EOL"];
+    F11 [label="Fase 11\nGradeComponenteCurricular"];
+    F12 [label="Fase 12\nTurma"];
+    F13 [label="Fase 13\nTurmaAtribuidaDreUe"];
 
-    F1 -> F2 -> F3 -> F4 -> F5 -> F9 -> F10 -> F11;
+    F1 -> F2 -> F3 -> F4 -> F5 -> F10 -> F11 -> F12 -> F13;
 }
 ```

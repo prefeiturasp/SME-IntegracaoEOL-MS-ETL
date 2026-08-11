@@ -22,7 +22,7 @@ _TABELAS_UPSERT = frozenset(
 class Command(BaseEtlCommand):
     """Executa ETL completo ou parcial do domínio PEDAGOGICO_DB."""
 
-    help = "Popula pedagogico_db a partir do EOL (SQL Server)"
+    help = "Popula pedagogico_db a partir do EOL e da API EOL"
     dominio = "pedagogico"
     fase_final = 13
     service_class = EtlPedagogicoService
