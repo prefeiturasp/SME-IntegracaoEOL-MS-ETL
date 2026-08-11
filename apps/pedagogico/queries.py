@@ -565,6 +565,7 @@ SELECT DISTINCT
     tur.cd_tipo_turno                                                          AS TipoTurno,
     tur.dt_inicio_turma                                                        AS DataInicioTurma,
     tur.dt_fim                                                                 AS DataFim,
+    tur.dt_fim_turma                                                           AS DataFimTurma,
     CASE WHEN tur.st_turma_escola = 'E' THEN 1 ELSE 0 END                     AS Extinta,
     tur.st_turma_escola                                                        AS Situacao,
     tur.cd_escola                                                              AS UeCodigo,

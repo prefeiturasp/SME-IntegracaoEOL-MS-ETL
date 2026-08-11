@@ -723,6 +723,7 @@ class EtlPedagogicoService(BaseEtlService):
                     "tipo_turno",
                     "data_inicio_turma",
                     "data_fim",
+                    "data_fim_turma",
                     "extinta",
                     "situacao",
                     "ue_codigo",

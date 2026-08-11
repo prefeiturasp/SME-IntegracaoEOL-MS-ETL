@@ -187,6 +187,7 @@ class TurmaIn:
     tipo_turno: Any
     data_inicio_turma: Any
     data_fim: Any
+    data_fim_turma: Any
     extinta: Any
     situacao: Any
     ue_codigo: Any
@@ -219,6 +220,7 @@ class TurmaIn:
             "tipo_turno": int_or_none(self.tipo_turno),
             "data_inicio_turma": aware_or_none(self.data_inicio_turma),
             "data_fim": aware_or_none(self.data_fim),
+            "data_fim_turma": aware_or_none(self.data_fim_turma),
             "extinta": bool(self.extinta),
             "situacao": str_or_none(self.situacao),
             "ue_codigo": str_or_none(self.ue_codigo),
