@@ -416,6 +416,7 @@ class Turma(ModeloBase):
     tipo_turno = models.IntegerField(null=True, blank=True)
     data_inicio_turma = models.DateTimeField(null=True, blank=True)
     data_fim = models.DateTimeField(null=True, blank=True)
+    data_fim_turma = models.DateTimeField(null=True, blank=True)
     extinta = models.BooleanField(default=False)
     situacao = models.CharField(max_length=1, null=True, blank=True)
     ue_codigo = models.CharField(max_length=20)

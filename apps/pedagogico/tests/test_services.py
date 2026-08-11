@@ -167,6 +167,7 @@ class TestPedagogicoService(TestCase):
             2,  # tipo_turno
             "2025-02-05T08:00:00",  # data_inicio_turma
             None,  # data_fim
+            None,  # data_fim_turma
             0,  # extinta
             "O",  # situacao
             "001234",  # ue_codigo
