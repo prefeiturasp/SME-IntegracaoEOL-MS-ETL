@@ -205,9 +205,7 @@ class VerificadorPerfilProfServidorTest(TestCase):
         self.assertEqual(chave, ("012345", "000001", 9999, 2024))
 
     @patch(f"{_MOD_AA}.AtribuicaoAula")
-    def test_buscar_destino_mapeia_campos(
-        self, mock_aa: MagicMock
-    ) -> None:
+    def test_buscar_destino_mapeia_campos(self, mock_aa: MagicMock) -> None:
         """Verifica mapeamento de campos via AtribuicaoAula no destino."""
         aa_qs = mock_aa.objects.using.return_value.filter.return_value
         aa_qs.values.return_value = [
@@ -426,9 +424,7 @@ class VerificadorPerfilProfExternoTest(TestCase):
         self.assertEqual(chave, ("123.456.789-00", "000001", 9999, 2024))
 
     @patch(f"{_MOD_AE}.AtribuicaoExterno")
-    def test_buscar_destino_mapeia_campos(
-        self, mock_ae: MagicMock
-    ) -> None:
+    def test_buscar_destino_mapeia_campos(self, mock_ae: MagicMock) -> None:
         """Verifica mapeamento de campos via AtribuicaoExterno no destino."""
         ae_qs = mock_ae.objects.using.return_value.filter.return_value
         ae_qs.values.return_value = [

@@ -13,11 +13,15 @@ if TYPE_CHECKING:
         DisciplinaTurmaAtribuidaUeOut,
         FuncaoAtividadeCargoServidorOut,
         FuncionarioCargoOut,
+        FuncionarioConectaFormacaoOut,
+        FuncionarioConectaModalidadeEscolaOut,
         FuncionarioSistemaPerfilOut,
         FuncionarioUnidadeEducacionalOut,
+        FuncionarioVinculoFuncionalOut,
         LaudoMedicoOut,
         LotacaoServidorOut,
         PessoaOut,
+        ProfessorEscolaAnoOut,
         ProfessorOut,
         TurmaAtribuidaUeOut,
     )
@@ -110,6 +114,188 @@ class FuncionarioCargoIn:
             data_fim=self.dt_fim_nomeacao,
             cargo=self.dc_cargo,
             codigo_cargo=self.cd_cargo,
+        )
+
+
+@dataclass(slots=True)
+class ProfessorEscolaAnoIn:
+    """Dados de professor por escola e ano."""
+
+    origem: Any
+    codigo_escola: Any
+    ano_letivo: Any
+    codigo_turma: Any
+    codigo_rf: Any
+    codigo_componente_curricular: Any
+    nome: Any
+    cargo: Any
+    cpf: Any
+    data_inicio_exercicio: Any
+
+    def to_domain(self) -> "ProfessorEscolaAnoOut":
+        """Retorna dados normalizados de professor por escola e ano.
+
+        Returns:
+            Dados de professor por escola e ano para persistência.
+        """
+        from apps.professores.dtos.model_out import ProfessorEscolaAnoOut
+
+        return ProfessorEscolaAnoOut(
+            origem=self.origem,
+            codigo_escola=self.codigo_escola,
+            ano_letivo=self.ano_letivo,
+            codigo_turma=self.codigo_turma,
+            codigo_rf=self.codigo_rf,
+            codigo_componente_curricular=self.codigo_componente_curricular,
+            nome=self.nome,
+            cargo=self.cargo,
+            cpf=self.cpf,
+            data_inicio_exercicio=self.data_inicio_exercicio,
+        )
+
+
+@dataclass(slots=True)
+class FuncionarioVinculoFuncionalIn:
+    """Dados de vínculo funcional consolidado."""
+
+    rf: Any
+    cpf: Any
+    cd_cargo_base: Any
+    cargo_base: Any
+    cd_dre_cargo_base: Any
+    cd_ue_cargo_base: Any
+    ue_cargo_base: Any
+    tipo_vinculo_cargo_base: Any
+    data_inicio_cargo_base: Any
+    cd_cargo_sobreposto: Any
+    cargo_sobreposto: Any
+    cd_dre_cargo_sobreposto: Any
+    cd_ue_cargo_sobreposto: Any
+    ue_cargo_sobreposto: Any
+    tipo_vinculo_cargo_sobreposto: Any
+    data_inicio_cargo_sobreposto: Any
+    cd_funcao_atividade: Any
+    funcao_atividade: Any
+    cd_dre_funcao_atividade: Any
+    cd_ue_funcao_atividade: Any
+    ue_funcao_atividade: Any
+    tipo_vinculo_funcao_atividade: Any
+    data_inicio_funcao_atividade: Any
+    dt_cancelamento_funcao_atividade: Any
+    dt_fim_funcao_atividade: Any
+
+    def to_domain(self) -> "FuncionarioVinculoFuncionalOut":
+        """Retorna dados normalizados do vínculo funcional.
+
+        Returns:
+            Dados do vínculo funcional para persistência.
+        """
+        from apps.professores.dtos.model_out import (
+            FuncionarioVinculoFuncionalOut,
+        )
+
+        return FuncionarioVinculoFuncionalOut(
+            rf=self.rf,
+            cpf=self.cpf,
+            cd_cargo_base=self.cd_cargo_base,
+            cargo_base=self.cargo_base,
+            cd_dre_cargo_base=self.cd_dre_cargo_base,
+            cd_ue_cargo_base=self.cd_ue_cargo_base,
+            ue_cargo_base=self.ue_cargo_base,
+            tipo_vinculo_cargo_base=self.tipo_vinculo_cargo_base,
+            data_inicio_cargo_base=self.data_inicio_cargo_base,
+            cd_cargo_sobreposto=self.cd_cargo_sobreposto,
+            cargo_sobreposto=self.cargo_sobreposto,
+            cd_dre_cargo_sobreposto=self.cd_dre_cargo_sobreposto,
+            cd_ue_cargo_sobreposto=self.cd_ue_cargo_sobreposto,
+            ue_cargo_sobreposto=self.ue_cargo_sobreposto,
+            tipo_vinculo_cargo_sobreposto=(self.tipo_vinculo_cargo_sobreposto),
+            data_inicio_cargo_sobreposto=self.data_inicio_cargo_sobreposto,
+            cd_funcao_atividade=self.cd_funcao_atividade,
+            funcao_atividade=self.funcao_atividade,
+            cd_dre_funcao_atividade=self.cd_dre_funcao_atividade,
+            cd_ue_funcao_atividade=self.cd_ue_funcao_atividade,
+            ue_funcao_atividade=self.ue_funcao_atividade,
+            tipo_vinculo_funcao_atividade=(self.tipo_vinculo_funcao_atividade),
+            data_inicio_funcao_atividade=self.data_inicio_funcao_atividade,
+            dt_cancelamento_funcao_atividade=(
+                self.dt_cancelamento_funcao_atividade
+            ),
+            dt_fim_funcao_atividade=self.dt_fim_funcao_atividade,
+        )
+
+
+@dataclass(slots=True)
+class FuncionarioConectaFormacaoIn:
+    """Dados de funcionário elegível para o Conecta Formação."""
+
+    rf: Any
+    nome: Any
+    cpf: Any
+    cargo_codigo: Any
+    cargo: Any
+    cargo_dre_codigo: Any
+    cargo_ue_codigo: Any
+    funcao_codigo: Any
+    funcao: Any
+    funcao_dre_codigo: Any
+    funcao_ue_codigo: Any
+    tipo_vinculo: Any
+    codigo_modalidade: Any
+    ano_turma: Any
+    codigo_componente_curricular: Any
+    eh_tipo_jornada_jeif: Any
+
+    def to_domain(self) -> "FuncionarioConectaFormacaoOut":
+        """Retorna dados normalizados do funcionário.
+
+        Returns:
+            Dados do funcionário para persistência.
+        """
+        from apps.professores.dtos.model_out import (
+            FuncionarioConectaFormacaoOut,
+        )
+
+        return FuncionarioConectaFormacaoOut(
+            rf=self.rf,
+            nome=self.nome,
+            cpf=self.cpf,
+            cargo_codigo=self.cargo_codigo,
+            cargo=self.cargo,
+            cargo_dre_codigo=self.cargo_dre_codigo,
+            cargo_ue_codigo=self.cargo_ue_codigo,
+            funcao_codigo=self.funcao_codigo,
+            funcao=self.funcao,
+            funcao_dre_codigo=self.funcao_dre_codigo,
+            funcao_ue_codigo=self.funcao_ue_codigo,
+            tipo_vinculo=self.tipo_vinculo,
+            codigo_modalidade=self.codigo_modalidade,
+            ano_turma=self.ano_turma,
+            codigo_componente_curricular=self.codigo_componente_curricular,
+            eh_tipo_jornada_jeif=self.eh_tipo_jornada_jeif,
+        )
+
+
+@dataclass(slots=True)
+class FuncionarioConectaModalidadeEscolaIn:
+    """Dados de modalidade por unidade do Conecta Formação."""
+
+    codigo_ue: Any
+    codigo_modalidade: Any
+
+    def to_domain(self) -> "FuncionarioConectaModalidadeEscolaOut":
+        """Retorna dados normalizados da modalidade por unidade.
+
+        Returns:
+            Dados da modalidade por unidade para persistência.
+        """
+        from apps.professores.dtos.model_out import (
+            FuncionarioConectaModalidadeEscolaOut,
+        )
+
+        return FuncionarioConectaModalidadeEscolaOut(
+            codigo_ue=self.codigo_ue,
+            codigo_modalidade=self.codigo_modalidade,
         )
 
 
@@ -348,6 +534,7 @@ class AtribuicaoAulaIn:
     semestre: Any
     duracao_turno: Any
     tipo_turno: Any
+    dt_disponibilizacao_aulas_origem: Any = None
 
     def to_domain(self) -> "AtribuicaoAulaOut":
         """Retorna dados normalizados da atribuição de aula.
@@ -377,6 +564,9 @@ class AtribuicaoAulaIn:
             dt_inicio_turma=self.dt_inicio_turma,
             dt_fim_turma=self.dt_fim_turma,
             dt_disponibilizacao_aulas=self.dt_disponibilizacao_aulas,
+            dt_disponibilizacao_aulas_origem=(
+                self.dt_disponibilizacao_aulas_origem
+            ),
             codigo_motivo_disponibilizacao=self.cd_motivo_disponibilizacao,
             dt_cancelamento=self.dt_cancelamento,
             codigo_dre=self.codigo_dre,

@@ -291,9 +291,10 @@ resposta.
 Indices: `login`, `sis_id`, `perfil`.
 Restricao unica: `(login, perfil, sis_id)`.
 
-A carga considera atualmente o SGP (`sis_id = 1000`) para manter
-compatibilidade com a API legada. Quando a origem retorna a mesma combinacao
-de `login`, `perfil` e `sis_id` com e sem UAD, a carga preserva a linha unica com `uad_codigo` preenchido.
+A carga contempla os sistemas usados pelos contratos legados. O filtro do
+sistema consumido deve ser aplicado no microsservico. Quando a origem retorna a
+mesma combinacao de `login`, `perfil` e `sis_id` com e sem UAD, a carga preserva
+a linha unica com `uad_codigo` preenchido.
 
 ---
 

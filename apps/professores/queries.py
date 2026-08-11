@@ -82,6 +82,415 @@ SQL_FUNCIONARIOS_CARGOS = """
     WHERE sc.cd_registro_funcional IS NOT NULL
 """
 
+SQL_FUNCIONARIOS_VINCULOS_FUNCIONAIS = """
+    SELECT DISTINCT
+        cb.rf,
+        cb.cpf,
+        cb.CdCargoBase,
+        CASE
+            WHEN cb.TipoVinculo IS NOT NULL
+                THEN LTRIM(RTRIM(cb.CargoBase))
+                    + ' - v' + CAST(cb.TipoVinculo AS VARCHAR(10))
+            ELSE LTRIM(RTRIM(cb.CargoBase))
+        END AS CargoBase,
+        cb.CdDreCargoBase,
+        cb.CdUeCargoBase,
+        cb.UeCargoBase,
+        cb.TipoVinculo AS TipoVinculoCargoBase,
+        cb.DataInicio AS DataInicioCargoBase,
+        cs.CdCargoSobreposto,
+        CASE
+            WHEN cs.TipoVinculo IS NOT NULL
+                THEN LTRIM(RTRIM(cs.CargoSobreposto))
+                    + ' - v' + CAST(cs.TipoVinculo AS VARCHAR(10))
+            ELSE LTRIM(RTRIM(cs.CargoSobreposto))
+        END AS CargoSobreposto,
+        cs.CdDreCargoSobreposto,
+        cs.CdUeCargoSobreposto,
+        cs.ueCargoSobreposto,
+        cs.TipoVinculo AS TipoVinculoCargoSobreposto,
+        cs.DataInicio AS DataInicioCargoSobreposto,
+        fa.CdFuncaoAtividade,
+        CASE
+            WHEN fa.TipoVinculo IS NOT NULL
+                THEN LTRIM(RTRIM(fa.FuncaoAtividade))
+                    + ' - v' + CAST(fa.TipoVinculo AS VARCHAR(10))
+            ELSE LTRIM(RTRIM(fa.FuncaoAtividade))
+        END AS FuncaoAtividade,
+        fa.CdDreFuncaoAtividade,
+        fa.CdUeFuncaoAtividade,
+        fa.ueFuncaoAtividade,
+        fa.TipoVinculo AS TipoVinculoFuncaoAtividade,
+        fa.DataInicio AS DataInicioFuncaoAtividade,
+        fa.DtCancelamentoFuncaoAtividade,
+        fa.DtFimFuncaoAtividade
+    FROM (
+        SELECT
+            cargobase.cd_cargo_base_servidor,
+            servidor.cd_registro_funcional AS rf,
+            servidor.cd_cpf_pessoa AS cpf,
+            c.cd_cargo AS CdCargoBase,
+            c.dc_cargo AS CargoBase,
+            ue_base.cd_unidade_administrativa_referencia AS CdDreCargoBase,
+            ue_base.cd_unidade_educacao AS CdUeCargoBase,
+            ue_base.nm_unidade_educacao AS ueCargoBase,
+            cargobase.cd_vinculo_sigpec AS TipoVinculo,
+            cargobase.dt_posse AS DataInicio
+        FROM v_servidor_cotic servidor WITH (NOLOCK)
+        INNER JOIN v_cargo_base_cotic cargobase WITH (NOLOCK)
+            ON servidor.cd_servidor = cargobase.cd_servidor
+        INNER JOIN lotacao_servidor ls WITH (NOLOCK)
+            ON cargobase.cd_cargo_base_servidor =
+                ls.cd_cargo_base_servidor
+            AND (
+                ls.dt_fim IS NULL
+                OR CAST(GETDATE() AS DATE) <= ls.dt_fim
+            )
+            AND ls.dt_cancelamento IS NULL
+        INNER JOIN cargo c WITH (NOLOCK)
+            ON c.cd_cargo = cargobase.cd_cargo
+        INNER JOIN v_cadastro_unidade_educacao ue_base WITH (NOLOCK)
+            ON ls.cd_unidade_educacao = ue_base.cd_unidade_educacao
+        WHERE servidor.cd_registro_funcional IS NOT NULL
+          AND cargobase.dt_cancelamento IS NULL
+          AND cargobase.dt_fim_nomeacao IS NULL
+    ) cb
+    LEFT JOIN (
+        SELECT DISTINCT
+            cargobase.cd_cargo_base_servidor,
+            c.cd_cargo AS CdCargoSobreposto,
+            c.dc_cargo AS CargoSobreposto,
+            ue.cd_unidade_administrativa_referencia
+                AS CdDreCargoSobreposto,
+            ue.cd_unidade_educacao AS CdUeCargoSobreposto,
+            ue.nm_unidade_educacao AS ueCargoSobreposto,
+            cargobase.cd_vinculo_sigpec AS TipoVinculo,
+            cargobase.dt_posse AS DataInicio
+        FROM v_servidor_cotic servidor WITH (NOLOCK)
+        INNER JOIN v_cargo_base_cotic cargobase WITH (NOLOCK)
+            ON servidor.cd_servidor = cargobase.cd_servidor
+        INNER JOIN cargo_sobreposto_servidor cargosobreposto WITH (NOLOCK)
+            ON cargobase.cd_cargo_base_servidor =
+                cargosobreposto.cd_cargo_base_servidor
+        INNER JOIN v_cadastro_unidade_educacao ue WITH (NOLOCK)
+            ON cargosobreposto.cd_unidade_local_servico =
+                ue.cd_unidade_educacao
+        INNER JOIN cargo c WITH (NOLOCK)
+            ON c.cd_cargo = cargosobreposto.cd_cargo
+        WHERE servidor.cd_registro_funcional IS NOT NULL
+          AND cargobase.dt_cancelamento IS NULL
+          AND cargobase.dt_fim_nomeacao IS NULL
+          AND cargosobreposto.dt_cancelamento IS NULL
+          AND (
+              cargosobreposto.dt_fim_cargo_sobreposto IS NULL
+              OR CAST(GETDATE() AS DATE) <=
+                  cargosobreposto.dt_fim_cargo_sobreposto
+          )
+    ) cs
+        ON cs.cd_cargo_base_servidor = cb.cd_cargo_base_servidor
+    LEFT JOIN (
+        SELECT DISTINCT
+            cargobase.cd_cargo_base_servidor,
+            tfa.cd_tipo_funcao AS CdFuncaoAtividade,
+            tfa.dc_tipo_funcao AS FuncaoAtividade,
+            ue.cd_unidade_administrativa_referencia
+                AS CdDreFuncaoAtividade,
+            ue.cd_unidade_educacao AS CdUeFuncaoAtividade,
+            ue.nm_unidade_educacao AS ueFuncaoAtividade,
+            cargobase.cd_vinculo_sigpec AS TipoVinculo,
+            cargobase.dt_posse AS DataInicio,
+            funcao.dt_cancelamento AS DtCancelamentoFuncaoAtividade,
+            funcao.dt_fim_funcao_atividade AS DtFimFuncaoAtividade
+        FROM v_servidor_cotic servidor WITH (NOLOCK)
+        INNER JOIN v_cargo_base_cotic cargobase WITH (NOLOCK)
+            ON servidor.cd_servidor = cargobase.cd_servidor
+        INNER JOIN funcao_atividade_cargo_servidor funcao WITH (NOLOCK)
+            ON cargobase.cd_cargo_base_servidor =
+                funcao.cd_cargo_base_servidor
+            AND (
+                funcao.dt_cancelamento IS NULL
+                OR funcao.dt_fim_funcao_atividade > GETDATE()
+            )
+            AND (
+                funcao.dt_fim_funcao_atividade IS NULL
+                OR funcao.dt_fim_funcao_atividade > GETDATE()
+            )
+        INNER JOIN v_cadastro_unidade_educacao ue WITH (NOLOCK)
+            ON funcao.cd_unidade_local_servico = ue.cd_unidade_educacao
+        INNER JOIN tipo_funcao_atividade tfa WITH (NOLOCK)
+            ON tfa.cd_tipo_funcao = funcao.cd_tipo_funcao
+        WHERE servidor.cd_registro_funcional IS NOT NULL
+          AND funcao.dt_fim_funcao_atividade IS NULL
+          AND cargobase.dt_cancelamento IS NULL
+          AND cargobase.dt_fim_nomeacao IS NULL
+    ) fa
+        ON fa.cd_cargo_base_servidor = cb.cd_cargo_base_servidor
+"""
+
+SQL_FUNCIONARIOS_CONECTA_FORMACAO = """
+    WITH atribuicao_escola_servidor AS (
+        SELECT DISTINCT
+            esc.cd_escola,
+            aa.cd_cargo_base_servidor,
+            ee.cd_etapa_ensino AS codigo_modalidade,
+            se.sg_resumida_serie AS ano_turma,
+            aa.cd_componente_curricular
+        FROM escola esc WITH (NOLOCK)
+        INNER JOIN turma_escola te WITH (NOLOCK)
+            ON te.cd_escola = esc.cd_escola
+        INNER JOIN serie_turma_escola ste WITH (NOLOCK)
+            ON ste.cd_turma_escola = te.cd_turma_escola
+        INNER JOIN serie_turma_grade stg WITH (NOLOCK)
+            ON stg.cd_turma_escola = ste.cd_turma_escola
+           AND stg.dt_fim IS NULL
+        INNER JOIN escola_grade eg WITH (NOLOCK)
+            ON stg.cd_escola_grade = eg.cd_escola_grade
+        INNER JOIN grade g WITH (NOLOCK)
+            ON eg.cd_grade = g.cd_grade
+        INNER JOIN grade_componente_curricular gcc WITH (NOLOCK)
+            ON gcc.cd_grade = g.cd_grade
+        INNER JOIN serie_ensino se WITH (NOLOCK)
+            ON g.cd_serie_ensino = se.cd_serie_ensino
+        INNER JOIN etapa_ensino ee WITH (NOLOCK)
+            ON se.cd_etapa_ensino = ee.cd_etapa_ensino
+        INNER JOIN atribuicao_aula aa WITH (NOLOCK)
+            ON gcc.cd_grade = aa.cd_grade
+           AND gcc.cd_componente_curricular = aa.cd_componente_curricular
+           AND aa.cd_serie_grade = stg.cd_serie_grade
+           AND aa.dt_cancelamento IS NULL
+           AND aa.an_atribuicao = te.an_letivo
+           AND aa.dt_disponibilizacao_aulas IS NULL
+           AND aa.dt_atribuicao_aula <= GETDATE()
+    ),
+    rfs AS (
+        SELECT
+            servidor.cd_registro_funcional AS rf,
+            servidor.nm_pessoa AS nome,
+            servidor.cd_cpf_pessoa AS cpf,
+            c.cd_cargo AS cargo_codigo,
+            c.dc_cargo AS cargo,
+            ue.cd_unidade_administrativa_referencia AS cargo_dre_codigo,
+            ue.cd_unidade_educacao AS cargo_ue_codigo,
+            NULL AS funcao_codigo,
+            NULL AS funcao,
+            NULL AS funcao_dre_codigo,
+            NULL AS funcao_ue_codigo,
+            cargobase.cd_vinculo_sigpec AS tipo_vinculo,
+            aes.codigo_modalidade,
+            aes.ano_turma,
+            aes.cd_componente_curricular AS codigo_componente_curricular,
+            CASE
+                WHEN EXISTS (
+                    SELECT TOP 1 1
+                    FROM jornada_cargo_servidor jcs WITH (NOLOCK)
+                    WHERE jcs.cd_cargo_base_servidor =
+                        cargobase.cd_cargo_base_servidor
+                      AND jcs.cd_tipo_jornada_opcao = 6
+                      AND (
+                          jcs.dt_fim IS NULL
+                          OR jcs.dt_fim >= CAST(GETDATE() AS DATE)
+                      )
+                      AND jcs.an_referencia_opcao_jornada = YEAR(GETDATE())
+                )
+                    THEN 1
+                ELSE 0
+            END AS eh_tipo_jornada_jeif
+        FROM v_servidor_cotic servidor WITH (NOLOCK)
+        INNER JOIN v_cargo_base_cotic cargobase WITH (NOLOCK)
+            ON servidor.cd_servidor = cargobase.cd_servidor
+        INNER JOIN lotacao_servidor ls WITH (NOLOCK)
+            ON cargobase.cd_cargo_base_servidor =
+                ls.cd_cargo_base_servidor
+           AND (
+               ls.dt_fim IS NULL
+               OR CAST(GETDATE() AS DATE) <= ls.dt_fim
+           )
+           AND ls.dt_cancelamento IS NULL
+        LEFT JOIN cargo_sobreposto_servidor cargosobreposto WITH (NOLOCK)
+            ON cargobase.cd_cargo_base_servidor =
+                cargosobreposto.cd_cargo_base_servidor
+           AND cargosobreposto.dt_cancelamento IS NULL
+           AND cargosobreposto.dt_fim_cargo_sobreposto IS NULL
+        INNER JOIN cargo c WITH (NOLOCK)
+            ON c.cd_cargo = cargobase.cd_cargo
+        INNER JOIN v_cadastro_unidade_educacao ue WITH (NOLOCK)
+            ON ue.cd_unidade_educacao = ls.cd_unidade_educacao
+        LEFT JOIN atribuicao_escola_servidor aes
+            ON aes.cd_escola = ue.cd_unidade_educacao
+           AND aes.cd_cargo_base_servidor =
+                cargobase.cd_cargo_base_servidor
+        WHERE servidor.cd_registro_funcional IS NOT NULL
+          AND cargobase.dt_cancelamento IS NULL
+          AND cargobase.dt_fim_nomeacao IS NULL
+          AND cargosobreposto.cd_cargo_sobreposto_servidor IS NULL
+
+        UNION ALL
+
+        SELECT
+            servidor.cd_registro_funcional AS rf,
+            servidor.nm_pessoa AS nome,
+            servidor.cd_cpf_pessoa AS cpf,
+            c.cd_cargo AS cargo_codigo,
+            c.dc_cargo AS cargo,
+            ue.cd_unidade_administrativa_referencia AS cargo_dre_codigo,
+            ue.cd_unidade_educacao AS cargo_ue_codigo,
+            NULL AS funcao_codigo,
+            NULL AS funcao,
+            NULL AS funcao_dre_codigo,
+            NULL AS funcao_ue_codigo,
+            cargobase.cd_vinculo_sigpec AS tipo_vinculo,
+            aes.codigo_modalidade,
+            aes.ano_turma,
+            aes.cd_componente_curricular AS codigo_componente_curricular,
+            CASE
+                WHEN EXISTS (
+                    SELECT TOP 1 1
+                    FROM jornada_cargo_servidor jcs WITH (NOLOCK)
+                    WHERE jcs.cd_cargo_base_servidor =
+                        cargobase.cd_cargo_base_servidor
+                      AND jcs.cd_tipo_jornada_opcao = 6
+                      AND (
+                          jcs.dt_fim IS NULL
+                          OR jcs.dt_fim >= CAST(GETDATE() AS DATE)
+                      )
+                      AND jcs.an_referencia_opcao_jornada = YEAR(GETDATE())
+                )
+                    THEN 1
+                ELSE 0
+            END AS eh_tipo_jornada_jeif
+        FROM v_servidor_cotic servidor WITH (NOLOCK)
+        INNER JOIN v_cargo_base_cotic cargobase WITH (NOLOCK)
+            ON servidor.cd_servidor = cargobase.cd_servidor
+        INNER JOIN cargo_sobreposto_servidor cargosobreposto WITH (NOLOCK)
+            ON cargobase.cd_cargo_base_servidor =
+                cargosobreposto.cd_cargo_base_servidor
+           AND cargosobreposto.dt_cancelamento IS NULL
+           AND cargosobreposto.dt_fim_cargo_sobreposto IS NULL
+        INNER JOIN cargo c WITH (NOLOCK)
+            ON c.cd_cargo = cargosobreposto.cd_cargo
+        INNER JOIN v_cadastro_unidade_educacao ue WITH (NOLOCK)
+            ON ue.cd_unidade_educacao =
+                cargosobreposto.cd_unidade_local_servico
+        LEFT JOIN atribuicao_escola_servidor aes
+            ON aes.cd_escola = ue.cd_unidade_educacao
+           AND aes.cd_cargo_base_servidor =
+                cargobase.cd_cargo_base_servidor
+        WHERE servidor.cd_registro_funcional IS NOT NULL
+          AND cargobase.dt_cancelamento IS NULL
+          AND cargobase.dt_fim_nomeacao IS NULL
+
+        UNION ALL
+
+        SELECT
+            servidor.cd_registro_funcional AS rf,
+            servidor.nm_pessoa AS nome,
+            servidor.cd_cpf_pessoa AS cpf,
+            c.cd_cargo AS cargo_codigo,
+            c.dc_cargo AS cargo,
+            ue_base.cd_unidade_administrativa_referencia AS cargo_dre_codigo,
+            ue_base.cd_unidade_educacao AS cargo_ue_codigo,
+            tfa.cd_tipo_funcao AS funcao_codigo,
+            tfa.dc_tipo_funcao AS funcao,
+            ue.cd_unidade_administrativa_referencia AS funcao_dre_codigo,
+            ue.cd_unidade_educacao AS funcao_ue_codigo,
+            cargobase.cd_vinculo_sigpec AS tipo_vinculo,
+            aes.codigo_modalidade,
+            aes.ano_turma,
+            aes.cd_componente_curricular AS codigo_componente_curricular,
+            CASE
+                WHEN EXISTS (
+                    SELECT TOP 1 1
+                    FROM jornada_cargo_servidor jcs WITH (NOLOCK)
+                    WHERE jcs.cd_cargo_base_servidor =
+                        cargobase.cd_cargo_base_servidor
+                      AND jcs.cd_tipo_jornada_opcao = 6
+                      AND (
+                          jcs.dt_fim IS NULL
+                          OR jcs.dt_fim >= CAST(GETDATE() AS DATE)
+                      )
+                      AND jcs.an_referencia_opcao_jornada = YEAR(GETDATE())
+                )
+                    THEN 1
+                ELSE 0
+            END AS eh_tipo_jornada_jeif
+        FROM v_servidor_cotic servidor WITH (NOLOCK)
+        INNER JOIN v_cargo_base_cotic cargobase WITH (NOLOCK)
+            ON servidor.cd_servidor = cargobase.cd_servidor
+        LEFT JOIN lotacao_servidor ls WITH (NOLOCK)
+            ON cargobase.cd_cargo_base_servidor =
+                ls.cd_cargo_base_servidor
+           AND (
+               ls.dt_fim IS NULL
+               OR CAST(GETDATE() AS DATE) <= ls.dt_fim
+           )
+           AND ls.dt_cancelamento IS NULL
+        LEFT JOIN v_cadastro_unidade_educacao ue_base WITH (NOLOCK)
+            ON ls.cd_unidade_educacao = ue_base.cd_unidade_educacao
+        INNER JOIN funcao_atividade_cargo_servidor funcao WITH (NOLOCK)
+            ON cargobase.cd_cargo_base_servidor =
+                funcao.cd_cargo_base_servidor
+           AND (
+               funcao.dt_cancelamento IS NULL
+               OR funcao.dt_fim_funcao_atividade IS NULL
+               OR funcao.dt_fim_funcao_atividade > GETDATE()
+           )
+        INNER JOIN v_cadastro_unidade_educacao ue WITH (NOLOCK)
+            ON funcao.cd_unidade_local_servico = ue.cd_unidade_educacao
+        INNER JOIN tipo_funcao_atividade tfa WITH (NOLOCK)
+            ON tfa.cd_tipo_funcao = funcao.cd_tipo_funcao
+        INNER JOIN cargo c WITH (NOLOCK)
+            ON c.cd_cargo = cargobase.cd_cargo
+        LEFT JOIN atribuicao_escola_servidor aes
+            ON aes.cd_escola = ue.cd_unidade_educacao
+           AND aes.cd_cargo_base_servidor =
+                cargobase.cd_cargo_base_servidor
+        WHERE servidor.cd_registro_funcional IS NOT NULL
+          AND funcao.dt_fim_funcao_atividade IS NULL
+          AND cargobase.dt_cancelamento IS NULL
+          AND cargobase.dt_fim_nomeacao IS NULL
+    )
+    SELECT DISTINCT
+        rf,
+        nome,
+        cpf,
+        cargo_codigo,
+        cargo,
+        cargo_dre_codigo,
+        cargo_ue_codigo,
+        funcao_codigo,
+        funcao,
+        funcao_dre_codigo,
+        funcao_ue_codigo,
+        tipo_vinculo,
+        codigo_modalidade,
+        ano_turma,
+        codigo_componente_curricular,
+        eh_tipo_jornada_jeif
+    FROM rfs
+"""
+
+SQL_FUNCIONARIOS_CONECTA_MODALIDADE_ESCOLA = """
+    SELECT DISTINCT
+        esc.cd_escola AS codigo_ue,
+        ee.cd_etapa_ensino AS codigo_modalidade
+    FROM escola esc WITH (NOLOCK)
+    INNER JOIN turma_escola te WITH (NOLOCK)
+        ON te.cd_escola = esc.cd_escola
+    INNER JOIN serie_turma_escola ste WITH (NOLOCK)
+        ON ste.cd_turma_escola = te.cd_turma_escola
+    INNER JOIN serie_turma_grade stg WITH (NOLOCK)
+        ON stg.cd_turma_escola = ste.cd_turma_escola
+       AND stg.dt_fim IS NULL
+    INNER JOIN escola_grade eg WITH (NOLOCK)
+        ON stg.cd_escola_grade = eg.cd_escola_grade
+    INNER JOIN grade g WITH (NOLOCK)
+        ON eg.cd_grade = g.cd_grade
+    INNER JOIN serie_ensino se WITH (NOLOCK)
+        ON g.cd_serie_ensino = se.cd_serie_ensino
+    INNER JOIN etapa_ensino ee WITH (NOLOCK)
+        ON se.cd_etapa_ensino = ee.cd_etapa_ensino
+"""
+
 SQL_LOTACOES = """
     SELECT
         ls.cd_cargo_base_servidor,
@@ -290,6 +699,185 @@ SQL_DISCIPLINAS_TURMAS_ATRIBUIDAS_UE = """
       /*FILTRO_ANO_LETIVO_DISCIPLINAS_TURMAS_ATRIBUIDAS_UE*/
 """
 
+SQL_CODIGOS_ESCOLAS_PROFESSORES_ANO = """
+    SELECT DISTINCT turma_escola.cd_escola AS codigo_escola
+    FROM turma_escola
+    INNER JOIN serie_turma_escola
+        ON serie_turma_escola.cd_turma_escola =
+            turma_escola.cd_turma_escola
+    INNER JOIN serie_turma_grade
+        ON serie_turma_grade.cd_turma_escola =
+            serie_turma_escola.cd_turma_escola
+    INNER JOIN escola_grade
+        ON serie_turma_grade.cd_escola_grade =
+            escola_grade.cd_escola_grade
+    INNER JOIN grade
+        ON escola_grade.cd_grade = grade.cd_grade
+    INNER JOIN atribuicao_aula
+        ON grade.cd_grade = atribuicao_aula.cd_grade
+        AND an_atribuicao = turma_escola.an_letivo
+        AND cd_unidade_educacao = turma_escola.cd_escola
+        AND atribuicao_aula.cd_grade = grade.cd_grade
+    WHERE 1 = 1
+      /*FILTRO_ANO_LETIVO_ESCOLAS_PROFESSORES_ANO*/
+
+    UNION
+
+    SELECT DISTINCT turma_escola.cd_escola AS codigo_escola
+    FROM turma_escola
+    INNER JOIN turma_escola_grade_programa
+        ON turma_escola.cd_turma_escola =
+            turma_escola_grade_programa.cd_turma_escola
+    INNER JOIN escola_grade
+        ON turma_escola_grade_programa.cd_escola_grade =
+            escola_grade.cd_escola_grade
+    INNER JOIN grade
+        ON escola_grade.cd_grade = grade.cd_grade
+    INNER JOIN atribuicao_aula
+        ON grade.cd_grade = atribuicao_aula.cd_grade
+        AND an_atribuicao = turma_escola.an_letivo
+        AND cd_unidade_educacao = turma_escola.cd_escola
+        AND atribuicao_aula.cd_grade = grade.cd_grade
+    WHERE 1 = 1
+      /*FILTRO_ANO_LETIVO_ESCOLAS_PROFESSORES_ANO*/
+"""
+
+SQL_PROFESSORES_ESCOLA_ANO = """
+    WITH atribuicoes AS (
+        SELECT
+            turma_escola.cd_escola AS codigo_escola,
+            turma_escola.an_letivo AS ano_letivo,
+            turma_escola.cd_turma_escola AS codigo_turma,
+            atribuicao_aula.cd_atribuicao_aula,
+            servidor.cd_registro_funcional AS codigo_rf,
+            componente_curricular.cd_componente_curricular
+                AS codigo_componente_curricular,
+            RTRIM(LTRIM(servidor.nm_pessoa)) AS nome,
+            RTRIM(LTRIM(dc_cargo)) AS cargo,
+            servidor.cd_cpf_pessoa AS cpf,
+            dt_inicio_exercicio AS data_inicio_exercicio,
+            atribuicao_aula.dt_cancelamento,
+            ROW_NUMBER() OVER (
+                PARTITION BY
+                    turma_escola.cd_turma_escola,
+                    componente_curricular.cd_componente_curricular
+                ORDER BY atribuicao_aula.dt_cancelamento DESC
+            ) AS sequencia
+        FROM turma_escola
+        INNER JOIN serie_turma_escola
+            ON serie_turma_escola.cd_turma_escola =
+                turma_escola.cd_turma_escola
+        INNER JOIN serie_turma_grade
+            ON serie_turma_grade.cd_turma_escola =
+                serie_turma_escola.cd_turma_escola
+        INNER JOIN escola_grade
+            ON serie_turma_grade.cd_escola_grade =
+                escola_grade.cd_escola_grade
+        INNER JOIN grade
+            ON escola_grade.cd_grade = grade.cd_grade
+        INNER JOIN atribuicao_aula
+            ON grade.cd_grade = atribuicao_aula.cd_grade
+            AND an_atribuicao = turma_escola.an_letivo
+            AND cd_unidade_educacao = turma_escola.cd_escola
+            AND atribuicao_aula.cd_grade = grade.cd_grade
+        INNER JOIN componente_curricular
+            ON atribuicao_aula.cd_componente_curricular =
+                componente_curricular.cd_componente_curricular
+        INNER JOIN v_cargo_base_cotic cargoServidor
+            ON cargoServidor.cd_cargo_base_servidor =
+                atribuicao_aula.cd_cargo_base_servidor
+        INNER JOIN v_servidor_cotic servidor
+            ON servidor.cd_servidor = cargoServidor.cd_servidor
+        INNER JOIN cargo
+            ON cargoServidor.cd_cargo = cargo.cd_cargo
+        WHERE 1 = 1
+          /*FILTRO_ANO_LETIVO_PROFESSORES_ESCOLA_ANO*/
+          /*FILTRO_ESCOLA_PROFESSORES_ESCOLA_ANO*/
+    ),
+    serie AS (
+        SELECT DISTINCT
+            'serie' AS origem,
+            codigo_escola,
+            ano_letivo,
+            codigo_turma,
+            codigo_rf,
+            codigo_componente_curricular,
+            nome,
+            cargo,
+            cpf,
+            data_inicio_exercicio
+        FROM atribuicoes
+        WHERE sequencia = 1
+          AND dt_cancelamento IS NULL
+    ),
+    programa AS (
+        SELECT DISTINCT
+            'programa' AS origem,
+            turma_escola.cd_escola AS codigo_escola,
+            turma_escola.an_letivo AS ano_letivo,
+            turma_escola.cd_turma_escola AS codigo_turma,
+            servidor.cd_registro_funcional AS codigo_rf,
+            componente_curricular.cd_componente_curricular
+                AS codigo_componente_curricular,
+            RTRIM(LTRIM(servidor.nm_pessoa)) AS nome,
+            RTRIM(LTRIM(dc_cargo)) AS cargo,
+            servidor.cd_cpf_pessoa AS cpf,
+            dt_inicio_exercicio AS data_inicio_exercicio
+        FROM turma_escola
+        INNER JOIN turma_escola_grade_programa
+            ON turma_escola.cd_turma_escola =
+                turma_escola_grade_programa.cd_turma_escola
+        INNER JOIN escola_grade
+            ON turma_escola_grade_programa.cd_escola_grade =
+                escola_grade.cd_escola_grade
+        INNER JOIN grade
+            ON escola_grade.cd_grade = grade.cd_grade
+        INNER JOIN atribuicao_aula
+            ON grade.cd_grade = atribuicao_aula.cd_grade
+            AND an_atribuicao = turma_escola.an_letivo
+            AND cd_unidade_educacao = turma_escola.cd_escola
+            AND atribuicao_aula.cd_grade = grade.cd_grade
+        INNER JOIN componente_curricular
+            ON atribuicao_aula.cd_componente_curricular =
+                componente_curricular.cd_componente_curricular
+        INNER JOIN v_cargo_base_cotic cargoServidor
+            ON cargoServidor.cd_cargo_base_servidor =
+                atribuicao_aula.cd_cargo_base_servidor
+        INNER JOIN v_servidor_cotic servidor
+            ON servidor.cd_servidor = cargoServidor.cd_servidor
+        INNER JOIN cargo
+            ON cargoServidor.cd_cargo = cargo.cd_cargo
+        WHERE 1 = 1
+          /*FILTRO_ANO_LETIVO_PROFESSORES_ESCOLA_ANO*/
+          /*FILTRO_ESCOLA_PROFESSORES_ESCOLA_ANO*/
+    )
+    SELECT
+        origem,
+        codigo_escola,
+        ano_letivo,
+        codigo_turma,
+        codigo_rf,
+        codigo_componente_curricular,
+        nome,
+        cargo,
+        cpf,
+        data_inicio_exercicio
+    FROM serie
+    UNION ALL
+    SELECT
+        origem,
+        codigo_escola,
+        ano_letivo,
+        codigo_turma,
+        codigo_rf,
+        codigo_componente_curricular,
+        nome,
+        cargo,
+        cpf,
+        data_inicio_exercicio
+    FROM programa
+"""
+
 SQL_ATRIBUICOES_AULA = f"""
     SELECT
         aa.cd_atribuicao_aula,
@@ -343,7 +931,8 @@ SQL_ATRIBUICOES_AULA = f"""
             ELSE 0
         END AS semestre,
         dtt.qt_hora_duracao AS duracao_turno,
-        tt.cd_tipo_turno AS tipo_turno
+        tt.cd_tipo_turno AS tipo_turno,
+        aa.dt_disponibilizacao_aulas AS dt_disponibilizacao_aulas_origem
     FROM atribuicao_aula aa
     INNER JOIN v_cargo_base_cotic cbs
         ON cbs.cd_cargo_base_servidor = aa.cd_cargo_base_servidor
@@ -832,6 +1421,7 @@ SQL_FUNCIONARIO_SISTEMA_PERFIL = """
             AND G.gru_id = UG.gru_id
         WHERE US.usu_situacao = 1
           AND UG.usg_situacao = 1
+          AND G.sis_id IN (1000, 1007)
         UNION
         SELECT
             US.usu_login AS login,
@@ -851,7 +1441,7 @@ SQL_FUNCIONARIO_SISTEMA_PERFIL = """
         LEFT JOIN PES_PessoaDocumento PPD
             ON PPD.pes_id = PP.pes_id
         WHERE US.usu_situacao = 1
-          AND G.sis_id = 1000
+          AND G.sis_id IN (1000, 1007)
     ) AS Funcionarios
     GROUP BY login, perfil, sis_id;
 """

@@ -21,11 +21,15 @@ from apps.professores.dtos.model_in import (
     DisciplinaTurmaAtribuidaUeIn,
     FuncaoAtividadeCargoServidorIn,
     FuncionarioCargoIn,
+    FuncionarioConectaFormacaoIn,
+    FuncionarioConectaModalidadeEscolaIn,
     FuncionarioSistemaPerfilIn,
     FuncionarioUnidadeEducacionalIn,
+    FuncionarioVinculoFuncionalIn,
     LaudoMedicoIn,
     LotacaoServidorIn,
     PessoaIn,
+    ProfessorEscolaAnoIn,
     ProfessorIn,
     TurmaAtribuidaUeIn,
 )
@@ -49,12 +53,16 @@ from apps.professores.models import (
     DisciplinaTurmaAtribuidaUe,
     FuncaoAtividadeCargoServidor,
     FuncionarioCargo,
+    FuncionarioConectaFormacao,
+    FuncionarioConectaModalidadeEscola,
     FuncionarioSistemaPerfil,
     FuncionarioUnidadeEducacional,
+    FuncionarioVinculoFuncional,
     LaudoMedico,
     LotacaoServidor,
     Pessoa,
     Professor,
+    ProfessorEscolaAno,
     TurmaAtribuidaUe,
 )
 from apps.professores.queries import (
@@ -64,23 +72,28 @@ from apps.professores.queries import (
     SQL_ATRIBUICOES_EXTERNO,
     SQL_CARGOS_BASE,
     SQL_CARGOS_SOBREPOSTOS,
+    SQL_CODIGOS_ESCOLAS_PROFESSORES_ANO,
     SQL_CONTRATOS_EXTERNOS,
     SQL_DISCIPLINAS_TURMAS_ATRIBUIDAS_UE,
     SQL_FUNCIONARIO_SISTEMA_PERFIL,
     SQL_FUNCIONARIOS_CARGOS,
+    SQL_FUNCIONARIOS_CONECTA_FORMACAO,
+    SQL_FUNCIONARIOS_CONECTA_MODALIDADE_ESCOLA,
     SQL_FUNCIONARIOS_UNIDADE_EDUCACIONAL,
+    SQL_FUNCIONARIOS_VINCULOS_FUNCIONAIS,
     SQL_FUNCOES_ATIVIDADE,
     SQL_LAUDOS,
     SQL_LOTACOES,
     SQL_PESSOAS,
     SQL_PROFESSORES,
+    SQL_PROFESSORES_ESCOLA_ANO,
     SQL_TURMAS_ATRIBUIDAS_UE,
 )
 
 logger = logging.getLogger(__name__)
 
 _QTD_CAMPOS_ATRIBUICAO_AULA_LEGADO = 18
-_QTD_CAMPOS_ATRIBUICAO_AULA_ATUAL = 30
+_QTD_CAMPOS_ATRIBUICAO_AULA_ATUAL = 31
 _QTD_CAMPOS_ATRIBUICAO_EXTERNO_LEGADO = 18
 _QTD_CAMPOS_ATRIBUICAO_EXTERNO_ATUAL = 19
 _QTD_CAMPOS_CARGO_BASE = 8
@@ -90,6 +103,9 @@ _MARCADORES_ANO_LETIVO = {
     "/*FILTRO_ANO_LETIVO_ATRIBUICAO_EXTERNO*/": "",
     "/*FILTRO_ANO_LETIVO_TURMAS_ATRIBUIDAS_UE*/": "",
     "/*FILTRO_ANO_LETIVO_DISCIPLINAS_TURMAS_ATRIBUIDAS_UE*/": "",
+    "/*FILTRO_ANO_LETIVO_ESCOLAS_PROFESSORES_ANO*/": "",
+    "/*FILTRO_ANO_LETIVO_PROFESSORES_ESCOLA_ANO*/": "",
+    "/*FILTRO_ESCOLA_PROFESSORES_ESCOLA_ANO*/": "",
 }
 
 
@@ -164,6 +180,35 @@ def _row_to_funcionario(row: tuple) -> dict:
 def _row_to_funcionario_cargo(row: tuple) -> dict:
     """Monta o dicionário da linha de funcionário por cargo."""
     return cast(dict, FuncionarioCargoIn(*row).to_domain().to_dict())
+
+
+def _row_to_professor_escola_ano(row: tuple) -> dict:
+    """Monta o dicionário da linha de professor por escola e ano."""
+    return cast(dict, ProfessorEscolaAnoIn(*row).to_domain().to_dict())
+
+
+def _row_to_funcionario_vinculo_funcional(row: tuple) -> dict:
+    """Monta o dicionário da linha de vínculo funcional."""
+    return cast(
+        dict,
+        FuncionarioVinculoFuncionalIn(*row).to_domain().to_dict(),
+    )
+
+
+def _row_to_funcionario_conecta_formacao(row: tuple) -> dict:
+    """Monta o dicionário da linha do Conecta Formação."""
+    return cast(
+        dict,
+        FuncionarioConectaFormacaoIn(*row).to_domain().to_dict(),
+    )
+
+
+def _row_to_funcionario_conecta_modalidade_escola(row: tuple) -> dict:
+    """Monta o dicionário da linha de modalidade por unidade."""
+    return cast(
+        dict,
+        FuncionarioConectaModalidadeEscolaIn(*row).to_domain().to_dict(),
+    )
 
 
 def _row_to_funcionario_sistema_perfil(row: tuple) -> dict:
@@ -426,6 +471,9 @@ _TABELAS_FULL_REFRESH: frozenset[str] = frozenset(
         "funcao_atividade_cargo_servidor",
         "laudo_medico",
         "funcionario_cargo",
+        "funcionario_vinculo_funcional",
+        "funcionario_conecta_modalidade_escola",
+        "funcionario_conecta_formacao",
         "turma_atribuida_ue",
         "disciplina_turma_atribuida_ue",
         "administrador_escola",
@@ -445,9 +493,13 @@ _ORDEM_TABELAS: tuple[str, ...] = (
     "atribuicao_aula",
     "atribuicao_externo",
     "funcionario_unidade_educacional",
+    "funcionario_vinculo_funcional",
+    "funcionario_conecta_modalidade_escola",
+    "funcionario_conecta_formacao",
     "funcionario_sistema_perfil",
     "turma_atribuida_ue",
     "disciplina_turma_atribuida_ue",
+    "professor_escola_ano",
 )
 
 
@@ -497,10 +549,46 @@ class EtlProfessoresService:
                 "/*FILTRO_ANO_LETIVO_DISCIPLINAS_TURMAS_ATRIBUIDAS_UE*/": (
                     f"AND tau.AnoLetivo = {ano}"
                 ),
+                "/*FILTRO_ANO_LETIVO_PROFESSORES_ESCOLA_ANO*/": (
+                    f"AND turma_escola.an_letivo = {ano}"
+                ),
+                "/*FILTRO_ANO_LETIVO_ESCOLAS_PROFESSORES_ANO*/": (
+                    f"AND turma_escola.an_letivo = {ano}"
+                ),
             }
         for marcador, filtro in filtros.items():
             consulta = consulta.replace(marcador, filtro)
         return consulta
+
+    def _sql_professores_escola_ano(
+        self, codigo_escola: str | None = None
+    ) -> str:
+        """Monta consulta de professores por escola e ano.
+
+        Args:
+            codigo_escola: Código EOL da escola consultada.
+
+        Returns:
+            Consulta com os filtros aplicáveis.
+        """
+        consulta = self._sql_com_filtro_ano_letivo(SQL_PROFESSORES_ESCOLA_ANO)
+        filtro = "AND turma_escola.cd_escola = %s" if codigo_escola else ""
+        return consulta.replace(
+            "/*FILTRO_ESCOLA_PROFESSORES_ESCOLA_ANO*/", filtro
+        )
+
+    def _codigos_escolas_professores_ano(self) -> list[str]:
+        """Lista escolas para carga de professores por escola e ano.
+
+        Returns:
+            Códigos EOL das escolas encontradas.
+        """
+        consulta = self._sql_com_filtro_ano_letivo(
+            SQL_CODIGOS_ESCOLAS_PROFESSORES_ANO
+        )
+        return [
+            str(row[0]).strip() for row in self.eol.executar_query(consulta)
+        ]
 
     def popular_professores(self) -> int:
         """Popula a tabela Professor."""
@@ -707,6 +795,7 @@ class EtlProfessoresService:
                         "codigo_etapa_ensino",
                         "dt_atribuicao_aula",
                         "dt_disponibilizacao_aulas",
+                        "dt_disponibilizacao_aulas_origem",
                         "dt_inicio_turma",
                         "dt_fim_turma",
                         "codigo_motivo_disponibilizacao",
@@ -844,11 +933,109 @@ class EtlProfessoresService:
             ),
         )
 
-    def popular_funcionarios_sistema_perfil(self) -> int:
-        """Popula perfis SGP para compatibilidade com a API legada.
+    def popular_professores_escola_ano(self) -> int:
+        """Popula professores por escola e ano."""
+        destino = ProfessorEscolaAno.objects.using("professores_db")
+        consultas: list[tuple[str, list[str] | None]]
+        if self._ano_letivo is None:
+            destino.all().delete()
+            consultas = [(self._sql_professores_escola_ano(), None)]
+        else:
+            destino.filter(ano_letivo=int(self._ano_letivo)).delete()
+            consultas = [
+                (
+                    self._sql_professores_escola_ano(codigo_escola),
+                    [codigo_escola, codigo_escola],
+                )
+                for codigo_escola in self._codigos_escolas_professores_ano()
+            ]
 
-        Atualmente considera apenas `sis_id = 1000`, SGP.
+        total = 0
+        for consulta, parametros in consultas:
+            for chunk in self.eol.iter_query(consulta, parametros):
+                objs = [
+                    ProfessorEscolaAno(**_row_to_professor_escola_ano(row))
+                    for row in chunk
+                ]
+                if objs:
+                    criados = destino.bulk_create(
+                        objs,
+                        batch_size=500,
+                        ignore_conflicts=True,
+                    )
+                    total += len(criados)
+        return total
+
+    def popular_funcionarios_vinculos_funcionais(self) -> int:
+        """Popula vínculos funcionais consolidados por funcionário.
+
+        A carga materializa cargo base, cargo sobreposto e função atividade
+        em uma mesma linha para consultas por RF. A origem permanece no EOL e
+        os filtros de vínculos ativos seguem o comportamento legado desse
+        contrato.
+
+        Returns:
+            Quantidade de vínculos funcionais gravados.
         """
+        return _full_refresh_por_lote(
+            FuncionarioVinculoFuncional,
+            (
+                [
+                    FuncionarioVinculoFuncional(
+                        **_row_to_funcionario_vinculo_funcional(row)
+                    )
+                    for row in chunk
+                ]
+                for chunk in self.eol.iter_query(
+                    SQL_FUNCIONARIOS_VINCULOS_FUNCIONAIS
+                )
+            ),
+        )
+
+    def popular_funcionarios_conecta_modalidade_escola(self) -> int:
+        """Popula modalidades por unidade para o Conecta Formação.
+
+        Returns:
+            Quantidade de modalidades por unidade gravadas.
+        """
+        return _full_refresh_por_lote(
+            FuncionarioConectaModalidadeEscola,
+            (
+                [
+                    FuncionarioConectaModalidadeEscola(
+                        **_row_to_funcionario_conecta_modalidade_escola(row)
+                    )
+                    for row in chunk
+                ]
+                for chunk in self.eol.iter_query(
+                    SQL_FUNCIONARIOS_CONECTA_MODALIDADE_ESCOLA
+                )
+            ),
+        )
+
+    def popular_funcionarios_conecta_formacao(self) -> int:
+        """Popula funcionários elegíveis para o Conecta Formação.
+
+        Returns:
+            Quantidade de funcionários gravados.
+        """
+        return _full_refresh_por_lote(
+            FuncionarioConectaFormacao,
+            (
+                [
+                    FuncionarioConectaFormacao(
+                        **_row_to_funcionario_conecta_formacao(row)
+                    )
+                    for row in chunk
+                ]
+                for chunk in self.eol.iter_query(
+                    SQL_FUNCIONARIOS_CONECTA_FORMACAO
+                )
+            ),
+        )
+
+    def popular_funcionarios_sistema_perfil(self) -> int:
+        """Popula perfis de sistema usados por contratos legados."""
         rows = self.core_sso.factory.executar_consulta(
             SQL_FUNCIONARIO_SISTEMA_PERFIL
         )
@@ -995,6 +1182,18 @@ class EtlProfessoresService:
         )
         executar_tabela("funcionario_cargo", self.popular_funcionarios_cargos)
         executar_tabela(
+            "funcionario_vinculo_funcional",
+            self.popular_funcionarios_vinculos_funcionais,
+        )
+        executar_tabela(
+            "funcionario_conecta_modalidade_escola",
+            self.popular_funcionarios_conecta_modalidade_escola,
+        )
+        executar_tabela(
+            "funcionario_conecta_formacao",
+            self.popular_funcionarios_conecta_formacao,
+        )
+        executar_tabela(
             "funcionario_sistema_perfil",
             self.popular_funcionarios_sistema_perfil,
         )
@@ -1004,6 +1203,9 @@ class EtlProfessoresService:
         executar_tabela(
             "disciplina_turma_atribuida_ue",
             self.popular_disciplinas_turmas_atribuidas_ue,
+        )
+        executar_tabela(
+            "professor_escola_ano", self.popular_professores_escola_ano
         )
         self.ultima_fase_concluida = 4
         logger.info("[ETL PROF] Fase 4 concluida.")
