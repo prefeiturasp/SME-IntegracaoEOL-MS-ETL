@@ -30,6 +30,7 @@ from apps.pedagogico.dtos.model_in import (
     AtribuicaoTerritorioSaberIn,
     ComponenteCurricularSimplesIn,
     ComponenteTurmaIn,
+    EtapaEnsinoIn,
     GradeComponenteCurricularIn,
     TurmaAtribuidaDreUeIn,
     TurmaIn,
@@ -44,6 +45,7 @@ from apps.pedagogico.models import (
     ComponenteCurricularPAP,
     ComponenteCurricularPlanejamentoRegencia,
     ComponenteTurma,
+    EtapaEnsino,
     GradeComponenteCurricular,
     Turma,
     TurmaAtribuidaDreUe,
@@ -61,6 +63,7 @@ from apps.pedagogico.queries import (
     SQL_ATRIBUICOES_TERRITORIO_SABER,
     SQL_COMPONENTE_TURMA,
     SQL_COMPONENTES_NAO_CANCELADOS,
+    SQL_ETAPA_ENSINO,
     SQL_GRADE_COMPONENTE_CURRICULAR,
     SQL_TURMAS,
     SQL_TURMAS_ATRIBUIDAS_DRE_UE,
@@ -193,6 +196,7 @@ class EtlPedagogicoService(BaseEtlService):
             ),
             "turma": self._transform_componente_curricular,
             "turma_atribuida_dre_ue": self._transform_turma_atribuida_dre_ue,
+            "etapa_ensino": self._transform_componente_curricular,
         }
         factory = transform_factories.get(config.nome)
         if factory is None:
@@ -774,6 +778,19 @@ class EtlPedagogicoService(BaseEtlService):
                 modo_escrita="full_refresh",
                 truncate_on_full_sync=True,
             ),
+            PhaseConfig(
+                nome="etapa_ensino",
+                sql=SQL_ETAPA_ENSINO,
+                table_name="etapa_ensino",
+                source_table="etapa_ensino",
+                model_class=EtapaEnsino,
+                dto_in=EtapaEnsinoIn,
+                pk_field="codigo",
+                update_fields=("descricao", "transferido_em"),
+                unique_fields=("codigo",),
+                modo_escrita="full_refresh",
+                truncate_on_full_sync=True,
+            ),
         ]
         return fases
 
@@ -797,6 +814,7 @@ class EtlPedagogicoService(BaseEtlService):
             10 — grade_componente_curricular (por ano letivo)
             11 — turma                       (por ano letivo)
             12 — turma_atribuida_dre_ue      (por ano letivo)
+            13 — etapa_ensino                (catálogo)
         """
         self._agora = timezone.now()
         self._cache_anos = None  # reseta cache de anos para o run

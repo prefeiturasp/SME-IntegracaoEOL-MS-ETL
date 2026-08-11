@@ -46,6 +46,14 @@ _PLACEHOLDERS_REGENCIA_ATRIBUICAO = ",".join(
     str(i) for i in _IDS_REGENCIA_ATRIBUICAO
 )
 
+# Catálogo de etapas de ensino (EolConnection).
+SQL_ETAPA_ENSINO = """
+SELECT
+    cd_etapa_ensino AS Codigo,
+    LTRIM(RTRIM(dc_etapa_ensino)) AS Descricao
+FROM etapa_ensino
+"""
+
 # Anos letivos disponíveis no EOL (EolConnection)
 SQL_ANOS_LETIVOS = """
 SELECT DISTINCT an_letivo
@@ -567,7 +575,7 @@ SELECT DISTINCT
     CASE
         WHEN ee.cd_etapa_ensino IN (2, 3, 7, 11)     THEN 'EJA'
         WHEN ee.cd_etapa_ensino IN (4, 5, 12, 13)    THEN 'Fundamental'
-        WHEN ee.cd_etapa_ensino IN (6, 7, 8, 14, 17) THEN 'Médio'
+        WHEN ee.cd_etapa_ensino IN (6, 7, 8, 9, 14, 17) THEN 'Médio'
         WHEN ee.cd_etapa_ensino IN (1, 10)            THEN 'Infantil'
         ELSE NULL
     END                                                                        AS Modalidade,
@@ -578,7 +586,7 @@ SELECT DISTINCT
         WHEN ee.cd_etapa_ensino IN (2, 3, 7, 11)                              THEN 3
         WHEN ee.cd_etapa_ensino IN (4, 5, 12, 13)                             THEN 5
         WHEN tur.cd_tipo_turma = 3 AND esc.tp_escola IN(1, 3, 4, 16) 		  THEN 5
-        WHEN ee.cd_etapa_ensino IN (6, 7, 8, 14, 17)                         THEN 6
+        WHEN ee.cd_etapa_ensino IN (6, 7, 8, 9, 14, 17)                      THEN 6
         WHEN tur.cd_tipo_turma = 7                                            THEN 6
         WHEN esc.tp_escola = 13                                               THEN 4
         ELSE 0
@@ -589,7 +597,7 @@ SELECT DISTINCT
         WHEN COALESCE(ee.cd_etapa_ensino, prog_etapa.cd_etapa_ensino_prog) IN (2, 3, 7, 11)     THEN 3
         WHEN esc.tp_escola = 13                                                                  THEN 4
         WHEN COALESCE(ee.cd_etapa_ensino, prog_etapa.cd_etapa_ensino_prog) IN (4, 5, 12, 13)    THEN 5
-        WHEN COALESCE(ee.cd_etapa_ensino, prog_etapa.cd_etapa_ensino_prog) IN (6, 7, 8, 14, 17) THEN 6
+        WHEN COALESCE(ee.cd_etapa_ensino, prog_etapa.cd_etapa_ensino_prog) IN (6, 7, 8, 9, 14, 17) THEN 6
         ELSE 0
     END                                                                        AS CodigoModalidadeEtapa,
     CASE

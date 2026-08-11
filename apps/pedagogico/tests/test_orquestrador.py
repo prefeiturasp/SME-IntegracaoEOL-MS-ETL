@@ -18,10 +18,10 @@ class TestEtlPedagogicoOrquestrador(TestCase):
             **kwargs,
         )
 
-    def test_dominio_e_12_fases(self) -> None:
+    def test_dominio_e_13_fases(self) -> None:
         """Pedagógico deve expor as fases ao orquestrador."""
         orq = self._make_orquestrador()
-        self.assertEqual(len(orq.service._fases), 12)
+        self.assertEqual(len(orq.service._fases), 13)
 
     def test_id_execucao_mantido(self) -> None:
         """Valida que o orquestrador aceita e mantém um id_execucao."""
