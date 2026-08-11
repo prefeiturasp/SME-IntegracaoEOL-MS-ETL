@@ -1702,9 +1702,13 @@ class EtlProfessoresServiceExecutarTest(TestCase):
             {
                 "funcionario_unidade_educacional": 1,
                 "funcionario_cargo": 1,
+                "funcionario_vinculo_funcional": 1,
+                "funcionario_conecta_modalidade_escola": 1,
+                "funcionario_conecta_formacao": 1,
                 "funcionario_sistema_perfil": 1,
                 "turma_atribuida_ue": 1,
                 "disciplina_turma_atribuida_ue": 1,
+                "professor_escola_ano": 1,
             },
         )
 
