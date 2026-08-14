@@ -46,6 +46,14 @@ _PLACEHOLDERS_REGENCIA_ATRIBUICAO = ",".join(
     str(i) for i in _IDS_REGENCIA_ATRIBUICAO
 )
 
+# Catálogo de etapas de ensino (EolConnection).
+SQL_ETAPA_ENSINO = """
+SELECT
+    cd_etapa_ensino AS Codigo,
+    LTRIM(RTRIM(dc_etapa_ensino)) AS Descricao
+FROM etapa_ensino
+"""
+
 # Anos letivos disponíveis no EOL (EolConnection)
 SQL_ANOS_LETIVOS = """
 SELECT DISTINCT an_letivo
@@ -56,6 +64,21 @@ ORDER BY an_letivo
 
 # Fonte Postgres API EOL → destino pedagogico_db.
 # Estas consultas alimentam tabelas estáticas/legadas via full refresh.
+SQL_API_EOL_COMPONENTE_CURRICULAR = """
+SELECT
+    ccp.id,
+    cc.idcomponentecurricular,
+    cc.ehregencia,
+    cc.ehterritorio,
+    cc.descricao,
+    ccp.idcomponentecurricularpai,
+    ccp.vigencia
+FROM componentecurricular cc
+LEFT JOIN componentecurricularpai ccp
+    ON cc.idcomponentecurricular = ccp.idcomponentecurricular
+ORDER BY cc.idcomponentecurricular, ccp.id
+"""
+
 SQL_API_EOL_COMPONENTE_CURRICULAR_HIERARQUIA = """
 SELECT
     id,
@@ -124,6 +147,11 @@ ORDER BY codagrupamento
 """
 
 API_EOL_PEDAGOGICO_TABLE_MAPPINGS = {
+    "componente_curricular_api_eol": {
+        "source_table": "componentecurricular, componentecurricularpai",
+        "target_table": "componente_curricular_api_eol",
+        "sql": SQL_API_EOL_COMPONENTE_CURRICULAR,
+    },
     "componentecurricularhierarquia": {
         "source_table": "componentecurricularpai",
         "target_table": "componente_curricular_hierarquia",
@@ -557,6 +585,7 @@ SELECT DISTINCT
     tur.cd_tipo_turno                                                          AS TipoTurno,
     tur.dt_inicio_turma                                                        AS DataInicioTurma,
     tur.dt_fim                                                                 AS DataFim,
+    tur.dt_fim_turma                                                           AS DataFimTurma,
     CASE WHEN tur.st_turma_escola = 'E' THEN 1 ELSE 0 END                     AS Extinta,
     tur.st_turma_escola                                                        AS Situacao,
     tur.cd_escola                                                              AS UeCodigo,
@@ -567,7 +596,7 @@ SELECT DISTINCT
     CASE
         WHEN ee.cd_etapa_ensino IN (2, 3, 7, 11)     THEN 'EJA'
         WHEN ee.cd_etapa_ensino IN (4, 5, 12, 13)    THEN 'Fundamental'
-        WHEN ee.cd_etapa_ensino IN (6, 7, 8, 14, 17) THEN 'Médio'
+        WHEN ee.cd_etapa_ensino IN (6, 7, 8, 9, 14, 17) THEN 'Médio'
         WHEN ee.cd_etapa_ensino IN (1, 10)            THEN 'Infantil'
         ELSE NULL
     END                                                                        AS Modalidade,
@@ -578,7 +607,7 @@ SELECT DISTINCT
         WHEN ee.cd_etapa_ensino IN (2, 3, 7, 11)                              THEN 3
         WHEN ee.cd_etapa_ensino IN (4, 5, 12, 13)                             THEN 5
         WHEN tur.cd_tipo_turma = 3 AND esc.tp_escola IN(1, 3, 4, 16) 		  THEN 5
-        WHEN ee.cd_etapa_ensino IN (6, 7, 8, 14, 17)                         THEN 6
+        WHEN ee.cd_etapa_ensino IN (6, 7, 8, 9, 14, 17)                      THEN 6
         WHEN tur.cd_tipo_turma = 7                                            THEN 6
         WHEN esc.tp_escola = 13                                               THEN 4
         ELSE 0
@@ -589,7 +618,7 @@ SELECT DISTINCT
         WHEN COALESCE(ee.cd_etapa_ensino, prog_etapa.cd_etapa_ensino_prog) IN (2, 3, 7, 11)     THEN 3
         WHEN esc.tp_escola = 13                                                                  THEN 4
         WHEN COALESCE(ee.cd_etapa_ensino, prog_etapa.cd_etapa_ensino_prog) IN (4, 5, 12, 13)    THEN 5
-        WHEN COALESCE(ee.cd_etapa_ensino, prog_etapa.cd_etapa_ensino_prog) IN (6, 7, 8, 14, 17) THEN 6
+        WHEN COALESCE(ee.cd_etapa_ensino, prog_etapa.cd_etapa_ensino_prog) IN (6, 7, 8, 9, 14, 17) THEN 6
         ELSE 0
     END                                                                        AS CodigoModalidadeEtapa,
     CASE

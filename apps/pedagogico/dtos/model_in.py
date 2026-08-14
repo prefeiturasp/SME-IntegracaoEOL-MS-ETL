@@ -38,6 +38,49 @@ class ComponenteCurricularSimplesIn:
 
 
 @dataclass
+class EtapaEnsinoIn:
+    """Linha bruta da query de catálogo de etapa_ensino."""
+
+    codigo: Any
+    descricao: Any
+
+    def to_domain(self, transferido_em: Any) -> dict:
+        return {
+            "codigo": int(self.codigo),
+            "descricao": strip_str(self.descricao),
+            "transferido_em": transferido_em,
+        }
+
+
+@dataclass
+class ApiEolComponenteCurricularIn:
+    """Linha consolidada de componente curricular da API EOL."""
+
+    id_relacao_origem: Any
+    id_componente_curricular: Any
+    eh_regencia: Any
+    eh_territorio: Any
+    descricao: Any
+    id_componente_curricular_pai: Any
+    vigencia: Any
+
+    def to_domain(self, transferido_em: Any | None = None) -> dict:
+        transferido_em = transferido_em or timezone.now()
+        return {
+            "id_relacao_origem": int_or_none(self.id_relacao_origem),
+            "id_componente_curricular": int(self.id_componente_curricular),
+            "eh_regencia": bool(self.eh_regencia),
+            "eh_territorio": bool(self.eh_territorio),
+            "descricao": strip_str(self.descricao),
+            "id_componente_curricular_pai": int_or_none(
+                self.id_componente_curricular_pai
+            ),
+            "vigencia": aware_or_none(self.vigencia),
+            "transferido_em": transferido_em,
+        }
+
+
+@dataclass
 class ComponenteTurmaIn:
     """Dados de componente de turma recebidos para carga.
 
@@ -172,6 +215,7 @@ class TurmaIn:
     tipo_turno: Any
     data_inicio_turma: Any
     data_fim: Any
+    data_fim_turma: Any
     extinta: Any
     situacao: Any
     ue_codigo: Any
@@ -204,6 +248,7 @@ class TurmaIn:
             "tipo_turno": int_or_none(self.tipo_turno),
             "data_inicio_turma": aware_or_none(self.data_inicio_turma),
             "data_fim": aware_or_none(self.data_fim),
+            "data_fim_turma": aware_or_none(self.data_fim_turma),
             "extinta": bool(self.extinta),
             "situacao": str_or_none(self.situacao),
             "ue_codigo": str_or_none(self.ue_codigo),

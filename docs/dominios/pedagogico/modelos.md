@@ -12,7 +12,18 @@ Catálogo de componentes curriculares ativos no EOL. Fonte de verdade para códi
 - **Nota:** também armazena `regencia`, calculado no SQL pela lista `_IDS_REGENCIA`.
 - **Alimenta:** `GET /api/v1/componentes-curriculares`
 
-## 2. ComponenteTurma
+## 2. ComponenteCurricularApiEol
+
+Materializa o catálogo de componentes da API EOL junto com todas as relações
+pai retornadas pela origem.
+
+- **Tabela:** `componente_curricular_api_eol`
+- **Origem:** `componentecurricular LEFT JOIN componentecurricularpai` no `api_eol_db`
+- **Carga:** `full_refresh`
+- **Unique:** `(id_relacao_origem, id_componente_curricular)` com `nulls_distinct=False`
+- **Campos principais:** identificadores da relação e do componente, indicadores de regência e território, descrição, componente pai e vigência
+
+## 3. ComponenteTurma
 
 Estrutura turma × componente, sem professor. Mantém o vínculo curricular real
 da turma e, quando o componente pertence a Território do Saber, materializa os
@@ -34,7 +45,7 @@ dados contextuais usados na resposta do MS Pedagógico.
   apenas `desc_territorio_saber` quando a experiência não existir.
 - **Alimenta:** consultas de componentes por turma
 
-## 3. AtribuicaoComponente
+## 4. AtribuicaoComponente
 
 Atribuição real de professor a uma turma e componente. Separa a existência do componente na turma da existência de professor atribuído.
 
@@ -49,7 +60,7 @@ Atribuição real de professor a uma turma e componente. Separa a existência do
 - **Professor nulo:** não representa “componente sem professor”; ausência de linha indica que não há professor atribuído.
 - **Alimenta:** consultas por professor/turma/componente
 
-## 4. AgrupamentoAtribuicaoTerritorioSaber
+## 5. AgrupamentoAtribuicaoTerritorioSaber
 
 Agrupamento de componentes de território atribuídos a um professor numa mesma turma. `cod_agrupamento` é o identificador público/legado do agrupamento retornado nos endpoints, mas não identifica sozinho uma linha física da tabela.
 
@@ -62,7 +73,7 @@ Agrupamento de componentes de território atribuídos a um professor numa mesma 
 - **Alimenta:** `territorio-saber/agrupamentos-correlacionados`, `territorio-saber/agrupamentos`
 - **Nota:** `cod_componentes_curriculares` armazena os códigos como CSV. O mesmo `cod_agrupamento` pode aparecer em mais de uma linha quando a origem reaproveita o identificador para outro professor ou outro recorte histórico.
 
-## 5. ComponenteCurricularAgrupamento
+## 6. ComponenteCurricularAgrupamento
 
 Itens de um agrupamento de território do saber — uma linha por componente. Mantida para compatibilidade e para a fase backup de geração local de agrupamentos.
 
@@ -72,7 +83,7 @@ Itens de um agrupamento de território do saber — uma linha por componente. Ma
 - **Índices:** `turma_codigo`, `componente_codigo`, `codigo_agrupamento`
 - **Uso atual:** apoio/compatibilidade; o fluxo principal lê o CSV diretamente da tabela de agrupamento.
 
-## 6. GradeComponenteCurricular
+## 7. GradeComponenteCurricular
 
 Catálogo de componentes previstos na grade por série e modalidade. Representa a oferta curricular possível — independente de haver atribuição real de professor ou turma.
 
@@ -88,7 +99,7 @@ Catálogo de componentes previstos na grade por série e modalidade. Representa 
 - **`codigo_ano_turma`:** campo de exibição/classificação retornado ao consumidor. Não compõe a identidade porque pode variar para a mesma série de ensino no legado; a chave segura usa `codigo_serie_ensino`.
 - **Alimenta:** `ues/{ueId}/modalidades/{mod}/anos/{ano}`, `ues/{ueId}/modalidades/{mod}/anos/{ano}/turmas-programa`
 
-## 7. Turma
+## 8. Turma
 
 Dados cadastrais de turmas extraídos do EOL. Sincronizado por ano letivo a partir de `turma_escola`.
 
@@ -101,7 +112,7 @@ Dados cadastrais de turmas extraídos do EOL. Sincronizado por ano letivo a part
 - **Campos calculados:** `Ano` usa o primeiro caractere numérico de `dc_turma_escola`, senão `0`; `Extinta` deriva de `st_turma_escola = 'E'`; `Modalidade` e `CodigoModalidade` derivam da etapa e do tipo de escola; `Semestre` é calculado para EJA pelo mês de início; `EnsinoEspecial` deriva de `cd_etapa_ensino = 13 AND cd_modalidade_ensino = 2`.
 - **Etapa e ciclo (códigos crus):** `codigo_etapa_ensino` ← `ee.cd_etapa_ensino` (1–17) e `codigo_ciclo_ensino` ← `se.cd_ciclo_ensino`, materializados para paridade com `EtapaEnsino`/`CicloEnsino` do legado (Pedagogico-API). Os joins `ee`/`se` já existiam na `SQL_TURMAS` (sem join novo). ⚠️ **Não confundir com `codigo_modalidade_etapa`**, que é *bucket* derivado por `CASE` (1/3/4/5/6, com `COALESCE` da etapa do programa) — equivalente a um segundo `codigo_modalidade`, e **não** o `cd_etapa_ensino` cru. Adicionados na migration `0011`.
 
-## 8. TurmaItinerarioEnsinoMedio
+## 9. TurmaItinerarioEnsinoMedio
 
 Tabela de apoio com os itinerários disponíveis para o Ensino Médio.
 
@@ -109,7 +120,7 @@ Tabela de apoio com os itinerários disponíveis para o Ensino Médio.
 - **Origem:** `turma_tipo_itinerario` no `API_EOL_DB`, via `full_refresh`
 - **Alimenta:** `GET /api/v1/itinerario/ensino-medio`
 
-## 9. ComponenteCurricularPlanejamentoRegencia
+## 10. ComponenteCurricularPlanejamentoRegencia
 
 Tabela de apoio. Armazena triplas `(id_componente_curricular, turno, ano)` que representam quais componentes entram no planejamento de regência por combinação de turno e série.
 
@@ -117,7 +128,7 @@ Tabela de apoio. Armazena triplas `(id_componente_curricular, turno, ano)` que r
 - **Origem:** `regenciacomponentecurricular` no `API_EOL_DB`, via `full_refresh`
 - **Uso atual:** referência para o microsserviço de consumo. Não enriquece `ComponenteTurma`.
 
-## 10. ComponenteCurricularHierarquia
+## 11. ComponenteCurricularHierarquia
 
 Tabela de apoio para resolver componentes filhos e seus componentes curriculares pais.
 
@@ -126,7 +137,7 @@ Tabela de apoio para resolver componentes filhos e seus componentes curriculares
 - **Origem:** `componentecurricularpai` no `API_EOL_DB`, via `full_refresh`
 - **Uso atual:** referência para o microsserviço de consumo. Não é gravada em `ComponenteTurma`.
 
-## 11. ComponenteCurricularPAP
+## 12. ComponenteCurricularPAP
 
 Tabela de apoio com os IDs de componentes PAP (Programa de Apoio e Acompanhamento à Aprendizagem).
 
@@ -135,7 +146,7 @@ Tabela de apoio com os IDs de componentes PAP (Programa de Apoio e Acompanhament
 - **Origem:** `componentecurricularpap` no `API_EOL_DB`, via `full_refresh`
 - **Alimenta:** validações e regras ligadas a PAP
 
-## 12. TurmaAtribuidaDreUe
+## 13. TurmaAtribuidaDreUe
 
 Turma consolidada por DRE e UE, já entregue pronta pela origem. Existe para
 responder à abrangência de turmas de um funcionário por unidade sem recompor a

@@ -33,9 +33,27 @@ dependencias conceituais.
 | Grupo | Destino | Estratégia | Origem |
 |---|---|---|---|
 | Funcionarios por unidade | `funcionario_unidade_educacional` | incremental | vinculos de servidor com unidade |
-| Perfis de sistema por funcionario | `funcionario_sistema_perfil` | incremental | atualmente somente perfis SGP por login no CoreSSO |
+| Vinculos funcionais por funcionario | `funcionario_vinculo_funcional` | completa | vinculos funcionais ativos |
+| Funcionarios para Conecta Formacao | `funcionario_conecta_formacao` | completa | vinculos funcionais e elegibilidade pedagogica |
+| Perfis de sistema por funcionario | `funcionario_sistema_perfil` | incremental | perfis por login no CoreSSO |
 | Turmas por abrangencia de unidade | `turma_atribuida_ue` | completa | turmas associadas ao vinculo de unidade |
 | Componentes por abrangencia de unidade | `disciplina_turma_atribuida_ue` | completa | componentes disponiveis nas turmas abrangidas |
+
+## Vínculos funcionais por funcionário
+
+A tabela `funcionario_vinculo_funcional` consolida os vínculos funcionais
+ativos do servidor para consultas por registro funcional. Ela reúne cargo base,
+cargo sobreposto e função atividade em uma fonte única, preservando os dados de
+unidade, DRE e tipo de vínculo necessários para responder contratos de cargos do
+funcionário.
+
+## Funcionários para Conecta Formação
+
+A tabela `funcionario_conecta_formacao` consolida dados de vínculo funcional e
+dados de elegibilidade pedagógica usados nas consultas do Conecta Formação.
+Ela existe para permitir filtros por cargo, função, DRE, modalidade, ano,
+componente e jornada sem recompor as relações funcionais e pedagógicas no
+serviço de consumo.
 
 ## Dados desnormalizados na atribuição de aula
 
@@ -51,6 +69,21 @@ e do tipo de turma da turma atribuída:
 | :--- | :--- |
 | `modalidade` / `codigo_modalidade` | classifica a turma em Fundamental, Médio ou EJA a partir da etapa de ensino e do tipo de turma |
 | `semestre` | turmas de EJA recebem 1º ou 2º semestre conforme o mês de início; as demais não têm semestre |
+
+## Professores por escola e ano
+
+A visão de professores por escola e ano materializa as atribuições associadas
+às turmas da unidade educacional. Ela existe para responder consultas de
+professores da escola sem recompor, em tempo de resposta, as relações entre
+turma, grade, componente, cargo e servidor.
+
+Quando há mais de uma atribuição ativa para a mesma turma e componente, a
+origem legada não define um desempate completo entre os servidores
+concorrentes. Nesses casos, o resultado pode depender do plano de execução ou
+de valores previamente armazenados em cache. A carga deve manter uma escolha
+estável para que o microsserviço entregue respostas previsíveis, ainda que
+casos de empate possam divergir da escolha observada em uma execução específica
+do legado.
 
 ## Filtro incremental por ano letivo
 

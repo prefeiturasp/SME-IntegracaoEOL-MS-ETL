@@ -6,11 +6,13 @@ from django.utils import timezone
 from apps.pedagogico.dtos.model_in import (
     ApiEolAgrupamentoAtribuicaoTerritorioSaberIn,
     ApiEolComponenteCurricularHierarquiaIn,
+    ApiEolComponenteCurricularIn,
     ApiEolComponenteCurricularPAPIn,
     ApiEolComponenteCurricularPlanejamentoRegenciaIn,
     ApiEolTurmaItinerarioEnsinoMedioIn,
     ComponenteCurricularSimplesIn,
     ComponenteTurmaIn,
+    EtapaEnsinoIn,
     GradeComponenteCurricularIn,
     TurmaIn,
 )
@@ -22,6 +24,10 @@ class ApiEolPedagogicoTableMappingsTest(SimpleTestCase):
 
     def test_mapeia_tabelas_origem_e_destino(self) -> None:
         esperado = {
+            "componente_curricular_api_eol": (
+                "componentecurricular, componentecurricularpai",
+                "componente_curricular_api_eol",
+            ),
             "componentecurricularhierarquia": (
                 "componentecurricularpai",
                 "componente_curricular_hierarquia",
@@ -54,6 +60,81 @@ class ApiEolPedagogicoTableMappingsTest(SimpleTestCase):
 
 class ApiEolPedagogicoDtoTest(SimpleTestCase):
     """Testes dos DTOs da fonte Postgres API EOL."""
+
+    def test_componente_curricular_api_eol_com_relacao_pai(self) -> None:
+        dto = ApiEolComponenteCurricularIn(
+            "10",
+            "513",
+            True,
+            False,
+            " Arte ",
+            "512",
+            datetime(2021, 12, 31, 0, 0, 0),
+        )
+
+        data = dto.to_domain("agora")
+
+        self.assertEqual(data["id_relacao_origem"], 10)
+        self.assertEqual(data["id_componente_curricular"], 513)
+        self.assertTrue(data["eh_regencia"])
+        self.assertFalse(data["eh_territorio"])
+        self.assertEqual(data["descricao"], "Arte")
+        self.assertEqual(data["id_componente_curricular_pai"], 512)
+        self.assertTrue(timezone.is_aware(data["vigencia"]))
+        self.assertEqual(data["transferido_em"], "agora")
+
+    def test_componente_curricular_api_eol_sem_relacao_pai(self) -> None:
+        dto = ApiEolComponenteCurricularIn(
+            None,
+            "513",
+            False,
+            True,
+            "Território do Saber",
+            None,
+            None,
+        )
+
+        data = dto.to_domain("agora")
+
+        self.assertIsNone(data["id_relacao_origem"])
+        self.assertIsNone(data["id_componente_curricular_pai"])
+        self.assertIsNone(data["vigencia"])
+        self.assertTrue(data["eh_territorio"])
+
+    def test_componente_curricular_api_eol_sem_descricao(self) -> None:
+        dto = ApiEolComponenteCurricularIn(
+            None,
+            "1",
+            False,
+            False,
+            None,
+            None,
+            None,
+        )
+
+        data = dto.to_domain("agora")
+
+        self.assertIsNone(data["descricao"])
+
+    def test_componente_curricular_api_eol_define_transferencia_atual(
+        self,
+    ) -> None:
+        dto = ApiEolComponenteCurricularIn(
+            None,
+            "1",
+            False,
+            False,
+            "Arte",
+            None,
+            None,
+        )
+
+        antes = timezone.now()
+        data = dto.to_domain()
+        depois = timezone.now()
+
+        self.assertGreaterEqual(data["transferido_em"], antes)
+        self.assertLessEqual(data["transferido_em"], depois)
 
     def test_componente_curricular_hierarquia(self) -> None:
         dto = ApiEolComponenteCurricularHierarquiaIn(
@@ -173,6 +254,18 @@ class ComponenteCurricularSimplesInTest(SimpleTestCase):
         self.assertEqual(data["transferido_em"], "agora")
 
 
+class EtapaEnsinoInTest(SimpleTestCase):
+    """Testes de ``EtapaEnsinoIn.to_domain()``."""
+
+    def test_mapeamento_basico(self) -> None:
+        dto = EtapaEnsinoIn(codigo="1", descricao=" Infantil ")
+        data = dto.to_domain("agora")
+
+        self.assertEqual(data["codigo"], 1)
+        self.assertEqual(data["descricao"], "Infantil")
+        self.assertEqual(data["transferido_em"], "agora")
+
+
 class ComponenteTurmaInTest(SimpleTestCase):
     """Testes de ``ComponenteTurmaIn.to_domain()``."""
 
@@ -245,6 +338,7 @@ def _turma_in_completa(**overrides: object) -> TurmaIn:
         "tipo_turno": 2,
         "data_inicio_turma": datetime(2025, 2, 5, 8, 0, 0),
         "data_fim": None,
+        "data_fim_turma": None,
         "extinta": 0,
         "situacao": "O",
         "ue_codigo": "001234",
@@ -402,6 +496,7 @@ class TurmaInTest(SimpleTestCase):
             5,
             2,
             datetime(2025, 2, 5, 8, 0, 0),
+            None,
             None,
             0,
             "O",

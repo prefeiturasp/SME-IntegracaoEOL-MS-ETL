@@ -16,6 +16,7 @@ from apps.pedagogico.models import (
     ComponenteCurricularAgrupamento,
 )
 from apps.pedagogico.queries import (
+    SQL_API_EOL_COMPONENTE_CURRICULAR,
     SQL_API_EOL_COMPONENTE_CURRICULAR_HIERARQUIA,
 )
 from apps.pedagogico.services import (
@@ -57,8 +58,8 @@ class TestPedagogicoService(TestCase):
         with self.assertRaises(AttributeError):
             config.nome = "mudar"  # type: ignore[misc]
 
-    def test_fases_contem_12_configs_esperados(self) -> None:
-        self.assertEqual(len(self.service._fases), 12)
+    def test_fases_contem_14_configs_esperados(self) -> None:
+        self.assertEqual(len(self.service._fases), 14)
         self.assertEqual(
             [fase.nome for fase in self.service._fases],
             [
@@ -66,6 +67,7 @@ class TestPedagogicoService(TestCase):
                 "componente_turma",
                 "atribuicao_componente",
                 "atribuicao_territorio_saber",
+                "componente_curricular_api_eol",
                 "componentecurricularhierarquia",
                 "componentecurricularpap",
                 "componentecurricularplanejamentoregencia",
@@ -74,6 +76,7 @@ class TestPedagogicoService(TestCase):
                 "grade_componente_curricular",
                 "turma",
                 "turma_atribuida_dre_ue",
+                "etapa_ensino",
             ],
         )
 
@@ -151,7 +154,7 @@ class TestPedagogicoService(TestCase):
     def test_criar_transform_turma_retorna_tripla_com_pk_codigo(
         self,
     ) -> None:
-        config = self.service._fases[10]  # fase 11 = turma
+        config = self.service._fases[11]  # fase 12 = turma
         transform = self.service._criar_transform(config)
 
         row = (
@@ -164,6 +167,7 @@ class TestPedagogicoService(TestCase):
             2,  # tipo_turno
             "2025-02-05T08:00:00",  # data_inicio_turma
             None,  # data_fim
+            None,  # data_fim_turma
             0,  # extinta
             "O",  # situacao
             "001234",  # ue_codigo
@@ -210,7 +214,7 @@ class TestPedagogicoService(TestCase):
     def test_criar_transform_comp_por_ano_letivo_ignora_registro_sem_chave(
         self,
     ) -> None:
-        config = self.service._fases[9]
+        config = self.service._fases[10]
         transform = self.service._criar_transform(config)
 
         self.assertIsNone(transform((None, "Desc", "1", "1 ano", 1, 5, 2025)))
@@ -218,7 +222,7 @@ class TestPedagogicoService(TestCase):
 
     def test_criar_transform_grade_usa_serie_na_chave(self) -> None:
         """Grade usa série na chave e ano turma como campo atualizável."""
-        config = self.service._fases[9]
+        config = self.service._fases[10]
         transform = self.service._criar_transform(config)
 
         result = transform((100, " Arte ", "1", "1 ano", 88, 5, 2024))
@@ -252,7 +256,7 @@ class TestPedagogicoService(TestCase):
         self,
     ) -> None:
         """Fase API EOL usa transform genérico da base."""
-        config = self.service._fases[4]
+        config = self.service._fases[5]
         transform = self.service._criar_transform(config)
 
         result = transform((1, 512, 513, "2021-12-31T00:00:00"))
@@ -268,7 +272,7 @@ class TestPedagogicoService(TestCase):
         self,
     ) -> None:
         """Regência da API EOL não depende de id físico de origem."""
-        config = self.service._fases[6]
+        config = self.service._fases[7]
         transform = self.service._criar_transform(config)
 
         result = transform((218, 4, 5))
@@ -525,7 +529,7 @@ class TestPedagogicoService(TestCase):
         self.assertNotIn("componente_curricular_agrupamento", resultado)
         self.assertIn("grade_componente_curricular", resultado)
         self.assertIn("turma", resultado)
-        self.assertEqual(mock_fase.call_count, 10)
+        self.assertEqual(mock_fase.call_count, 12)
 
     def test_cod_agrupamento_gera_proximo_sequencial_quando_novo(self) -> None:
         """Novo agrupamento deve receber o próximo ID acima do piso."""
@@ -820,6 +824,38 @@ class TestPedagogicoService(TestCase):
         )
         self.mock_eol.iter_query.assert_not_called()
 
+    def test_componente_curricular_api_eol_preserva_linha_sem_pai(
+        self,
+    ) -> None:
+        config = self.service._fases[4]
+        transform = self.service._criar_transform(config)
+
+        result = transform((None, 513, True, False, " Arte ", None, None))
+        assert result is not None
+        pk, _, obj = result
+
+        self.assertEqual(pk, "None-513")
+        self.assertIsNone(obj.id_relacao_origem)
+        self.assertEqual(obj.id_componente_curricular, 513)
+        self.assertEqual(obj.descricao, "Arte")
+        self.assertIsNone(obj.id_componente_curricular_pai)
+        self.assertIsNone(obj.vigencia)
+        self.assertEqual(config.modo_escrita, "full_refresh")
+        self.assertTrue(config.truncate_on_full_sync)
+
+    def test_iter_chunks_componente_curricular_usa_api_eol(self) -> None:
+        self.mock_api_eol.iter_query.return_value = [[("api",)]]
+
+        chunks = list(
+            self.service._iter_chunks(SQL_API_EOL_COMPONENTE_CURRICULAR)
+        )
+
+        self.assertEqual(chunks, [[("api",)]])
+        self.mock_api_eol.iter_query.assert_called_once_with(
+            SQL_API_EOL_COMPONENTE_CURRICULAR
+        )
+        self.mock_eol.iter_query.assert_not_called()
+
     def test_criar_transform_fase_sem_factory_usa_implementacao_base(
         self,
     ) -> None:
@@ -952,7 +988,7 @@ class TestPedagogicoService(TestCase):
             fases=["agrupamento_territorio_saber_gerado"],
         )
 
-        self.assertEqual(len(service._fases), 13)
+        self.assertEqual(len(service._fases), 15)
         self.assertEqual(
             service._fases[-1].nome,
             "agrupamento_territorio_saber_gerado",

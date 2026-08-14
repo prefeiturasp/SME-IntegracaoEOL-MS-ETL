@@ -14,27 +14,28 @@ A ordem abaixo é exatamente a que o método `executar` aplica em `EtlPedagogico
 ## Fase 4 — sem dependências internas
 4. `atribuicao_territorio_saber`
 
-## Fases 5 a 8 — API EOL (`full_refresh`)
-5. `componente_curricular_hierarquia`
-6. `componente_curricular_pap`
-7. `componente_curricular_planejamento_regencia`
-8. `turma_itinerario_ensino_medio`
+## Fases 5 a 9 — API EOL (`full_refresh`)
+5. `componente_curricular_api_eol`
+6. `componente_curricular_hierarquia`
+7. `componente_curricular_pap`
+8. `componente_curricular_planejamento_regencia`
+9. `turma_itinerario_ensino_medio`
 
-## Fase 9 — API EOL (`full_refresh`)
-9. `agrupamento_atribuicao_territorio_saber`
-
-## Fase 10 — sem dependências internas
-10. `grade_componente_curricular`
+## Fase 10 — API EOL (`full_refresh`)
+10. `agrupamento_atribuicao_territorio_saber`
 
 ## Fase 11 — sem dependências internas
-11. `turma`
+11. `grade_componente_curricular`
 
 ## Fase 12 — sem dependências internas
-12. `turma_atribuida_dre_ue`
+12. `turma`
+
+## Fase 13 — sem dependências internas
+13. `turma_atribuida_dre_ue`
 
 ---
 
-> **Nota:** as fases 2 a 11 são independentes entre si no banco de destino. A ordem é mantida por conveniência operacional e por compatibilidade com a auditoria por fase.
+> **Nota:** as fases 2 a 12 são independentes entre si no banco de destino. A ordem é mantida por conveniência operacional e por compatibilidade com a auditoria por fase.
 > A fase `agrupamento_territorio_saber_gerado` é backup selecionável e não faz parte da execução padrão.
 
 ## Diagrama
@@ -48,12 +49,12 @@ digraph G {
     F2 [label="Fase 2\ncomponente_turma"];
     F3 [label="Fase 3\natribuicao_componente"];
     F4 [label="Fase 4\natribuicao_territorio_saber"];
-    F5 [label="Fases 5-8\napoio API EOL"];
-    F9 [label="Fase 9\nagrupamentos TS\nAPI EOL"];
-    F10 [label="Fase 10\ngrade_componente_curricular"];
-    F11 [label="Fase 11\nturma"];
-    F12 [label="Fase 12\nturma_atribuida_dre_ue"];
+    F5 [label="Fases 5-9\napoio API EOL"];
+    F10 [label="Fase 10\nagrupamentos TS\nAPI EOL"];
+    F11 [label="Fase 11\ngrade_componente_curricular"];
+    F12 [label="Fase 12\nturma"];
+    F13 [label="Fase 13\nturma_atribuida_dre_ue"];
 
-    F1 -> F2 -> F3 -> F4 -> F5 -> F9 -> F10 -> F11 -> F12;
+    F1 -> F2 -> F3 -> F4 -> F5 -> F10 -> F11 -> F12 -> F13;
 }
 ```

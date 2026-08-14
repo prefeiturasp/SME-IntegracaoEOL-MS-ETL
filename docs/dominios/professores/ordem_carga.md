@@ -48,7 +48,8 @@ servidor, cargo, afastamento, atribuicao e contrato externo.
 ## FuncionarioSistemaPerfil
 
 O perfil de sistema do funcionario e consolidado por login, perfil e sistema
-na fase final. A carga considera atualmente o SGP (`sis_id = 1000`) e preserva `cpf` e `uad_codigo` quando a origem informar, para compatibilidade com a API legada.
+na fase final. A carga contempla os sistemas usados pelos contratos legados e
+preserva `cpf` e `uad_codigo` quando a origem informar.
 
 ## TurmaAtribuidaUe
 
