@@ -213,6 +213,7 @@ class TurmaIn:
     nome_turma: Any
     duracao_turno: Any
     tipo_turno: Any
+    data_inicio: Any
     data_inicio_turma: Any
     data_fim: Any
     data_fim_turma: Any
@@ -246,6 +247,7 @@ class TurmaIn:
             "nome_turma": strip_str(self.nome_turma),
             "duracao_turno": int_or_none(self.duracao_turno),
             "tipo_turno": int_or_none(self.tipo_turno),
+            "data_inicio": aware_or_none(self.data_inicio),
             "data_inicio_turma": aware_or_none(self.data_inicio_turma),
             "data_fim": aware_or_none(self.data_fim),
             "data_fim_turma": aware_or_none(self.data_fim_turma),

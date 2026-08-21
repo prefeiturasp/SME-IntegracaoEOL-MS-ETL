@@ -165,6 +165,7 @@ class TestPedagogicoService(TestCase):
             " 5A Manhã ",  # nome_turma
             5,  # duracao_turno
             2,  # tipo_turno
+            "2025-02-04T00:00:00",  # data_inicio
             "2025-02-05T08:00:00",  # data_inicio_turma
             None,  # data_fim
             None,  # data_fim_turma
@@ -855,6 +856,79 @@ class TestPedagogicoService(TestCase):
             SQL_API_EOL_COMPONENTE_CURRICULAR
         )
         self.mock_eol.iter_query.assert_not_called()
+
+    def test_parametros_abrangencia_le_chave_valor(self) -> None:
+        """Lê a tabela ``parametros`` (api_eol_db) como dict nome->valor."""
+        self.mock_api_eol.iter_query.return_value = [
+            [
+                ("tipo_escola_sgp", "1,2,3"),
+                ("tipo_escola_infantil_sgp", "2,11"),
+            ],
+            [("etapas_por_modalidade", '{"1": [1, 10]}')],
+        ]
+
+        parametros = self.service._parametros_abrangencia()
+
+        self.assertEqual(
+            parametros,
+            {
+                "tipo_escola_sgp": "1,2,3",
+                "tipo_escola_infantil_sgp": "2,11",
+                "etapas_por_modalidade": '{"1": [1, 10]}',
+            },
+        )
+
+    def test_sql_turmas_atribuidas_dre_ue_formata_placeholders(self) -> None:
+        """Monta a SQL de abrangência com os parâmetros vigentes."""
+        self.mock_api_eol.iter_query.return_value = [
+            [
+                ("tipo_escola_sgp", "1,2,3,4"),
+                ("tipo_escola_infantil_sgp", "2,11"),
+                (
+                    "etapas_por_modalidade",
+                    '{"1": [1, 10], "3": [2, 3, 11], '
+                    '"5": [4, 5, 12, 13], "6": [6, 7, 8]}',
+                ),
+            ]
+        ]
+
+        sql = self.service._sql_turmas_atribuidas_dre_ue()
+
+        self.assertIn("esc.tp_escola IN (1,2,3,4)", sql)
+        self.assertIn("tp_escola IN (2,11)", sql)
+        self.assertIn("ee.cd_etapa_ensino IN (1,10)", sql)
+        self.assertIn("ee.cd_etapa_ensino IN (2,3,11)", sql)
+        self.assertIn("ee.cd_etapa_ensino IN (4,5,12,13)", sql)
+        self.assertIn("ee.cd_etapa_ensino IN (6,7,8)", sql)
+        self.assertNotIn("{tipos_escola}", sql)
+        self.assertNotIn("{etapas_infantil}", sql)
+
+    def test_executar_fase_turma_atribuida_dre_ue_monta_sql_antes_de_delegar(
+        self,
+    ) -> None:
+        """Fase de abrangência troca o SQL pelo montado em tempo real."""
+        config = next(
+            f for f in self.service._fases if f.nome == "turma_atribuida_dre_ue"
+        )
+        sql_montado = "SELECT 1 -- sql montado"
+
+        with (
+            patch.object(
+                self.service,
+                "_sql_turmas_atribuidas_dre_ue",
+                return_value=sql_montado,
+            ),
+            patch.object(
+                self.service.__class__.__bases__[0], "_executar_fase"
+            ) as mock_base,
+        ):
+            self.service._executar_fase(config, numero_fase=13)
+
+        mock_base.assert_called_once()
+        config_chamado = mock_base.call_args.args[0]
+        self.assertEqual(config_chamado.sql, sql_montado)
+        self.assertEqual(config_chamado.nome, "turma_atribuida_dre_ue")
+        self.mock_api_eol.iter_query.assert_not_called()
 
     def test_criar_transform_fase_sem_factory_usa_implementacao_base(
         self,

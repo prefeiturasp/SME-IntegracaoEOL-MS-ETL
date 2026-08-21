@@ -5,8 +5,10 @@ banco `pedagogico_db`. As regras de origem, chaves e filtros ficam
 documentadas em `docs/dominios/pedagogico/`.
 """
 
+import json
 import logging
 from collections.abc import Callable, Iterator
+from dataclasses import replace
 from typing import Any, cast
 from uuid import UUID
 
@@ -68,6 +70,7 @@ from apps.pedagogico.queries import (
     SQL_COMPONENTES_NAO_CANCELADOS,
     SQL_ETAPA_ENSINO,
     SQL_GRADE_COMPONENTE_CURRICULAR,
+    SQL_PARAMETROS_ABRANGENCIA,
     SQL_TURMAS,
     SQL_TURMAS_ATRIBUIDAS_DRE_UE,
 )
@@ -489,7 +492,46 @@ class EtlPedagogicoService(BaseEtlService):
         )
 
     # ------------------------------------------------------------------
-    # Override _executar_fase para fase de agrupamentos
+    # Parâmetros de abrangência (parametros, api_eol_db) — usados para
+    # montar a SQL de turma_atribuida_dre_ue em tempo de execução.
+    # ------------------------------------------------------------------
+
+    def _parametros_abrangencia(self) -> dict[str, str]:
+        """Lê os parâmetros de abrangência da API EOL (chave/valor)."""
+        linhas = [
+            row
+            for chunk in self.api_eol.iter_query(SQL_PARAMETROS_ABRANGENCIA)
+            for row in chunk
+        ]
+        return {str(nome): str(valor) for nome, valor in linhas}
+
+    def _sql_turmas_atribuidas_dre_ue(self) -> str:
+        """Monta a SQL de abrangência com os parâmetros vigentes.
+
+        Recorte de tipo de escola e etapas por
+        modalidade vêm de ``parametros`` e não de constante hardcoded.
+        """
+        parametros = self._parametros_abrangencia()
+        etapas_por_modalidade = json.loads(
+            parametros["etapas_por_modalidade"]
+        )
+        return SQL_TURMAS_ATRIBUIDAS_DRE_UE.format(
+            tipos_escola=parametros["tipo_escola_sgp"],
+            tipos_escola_infantil=parametros["tipo_escola_infantil_sgp"],
+            etapas_infantil=",".join(
+                str(v) for v in etapas_por_modalidade["1"]
+            ),
+            etapas_eja=",".join(str(v) for v in etapas_por_modalidade["3"]),
+            etapas_fundamental=",".join(
+                str(v) for v in etapas_por_modalidade["5"]
+            ),
+            etapas_medio=",".join(
+                str(v) for v in etapas_por_modalidade["6"]
+            ),
+        )
+
+    # ------------------------------------------------------------------
+    # Override _executar_fase para fases com lógica própria
     # ------------------------------------------------------------------
 
     def _executar_fase(
@@ -499,6 +541,8 @@ class EtlPedagogicoService(BaseEtlService):
             return self._executar_atribuicoes_territorio(config)
         if config.nome == _AGRUPAMENTO_GERADO_BACKUP:
             return self._executar_agrupamentos(config)
+        if config.nome == "turma_atribuida_dre_ue":
+            config = replace(config, sql=self._sql_turmas_atribuidas_dre_ue())
         return super()._executar_fase(config, numero_fase=numero_fase)
 
     # ------------------------------------------------------------------
@@ -750,6 +794,7 @@ class EtlPedagogicoService(BaseEtlService):
                     "nome_turma",
                     "duracao_turno",
                     "tipo_turno",
+                    "data_inicio",
                     "data_inicio_turma",
                     "data_fim",
                     "data_fim_turma",
@@ -781,7 +826,7 @@ class EtlPedagogicoService(BaseEtlService):
                 nome="turma_atribuida_dre_ue",
                 sql=SQL_TURMAS_ATRIBUIDAS_DRE_UE,
                 table_name="turma_atribuida_dre_ue",
-                source_table="turmas_atribuidas_dre_ue",
+                source_table="turma_escola",
                 model_class=TurmaAtribuidaDreUe,
                 dto_in=TurmaAtribuidaDreUeIn,
                 pk_field=["codigo_escola", "codigo_turma", "ano_letivo"],
