@@ -31,6 +31,7 @@ from apps.pedagogico.dtos.model_in import (
     ApiEolTurmaItinerarioEnsinoMedioIn,
     AtribuicaoComponenteIn,
     AtribuicaoTerritorioSaberIn,
+    CicloEnsinoIn,
     ComponenteCurricularSimplesIn,
     ComponenteTurmaIn,
     EtapaEnsinoIn,
@@ -42,6 +43,7 @@ from apps.pedagogico.models import (
     AgrupamentoAtribuicaoTerritorioSaber,
     AtribuicaoComponente,
     AtribuicaoTerritorioSaber,
+    CicloEnsino,
     ComponenteCurricular,
     ComponenteCurricularAgrupamento,
     ComponenteCurricularApiEol,
@@ -66,6 +68,7 @@ from apps.pedagogico.queries import (
     SQL_API_EOL_TURMA_ITINERARIO_ENSINO_MEDIO,
     SQL_ATRIBUICAO_COMPONENTE,
     SQL_ATRIBUICOES_TERRITORIO_SABER,
+    SQL_CICLO_ENSINO,
     SQL_COMPONENTE_TURMA,
     SQL_COMPONENTES_NAO_CANCELADOS,
     SQL_ETAPA_ENSINO,
@@ -203,6 +206,7 @@ class EtlPedagogicoService(BaseEtlService):
             "turma": self._transform_componente_curricular,
             "turma_atribuida_dre_ue": self._transform_turma_atribuida_dre_ue,
             "etapa_ensino": self._transform_componente_curricular,
+            "ciclo_ensino": self._transform_componente_curricular,
         }
         factory = transform_factories.get(config.nome)
         if factory is None:
@@ -866,6 +870,25 @@ class EtlPedagogicoService(BaseEtlService):
                 modo_escrita="full_refresh",
                 truncate_on_full_sync=True,
             ),
+            PhaseConfig(
+                nome="ciclo_ensino",
+                sql=SQL_CICLO_ENSINO,
+                table_name="ciclo_ensino",
+                source_table="ciclo_ensino",
+                model_class=CicloEnsino,
+                dto_in=CicloEnsinoIn,
+                pk_field="codigo",
+                update_fields=(
+                    "codigo_modalidade_ensino",
+                    "codigo_etapa_ensino",
+                    "descricao",
+                    "data_atualizacao",
+                    "transferido_em",
+                ),
+                unique_fields=("codigo",),
+                modo_escrita="full_refresh",
+                truncate_on_full_sync=True,
+            ),
         ]
         return fases
 
@@ -891,6 +914,7 @@ class EtlPedagogicoService(BaseEtlService):
             12 — turma                       (por ano letivo)
             13 — turma_atribuida_dre_ue      (por ano letivo)
             14 — etapa_ensino                (catálogo)
+            15 — ciclo_ensino                (catálogo)
         """
         self._agora = timezone.now()
         self._cache_anos = None  # reseta cache de anos para o run

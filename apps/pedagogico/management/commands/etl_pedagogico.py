@@ -24,7 +24,7 @@ class Command(BaseEtlCommand):
 
     help = "Popula pedagogico_db a partir do EOL e da API EOL"
     dominio = "pedagogico"
-    fase_final = 13
+    fase_final = 15
     service_class = EtlPedagogicoService
     orquestrador_class = EtlPedagogicoOrquestrador
 

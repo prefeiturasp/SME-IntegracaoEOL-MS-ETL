@@ -78,6 +78,24 @@ class DREIn:
 
 
 @dataclass(slots=True)
+class DREAbrangenciaIn:
+    """Dados de DRE com oferta educacional válida para abrangência."""
+
+    codigo_dre: str
+    nome: str
+    abreviacao: str | None
+    ordem: int
+
+    def to_domain(self) -> dict:
+        return {
+            "codigo_dre": str(self.codigo_dre),
+            "nome": strip_str(self.nome),
+            "abreviacao": strip_str(self.abreviacao),
+            "ordem": int(self.ordem),
+        }
+
+
+@dataclass(slots=True)
 class UnidadeEducacionalIn:
     """Dados de Unidade Educacional.
 

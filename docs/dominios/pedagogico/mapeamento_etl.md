@@ -276,7 +276,7 @@ sem detecção de mudança por linha. Linhas sem escola ou turma são descartada
 
 ---
 
-## Fase 13 — EtapaEnsino
+## Fase 14 — EtapaEnsino
 
 **Query:** `SQL_ETAPA_ENSINO` (sem parâmetro de ano, `full_refresh` + `truncate_on_full_sync=True`)
 
@@ -288,4 +288,23 @@ devolve as descrições como lista de strings.
 | :--- | :--- | :--- |
 | `cd_etapa_ensino` | `codigo` | `int()` |
 | `dc_etapa_ensino` | `descricao` | `strip_str()` (já com `LTRIM`/`RTRIM` na query) |
+| — | `transferido_em` | `timezone.now()` |
+
+---
+
+## Fase 15 — CicloEnsino
+
+**Query:** `SQL_CICLO_ENSINO` (sem parâmetro de ano, `full_refresh` + `truncate_on_full_sync=True`)
+
+Catálogo completo de ciclos de ensino (`ciclo_ensino` no EOL), sem filtro
+`WHERE`. Alimenta o endpoint de abrangência `ciclo-ensino` do domínio
+Pedagógico.
+
+| Campo EOL | Campo Destino | Transformação |
+| :--- | :--- | :--- |
+| `cd_modalidade_ensino` | `codigo_modalidade_ensino` | `int()` |
+| `cd_etapa_ensino` | `codigo_etapa_ensino` | `int()` |
+| `cd_ciclo_ensino` | `codigo` | `int()` |
+| `dc_ciclo_ensino` | `descricao` | `str_value_or_none()` |
+| `dt_atualizacao_tabela` | `data_atualizacao` | `aware_or_none()` |
 | — | `transferido_em` | `timezone.now()` |

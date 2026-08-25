@@ -13,6 +13,7 @@ from apps.core.libs.cache import CacheService
 from apps.core.libs.thread_processor import calcular_hash
 from apps.eol_connection.libs.servico_eol import EOLService
 from apps.institucional.dtos.model_in import (
+    DREAbrangenciaIn,
     DREIn,
     SubprefeituraIn,
     TipoEscolaIn,
@@ -21,6 +22,7 @@ from apps.institucional.dtos.model_in import (
 from apps.institucional.libs.repositorio_core_sso import RepositorioCoreSSO
 from apps.institucional.models import (
     DRE,
+    DREAbrangencia,
     SubPrefeitura,
     TipoEscola,
     UnidadeEducacional,
@@ -73,6 +75,57 @@ WHERE ua.tp_unidade_administrativa = 24
           ua.cd_unidade_administrativa
         AND te_ref.tp_escola IS NOT NULL
   )
+"""
+
+SQL_DRE_ABRANGENCIA = """
+WITH dres_abrangencia AS (
+    SELECT DISTINCT
+        dre.cd_unidade_educacao AS codigo_dre
+      , dre.nm_unidade_educacao AS nome
+      , dre.nm_exibicao_unidade AS abreviacao
+    FROM v_cadastro_unidade_educacao dre
+    INNER JOIN v_cadastro_unidade_educacao ue
+        ON dre.cd_unidade_educacao =
+           ue.cd_unidade_administrativa_referencia
+    INNER JOIN turma_escola
+        ON ue.cd_unidade_educacao = turma_escola.cd_escola
+    INNER JOIN escola
+        ON turma_escola.cd_escola = escola.cd_escola
+    INNER JOIN serie_turma_escola
+        ON serie_turma_escola.cd_turma_escola =
+           turma_escola.cd_turma_escola
+    INNER JOIN serie_turma_grade
+        ON serie_turma_grade.cd_turma_escola =
+           serie_turma_escola.cd_turma_escola
+    INNER JOIN escola_grade
+        ON serie_turma_grade.cd_escola_grade =
+           escola_grade.cd_escola_grade
+    INNER JOIN grade
+        ON escola_grade.cd_grade = grade.cd_grade
+    INNER JOIN serie_ensino
+        ON grade.cd_serie_ensino = serie_ensino.cd_serie_ensino
+    INNER JOIN etapa_ensino
+        ON serie_ensino.cd_etapa_ensino = etapa_ensino.cd_etapa_ensino
+    WHERE escola.tp_escola IN (1, 3, 4, 16)
+      AND etapa_ensino.cd_etapa_ensino IN (
+          2, 3, 7, 11, 4, 5, 12, 13, 6, 7, 8, 9, 17, 14, 18
+      )
+),
+dres_ordenadas AS (
+    SELECT
+        codigo_dre
+      , nome
+      , abreviacao
+      , ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS ordem
+    FROM dres_abrangencia
+)
+SELECT
+    codigo_dre
+  , nome
+  , abreviacao
+  , ordem
+FROM dres_ordenadas
+ORDER BY ordem
 """
 
 SQL_OBTER_CODIGOS_UES_POR_DRE = """
@@ -370,8 +423,8 @@ WHERE te.tp_escola IS NOT NULL
 class EtlInstitucionalService(BaseEtlService):
     """Serviço de ETL do domínio Institucional.
 
-    Orquestra 4 fases: DRE, TipoEscola, SubPrefeitura,
-    UnidadeEducacional. A fase 4 enriquece cada UE com o
+    Orquestra 5 fases: DRE, TipoEscola, SubPrefeitura,
+    UnidadeEducacional e DREAbrangencia. A fase 4 enriquece cada UE com o
     código de integração obtido via Core SSO (pré-cacheado).
     """
 
@@ -489,6 +542,19 @@ class EtlInstitucionalService(BaseEtlService):
                     "codigo_ue_integracao",
                 ),
                 unique_fields=("codigo_ue",),
+                truncate_on_full_sync=True,
+                modo_escrita="full_refresh",
+            ),
+            PhaseConfig(
+                nome="dre_abrangencia",
+                sql=SQL_DRE_ABRANGENCIA,
+                table_name="dre_abrangencia",
+                source_table="v_cadastro_unidade_educacao",
+                model_class=DREAbrangencia,
+                dto_in=DREAbrangenciaIn,
+                pk_field="codigo_dre",
+                update_fields=("nome", "abreviacao", "ordem"),
+                unique_fields=("codigo_dre",),
                 truncate_on_full_sync=True,
                 modo_escrita="full_refresh",
             ),

@@ -18,10 +18,10 @@ class TestEtlPedagogicoOrquestrador(TestCase):
             **kwargs,
         )
 
-    def test_dominio_e_14_fases(self) -> None:
+    def test_dominio_e_15_fases(self) -> None:
         """Pedagógico deve expor as fases ao orquestrador."""
         orq = self._make_orquestrador()
-        self.assertEqual(len(orq.service._fases), 14)
+        self.assertEqual(len(orq.service._fases), 15)
 
     def test_id_execucao_mantido(self) -> None:
         """Valida que o orquestrador aceita e mantém um id_execucao."""
@@ -33,7 +33,7 @@ class TestEtlPedagogicoOrquestrador(TestCase):
         """Valida metadados da fase 10 de agrupamento copiado."""
         orq = self._make_orquestrador()
         meta = orq.service.get_meta(
-            orq.service._fases[9], 10, 14, orq.id_execucao
+            orq.service._fases[9], 10, 15, orq.id_execucao
         )
 
         self.assertEqual(meta.numero_fase, 10)

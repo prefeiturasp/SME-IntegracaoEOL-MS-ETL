@@ -14,7 +14,9 @@ class TestEtlInstitucionalOrquestrador(TestCase):
 
     databases = {"default", "eol_db", "institucional_db"}
 
-    def _make_orquestrador(self, **kwargs: Any) -> EtlInstitucionalOrquestrador:
+    def _make_orquestrador(
+        self, **kwargs: Any
+    ) -> EtlInstitucionalOrquestrador:
         mock_eol = MagicMock()
         kwargs.setdefault("id_execucao", uuid4())
         return EtlInstitucionalOrquestrador(
@@ -60,7 +62,7 @@ class TestEtlInstitucionalOrquestrador(TestCase):
         mock_proc: MagicMock,
         mock_finalizar: MagicMock,
     ) -> None:
-        """Valida que as 4 fases são passadas ao callback do chord."""
+        """Valida que as 5 fases são passadas ao callback do chord."""
         mock_leitor = MagicMock()
         mock_leitor.criar_grupo.return_value = ["task1"]
         mock_leitor_cls.return_value = mock_leitor
@@ -71,7 +73,7 @@ class TestEtlInstitucionalOrquestrador(TestCase):
         self.assertTrue(mock_finalizar.s.called)
         args, _ = mock_finalizar.s.call_args
         meta_dict = args[0]
-        self.assertEqual(meta_dict["total_fases"], 4)
+        self.assertEqual(meta_dict["total_fases"], 5)
 
     @patch("apps.core.libs.base_etl_orquestrador.finalizar_fase")
     @patch("apps.core.libs.base_etl_orquestrador.processar_chunk")
@@ -107,22 +109,34 @@ class TestEtlInstitucionalOrquestrador(TestCase):
         """get_meta resolve metadados corretos para a fase 1 (DRE)."""
         orq = self._make_orquestrador()
         meta = orq.service.get_meta(
-            orq.service._fases[0], 1, 4, orq.id_execucao
+            orq.service._fases[0], 1, 5, orq.id_execucao
         )
 
         self.assertEqual(meta.numero_fase, 1)
         self.assertEqual(meta.nome, "dre")
-        self.assertIn("apps.core.tasks.processar_chunk", meta.task_processamento_path)
+        self.assertIn(
+            "apps.core.tasks.processar_chunk", meta.task_processamento_path
+        )
 
     def test_get_meta_fase_4(self) -> None:
         """get_meta resolve metadados corretos para a fase 4 (UE)."""
         orq = self._make_orquestrador()
         meta = orq.service.get_meta(
-            orq.service._fases[3], 4, 4, orq.id_execucao
+            orq.service._fases[3], 4, 5, orq.id_execucao
         )
 
         self.assertEqual(meta.numero_fase, 4)
         self.assertEqual(meta.nome, "unidade_educacional")
+
+    def test_get_meta_fase_5(self) -> None:
+        """get_meta resolve metadados da DRE de abrangência."""
+        orq = self._make_orquestrador()
+        meta = orq.service.get_meta(
+            orq.service._fases[4], 5, 5, orq.id_execucao
+        )
+
+        self.assertEqual(meta.numero_fase, 5)
+        self.assertEqual(meta.nome, "dre_abrangencia")
 
     def test_dominio_padrao_e_institucional(self) -> None:
         """Orquestrador inicializa com domínio 'institucional' por padrão."""

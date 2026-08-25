@@ -53,6 +53,37 @@ class EtapaEnsinoIn:
 
 
 @dataclass
+class CicloEnsinoIn:
+    """Linha bruta da query de catálogo de ciclos de ensino."""
+
+    codigo_modalidade_ensino: Any
+    codigo_etapa_ensino: Any
+    codigo: Any
+    descricao: Any
+    data_atualizacao: Any
+
+    def to_domain(self, transferido_em: Any) -> dict:
+        """Converte a linha extraída para os campos do domínio.
+
+        Args:
+            transferido_em: Momento em que o registro foi processado.
+
+        Returns:
+            Campos normalizados do ciclo de ensino.
+        """
+        return {
+            "codigo_modalidade_ensino": int(
+                self.codigo_modalidade_ensino
+            ),
+            "codigo_etapa_ensino": int(self.codigo_etapa_ensino),
+            "codigo": int(self.codigo),
+            "descricao": str_value_or_none(self.descricao) or "",
+            "data_atualizacao": aware_or_none(self.data_atualizacao),
+            "transferido_em": transferido_em,
+        }
+
+
+@dataclass
 class ApiEolComponenteCurricularIn:
     """Linha consolidada de componente curricular da API EOL."""
 

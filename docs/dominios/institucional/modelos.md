@@ -30,3 +30,9 @@ A entidade principal do domínio, representando a escola.
     - `tipo_escola_id`: Classificação da unidade.
     - `subprefeitura_id`: Localização municipal.
 - **Indicadores**: Armazena capacidade de vagas (`vagas_matutino`, `vagas_total`) e contagem de funcionários da extração do EOL.
+
+## 5. DREAbrangencia
+Projeção das DREs que possuem oferta educacional válida para abrangência.
+- **Tabela**: `dre_abrangencia`
+- **PK**: `codigo_dre` (CharField 20)
+- **Campos Principais**: `nome`, `abreviacao`, `ordem`.

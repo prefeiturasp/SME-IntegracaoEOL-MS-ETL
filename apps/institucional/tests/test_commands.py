@@ -30,7 +30,7 @@ class EtlInstitucionalCommandTestCase(TestCase):
         self.mock_servico_class = self.patcher_servico.start()
         self.servico = self.mock_servico_class.return_value
         self.servico.executar.return_value = {"dre": 10, "tipo_escola": 5}
-        self.servico.ultima_fase_concluida = 4
+        self.servico.ultima_fase_concluida = 5
 
     def tearDown(self) -> None:
         """Encerra os mocks de repositório e serviço."""
@@ -81,7 +81,7 @@ class EtlInstitucionalCommandTestCase(TestCase):
         self.repo.atualizar_checkpoint_dominio.assert_called_once()
 
     def test_execucao_com_continuar_sem_erro_anterior(self) -> None:
-        """Valida retomada para fase 1 caso o checkpoint não indique erro parcial."""
+        """Valida retomada quando o checkpoint não indica erro parcial."""
         self.repo.obter_checkpoint_dominio.return_value = {
             "ultima_situacao": "concluido",
             "ultima_pagina": 4,
