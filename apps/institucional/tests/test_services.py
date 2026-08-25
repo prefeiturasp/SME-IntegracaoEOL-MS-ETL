@@ -11,13 +11,22 @@ from django.test import TestCase
 
 from apps.core.libs.base_etl_service import PipelineMetrics
 from apps.institucional.dtos.model_in import (
+    DREAbrangenciaIn,
     DREIn,
     SubprefeituraIn,
     TipoEscolaIn,
     UnidadeEducacionalIn,
 )
-from apps.institucional.models import DRE, TipoEscola, UnidadeEducacional
-from apps.institucional.services import EtlInstitucionalService
+from apps.institucional.models import (
+    DRE,
+    DREAbrangencia,
+    TipoEscola,
+    UnidadeEducacional,
+)
+from apps.institucional.services import (
+    SQL_DRE_ABRANGENCIA,
+    EtlInstitucionalService,
+)
 
 _ROW_UE = (
     "000001",  # codigo_ue
@@ -74,9 +83,9 @@ class EtlInstitucionalServiceTestCase(TestCase):
             id_execucao=uuid4(),
         )
 
-    def test_fases_contem_4_configs(self) -> None:
+    def test_fases_contem_5_configs(self) -> None:
         """Valida quantidade e ordem das fases."""
-        self.assertEqual(len(self.service._fases), 4)
+        self.assertEqual(len(self.service._fases), 5)
         nomes = [f.nome for f in self.service._fases]
         self.assertEqual(
             nomes,
@@ -85,6 +94,7 @@ class EtlInstitucionalServiceTestCase(TestCase):
                 "tipo_escola",
                 "sub_prefeitura",
                 "unidade_educacional",
+                "dre_abrangencia",
             ],
         )
 
@@ -100,7 +110,7 @@ class EtlInstitucionalServiceTestCase(TestCase):
         self.assertIsNotNone(service.eol)
         self.assertIsNotNone(service.cache)
         self.assertIsNotNone(service.core_sso)
-        self.assertEqual(len(service._fases), 4)
+        self.assertEqual(len(service._fases), 5)
 
     def test_criar_transform_tipo_escola_retorna_tripla(self) -> None:
         """Valida tripla (pk, hash SHA-256, obj) para TipoEscola."""
@@ -125,6 +135,32 @@ class EtlInstitucionalServiceTestCase(TestCase):
         self.assertEqual(pk, "108900")
         self.assertEqual(len(h), 64)
         self.assertIsInstance(obj, DRE)
+
+    def test_criar_transform_dre_abrangencia_retorna_tripla(self) -> None:
+        """Valida transformação do read model de abrangência."""
+        config = self.service._fases[4]
+        transform = self.service._criar_transform(config)
+
+        pk, hash_controle, obj = transform(
+            ("108700", "DRE ITAQUERA", "DRE - IQ", 1)
+        )
+
+        self.assertEqual(pk, "108700")
+        self.assertEqual(len(hash_controle), 64)
+        self.assertIsInstance(obj, DREAbrangencia)
+        self.assertEqual(obj.ordem, 1)
+
+    def test_fase_dre_abrangencia_reproduz_filtros_legados(self) -> None:
+        """Mantém na extração os tipos de escola e etapas do legado."""
+        sql_normalizado = " ".join(SQL_DRE_ABRANGENCIA.split())
+
+        self.assertIn("escola.tp_escola IN (1, 3, 4, 16)", sql_normalizado)
+        self.assertIn(
+            "etapa_ensino.cd_etapa_ensino IN "
+            "( 2, 3, 7, 11, 4, 5, 12, 13, 6, 7, 8, 9, 17, 14, 18 )",
+            sql_normalizado,
+        )
+        self.assertIn("ORDER BY ordem", sql_normalizado)
 
     def test_criar_transform_ue_enriquece_com_cache(self) -> None:
         """Transform da UE busca código de integração do cache."""
@@ -264,9 +300,10 @@ class EtlInstitucionalServiceTestCase(TestCase):
         self.assertNotIn("tipo_escola", res)
         self.assertIn("sub_prefeitura", res)
         self.assertIn("unidade_educacional", res)
-        self.assertEqual(mock_fase.call_count, 2)
+        self.assertIn("dre_abrangencia", res)
+        self.assertEqual(mock_fase.call_count, 3)
 
-    def test_executar_completo_retorna_4_chaves(self) -> None:
+    def test_executar_completo_retorna_5_chaves(self) -> None:
         """Execução completa retorna resultado para cada fase."""
         with (
             patch.object(
@@ -277,8 +314,8 @@ class EtlInstitucionalServiceTestCase(TestCase):
             mock_fase.return_value = PipelineMetrics(total_escritos=10)
             res = self.service.executar(fase_inicial=1)
 
-        self.assertEqual(len(res), 4)
-        self.assertEqual(mock_fase.call_count, 4)
+        self.assertEqual(len(res), 5)
+        self.assertEqual(mock_fase.call_count, 5)
         self.assertEqual(res["tipo_escola"], 10)
 
     def test_popular_cache_popula_mapeamentos(self) -> None:
@@ -367,6 +404,17 @@ class EtlInstitucionalServiceTestCase(TestCase):
         self.assertEqual(data["codigo_dre"], "108900")
         self.assertEqual(data["nome"], "DRE BT")
         self.assertEqual(data["sigla"], "BT")
+
+    def test_to_domain_dre_abrangencia_in(self) -> None:
+        """DREAbrangenciaIn normaliza o contrato persistido."""
+        dto = DREAbrangenciaIn("108700", " DRE ITAQUERA ", " DRE - IQ ", 1)
+
+        data = dto.to_domain()
+
+        self.assertEqual(data["codigo_dre"], "108700")
+        self.assertEqual(data["nome"], "DRE ITAQUERA")
+        self.assertEqual(data["abreviacao"], "DRE - IQ")
+        self.assertEqual(data["ordem"], 1)
 
     def test_to_domain_tipo_escola_in(self) -> None:
         """TipoEscolaIn.to_domain retorna campos corretos."""

@@ -14,7 +14,7 @@ class EtlPedagogicoCommandTest(TestCase):
         """Valida configuração básica do comando."""
         cmd = Command()
         self.assertEqual(cmd.dominio, "pedagogico")
-        self.assertEqual(cmd.fase_final, 13)
+        self.assertEqual(cmd.fase_final, 15)
         self.assertEqual(
             cmd.get_modo_escrita("componente_curricular"), "upsert"
         )

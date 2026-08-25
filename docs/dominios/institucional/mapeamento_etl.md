@@ -39,3 +39,15 @@ Detalhamento de origem e destino dos campos entre EOL/SSO e banco Institucional.
 | **CACHE: CORE_SSO** | `codigo_ue_integracao` | UUID legado do SSO. |
 | `vuedg.tp_escola` | `tipo_escola_id` | FK externa para TipoEscola. |
 | `vcue.cd_unidade_administrativa_referencia` | `dre_id` | FK externa para DRE. |
+
+## Fase 5 — DREs de abrangência
+
+| Campo EOL | Campo Destino | Descrição |
+| :--- | :--- | :--- |
+| `dre.cd_unidade_educacao` | `codigo_dre` | Código da DRE elegível. |
+| `dre.nm_unidade_educacao` | `nome` | Nome oficial da DRE. |
+| `dre.nm_exibicao_unidade` | `abreviacao` | Abreviação da DRE. |
+| `ROW_NUMBER()` | `ordem` | Sequência materializada da consulta de origem. |
+
+A elegibilidade reproduz os vínculos e filtros da consulta legada por tipo
+de escola e etapa de ensino.

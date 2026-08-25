@@ -2,7 +2,7 @@
 
 ## Objetivo
 
-Popular `institucional_db` com os dados da estrutura administrativa da SME (DREs, Tipos de Escola, Subprefeituras e Unidades Educacionais), servindo como base estrutural para todos os outros domínios do sistema.
+Popular `institucional_db` com os dados da estrutura administrativa da SME (DREs, Tipos de Escola, Subprefeituras e Unidades Educacionais), além da projeção de DREs elegíveis para abrangência.
 
 ## Origem dos Dados e Enriquecimento (SSO e EOL)
 
@@ -17,15 +17,16 @@ Por este motivo, o sistema utiliza uma estratégia de cache:
 
 `EtlInstitucionalService` em `apps/institucional/services.py`.
 
-Expõe métodos `popular_*` por fase e um método `executar(fase_inicial=1)` que orquestra as 4 fases principais.
+Expõe um método `executar(fase_inicial=1)` que orquestra as 5 fases.
 
 ## Total de modelos do app
 
-O código define **4 modelos principais** em `apps/institucional/models.py`:
+O código define **5 modelos principais** em `apps/institucional/models.py`:
 1. `DRE`
 2. `TipoEscola`
 3. `SubPrefeitura`
 4. `UnidadeEducacional`
+5. `DREAbrangencia`
 
 ## Fases implementadas
 
@@ -43,6 +44,11 @@ O código define **4 modelos principais** em `apps/institucional/models.py`:
 - A fase mais densa, extrai dados de endereço, ocupação, vagas e telefones.
 - **Cache Segmentado**: Utiliza as partições criadas na Fase 1 (`etl_institucional:dre:{codigo_dre}:...`) para obter o `codigo_ue_integracao` sem sobrecarregar o banco legado.
 
+### Fase 5 — DRE de abrangência
+- Materializa somente as DREs com tipos de escola e etapas de ensino aceitos
+  pelo contrato legado.
+- Usa substituição integral para remover DREs que deixarem de ser elegíveis.
+
 ## Fluxo
 
 ```{graphviz}
@@ -54,7 +60,8 @@ digraph G {
     F2 [label="Fase 2\nTipo Escola"];
     F3 [label="Fase 3\nSubprefeitura"];
     F4 [label="Fase 4\nUnidade Educacional"];
+    F5 [label="Fase 5\nDRE Abrangência"];
 
-    F1 -> F2 -> F3 -> F4;
+    F1 -> F2 -> F3 -> F4 -> F5;
 }
 ```

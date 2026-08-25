@@ -14,6 +14,9 @@ A ordem abaixo é exatamente a que o método `executar` aplica no serviço.
 ## Fase 4 — depende das Fases anteriores
 4. `unidade_educacional`
 
+## Fase 5 — read model de compatibilidade
+5. `dre_abrangencia`
+
 ## Diagrama
 
 ```{graphviz}
@@ -25,7 +28,8 @@ digraph G {
     F2 [label="Fase 2"];
     F3 [label="Fase 3"];
     F4 [label="Fase 4"];
+    F5 [label="Fase 5"];
 
-    F1 -> F2 -> F3 -> F4;
+    F1 -> F2 -> F3 -> F4 -> F5;
 }
 ```

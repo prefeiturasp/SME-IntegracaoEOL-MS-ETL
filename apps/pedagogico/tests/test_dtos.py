@@ -10,6 +10,7 @@ from apps.pedagogico.dtos.model_in import (
     ApiEolComponenteCurricularPAPIn,
     ApiEolComponenteCurricularPlanejamentoRegenciaIn,
     ApiEolTurmaItinerarioEnsinoMedioIn,
+    CicloEnsinoIn,
     ComponenteCurricularSimplesIn,
     ComponenteTurmaIn,
     EtapaEnsinoIn,
@@ -263,6 +264,29 @@ class EtapaEnsinoInTest(SimpleTestCase):
 
         self.assertEqual(data["codigo"], 1)
         self.assertEqual(data["descricao"], "Infantil")
+        self.assertEqual(data["transferido_em"], "agora")
+
+
+class CicloEnsinoInTest(SimpleTestCase):
+    """Testes de ``CicloEnsinoIn.to_domain()``."""
+
+    def test_mapeamento_basico(self) -> None:
+        data_atualizacao = datetime(2026, 8, 20, 10, 30)
+        dto = CicloEnsinoIn(
+            codigo_modalidade_ensino="5",
+            codigo_etapa_ensino="4",
+            codigo="3",
+            descricao="Alfabetização ",
+            data_atualizacao=data_atualizacao,
+        )
+
+        data = dto.to_domain("agora")
+
+        self.assertEqual(data["codigo_modalidade_ensino"], 5)
+        self.assertEqual(data["codigo_etapa_ensino"], 4)
+        self.assertEqual(data["codigo"], 3)
+        self.assertEqual(data["descricao"], "Alfabetização ")
+        self.assertTrue(timezone.is_aware(data["data_atualizacao"]))
         self.assertEqual(data["transferido_em"], "agora")
 
 

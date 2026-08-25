@@ -54,6 +54,17 @@ SELECT
 FROM etapa_ensino
 """
 
+# Catálogo de ciclos de ensino (EolConnection).
+SQL_CICLO_ENSINO = """
+SELECT
+    cd_modalidade_ensino AS CodigoModalidadeEnsino,
+    cd_etapa_ensino AS CodigoEtapaEnsino,
+    cd_ciclo_ensino AS Codigo,
+    dc_ciclo_ensino AS Descricao,
+    dt_atualizacao_tabela AS DtAtualizacao
+FROM ciclo_ensino
+"""
+
 # Anos letivos disponíveis no EOL (EolConnection)
 SQL_ANOS_LETIVOS = """
 SELECT DISTINCT an_letivo

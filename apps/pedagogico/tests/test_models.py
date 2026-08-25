@@ -2,6 +2,7 @@ from django.test import TestCase
 
 from apps.pedagogico.models import (
     AgrupamentoAtribuicaoTerritorioSaber,
+    CicloEnsino,
     ComponenteCurricular,
     ComponenteCurricularAgrupamento,
     ComponenteCurricularApiEol,
@@ -17,6 +18,11 @@ class PedagogicoModelsTest(TestCase):
     def test_componente_curricular_str(self) -> None:
         obj = ComponenteCurricular(codigo=100, descricao="Arte")
         self.assertEqual(str(obj), "100 - Arte")
+
+    def test_ciclo_ensino_str(self) -> None:
+        """Representa o ciclo pelo código e pela descrição."""
+        obj = CicloEnsino(codigo=3, descricao="Alfabetização")
+        self.assertEqual(str(obj), "3 - Alfabetização")
 
     def test_componente_curricular_api_eol_str(self) -> None:
         obj = ComponenteCurricularApiEol(

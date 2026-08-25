@@ -6,7 +6,7 @@ A retomada é baseada em `EtlCheckpointDominio` e em `ultima_fase_concluida` do 
 
 Se `--continuar`:
 - lê checkpoint do domínio `institucional`
-- se `ultima_situacao == "erro"` e `0 < ultima_pagina < 4`, define `fase_inicial = ultima_pagina + 1`
+- se `ultima_situacao == "erro"` e `0 < ultima_pagina < 5`, define `fase_inicial = ultima_pagina + 1`
 - caso contrário, reinicia em fase 1
 
 ## Em caso de erro

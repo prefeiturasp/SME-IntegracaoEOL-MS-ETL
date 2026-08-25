@@ -4,9 +4,32 @@ from django.test import SimpleTestCase
 
 from apps.pedagogico.queries import (
     SQL_API_EOL_COMPONENTE_CURRICULAR,
+    SQL_CICLO_ENSINO,
     SQL_ETAPA_ENSINO,
     SQL_TURMAS,
 )
+
+
+class SqlCicloEnsinoProjecaoTest(SimpleTestCase):
+    """Valida a projeção completa do catálogo de ciclos de ensino."""
+
+    def test_projeta_campos_do_contrato_legado(self) -> None:
+        self.assertIn(
+            "cd_modalidade_ensino AS CodigoModalidadeEnsino",
+            SQL_CICLO_ENSINO,
+        )
+        self.assertIn(
+            "cd_etapa_ensino AS CodigoEtapaEnsino",
+            SQL_CICLO_ENSINO,
+        )
+        self.assertIn("cd_ciclo_ensino AS Codigo", SQL_CICLO_ENSINO)
+        self.assertIn("dc_ciclo_ensino AS Descricao", SQL_CICLO_ENSINO)
+        self.assertIn(
+            "dt_atualizacao_tabela AS DtAtualizacao",
+            SQL_CICLO_ENSINO,
+        )
+        self.assertIn("FROM ciclo_ensino", SQL_CICLO_ENSINO)
+        self.assertNotIn("WHERE", SQL_CICLO_ENSINO)
 
 
 class SqlEtapaEnsinoProjecaoTest(SimpleTestCase):
