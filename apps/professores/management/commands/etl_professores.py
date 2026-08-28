@@ -19,6 +19,7 @@ Formato de indice_sincronizacao:
 """
 
 import os
+from argparse import SUPPRESS
 from typing import Any
 from uuid import UUID
 
@@ -27,6 +28,7 @@ from django.core.management.base import BaseCommand
 from apps.controle_auditoria.libs.repositorio_auditoria import (
     RepositorioAuditoriaPostgres,
 )
+from apps.core.libs.base_etl_command import montar_parametros_execucao
 from apps.professores.services import (
     _ORDEM_TABELAS,
     _TABELAS_FULL_REFRESH,
@@ -97,6 +99,12 @@ class Command(BaseCommand):
             dest="skip_audit_hash",
             help="Não grava hashes em etl_auditoria_linha.",
         )
+        parser.add_argument(
+            "--parametros-disparo",
+            type=str,
+            default=None,
+            help=SUPPRESS,
+        )
 
     def handle(self, *args: Any, **options: Any) -> None:
         """Executa o ETL e registra auditoria e checkpoint."""
@@ -114,7 +122,10 @@ class Command(BaseCommand):
         # ------------------------------------------------------------------
         # Executar ETL
         # ------------------------------------------------------------------
-        id_execucao: UUID = repositorio.iniciar_execucao("professores")
+        id_execucao: UUID = repositorio.iniciar_execucao(
+            "professores",
+            parametros=self._parametros_execucao(fase_inicial, **options),
+        )
         servico = EtlProfessoresService(anos_letivos=anos_letivos)
         ultimo_indice_salvo: str | None = None
 
@@ -218,6 +229,16 @@ class Command(BaseCommand):
     # ------------------------------------------------------------------
     # Helpers de retomada
     # ------------------------------------------------------------------
+
+    def _parametros_execucao(
+        self, fase_inicial: int, **options: Any
+    ) -> dict[str, object]:
+        """Monta parâmetros rastreáveis da execução."""
+        return montar_parametros_execucao(
+            fase_inicial,
+            options,
+            {"skip_audit_hash": options.get("skip_audit_hash", False)},
+        )
 
     def _interpretar_checkpoint(
         self, checkpoint: dict

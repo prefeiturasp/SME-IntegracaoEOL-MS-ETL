@@ -1,5 +1,6 @@
 """Testes do management command etl_professores."""
 
+import json
 from unittest.mock import MagicMock, patch
 
 from django.test import TestCase
@@ -47,6 +48,49 @@ class EtlProfessoresCommandTest(TestCase):
         execucao = EtlExecucao.objects.get(dominio="professores")
         self.assertEqual(execucao.situacao, "concluido")
         self.assertIsNotNone(execucao.finalizado_em)
+
+    @patch(
+        "apps.professores.management.commands.etl_professores.EtlProfessoresService"
+    )
+    def test_salva_parametros_disparo_na_execucao(
+        self, mock_servico: MagicMock
+    ) -> None:
+        """Registra parâmetros enviados pelo orquestrador."""
+        mock_servico.return_value.executar.return_value = _RESULTADO_MOCK
+        mock_servico.return_value.ultima_fase_concluida = 4
+        parametros_disparo = {
+            "origem": "api",
+            "celery_task_id": "task-professores",
+            "prioridade": 5,
+        }
+
+        self._executar(
+            [
+                "--volume",
+                "100",
+                "--offset",
+                "0",
+                "--continuar",
+                "--anos-letivos",
+                "2026",
+                "--parametros-disparo",
+                json.dumps(parametros_disparo),
+            ]
+        )
+
+        execucao = EtlExecucao.objects.get(dominio="professores")
+        self.assertEqual(
+            execucao.parametros["execucao"],
+            {
+                "volume": 100,
+                "offset": 0,
+                "continuar": True,
+                "fase_inicial": 1,
+                "anos_letivos": [2026],
+                "skip_audit_hash": False,
+            },
+        )
+        self.assertEqual(execucao.parametros["disparo"], parametros_disparo)
 
     @patch(
         "apps.professores.management.commands.etl_professores.EtlProfessoresService"

@@ -344,6 +344,24 @@ class TestPedagogicoService(TestCase):
         self.assertEqual(len(processed_data), 1)
         self.assertEqual(processed_data[0][0], "T1-513")
 
+    @patch.object(EtlPedagogicoService, "sync_batch", return_value=(1, 0))
+    def test_processar_batch_repassa_materializacao_do_transform_generico(
+        self, mock_sync: MagicMock
+    ) -> None:
+        """Transform genérico precisa materializar payload antes do bulk."""
+        config = self.service._fases[5]
+        transform = self.service._criar_transform(config)
+
+        self.service._processar_batch(
+            config=config,
+            chunk=[(1, 512, 513, "2021-12-31T00:00:00")],
+            transform=transform,
+            batch_num=0,
+        )
+
+        meta = mock_sync.call_args.args[1]
+        self.assertTrue(callable(meta["materializar"]))
+
     def test_anos_letivos_usa_cache_por_instancia(self) -> None:
         self.mock_eol.iter_query.return_value = [[(2024,), (2025,)]]
 
@@ -542,10 +560,7 @@ class TestPedagogicoService(TestCase):
         self.assertEqual(itens, [])
 
     def test_executar_preenche_duas_chaves_a_partir_da_fase_3(self) -> None:
-        with (
-            patch.object(self.service, "_executar_fase") as mock_fase,
-            patch.object(self.service, "_registrar_auditoria_fase"),
-        ):
+        with patch.object(self.service, "_executar_fase") as mock_fase:
             mock_fase.return_value = PipelineMetrics(total_escritos=10)
             self.service._total_itens_agrupamento = 7
 
@@ -558,6 +573,7 @@ class TestPedagogicoService(TestCase):
         self.assertIn("grade_componente_curricular", resultado)
         self.assertIn("turma", resultado)
         self.assertEqual(mock_fase.call_count, 13)
+        self.assertEqual(mock_fase.call_args_list[0].kwargs["numero_fase"], 3)
 
     def test_cod_agrupamento_gera_proximo_sequencial_quando_novo(self) -> None:
         """Novo agrupamento deve receber o próximo ID acima do piso."""
@@ -1106,14 +1122,12 @@ class TestPedagogicoService(TestCase):
         """``executar`` pula fases abaixo do início e fora da seleção."""
         self.service._fases_selecionadas = ["turma"]
 
-        with (
-            patch.object(self.service, "_executar_fase") as mock_fase,
-            patch.object(self.service, "_registrar_auditoria_fase"),
-        ):
+        with patch.object(self.service, "_executar_fase") as mock_fase:
             mock_fase.return_value = PipelineMetrics(total_escritos=3)
             resultado = self.service.executar(fase_inicial=2)
 
         self.assertEqual(mock_fase.call_count, 1)
+        self.assertEqual(mock_fase.call_args.kwargs["numero_fase"], 12)
         self.assertEqual(resultado, {"turma": 3})
 
     @patch("apps.core.libs.base_etl_service.Queue")

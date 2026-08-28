@@ -168,7 +168,7 @@ class BaseEtlCommandTestCase(SimpleTestCase):
         self.servico.executar.assert_called_with(fase_inicial=1)
 
     def test_continuar_retoma_execucao_interrompida(self) -> None:
-        """Checkpoint interrompido retoma da fase seguinte, não do 1."""
+        """Checkpoint interrompido retoma a própria fase salva."""
         self.repo.obter_checkpoint_dominio.return_value = {
             "ultima_pagina": 2,
             "ultima_situacao": "interrompido",
@@ -179,7 +179,30 @@ class BaseEtlCommandTestCase(SimpleTestCase):
 
         self.cmd.handle(volume=100, offset=0, continuar=True)
 
-        self.servico.executar.assert_called_with(fase_inicial=3)
+        self.servico.executar.assert_called_with(fase_inicial=2)
+
+    def test_erro_em_fase_atual_preserva_ultima_concluida_para_retry(
+        self,
+    ) -> None:
+        """Erro na fase atual deve retomar a mesma fase no retry."""
+        self.servico.executar.side_effect = Exception("Falha na fase")
+        self.servico.ultima_fase_concluida = 2
+        self.servico.fase_atual = 3
+        self.servico.ultimo_token = "285516"
+
+        with self.assertRaises(CommandError):
+            self.cmd.handle(volume=100, offset=0, continuar=False)
+
+        id_exec = self.repo.iniciar_execucao.return_value
+        self.repo.atualizar_checkpoint_dominio.assert_called_with(
+            dominio="teste_base",
+            ultimo_id_execucao=id_exec,
+            ultima_pagina=2,
+            token_parada="285516",
+            indice_sincronizacao="ERRO:offset:285516",
+            ultima_situacao="erro",
+            sucesso=False,
+        )
 
     def test_checkpoint_usa_id_execucao_proprio(self) -> None:
         """Checkpoint é atualizado pelo serviço durante a execução."""

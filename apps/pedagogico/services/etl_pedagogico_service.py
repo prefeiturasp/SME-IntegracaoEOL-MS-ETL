@@ -350,7 +350,9 @@ class EtlPedagogicoService(BaseEtlService):
         if not lote_transformado:
             return 0, len(chunk)
 
-        meta = self._get_batch_meta(config)
+        meta = self._get_batch_meta(
+            config, materializar=getattr(transform, "materializar", None)
+        )
         return self.sync_batch(
             cast(list[ProcessedRecord], lote_transformado),
             meta,
@@ -937,7 +939,8 @@ class EtlPedagogicoService(BaseEtlService):
                 continue
 
             logger.info("[ETL PEDAG] === Fase %d: %s ===", i, config.nome)
-            metrics = self._executar_fase(config)
+            self.fase_atual = i
+            metrics = self._executar_fase(config, numero_fase=i)
 
             if config.nome == _AGRUPAMENTO_GERADO_BACKUP:
                 resultados["agrupamento_atribuicao_territorio_saber"] = (
@@ -950,7 +953,7 @@ class EtlPedagogicoService(BaseEtlService):
                 resultados[config.table_name] = metrics.total_escritos
 
             self.ultima_fase_concluida = i
-            self._registrar_auditoria_fase(config, metrics)
+            self.fase_atual = 0
             logger.info("[ETL PEDAG] Fase %d concluída.", i)
 
         logger.info(
