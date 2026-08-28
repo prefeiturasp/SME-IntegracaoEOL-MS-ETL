@@ -117,6 +117,15 @@ Payload agendado:
 }
 ```
 
+Parâmetros principais:
+
+| Campo | Padrão | Uso |
+|---|---:|---|
+| `volume` | `100` | Quantidade de registros processados por lote |
+| `offset` | `0` | Posição inicial da leitura; normalmente fica em `0` |
+| `continuar` | `false` | Retoma pelo checkpoint do domínio quando `true` |
+| `prioridade` | `5` | Prioridade da task: `0` mais urgente, `9` menos urgente |
+
 ### Via command
 
 Imediato:
@@ -171,6 +180,37 @@ Resposta:
 
 ```json
 { "task_id": "abc123-..." }
+```
+
+### Cron por ano letivo
+
+O script `scripts/disparar_etl_anos_letivos.sh` enfileira os domínios pela API
+e calcula os anos letivos pela data de referência:
+
+- diariamente: ano vigente;
+- dia 8: ano vigente e ano anterior;
+- dia 15: ano vigente e dois anos atrás;
+- dia 22: ano vigente e três anos atrás;
+- dia 29: ano vigente e quatro anos atrás.
+
+Simulação:
+
+```bash
+ETL_DRY_RUN=true ETL_DATA_REFERENCIA=2026-08-15 \
+  scripts/disparar_etl_anos_letivos.sh
+```
+
+Exemplo de cron com trava para evitar sobreposição:
+
+```cron
+0 2 * * * flock -n /tmp/sme-sgp-ms-etl.lock /app/scripts/disparar_etl_anos_letivos.sh >> /var/log/sme-sgp-ms-etl-cron.log 2>&1
+```
+
+Para anos anteriores ao quarto ano, configure uma janela periódica:
+
+```bash
+ETL_ANO_MINIMO_ANTERIORES=2020 ETL_INTERVALO_MESES_ANTERIORES=3 \
+  scripts/disparar_etl_anos_letivos.sh
 ```
 
 Execução direta via command (dev):

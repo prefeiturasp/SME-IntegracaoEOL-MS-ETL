@@ -86,7 +86,8 @@ SELECT
     te.cd_turma_escola
   , LTRIM(RTRIM(te.dc_turma_escola)) AS nome_turma
   , CAST(te.cd_escola AS VARCHAR(20)) AS codigo_ue
-  , CAST(vcue.cd_unidade_administrativa_referencia AS VARCHAR(20)) AS codigo_dre
+  , CAST(vcue.cd_unidade_administrativa_referencia AS VARCHAR(20))
+        AS codigo_dre
   , te.an_letivo
   , te.cd_tipo_turno
   , tt.dc_exibicao_portal AS descricao_turno
@@ -134,6 +135,7 @@ OUTER APPLY (
       AND tegp_g.dt_fim IS NULL
 ) AS g_one
 WHERE te.cd_tipo_turma = 3
+  /*FILTRO_ANOS_LETIVOS_TURMA_PROGRAMA*/
   AND te.st_turma_escola IN ('O', 'A', 'C', 'E')
   AND EXISTS (
       SELECT 1
@@ -176,7 +178,8 @@ SELECT
     , m.dt_situacao_aluno AS dt_situacao
     , te.an_letivo
     , CAST(te.cd_escola AS VARCHAR(20)) AS codigo_ue
-    , CAST(vcue.cd_unidade_administrativa_referencia AS VARCHAR(20)) AS codigo_dre
+    , CAST(vcue.cd_unidade_administrativa_referencia AS VARCHAR(20))
+          AS codigo_dre
   FROM matricula_turma_escola m
   INNER JOIN v_matricula_cotic vm
       ON vm.cd_matricula = m.cd_matricula
@@ -193,6 +196,7 @@ SELECT
   INNER JOIN componente_curricular cc
       ON cc.cd_componente_curricular = gcc.cd_componente_curricular
   WHERE te.cd_tipo_turma = 3
+    /*FILTRO_ANOS_LETIVOS_MATRICULA_TURMA_PROGRAMA*/
     AND te.st_turma_escola IN ('O', 'A', 'C', 'E')
     AND tegp.dt_fim IS NULL
     AND cc.dt_cancelamento IS NULL
@@ -211,7 +215,8 @@ SELECT
     , NULL AS dt_situacao
     , te.an_letivo
     , CAST(te.cd_escola AS VARCHAR(20)) AS codigo_ue
-    , CAST(vcue.cd_unidade_administrativa_referencia AS VARCHAR(20)) AS codigo_dre
+    , CAST(vcue.cd_unidade_administrativa_referencia AS VARCHAR(20))
+          AS codigo_dre
   FROM v_historico_matricula_cotic vm WITH (NOLOCK)
   INNER JOIN historico_matricula_turma_escola m WITH (NOLOCK)
       ON vm.cd_matricula = m.cd_matricula
@@ -228,6 +233,7 @@ SELECT
   INNER JOIN componente_curricular cc WITH (NOLOCK)
       ON cc.cd_componente_curricular = gcc.cd_componente_curricular
   WHERE te.cd_tipo_turma = 3
+    /*FILTRO_ANOS_LETIVOS_MATRICULA_TURMA_PROGRAMA_HISTORICO*/
     AND te.st_turma_escola IN ('O', 'A', 'C')
     AND tegp.dt_fim IS NULL
     AND cc.dt_cancelamento IS NULL
@@ -241,7 +247,8 @@ SELECT DISTINCT
     , gcc.cd_componente_curricular
     , te.an_letivo
     , CAST(te.cd_escola AS VARCHAR(20)) AS codigo_ue
-    , CAST(vcue.cd_unidade_administrativa_referencia AS VARCHAR(20)) AS codigo_dre
+    , CAST(vcue.cd_unidade_administrativa_referencia AS VARCHAR(20))
+          AS codigo_dre
   FROM matricula_turma_escola m
   INNER JOIN v_matricula_cotic vm
       ON vm.cd_matricula = m.cd_matricula
@@ -258,6 +265,7 @@ SELECT DISTINCT
   INNER JOIN componente_curricular cc
       ON cc.cd_componente_curricular = gcc.cd_componente_curricular
   WHERE te.cd_tipo_turma = 3
+    /*FILTRO_ANOS_LETIVOS_ALUNO_PAP_ANO_LETIVO*/
     AND gcc.cd_componente_curricular IN ({_COMPONENTES_PAP_VIGENTES_IN})
     AND te.st_turma_escola IN ('O', 'A', 'C')
     AND tegp.dt_fim IS NULL
@@ -273,7 +281,8 @@ SELECT DISTINCT
     , gcc.cd_componente_curricular
     , te.an_letivo
     , CAST(te.cd_escola AS VARCHAR(20)) AS codigo_ue
-    , CAST(vcue.cd_unidade_administrativa_referencia AS VARCHAR(20)) AS codigo_dre
+    , CAST(vcue.cd_unidade_administrativa_referencia AS VARCHAR(20))
+          AS codigo_dre
   FROM v_historico_matricula_cotic vm WITH (NOLOCK)
   INNER JOIN historico_matricula_turma_escola m WITH (NOLOCK)
       ON vm.cd_matricula = m.cd_matricula
@@ -290,6 +299,7 @@ SELECT DISTINCT
   INNER JOIN componente_curricular cc WITH (NOLOCK)
       ON cc.cd_componente_curricular = gcc.cd_componente_curricular
   WHERE te.cd_tipo_turma = 3
+    /*FILTRO_ANOS_LETIVOS_ALUNO_PAP_ANO_LETIVO_HISTORICO*/
     AND gcc.cd_componente_curricular IN ({_COMPONENTES_PAP_VIGENTES_IN})
     AND te.st_turma_escola IN ('O', 'A', 'C')
     AND tegp.dt_fim IS NULL
@@ -310,6 +320,7 @@ class EtlProgramasService(BaseEtlService):
         repositorio_auditoria: Any | None = None,
         primeiro_run: bool = False,
         eol: EOLService | None = None,
+        anos_letivos: list[int] | None = None,
     ) -> None:
         super().__init__(
             db_alias=db_alias,
@@ -318,11 +329,34 @@ class EtlProgramasService(BaseEtlService):
             primeiro_run=primeiro_run,
         )
         self.eol = eol or EOLService()
+        self._anos_letivos = (
+            [int(ano) for ano in anos_letivos] if anos_letivos else None
+        )
         self._fases = self._init_fases()
 
     def _iter_chunks(self, sql: str) -> Iterator[list[tuple]]:
         """Itera resultados da query EOL em chunks."""
         return self.eol.iter_query(sql)
+
+    def _sql_com_filtro_anos_letivos(self, sql: str) -> str:
+        """Aplica recorte de anos letivos aos marcadores da query."""
+        marcadores = {
+            "/*FILTRO_ANOS_LETIVOS_TURMA_PROGRAMA*/": "",
+            "/*FILTRO_ANOS_LETIVOS_MATRICULA_TURMA_PROGRAMA*/": "",
+            "/*FILTRO_ANOS_LETIVOS_MATRICULA_TURMA_PROGRAMA_HISTORICO*/": "",
+            "/*FILTRO_ANOS_LETIVOS_ALUNO_PAP_ANO_LETIVO*/": "",
+            "/*FILTRO_ANOS_LETIVOS_ALUNO_PAP_ANO_LETIVO_HISTORICO*/": "",
+        }
+        if self._anos_letivos:
+            anos = ", ".join(str(ano) for ano in self._anos_letivos)
+            marcadores = dict.fromkeys(
+                marcadores,
+                f"AND te.an_letivo IN ({anos})",
+            )
+
+        for marcador, filtro in marcadores.items():
+            sql = sql.replace(marcador, filtro)
+        return sql
 
     def _init_fases(self) -> list[PhaseConfig]:
         """Retorna as fases do domínio em ordem de dependência."""
@@ -357,7 +391,7 @@ class EtlProgramasService(BaseEtlService):
             ),
             PhaseConfig(
                 nome="turma_programa",
-                sql=SQL_TURMA_PROGRAMA,
+                sql=self._sql_com_filtro_anos_letivos(SQL_TURMA_PROGRAMA),
                 table_name="turma_programa",
                 source_table="turma_escola",
                 model_class=TurmaPrograma,
@@ -395,7 +429,9 @@ class EtlProgramasService(BaseEtlService):
             ),
             PhaseConfig(
                 nome="matricula_turma_programa",
-                sql=SQL_MATRICULA_TURMA_PROGRAMA,
+                sql=self._sql_com_filtro_anos_letivos(
+                    SQL_MATRICULA_TURMA_PROGRAMA
+                ),
                 table_name="matricula_turma_programa",
                 source_table="matricula_turma_escola",
                 model_class=MatriculaTurmaPrograma,
@@ -425,7 +461,9 @@ class EtlProgramasService(BaseEtlService):
             ),
             PhaseConfig(
                 nome="matricula_turma_programa_historico",
-                sql=SQL_MATRICULA_TURMA_PROGRAMA_HISTORICO,
+                sql=self._sql_com_filtro_anos_letivos(
+                    SQL_MATRICULA_TURMA_PROGRAMA_HISTORICO
+                ),
                 table_name="matricula_turma_programa_historico",
                 source_table="v_historico_matricula_cotic",
                 model_class=MatriculaTurmaProgramaHistorico,
@@ -455,7 +493,9 @@ class EtlProgramasService(BaseEtlService):
             ),
             PhaseConfig(
                 nome="aluno_pap_ano_letivo",
-                sql=SQL_ALUNO_PAP_ANO_LETIVO,
+                sql=self._sql_com_filtro_anos_letivos(
+                    SQL_ALUNO_PAP_ANO_LETIVO
+                ),
                 table_name="aluno_pap_ano_letivo",
                 source_table="v_matricula_cotic",
                 model_class=AlunoPapAnoLetivo,
@@ -477,7 +517,9 @@ class EtlProgramasService(BaseEtlService):
             ),
             PhaseConfig(
                 nome="aluno_pap_ano_letivo_historico",
-                sql=SQL_ALUNO_PAP_ANO_LETIVO_HISTORICO,
+                sql=self._sql_com_filtro_anos_letivos(
+                    SQL_ALUNO_PAP_ANO_LETIVO_HISTORICO
+                ),
                 table_name="aluno_pap_ano_letivo_historico",
                 source_table="v_historico_matricula_cotic",
                 model_class=AlunoPapAnoLetivoHistorico,

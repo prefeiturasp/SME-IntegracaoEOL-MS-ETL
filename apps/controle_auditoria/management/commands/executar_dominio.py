@@ -24,15 +24,6 @@ class Command(BaseCommand):
         parser.add_argument("--offset", type=int, default=0)
         parser.add_argument("--continuar", action="store_true")
         parser.add_argument(
-            "--ano-letivo",
-            type=int,
-            default=None,
-            help=(
-                "(alunos/pedagogico) Processa apenas anos letivos "
-                "a partir deste valor."
-            ),
-        )
-        parser.add_argument(
             "--fases",
             nargs="+",
             default=None,
@@ -45,8 +36,12 @@ class Command(BaseCommand):
             nargs="+",
             default=None,
             metavar="ANO",
-            help="(alunos) Processa apenas os anos letivos informados.",
+            help=(
+                "(alunos/pedagogico/professores/programas) Processa apenas "
+                "os anos letivos informados."
+            ),
         )
+        parser.add_argument("--parametros-disparo", type=str, default=None)
 
     def handle(self, *args: Any, **options: Any) -> None:
         """Executa o ETL do dominio especificado."""
@@ -54,13 +49,11 @@ class Command(BaseCommand):
         volume = options["volume"]
         offset = options["offset"]
         continuar = options["continuar"]
-        ano_letivo = options.get("ano_letivo")
         fases = options.get("fases")
         anos_letivos = options.get("anos_letivos")
 
         erro_parametros = validar_parametros_dominio(
             dominio,
-            ano_letivo=ano_letivo,
             fases=fases,
             anos_letivos=anos_letivos,
         )
@@ -72,10 +65,13 @@ class Command(BaseCommand):
         argumentos = ["--volume", str(volume), "--offset", str(offset)]
         if continuar:
             argumentos.append("--continuar")
-        if ano_letivo is not None:
-            argumentos += ["--ano-letivo", str(ano_letivo)]
         if fases:
             argumentos += ["--fases", *fases]
         if anos_letivos:
             argumentos += ["--anos-letivos", *[str(a) for a in anos_letivos]]
+        if options.get("parametros_disparo"):
+            argumentos += [
+                "--parametros-disparo",
+                str(options["parametros_disparo"]),
+            ]
         call_command(str(comando_etl), *argumentos)

@@ -12,7 +12,7 @@ Herdados de `BaseEtlCommand`:
 - `--offset` — offset inicial
 - `--continuar` — retoma a partir do último checkpoint salvo
 - `--primeiro-run` — sinaliza primeiro run (sem filtro incremental)
-- `--ano-letivo` — processa apenas anos letivos a partir do valor informado
+- `--anos-letivos ANO [ANO ...]` — processa apenas os anos letivos informados
 
 ## Comportamento
 
@@ -57,4 +57,5 @@ python manage.py etl_pedagogico
 python manage.py etl_pedagogico --continuar
 python manage.py etl_pedagogico --primeiro-run
 python manage.py etl_pedagogico --fases agrupamento_atribuicao_territorio_saber
+python manage.py etl_pedagogico --anos-letivos 2025 2026
 ```

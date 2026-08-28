@@ -509,51 +509,53 @@ class EtlProfessoresService:
     def __init__(
         self,
         eol: EOLService | None = None,
-        ano_letivo: int | None = None,
+        anos_letivos: list[int] | None = None,
         core_sso: RepositorioCoreSSO | None = None,
     ) -> None:
         """Inicializa o serviço.
 
         Args:
             eol: Cliente EOL; instanciado sob demanda quando omitido.
-            ano_letivo: Ano letivo aplicado ao filtro incremental.
+            anos_letivos: Anos letivos aplicados ao filtro incremental.
             core_sso: Repositório CoreSSO.
         """
         self.eol = eol or EOLService()
         self.core_sso = core_sso or RepositorioCoreSSO()
-        self._ano_letivo = ano_letivo
+        self._anos_letivos = (
+            [int(ano) for ano in anos_letivos] if anos_letivos else None
+        )
         self.ultima_fase_concluida: int = 0
 
     def _sql_com_filtro_ano_letivo(self, consulta: str) -> str:
-        """Aplica o recorte de ano letivo quando informado.
+        """Aplica o recorte de anos letivos quando informado.
 
         Args:
             consulta: Texto base usado na carga.
 
         Returns:
-            Texto com recorte aplicado quando houver ano letivo.
+            Texto com recorte aplicado quando houver anos letivos.
         """
         filtros = _MARCADORES_ANO_LETIVO
-        if self._ano_letivo is not None:
-            ano = int(self._ano_letivo)
+        if self._anos_letivos is not None:
+            anos = ", ".join(str(ano) for ano in self._anos_letivos)
             filtros = {
                 "/*FILTRO_ANO_LETIVO_ATRIBUICAO_AULA*/": (
-                    f"AND aa.an_atribuicao = {ano}"
+                    f"AND aa.an_atribuicao IN ({anos})"
                 ),
                 "/*FILTRO_ANO_LETIVO_ATRIBUICAO_EXTERNO*/": (
-                    f"AND ae.an_atribuicao = {ano}"
+                    f"AND ae.an_atribuicao IN ({anos})"
                 ),
                 "/*FILTRO_ANO_LETIVO_TURMAS_ATRIBUIDAS_UE*/": (
-                    f"AND AnoLetivo = {ano}"
+                    f"AND AnoLetivo IN ({anos})"
                 ),
                 "/*FILTRO_ANO_LETIVO_DISCIPLINAS_TURMAS_ATRIBUIDAS_UE*/": (
-                    f"AND tau.AnoLetivo = {ano}"
+                    f"AND tau.AnoLetivo IN ({anos})"
                 ),
                 "/*FILTRO_ANO_LETIVO_PROFESSORES_ESCOLA_ANO*/": (
-                    f"AND turma_escola.an_letivo = {ano}"
+                    f"AND turma_escola.an_letivo IN ({anos})"
                 ),
                 "/*FILTRO_ANO_LETIVO_ESCOLAS_PROFESSORES_ANO*/": (
-                    f"AND turma_escola.an_letivo = {ano}"
+                    f"AND turma_escola.an_letivo IN ({anos})"
                 ),
             }
         for marcador, filtro in filtros.items():
@@ -937,11 +939,11 @@ class EtlProfessoresService:
         """Popula professores por escola e ano."""
         destino = ProfessorEscolaAno.objects.using("professores_db")
         consultas: list[tuple[str, list[str] | None]]
-        if self._ano_letivo is None:
+        if self._anos_letivos is None:
             destino.all().delete()
             consultas = [(self._sql_professores_escola_ano(), None)]
         else:
-            destino.filter(ano_letivo=int(self._ano_letivo)).delete()
+            destino.filter(ano_letivo__in=self._anos_letivos).delete()
             consultas = [
                 (
                     self._sql_professores_escola_ano(codigo_escola),

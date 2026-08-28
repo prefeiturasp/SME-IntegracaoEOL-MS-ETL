@@ -6,7 +6,7 @@ from uuid import uuid4
 from django.test import TestCase
 
 from apps.core.libs.base_etl_service import PhaseConfig, PipelineMetrics
-from apps.programas.services import EtlProgramasService
+from apps.programas.services import SQL_TURMA_PROGRAMA, EtlProgramasService
 
 
 class TestProgramasService(TestCase):
@@ -20,7 +20,7 @@ class TestProgramasService(TestCase):
             eol=self.mock_eol,
             id_execucao=uuid4(),
         )
-        self.service._truncar_tabela = MagicMock()
+        self.service._truncar_tabela = MagicMock()  # type: ignore[method-assign]
 
     def test_phase_config_e_imutavel(self) -> None:
         """Valida que PhaseConfig é frozen."""
@@ -35,7 +35,7 @@ class TestProgramasService(TestCase):
             unique_fields=("id",),
         )
         with self.assertRaises(AttributeError):
-            config.nome = "mudar"  # type: ignore[misc]
+            config.nome = "mudar"  # type: ignore[method-assign,misc]
 
     def test_fases_contem_8_configs(self) -> None:
         """Valida que o service define as 8 fases esperadas."""
@@ -60,6 +60,26 @@ class TestProgramasService(TestCase):
         self.mock_eol.iter_query.return_value = iter([[("a",)]])
         list(self.service._iter_chunks("SELECT 1"))
         self.mock_eol.iter_query.assert_called_once_with("SELECT 1")
+
+    def test_sql_com_filtro_anos_letivos_remove_marcadores(self) -> None:
+        """Sem filtro anual, marcadores são removidos."""
+        sql = self.service._sql_com_filtro_anos_letivos(SQL_TURMA_PROGRAMA)
+
+        self.assertNotIn("FILTRO_ANOS_LETIVOS_TURMA_PROGRAMA", sql)
+        self.assertNotIn("te.an_letivo IN", sql)
+
+    def test_sql_com_filtro_anos_letivos_aplica_in(self) -> None:
+        """Com anos informados, aplica filtro IN nas queries anuais."""
+        service = EtlProgramasService(
+            db_alias="programas_db",
+            eol=self.mock_eol,
+            id_execucao=uuid4(),
+            anos_letivos=[2025, 2026],
+        )
+
+        sql = service._sql_com_filtro_anos_letivos(SQL_TURMA_PROGRAMA)
+
+        self.assertIn("AND te.an_letivo IN (2025, 2026)", sql)
 
     def test_criar_transform_retorna_tripla(self) -> None:
         """Valida que a factory de transform gera a tripla (pk, hash, obj)."""
