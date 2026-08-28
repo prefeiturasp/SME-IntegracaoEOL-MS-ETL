@@ -1,13 +1,18 @@
 from datetime import UTC, date, datetime
 from queue import Empty
 from types import SimpleNamespace
+from typing import cast
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 from django.test import TestCase
 from django.utils import timezone
 
-from apps.core.libs.base_etl_service import PhaseConfig, PipelineMetrics
+from apps.core.libs.base_etl_service import (
+    PhaseConfig,
+    PipelineMetrics,
+    TransformFase,
+)
 from apps.pedagogico.dtos.model_in import (
     AtribuicaoTerritorioSaberIn,
 )
@@ -278,11 +283,12 @@ class TestPedagogicoService(TestCase):
     ) -> None:
         """Fase API EOL usa transform genérico da base."""
         config = self.service._fases[5]
-        transform = self.service._criar_transform(config)
+        transform = cast(TransformFase, self.service._criar_transform(config))
 
         result = transform((1, 512, 513, "2021-12-31T00:00:00"))
         assert result is not None
-        pk, _, obj = result
+        pk, _, payload = result
+        obj = transform.materializar(payload)
 
         self.assertEqual(pk, "1")
         self.assertEqual(obj.id_componente_curricular_pai, 512)
@@ -294,11 +300,12 @@ class TestPedagogicoService(TestCase):
     ) -> None:
         """Regência da API EOL não depende de id físico de origem."""
         config = self.service._fases[7]
-        transform = self.service._criar_transform(config)
+        transform = cast(TransformFase, self.service._criar_transform(config))
 
         result = transform((218, 4, 5))
         assert result is not None
-        pk, _, obj = result
+        pk, _, payload = result
+        obj = transform.materializar(payload)
 
         self.assertEqual(pk, "218-4-5")
         self.assertEqual(obj.id_componente_curricular, 218)
@@ -849,11 +856,12 @@ class TestPedagogicoService(TestCase):
         self,
     ) -> None:
         config = self.service._fases[4]
-        transform = self.service._criar_transform(config)
+        transform = cast(TransformFase, self.service._criar_transform(config))
 
         result = transform((None, 513, True, False, " Arte ", None, None))
         assert result is not None
-        pk, _, obj = result
+        pk, _, payload = result
+        obj = transform.materializar(payload)
 
         self.assertEqual(pk, "None-513")
         self.assertIsNone(obj.id_relacao_origem)

@@ -680,10 +680,11 @@ class BaseEtlServiceCoverageTest(TestCase, BaseEtlMockMixin):
         config.dto_in.return_value = dto_inst
 
         transform = self.svc._criar_transform(config)
-        id_dest, _, obj = transform((1,))
+        id_dest, _, payload = transform((1,))
 
         self.assertEqual(id_dest, "1")
-        self.assertEqual(obj.id, 1)
+        self.assertEqual(payload, (1,))
+        self.assertEqual(transform.materializar(payload).id, 1)
 
     def test_executar_fase_error_in_producer(self) -> None:
         """Testa erro no produtor dentro de _executar_fase."""

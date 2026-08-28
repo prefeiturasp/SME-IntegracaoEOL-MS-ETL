@@ -82,17 +82,32 @@ class TestProgramasService(TestCase):
         self.assertIn("AND te.an_letivo IN (2025, 2026)", sql)
 
     def test_criar_transform_retorna_tripla(self) -> None:
-        """Valida que a factory de transform gera a tripla (pk, hash, obj)."""
+        """Transform devolve (pk, hash, linha crua) sem materializar model."""
         config = self.service._fases[0]  # tipo_programa
         transform = self.service._criar_transform(config)
 
         row = (649, "PAP-RECUP", "PAP Recuperação")
-        pk, h, obj = transform(row)
+        pk, h, payload = transform(row)
 
         self.assertEqual(pk, "649")
         self.assertIsInstance(h, str)
         self.assertEqual(len(h), 64)
+        self.assertEqual(payload, row)
+
+        obj = transform.materializar(payload)
         self.assertEqual(obj.codigo_tipo_programa, 649)
+
+    def test_transform_ignora_colunas_fora_do_hash(self) -> None:
+        """Linhas iguais geram o mesmo hash; diferentes, hashes distintos."""
+        config = self.service._fases[0]
+        transform = self.service._criar_transform(config)
+
+        base = (649, "PAP-RECUP", "PAP Recuperação")
+        self.assertEqual(transform(base)[1], transform(base)[1])
+        self.assertNotEqual(
+            transform(base)[1],
+            transform((649, "PAP-RECUP", "PAP Recuperação II"))[1],
+        )
 
     def test_criar_transform_pk_composta_turma_componente(self) -> None:
         """Valida geração de PK composta para turma_programa_componente."""

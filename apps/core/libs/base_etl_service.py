@@ -8,10 +8,10 @@ import os
 import random
 import time
 from collections.abc import Callable, Iterator
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from queue import Empty, Queue
 from threading import Thread
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Protocol, cast
 
 if TYPE_CHECKING:
     from apps.core.libs.base_etl_fase import BaseEtlFase
@@ -21,7 +21,10 @@ from django.conf import settings
 from django.db import DatabaseError, connections, transaction
 from psycopg import sql
 
-from apps.core.libs.thread_processor import ThreadPoolProcessor, calcular_hash
+from apps.core.libs.thread_processor import (
+    ThreadPoolProcessor,
+    calcular_hash_linha,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +50,17 @@ def _get_attr(obj: Any, key: str, default: Any = None) -> Any:
     if isinstance(obj, dict):
         return obj.get(key, default)
     return getattr(obj, key, default)
+
+
+def _materializar(itens: list, materializar: Any) -> list:
+    """Converta o payload cru das linhas pendentes em objetos do model.
+
+    Quando ``materializar`` é None o payload já é o objeto final, mantendo
+    compatibilidade com chamadores que não usam transformação preguiçosa.
+    """
+    if materializar is None:
+        return itens
+    return [materializar(item) for item in itens]
 
 
 def _resolve_model(fase_meta: Any) -> Any:
@@ -303,8 +317,12 @@ class PostgresUpsertEngine:
         primeiro_run = _get_attr(fase_meta, "primeiro_run", False)
         modo = _get_attr(fase_meta, "modo_escrita", "upsert")
 
+        materializar = _get_attr(fase_meta, "materializar", None)
+
         if modo == "full_refresh":
-            objs = [item[1] for item in dedup.values()]
+            objs = _materializar(
+                [item[1] for item in dedup.values()], materializar
+            )
             self._persistir(
                 objs, _resolve_model(fase_meta), [], [], db, fast=True
             )
@@ -325,7 +343,7 @@ class PostgresUpsertEngine:
         if not pendentes:
             return 0, total
 
-        objs = [p[2] for p in pendentes]
+        objs = _materializar([p[2] for p in pendentes], materializar)
         hashes = [(f"{tn}:{p[0]}", p[1]) for p in pendentes]
         del pendentes
 
@@ -369,6 +387,62 @@ class PostgresUpsertEngine:
                     update_fields=update_fields,
                     batch_size=_BATCH_SIZE,
                 )
+
+
+class TransformFase(Protocol):
+    """Contrato do transform de uma fase.
+
+    Chamar devolve ``(pk, hash, payload)``; ``materializar`` converte o
+    payload no objeto do model. Fases cujo destino não é função pura da
+    origem devolvem o objeto pronto e materializam por identidade.
+    """
+
+    def __call__(self, row: tuple) -> tuple[str, str, Any]:
+        """Transforma a linha da origem."""
+        ...
+
+    def materializar(self, row: Any) -> Any:
+        """Converta o payload no objeto do model."""
+        ...
+
+
+class TransformadorFase:
+    """Transforma a linha da origem e materializa o model sob demanda.
+
+    Chamar a instância devolve ``(pk, hash, linha crua)``; o objeto do
+    model só é construído por ``materializar``, para as linhas que a
+    comparação de hash apontou como alteradas.
+    """
+
+    def __init__(
+        self, config: PhaseConfig, pk_idx: tuple[int, ...] | None
+    ) -> None:
+        """Guarda o necessário para transformar linhas desta fase."""
+        self._dto_in = config.dto_in
+        self._model_class = config.model_class
+        self._pk_field = config.pk_field
+        self._pk_idx = pk_idx
+        self._salt = (
+            f"{config.table_name}|{'|'.join(sorted(config.update_fields))}"
+        )
+
+    def __call__(self, row: tuple) -> tuple[str, str, Any]:
+        """Devolve (pk, hash da linha crua, linha crua)."""
+        if self._pk_idx is not None:
+            pk = "-".join(str(row[i]) for i in self._pk_idx)
+        else:
+            dto = self._dto_in(*row)
+            campos = self._pk_field
+            pk = (
+                "-".join(str(getattr(dto, f)) for f in campos)
+                if isinstance(campos, list)
+                else str(getattr(dto, campos))
+            )
+        return pk, calcular_hash_linha(row, self._salt), row
+
+    def materializar(self, row: tuple) -> Any:
+        """Constrói o objeto do model a partir da linha crua."""
+        return self._model_class(**self._dto_in(*row).to_domain())
 
 
 class BaseEtlService:
@@ -455,7 +529,9 @@ class BaseEtlService:
             if tp is not None
             else [transform(r) for r in chunk]
         )
-        meta = self._get_batch_meta(config)
+        meta = self._get_batch_meta(
+            config, materializar=getattr(transform, "materializar", None)
+        )
         return self.sync_batch(
             lote_transformado, meta, batch_num=kwargs.get("batch_num", 0)
         )
@@ -483,6 +559,7 @@ class BaseEtlService:
                 cfg.truncate_on_full_sync if cfg else False
             )
             or kwargs.get("truncate_on_full_sync", False),
+            "materializar": kwargs.get("materializar"),
         }
 
     def _executar_fase(
@@ -817,22 +894,33 @@ class BaseEtlService:
                 sql.SQL("TRUNCATE TABLE {} CASCADE").format(sql.Identifier(tn))
             )
 
-    def _criar_transform(self, config: PhaseConfig) -> Callable:
-        """Cria função de transformação de linha MSSQL para objeto Model."""
-        hf, pkf = sorted(config.update_fields), config.pk_field
-        din, mc = config.dto_in, config.model_class
+    def _criar_transform(self, config: PhaseConfig) -> TransformFase:
+        """Cria a transformação leve de linha MSSQL: (pk, hash, linha crua).
 
-        def _pk(d: Any) -> str:
-            if isinstance(pkf, list):
-                return "-".join(str(getattr(d, f)) for f in pkf)
-            return str(getattr(d, pkf))
+        O hash é calculado sobre a linha de origem, não sobre o objeto do
+        model. O destino é função pura da origem, então a linha crua é um
+        sinal de mudança equivalente — e evita construir DTO e model para as
+        linhas que serão descartadas por hash igual, que são a ampla maioria.
 
-        def transform(row: tuple) -> tuple[str, str, Any]:
-            d = din(*row)
-            obj = mc(**d.to_domain())
-            return _pk(d), calcular_hash(obj, hf), obj
+        O salt embute os campos que compõem o destino: alterar
+        ``update_fields`` invalida os hashes e força a regravação, que de
+        outro modo passaria despercebida.
+        """
+        return TransformadorFase(config, self._indices_pk(config))
 
-        return transform
+    def _indices_pk(self, config: PhaseConfig) -> tuple[int, ...] | None:
+        """Mapeia os campos de PK para índices na linha crua, se possível.
+
+        Retorna None quando o DTO não expõe os campos na mesma ordem da
+        query, caso em que a PK volta a ser extraída via DTO.
+        """
+        campos = config.pk_field
+        campos = campos if isinstance(campos, list) else [campos]
+        try:
+            nomes = [f.name for f in fields(config.dto_in)]
+            return tuple(nomes.index(campo) for campo in campos)
+        except (ValueError, TypeError):
+            return None
 
     def executar(self, fase_inicial: int = 1) -> dict[str, int]:
         """Executa todas as fases do serviço sequencialmente."""

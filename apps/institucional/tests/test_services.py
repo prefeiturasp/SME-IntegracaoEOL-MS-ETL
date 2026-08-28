@@ -117,11 +117,14 @@ class EtlInstitucionalServiceTestCase(TestCase):
         config = self.service._fases[1]
         transform = self.service._criar_transform(config)
 
-        pk, h, obj = transform((1, "EMEF", "Escola Municipal"))
+        row = (1, "EMEF", "Escola Municipal")
+        pk, h, payload = transform(row)
 
         self.assertEqual(pk, "1")
         self.assertIsInstance(h, str)
         self.assertEqual(len(h), 64)
+        self.assertEqual(payload, row)
+        obj = transform.materializar(payload)
         self.assertIsInstance(obj, TipoEscola)
         self.assertEqual(obj.descricao, "Escola Municipal")
 
@@ -130,23 +133,24 @@ class EtlInstitucionalServiceTestCase(TestCase):
         config = self.service._fases[0]
         transform = self.service._criar_transform(config)
 
-        pk, h, obj = transform(("108900", "DRE BT", "BT", 1, "Regional"))
+        pk, h, payload = transform(("108900", "DRE BT", "BT", 1, "Regional"))
 
         self.assertEqual(pk, "108900")
         self.assertEqual(len(h), 64)
-        self.assertIsInstance(obj, DRE)
+        self.assertIsInstance(transform.materializar(payload), DRE)
 
     def test_criar_transform_dre_abrangencia_retorna_tripla(self) -> None:
         """Valida transformação do read model de abrangência."""
         config = self.service._fases[4]
         transform = self.service._criar_transform(config)
 
-        pk, hash_controle, obj = transform(
+        pk, hash_controle, payload = transform(
             ("108700", "DRE ITAQUERA", "DRE - IQ", 1)
         )
 
         self.assertEqual(pk, "108700")
         self.assertEqual(len(hash_controle), 64)
+        obj = transform.materializar(payload)
         self.assertIsInstance(obj, DREAbrangencia)
         self.assertEqual(obj.ordem, 1)
 
