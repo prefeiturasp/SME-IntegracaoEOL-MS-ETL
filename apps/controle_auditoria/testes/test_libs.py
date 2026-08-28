@@ -131,8 +131,8 @@ class ServicoSincRecDbTestCase(TestCase):
 class DominiosTestCase(TestCase):
     """Valida regras de parâmetros por domínio."""
 
-    def test_alunos_rejeita_ano_letivo(self) -> None:
-        """Domínio alunos não aceita filtro de ano letivo."""
+    def test_rejeita_ano_letivo_legado(self) -> None:
+        """Contrato atual não aceita parâmetro singular de ano letivo."""
         self.assertIsNotNone(
             validar_parametros_dominio("alunos", ano_letivo=2024)
         )
@@ -145,10 +145,22 @@ class DominiosTestCase(TestCase):
             )
         )
 
-    def test_pedagogico_rejeita_anos_letivos(self) -> None:
-        """Domínio pedagógico não aceita o parâmetro anos_letivos."""
-        self.assertIsNotNone(
+    def test_pedagogico_aceita_anos_letivos(self) -> None:
+        """Domínio pedagógico aceita lista de anos letivos."""
+        self.assertIsNone(
             validar_parametros_dominio("pedagogico", anos_letivos=[2024])
+        )
+
+    def test_professores_aceita_anos_letivos(self) -> None:
+        """Domínio professores aceita lista de anos letivos."""
+        self.assertIsNone(
+            validar_parametros_dominio("professores", anos_letivos=[2024])
+        )
+
+    def test_programas_aceita_anos_letivos(self) -> None:
+        """Domínio programas aceita lista de anos letivos."""
+        self.assertIsNone(
+            validar_parametros_dominio("programas", anos_letivos=[2024])
         )
 
 
@@ -258,14 +270,14 @@ class TasksControleAuditoriaTestCase(TestCase):
     ) -> None:
         """Task rejeita parâmetros incompatíveis com o domínio."""
         retorno = executar_dominio_task(
-            dominio="programas",
+            dominio="institucional",
             volume=100,
             offset=0,
-            ano_letivo=2025,
+            anos_letivos=[2025],
         )
 
         self.assertIn("erro:", retorno)
-        self.assertIn("ano_letivo", retorno)
+        self.assertIn("anos_letivos", retorno)
         call_command_mock.assert_not_called()
 
 

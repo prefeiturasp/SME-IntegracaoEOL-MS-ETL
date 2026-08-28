@@ -122,6 +122,11 @@ class ViewsApiControleAuditoriaTestCase(TestCase):
                 "volume": 10,
                 "offset": 1,
                 "continuar": True,
+                "parametros_disparo": {
+                    "origem": "api",
+                    "prioridade": 5,
+                    "executar_em": None,
+                },
             },
             priority=5,
         )
@@ -148,24 +153,76 @@ class ViewsApiControleAuditoriaTestCase(TestCase):
                 "offset": 0,
                 "continuar": False,
                 "anos_letivos": [2021, 2022, 2023, 2024, 2025],
+                "parametros_disparo": {
+                    "origem": "api",
+                    "prioridade": 5,
+                    "executar_em": None,
+                },
             },
             priority=5,
         )
 
     @patch("apps.controle_auditoria.api.views.executar_dominio_task")
-    def test_deve_rejeitar_anos_letivos_em_dominio_sem_suporte(
+    def test_deve_enfileirar_pedagogico_com_anos_letivos(
         self, tarefa_mock: Any
     ) -> None:
-        """Retorna 400 quando domínio sem suporte recebe anos_letivos."""
+        """POST em pedagógico aceita anos_letivos e repassa para a task."""
+        tarefa_mock.apply_async.return_value = type(
+            "Result", (), {"id": "task-pedagogico"}
+        )()
         resposta = self.client.post(
             "/api/v1/dominios/pedagogico/executar/",
             data={"anos_letivos": [2024]},
             format="json",
             **self.headers,
         )
-        self.assertEqual(resposta.status_code, 400)
-        self.assertIn("anos_letivos", resposta.json()["erro"])
-        tarefa_mock.apply_async.assert_not_called()
+        self.assertEqual(resposta.status_code, 202)
+        tarefa_mock.apply_async.assert_called_once_with(
+            kwargs={
+                "dominio": "pedagogico",
+                "volume": 100,
+                "offset": 0,
+                "continuar": False,
+                "anos_letivos": [2024],
+                "parametros_disparo": {
+                    "origem": "api",
+                    "prioridade": 5,
+                    "executar_em": None,
+                },
+            },
+            priority=5,
+        )
+
+    @patch("apps.controle_auditoria.api.views.executar_dominio_task")
+    def test_deve_enfileirar_programas_com_anos_letivos(
+        self, tarefa_mock: Any
+    ) -> None:
+        """POST em programas aceita anos_letivos e repassa para a task."""
+        tarefa_mock.apply_async.return_value = type(
+            "Result", (), {"id": "task-programas"}
+        )()
+        resposta = self.client.post(
+            "/api/v1/dominios/programas/executar/",
+            data={"anos_letivos": [2025, 2026]},
+            format="json",
+            **self.headers,
+        )
+        self.assertEqual(resposta.status_code, 202)
+        tarefa_mock.apply_async.assert_called_once_with(
+            kwargs={
+                "dominio": "programas",
+                "volume": 100,
+                "offset": 0,
+                "continuar": False,
+                "anos_letivos": [2025, 2026],
+                "parametros_disparo": {
+                    "origem": "api",
+                    "prioridade": 5,
+                    "executar_em": None,
+                },
+            },
+            priority=5,
+        )
 
     @patch("apps.controle_auditoria.api.views.executar_dominio_task")
     def test_deve_agendar_execucao_com_data_hora(

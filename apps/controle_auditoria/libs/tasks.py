@@ -1,5 +1,6 @@
 """Tasks assincronas do ETL."""
 
+import json
 from typing import Any, cast
 
 from celery import Task
@@ -23,9 +24,9 @@ def _montar_argumentos(
     volume: int,
     offset: int,
     continuar: bool,
-    ano_letivo: int | None,
     fases: list[str] | None,
     anos_letivos: list[int] | None,
+    parametros_disparo: dict[str, object] | None,
 ) -> list[str]:
     """Monta a lista de argumentos para o comando executar_dominio."""
     args = [
@@ -38,12 +39,15 @@ def _montar_argumentos(
     ]
     if continuar:
         args.append("--continuar")
-    if ano_letivo is not None:
-        args += ["--ano-letivo", str(ano_letivo)]
     if fases:
         args += ["--fases", *fases]
     if anos_letivos:
         args += ["--anos-letivos", *[str(ano) for ano in anos_letivos]]
+    if parametros_disparo:
+        args += [
+            "--parametros-disparo",
+            json.dumps(parametros_disparo, default=str),
+        ]
     return args
 
 
@@ -57,6 +61,7 @@ def executar_dominio_task(
     ano_letivo: int | None = None,
     fases: list[str] | None = None,
     anos_letivos: list[int] | None = None,
+    parametros_disparo: dict[str, object] | None = None,
 ) -> str:
     """Executa domínio ETL via fila Celery com retomada por checkpoint."""
     erro_parametros = validar_parametros_dominio(
@@ -75,18 +80,16 @@ def executar_dominio_task(
     try:
         while True:
             cp_antes = repositorio.obter_checkpoint_dominio(dominio) or {}
-            token_antes = int(
-                cast(int | str, cp_antes.get("token_parada", 0))
-            )
+            token_antes = int(cast(int | str, cp_antes.get("token_parada", 0)))
 
             argumentos = _montar_argumentos(
                 dominio,
                 volume,
                 offset,
                 continuar_execucao,
-                ano_letivo,
                 fases,
                 anos_letivos,
+                parametros_disparo,
             )
             call_command("executar_dominio", *argumentos)
 
@@ -116,9 +119,9 @@ def executar_dominio_task(
             "volume": volume,
             "offset": offset,
             "continuar": True,
-            "ano_letivo": ano_letivo,
             "fases": fases,
             "anos_letivos": anos_letivos,
+            "parametros_disparo": parametros_disparo,
         }
 
         raise self.retry(

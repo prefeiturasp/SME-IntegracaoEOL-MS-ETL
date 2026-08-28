@@ -47,14 +47,14 @@ class ExecutarDominioCommandTestCase(TestCase):
         with self.assertRaises(CommandError):
             call_command("executar_dominio", "--dominio", "sinc_rec_db")
 
-    def test_deve_falhar_com_ano_letivo_sem_suporte(self) -> None:
-        """Retorna erro quando domínio não aceita ano_letivo."""
-        with self.assertRaisesMessage(CommandError, "ano_letivo"):
+    def test_deve_falhar_com_anos_letivos_sem_suporte(self) -> None:
+        """Retorna erro quando domínio não aceita anos_letivos."""
+        with self.assertRaisesMessage(CommandError, "anos_letivos"):
             call_command(
                 "executar_dominio",
                 "--dominio",
-                "programas",
-                "--ano-letivo",
+                "institucional",
+                "--anos-letivos",
                 "2025",
             )
 
@@ -98,6 +98,10 @@ class AgendarDominioCommandTestCase(TestCase):
             volume=120,
             offset=10,
             continuar=True,
+            parametros_disparo={
+                "origem": "management_command",
+                "executar_em": None,
+            },
         )
 
     @patch(
@@ -128,6 +132,10 @@ class AgendarDominioCommandTestCase(TestCase):
                 "volume": 100,
                 "offset": 0,
                 "continuar": False,
+                "parametros_disparo": {
+                    "origem": "management_command",
+                    "executar_em": "2026-03-10T23:00:00-03:00",
+                },
             },
         )
         self.assertIn("eta", kwargs_apply)

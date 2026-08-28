@@ -123,6 +123,72 @@ class RegistrarAuditoriaFaseTest(SimpleTestCase):
         svc._registrar_auditoria_fase(config, metrics)
 
 
+class ProgressoOperacionalTest(SimpleTestCase):
+    """Valida atualização de progresso operacional no service."""
+
+    def test_registra_progresso_com_force(self) -> None:
+        """force=True ignora throttle e atualiza auditoria."""
+        auditor = MagicMock()
+        svc = _make_service(
+            repositorio_auditoria=auditor,
+            id_execucao=uuid4(),
+        )
+        config = _make_phase()
+        metrics = PipelineMetrics(
+            total_lidos=100,
+            total_escritos=20,
+            total_ignorados=80,
+        )
+
+        svc._registrar_progresso_execucao(
+            config=config,
+            metrics=metrics,
+            numero_fase=2,
+            total_fases=5,
+            chunk_atual=3,
+            etapa="processando_chunk",
+            force=True,
+        )
+
+        auditor.atualizar_progresso_execucao.assert_called_once()
+        _, kwargs = auditor.atualizar_progresso_execucao.call_args
+        self.assertEqual(kwargs["fase_numero"], 2)
+        self.assertEqual(kwargs["chunk_atual"], 3)
+        self.assertEqual(kwargs["linhas_lidas"], 100)
+        self.assertEqual(kwargs["linhas_escritas"], 20)
+        self.assertEqual(kwargs["linhas_ignoradas"], 80)
+
+    def test_respeita_throttle_de_progresso(self) -> None:
+        """Sem force, não atualiza duas vezes dentro da janela."""
+        auditor = MagicMock()
+        svc = _make_service(
+            repositorio_auditoria=auditor,
+            id_execucao=uuid4(),
+        )
+        svc._progress_interval_seconds = 60
+        config = _make_phase()
+        metrics = PipelineMetrics(total_lidos=100)
+
+        svc._registrar_progresso_execucao(
+            config=config,
+            metrics=metrics,
+            numero_fase=1,
+            total_fases=1,
+            chunk_atual=1,
+            etapa="processando_chunk",
+        )
+        svc._registrar_progresso_execucao(
+            config=config,
+            metrics=metrics,
+            numero_fase=1,
+            total_fases=1,
+            chunk_atual=2,
+            etapa="processando_chunk",
+        )
+
+        auditor.atualizar_progresso_execucao.assert_called_once()
+
+
 class BuscarHashesPorCopyTest(SimpleTestCase, BaseEtlMockMixin):
     """Valida _buscar_sub_lote via WHERE id_destino = ANY(%s)."""
 

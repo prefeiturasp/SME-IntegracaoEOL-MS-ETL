@@ -40,6 +40,8 @@ Suporta filtros via query string: `dominio`, `data_inicio`, `data_fim`, `situaca
 
 Exibe:
 - Última execução por domínio com `total_processado` (via `token_parada`).
+- Escopo usado no disparo quando disponível: anos letivos, fases, volume,
+  offset, flag de retomada e prioridade.
 - Até 100 execuções filtradas.
 - Últimas 10 execuções com detalhes de tabelas escritas.
 
@@ -51,7 +53,8 @@ Exibe por domínio:
 - Coluna **Leitura EOL** — tabelas lidas e contagem.
 - Coluna **Hash Control** — contagem de `EtlAuditoriaLinha` por tabela.
 - Coluna **Escrita (Upsert)** — tabelas escritas e modo.
-- Coluna **Checkpoint** — token acumulado, fase, último sucesso.
+- Coluna **Checkpoint** — token acumulado, escopo da execução, fase em
+  andamento ou ponto de falha, último sucesso.
 
 ---
 
@@ -77,6 +80,29 @@ Retorna as 50 execuções ETL mais recentes, ordenadas por `iniciado_em` decresc
 Retorna uma execução identificada pelo UUID `id_execucao`, com `tabelas_lidas` e
 `tabelas_escritas` aninhadas.
 
+O campo `parametros` registra o escopo usado no disparo:
+
+```json
+{
+  "execucao": {
+    "volume": 100,
+    "offset": 0,
+    "continuar": true,
+    "fase": 0,
+    "fase_inicial": 1,
+    "fases": ["aluno"],
+    "anos_letivos": [2026],
+    "carga_inicial": false,
+    "celery": false
+  },
+  "disparo": {
+    "origem": "api",
+    "prioridade": 5,
+    "executar_em": null
+  }
+}
+```
+
 Retorna `404` se o UUID não existir.
 
 ---
@@ -96,11 +122,13 @@ Agenda ou executa imediatamente a sincronização de um domínio.
 
 | Campo | Tipo | Padrão | Descrição |
 |---|---|---|---|
-| `volume` | int | `100` | Tamanho da página de leitura |
-| `offset` | int | `0` | Offset inicial |
-| `continuar` | bool | `false` | Retomar da fase do último checkpoint |
+| `volume` | int | `100` | Quantidade de registros processados por lote. Valores maiores reduzem a quantidade de ciclos, mas aumentam memória e duração de cada tentativa |
+| `offset` | int | `0` | Posição inicial da leitura. Normalmente fica `0`; use apenas para iniciar de um ponto específico |
+| `continuar` | bool | `false` | Quando `true`, retoma pelo checkpoint do domínio. Quando `false`, começa conforme o `offset` informado |
 | `executar_em` | str | `null` | Data/hora ISO 8601 para agendamento |
-| `prioridade` | int | `5` | Prioridade Celery (0 = mais urgente, 9 = menos urgente) |
+| `prioridade` | int | `5` | Prioridade da task no Celery/Redis. `0` = mais urgente, `9` = menos urgente |
+| `fases` | array[str] | `null` | Lista opcional de fases a executar. Quando omitido, executa todas as fases do domínio |
+| `anos_letivos` | array[int] | `null` | Lista opcional de anos letivos a processar, somente para domínios/fases que aceitam esse filtro |
 
 Retorna `202` com `{"task_id": "<uuid>"}`.
 

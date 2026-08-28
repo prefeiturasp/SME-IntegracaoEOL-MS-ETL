@@ -1,5 +1,7 @@
 """Base para implementação de comandos de ETL com controle de auditoria."""
 
+import json
+from argparse import SUPPRESS
 from typing import Any
 
 from django.core.management.base import BaseCommand
@@ -88,6 +90,12 @@ class BaseEtlCommand(BaseCommand):
                 "Ex: --fases turma componente_curricular"
             ),
         )
+        parser.add_argument(
+            "--parametros-disparo",
+            type=str,
+            default=None,
+            help=SUPPRESS,
+        )
 
     def handle(self, *args: Any, **options: Any) -> None:
         """Execução padronizada do fluxo de ETL (Sync ou Async).
@@ -109,7 +117,10 @@ class BaseEtlCommand(BaseCommand):
             job_name=job_name,
         )
 
-        id_execucao = repositorio.iniciar_execucao(self.dominio)
+        id_execucao = repositorio.iniciar_execucao(
+            self.dominio,
+            parametros=self._parametros_execucao(fase_inicial, **options),
+        )
         self._etl_logger.update_context(execution_id=str(id_execucao))
 
         if options.get("celery"):
@@ -157,6 +168,31 @@ class BaseEtlCommand(BaseCommand):
     def _extra_service_kwargs(self, **_options: Any) -> dict[str, Any]:
         """Kwargs extras para o service."""
         return {}
+
+    def _parametros_execucao(
+        self, fase_inicial: int, **options: Any
+    ) -> dict[str, object]:
+        """Monta parâmetros rastreáveis da execução."""
+        disparo_raw = options.get("parametros_disparo")
+        disparo: dict[str, object] = {}
+        if disparo_raw:
+            try:
+                disparo = json.loads(disparo_raw)
+            except (TypeError, json.JSONDecodeError):
+                disparo = {"raw": str(disparo_raw)}
+
+        execucao = {
+            "volume": options.get("volume"),
+            "offset": options.get("offset"),
+            "continuar": options.get("continuar", False),
+            "fase": options.get("fase", 0),
+            "fase_inicial": fase_inicial,
+            "fases": options.get("fases"),
+            "anos_letivos": options.get("anos_letivos"),
+            "carga_inicial": options.get("carga_inicial", False),
+            "celery": options.get("celery", False),
+        }
+        return {"execucao": execucao, "disparo": disparo}
 
     def _handle_sync(
         self,

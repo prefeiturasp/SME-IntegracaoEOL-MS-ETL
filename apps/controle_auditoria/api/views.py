@@ -25,7 +25,11 @@ from apps.controle_auditoria.api.serializers import (
     EtlExecucaoTabelaLidaSerializer,
     HealthStatusSerializer,
 )
-from apps.controle_auditoria.libs.dominios import validar_parametros_dominio
+from apps.controle_auditoria.libs.dominios import (
+    FASES_COM_ANOS_LETIVOS,
+    FASES_POR_DOMINIO,
+    validar_parametros_dominio,
+)
 from apps.controle_auditoria.libs.tasks import executar_dominio_task
 from apps.controle_auditoria.models import (
     EtlAuditoriaLinha,
@@ -33,11 +37,39 @@ from apps.controle_auditoria.models import (
     EtlExecucao,
     EtlExecucaoTabelaEscrita,
     EtlExecucaoTabelaLida,
+    EtlProgressoExecucao,
 )
 
 _LIMITE_EXECUCOES_RECENTES = 50
 _LIMITE_MONITORAMENTO = 100
 _LIMITE_EXECUCOES_KANBAN = 100
+_STATUS_EM_EXECUCAO = frozenset({"em_execucao", "em_andamento"})
+
+
+def _descricao_execucao_dominio() -> str:
+    """Monta descrição do contrato de execução para o Swagger."""
+    linhas = [
+        "Agenda ou executa imediatamente a sincronização de um domínio ETL. "
+        "Se `executar_em` for informado, a task é agendada para aquela "
+        "data/hora (ISO 8601). Caso contrário, executa imediatamente via "
+        "Celery.",
+        "",
+        "Use `anos_letivos` para restringir cargas por ano.",
+        "",
+        "Domínios e fases:",
+    ]
+
+    for dominio, fases in FASES_POR_DOMINIO.items():
+        fases_ano = set(FASES_COM_ANOS_LETIVOS.get(dominio, ()))
+        linhas.append(f"- `{dominio}`")
+        linhas.append("  - fases:")
+        for fase in fases:
+            marcador = (
+                " - aceita filtro por ano letivo" if fase in fases_ano else ""
+            )
+            linhas.append(f"    - `{fase}`{marcador}")
+
+    return "\n".join(linhas)
 
 
 def _qs_ultima_execucao_por_dominio() -> QuerySet:
@@ -68,6 +100,86 @@ def _aplicar_filtros_execucao(
     if situacao:
         qs = qs.filter(situacao=situacao)
     return qs
+
+
+def _formatar_duracao(segundos: int | float | None) -> str:
+    """Formata duração curta para dashboard."""
+    if segundos is None:
+        return ""
+    total = max(int(segundos), 0)
+    horas, resto = divmod(total, 3600)
+    minutos, segs = divmod(resto, 60)
+    if horas:
+        return f"{horas}h {minutos}min"
+    if minutos:
+        return f"{minutos}min {segs}s"
+    return f"{segs}s"
+
+
+def _segundos_entre(inicio: Any, fim: Any) -> int:
+    """Calcula segundos entre duas datas."""
+    if not inicio or not fim:
+        return 0
+    return max(int((fim - inicio).total_seconds()), 0)
+
+
+def _percentual(parte: int | float, total: int | float) -> str:
+    """Formata percentual com uma casa decimal."""
+    if not total:
+        return "0%"
+    valor = (float(parte) / float(total)) * 100
+    return f"{valor:.1f}%".replace(".", ",")
+
+
+def _por_minuto(total: int | float, segundos: int) -> int:
+    """Calcula taxa por minuto."""
+    if segundos <= 0:
+        return 0
+    return int((float(total) / segundos) * 60)
+
+
+def _enriquecer_progresso_item(
+    progresso: dict[str, Any], execucao: EtlExecucao, agora: Any
+) -> None:
+    """Adiciona métricas derivadas ao item de progresso."""
+    total_fases = int(progresso.get("total_fases") or 0)
+    fase_numero = int(progresso.get("fase_numero") or 0)
+    linhas_lidas = int(progresso.get("linhas_lidas") or 0)
+    linhas_escritas = int(progresso.get("linhas_escritas") or 0)
+    linhas_ignoradas = int(progresso.get("linhas_ignoradas") or 0)
+    atualizado_em = progresso.get("atualizado_em")
+    base_fim = atualizado_em or execucao.finalizado_em or agora
+    segundos = _segundos_entre(execucao.iniciado_em, base_fim)
+    segundos_update = _segundos_entre(atualizado_em, agora)
+
+    progresso["percentual_fase"] = _percentual(fase_numero, total_fases)
+    progresso["atualizado_ha"] = _formatar_duracao(segundos_update)
+    progresso["taxa_lidas_minuto"] = _por_minuto(linhas_lidas, segundos)
+    progresso["taxa_alteracao"] = _percentual(linhas_escritas, linhas_lidas)
+    progresso["taxa_gravacao"] = progresso["taxa_alteracao"]
+    progresso["taxa_ignoradas"] = _percentual(linhas_ignoradas, linhas_lidas)
+
+
+def _enriquecer_execucao(
+    execucao: EtlExecucao,
+    progresso: list[dict[str, Any]],
+    agora: Any,
+) -> None:
+    """Adiciona métricas derivadas usadas pelos templates."""
+    fim = execucao.finalizado_em or agora
+    segundos = _segundos_entre(execucao.iniciado_em, fim)
+    execucao.duracao_label = _formatar_duracao(segundos)
+    execucao.duracao_prefixo = (
+        "rodando há" if execucao.situacao in _STATUS_EM_EXECUCAO else "duração"
+    )
+    for item in progresso:
+        _enriquecer_progresso_item(item, execucao, agora)
+    execucao.progresso_atual = progresso[-1] if progresso else None
+    execucao.fases_mais_caras = sorted(
+        progresso,
+        key=lambda item: int(item.get("linhas_lidas") or 0),
+        reverse=True,
+    )[:5]
 
 
 @extend_schema(tags=["Checkpoints"])
@@ -236,12 +348,7 @@ class ExecutarDominioView(APIView):
 
     @extend_schema(
         summary="Disparar execução de domínio",
-        description=(
-            "Agenda ou executa imediatamente a sincronização de um "
-            "domínio ETL. Se `executar_em` for informado, a task é "
-            "agendada para aquela data/hora (ISO 8601). Caso contrário, "
-            "executa imediatamente via Celery."
-        ),
+        description=_descricao_execucao_dominio(),
         request={
             "application/json": {
                 "type": "object",
@@ -249,19 +356,35 @@ class ExecutarDominioView(APIView):
                     "volume": {
                         "type": "integer",
                         "default": 100,
+                        "description": (
+                            "Quantidade de registros processados por lote. "
+                            "Valores maiores reduzem ciclos, mas aumentam "
+                            "memória e duração de cada tentativa."
+                        ),
                     },
                     "offset": {
                         "type": "integer",
                         "default": 0,
+                        "description": (
+                            "Posição inicial da leitura. Normalmente fica 0; "
+                            "use apenas para iniciar de um ponto específico."
+                        ),
                     },
                     "continuar": {
                         "type": "boolean",
                         "default": False,
+                        "description": (
+                            "Quando true, retoma pelo checkpoint do domínio. "
+                            "Quando false, começa conforme offset informado."
+                        ),
                     },
                     "prioridade": {
                         "type": "integer",
                         "default": 5,
-                        "description": "0 = mais urgente, 9 = menos urgente.",
+                        "description": (
+                            "Prioridade da task no Celery/Redis. "
+                            "0 = mais urgente, 9 = menos urgente."
+                        ),
                     },
                     "executar_em": {
                         "type": "string",
@@ -270,49 +393,27 @@ class ExecutarDominioView(APIView):
                             "Agenda a execução para esta data/hora (ISO 8601)."
                         ),
                     },
-                    "ano_letivo": {
-                        "type": "integer",
-                        "nullable": True,
-                        "x-nullable": True,
-                        "description": (
-                            "Opcional. Quando informado, processa apenas "
-                            "anos letivos a partir deste valor (inclusive)."
-                            " Aplicável ao domínio pedagógico."
-                        ),
-                        "example": None,
-                    },
                     "fases": {
                         "type": "array",
                         "items": {"type": "string"},
                         "nullable": True,
                         "x-nullable": True,
+                        "default": None,
                         "description": (
                             "Opcional. Lista de nomes de fases a executar. "
                             "Quando omitido, todas as fases são executadas. "
-                            "Aplicável aos domínios alunos e pedagógico. "
-                            "Fases disponíveis para alunos: "
-                            "tipo_necessidade_especial, aluno, "
-                            "responsavel_aluno, nee_aluno, matricula, "
-                            "matricula_turma, matricula_ano_letivo, "
-                            "matricula_componente_curricular_ano_letivo, "
-                            "dados_aluno_acompanhamento_escolar, "
-                            "responsavel_aluno_turma, "
-                            "matricula_ano_anterior."
                         ),
-                        "example": ["aluno", "matricula"],
                     },
                     "anos_letivos": {
                         "type": "array",
                         "items": {"type": "integer"},
                         "nullable": True,
                         "x-nullable": True,
+                        "default": None,
                         "description": (
                             "Opcional. Lista de anos letivos a processar. "
                             "Quando omitido, processa todos os anos. "
-                            "Aplicável apenas ao domínio alunos: filtra "
-                            "matrículas e turmas aos anos informados."
                         ),
-                        "example": [2021, 2022, 2023, 2024, 2025],
                     },
                 },
             }
@@ -358,12 +459,16 @@ class ExecutarDominioView(APIView):
             "offset": offset,
             "continuar": continuar,
         }
-        if ano_letivo is not None:
-            kwargs_task["ano_letivo"] = int(ano_letivo)
         if fases is not None:
             kwargs_task["fases"] = list(fases)
         if anos_letivos is not None:
             kwargs_task["anos_letivos"] = [int(a) for a in anos_letivos]
+        parametros_disparo = {
+            "origem": "api",
+            "prioridade": prioridade,
+            "executar_em": executar_em,
+        }
+        kwargs_task["parametros_disparo"] = parametros_disparo
 
         if executar_em:
             eta = parse_datetime(executar_em)
@@ -474,6 +579,7 @@ class DashboardView(View):
         data_inicio = request.GET.get("data_inicio", "")
         data_fim = request.GET.get("data_fim", "")
         situacao = request.GET.get("situacao", "")
+        agora = timezone.now()
 
         # Total de registros processados por domínio via checkpoint
         checkpoints = {
@@ -481,8 +587,13 @@ class DashboardView(View):
             for c in EtlCheckpointDominio.objects.all()
         }
         ultima_por_dominio = list(_qs_ultima_execucao_por_dominio())
+        progresso_map = _agregar_progresso_execucoes(
+            [e.id_execucao for e in ultima_por_dominio]
+        )
         for exec_obj in ultima_por_dominio:
             exec_obj.total_processado = checkpoints.get(exec_obj.dominio, 0)
+            progresso = progresso_map.get(str(exec_obj.id_execucao), [])
+            _enriquecer_execucao(exec_obj, progresso, agora)
 
         qs_filtrado = _aplicar_filtros_execucao(
             qs=EtlExecucao.objects.all(),
@@ -492,12 +603,28 @@ class DashboardView(View):
             situacao=situacao,
         ).order_by("-iniciado_em")
 
-        execucoes = qs_filtrado[:_LIMITE_MONITORAMENTO]
+        execucoes = list(qs_filtrado[:_LIMITE_MONITORAMENTO])
+        progresso_execucoes = _agregar_progresso_execucoes(
+            [e.id_execucao for e in execucoes]
+        )
+        for exec_obj in execucoes:
+            _enriquecer_execucao(
+                exec_obj,
+                progresso_execucoes.get(str(exec_obj.id_execucao), []),
+                agora,
+            )
 
         # Últimas 10 execuções com detalhes de tabelas escritas
         ultimas_10 = list(qs_filtrado[:10])
         ids_ultimas_10 = [e.id_execucao for e in ultimas_10]
         tabelas_map = _agregar_tabelas_escritas(ids_ultimas_10)
+        progresso_ultimas_10 = _agregar_progresso_execucoes(ids_ultimas_10)
+        for exec_obj in ultimas_10:
+            _enriquecer_execucao(
+                exec_obj,
+                progresso_ultimas_10.get(str(exec_obj.id_execucao), []),
+                agora,
+            )
         ultimas_10_com_tabelas = [
             {"exec": e, "tabelas": tabelas_map.get(str(e.id_execucao), [])}
             for e in ultimas_10
@@ -578,6 +705,32 @@ def _agregar_tabelas_escritas(ids_execucao: list) -> dict[str, list]:
     }
 
 
+def _agregar_progresso_execucoes(ids_execucao: list) -> dict[str, list]:
+    """Agrupa progresso operacional por execução."""
+    progresso: dict[str, list] = {}
+    for item in (
+        EtlProgressoExecucao.objects.filter(id_execucao__in=ids_execucao)
+        .values(
+            "id_execucao",
+            "fase_numero",
+            "total_fases",
+            "fase_nome",
+            "tabela_origem",
+            "tabela_destino",
+            "etapa",
+            "chunk_atual",
+            "linhas_lidas",
+            "linhas_escritas",
+            "linhas_ignoradas",
+            "mensagem",
+            "atualizado_em",
+        )
+        .order_by("id_execucao", "fase_numero")
+    ):
+        progresso.setdefault(str(item["id_execucao"]), []).append(item)
+    return progresso
+
+
 def _resolver_execucoes_kanban(
     qs_base: QuerySet,
     id_execucao_filtro: str,
@@ -613,6 +766,7 @@ class KanbanView(View):
         """Renderiza kanban com estágios de leitura, hash e escrita."""
         dominio_filtro = request.GET.get("dominio", "")
         id_execucao_filtro = request.GET.get("id_execucao", "").strip()
+        agora = timezone.now()
 
         qs_execucoes_select = EtlExecucao.objects.all()
         if dominio_filtro:
@@ -640,6 +794,7 @@ class KanbanView(View):
 
         lidas_map = _agregar_tabelas_lidas(ids_execucao)
         escritas_map = _agregar_tabelas_escritas(ids_execucao)
+        progresso_map = _agregar_progresso_execucoes(ids_execucao)
 
         tabelas_unicas = {
             te["tabela_destino"]
@@ -658,6 +813,14 @@ class KanbanView(View):
             key = str(exec_obj.id_execucao)
             tabelas_lidas = lidas_map.get(key, [])
             tabelas_escritas = escritas_map.get(key, [])
+            progresso = progresso_map.get(key, [])
+            _enriquecer_execucao(exec_obj, progresso, agora)
+            total_lido = sum(t["linhas_lidas"] for t in tabelas_lidas)
+            total_escrito = sum(t["linhas_escritas"] for t in tabelas_escritas)
+            total_nao_gravado = max(total_lido - total_escrito, 0)
+            duracao_segundos = _segundos_entre(
+                exec_obj.iniciado_em, exec_obj.finalizado_em or agora
+            )
             cp = checkpoints.get(exec_obj.dominio)
             cp_da_execucao = bool(
                 cp and str(cp.ultimo_id_execucao) == str(exec_obj.id_execucao)
@@ -667,13 +830,21 @@ class KanbanView(View):
                     "exec": exec_obj,
                     "checkpoint": cp,
                     "checkpoint_da_execucao": cp_da_execucao,
+                    "progresso": progresso,
+                    "progresso_atual": exec_obj.progresso_atual,
+                    "fases_mais_caras": exec_obj.fases_mais_caras,
                     "tabelas_lidas": tabelas_lidas,
                     "tabelas_escritas": tabelas_escritas,
-                    "total_lido": sum(
-                        t["linhas_lidas"] for t in tabelas_lidas
+                    "total_lido": total_lido,
+                    "total_escrito": total_escrito,
+                    "total_nao_gravado": total_nao_gravado,
+                    "taxa_lidas_minuto": _por_minuto(
+                        total_lido, duracao_segundos
                     ),
-                    "total_escrito": sum(
-                        t["linhas_escritas"] for t in tabelas_escritas
+                    "taxa_alteracao": _percentual(total_escrito, total_lido),
+                    "taxa_gravacao": _percentual(total_escrito, total_lido),
+                    "taxa_nao_gravadas": _percentual(
+                        total_nao_gravado, total_lido
                     ),
                     "hash_por_tabela": {
                         te["tabela_destino"]: hash_por_tabela.get(

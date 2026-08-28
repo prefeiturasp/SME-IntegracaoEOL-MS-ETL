@@ -396,6 +396,10 @@ class BaseEtlService:
         self._thread_processor: ThreadPoolProcessor | None = None
         self.ultimo_token: str | None = None
         self._ultimo_audit_count = 0
+        self._ultimo_progress_update = 0.0
+        self._progress_interval_seconds = getattr(
+            settings, "ETL_PROGRESS_INTERVAL_SECONDS", 15
+        )
 
     def get_meta(
         self,
@@ -495,6 +499,16 @@ class BaseEtlService:
             self._truncar_tabela(config.table_name)
 
         self._ultimo_audit_count = 0
+        self._ultimo_progress_update = 0.0
+        self._registrar_progresso_execucao(
+            config=config,
+            metrics=metrics,
+            numero_fase=numero_fase,
+            total_fases=len(self._fases),
+            chunk_atual=0,
+            etapa="fase_iniciada",
+            force=True,
+        )
         thread = self._iniciar_producer(config, queue, erros)
 
         trans = self._criar_transform(config)
@@ -520,12 +534,24 @@ class BaseEtlService:
                         )
                         self._atualizar_metricas(metrics, len(chunk), esc, ign)
                         bn += 1
-                        self._log_progresso(bn, metrics, start, config)
+                        self._log_progresso(
+                            bn, metrics, start, config, numero_fase
+                        )
                         queue.task_done()
                 finally:
                     self._thread_processor = None
         except BaseException as exc:
             erro_execucao = exc
+            self._registrar_progresso_execucao(
+                config=config,
+                metrics=metrics,
+                numero_fase=numero_fase,
+                total_fases=len(self._fases),
+                chunk_atual=bn,
+                etapa="erro",
+                mensagem=str(exc),
+                force=True,
+            )
             raise
         finally:
             try:
@@ -636,6 +662,7 @@ class BaseEtlService:
         metrics: PipelineMetrics,
         start: float,
         config: PhaseConfig,
+        numero_fase: int = 0,
     ) -> None:
         if bn % 10 == 0 or bn == 1:
             duracao = time.perf_counter() - start
@@ -652,6 +679,57 @@ class BaseEtlService:
         if metrics.total_lidos - self._ultimo_audit_count > intervalo:
             self._registrar_progresso_parcial(config)
             self._ultimo_audit_count = metrics.total_lidos
+
+        self._registrar_progresso_execucao(
+            config=config,
+            metrics=metrics,
+            numero_fase=numero_fase,
+            total_fases=len(self._fases),
+            chunk_atual=bn,
+            etapa="processando_chunk",
+        )
+
+    def _registrar_progresso_execucao(
+        self,
+        *,
+        config: PhaseConfig,
+        metrics: PipelineMetrics,
+        numero_fase: int,
+        total_fases: int,
+        chunk_atual: int,
+        etapa: str,
+        mensagem: str | None = None,
+        force: bool = False,
+    ) -> None:
+        """Atualiza progresso operacional com throttle."""
+        if not (self.auditor and self.id_execucao):
+            return
+
+        agora = time.monotonic()
+        if (
+            not force
+            and self._progress_interval_seconds > 0
+            and agora - self._ultimo_progress_update
+            < self._progress_interval_seconds
+        ):
+            return
+
+        self.auditor.atualizar_progresso_execucao(
+            id_execucao=self.id_execucao,
+            dominio=self._dominio.lower(),
+            fase_numero=numero_fase or self.ultima_fase_concluida,
+            total_fases=total_fases,
+            fase_nome=config.nome,
+            tabela_origem=config.source_table or None,
+            tabela_destino=config.table_name,
+            etapa=etapa,
+            chunk_atual=chunk_atual,
+            linhas_lidas=metrics.total_lidos,
+            linhas_escritas=metrics.total_escritos,
+            linhas_ignoradas=metrics.total_ignorados,
+            mensagem=mensagem,
+        )
+        self._ultimo_progress_update = agora
 
     def _registrar_progresso_parcial(self, config: PhaseConfig) -> None:
         """Atualiza checkpoint intermediário para retomada em caso de falha.
@@ -721,6 +799,15 @@ class BaseEtlService:
             indice_sincronizacao=f"{config.nome}:offset:{token}",
             ultima_situacao="concluido" if is_ultima else "em_execucao",
             sucesso=is_ultima,
+        )
+        self._registrar_progresso_execucao(
+            config=config,
+            metrics=metrics,
+            numero_fase=numero_fase,
+            total_fases=total_fases,
+            chunk_atual=ultimo_lote,
+            etapa="fase_concluida",
+            force=True,
         )
 
     def _truncar_tabela(self, tn: str) -> None:

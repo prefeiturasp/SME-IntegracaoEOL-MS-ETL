@@ -1,5 +1,6 @@
 """Filtros de formatacao para templates de auditoria."""
 
+import json
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
@@ -27,3 +28,9 @@ def numero_br(value: Any) -> Any:
         return value
 
     return f"{int(number):,}".replace(",", ".")
+
+
+@register.filter(name="json_bruto")
+def json_bruto(value: Any) -> str:
+    """Serializa valor para JSON seguro em blocos de diagnóstico."""
+    return json.dumps(value or {}, ensure_ascii=False, default=str)

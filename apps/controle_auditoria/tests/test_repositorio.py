@@ -12,6 +12,7 @@ from apps.controle_auditoria.models import (
     EtlExecucao,
     EtlExecucaoTabelaEscrita,
     EtlExecucaoTabelaLida,
+    EtlProgressoExecucao,
 )
 
 
@@ -230,3 +231,65 @@ class CheckpointDominioTest(TestCase):
         )
         checkpoint = EtlCheckpointDominio.objects.get(dominio="professores")
         self.assertIsNone(checkpoint.ultimo_sucesso_em)
+
+
+class ProgressoExecucaoTest(TestCase):
+    """Testes para progresso operacional de execução."""
+
+    def setUp(self) -> None:
+        """Inicializa repositório e execução."""
+        self.repo = RepositorioAuditoriaPostgres()
+        self.id_exec = uuid.uuid4()
+
+    def test_cria_e_atualiza_mesma_fase(self) -> None:
+        """Mantém uma linha por execução/fase."""
+        dados = {
+            "id_execucao": self.id_exec,
+            "dominio": "programas",
+            "fase_numero": 3,
+            "total_fases": 8,
+            "fase_nome": "turma_programa",
+            "tabela_origem": "turma_escola",
+            "tabela_destino": "turma_programa",
+            "etapa": "processando_chunk",
+            "chunk_atual": 1,
+            "linhas_lidas": 5000,
+            "linhas_escritas": 100,
+            "linhas_ignoradas": 4900,
+        }
+
+        self.repo.atualizar_progresso_execucao(**dados)
+        self.repo.atualizar_progresso_execucao(
+            **{**dados, "chunk_atual": 2, "linhas_lidas": 10000}
+        )
+
+        registros = EtlProgressoExecucao.objects.filter(
+            id_execucao=self.id_exec,
+            fase_numero=3,
+        )
+        self.assertEqual(registros.count(), 1)
+        progresso = registros.get()
+        self.assertEqual(progresso.chunk_atual, 2)
+        self.assertEqual(progresso.linhas_lidas, 10000)
+
+    def test_obter_progresso_execucoes_agrupa_por_id(self) -> None:
+        """Consulta progresso agrupado pelo id_execucao."""
+        self.repo.atualizar_progresso_execucao(
+            id_execucao=self.id_exec,
+            dominio="programas",
+            fase_numero=1,
+            total_fases=8,
+            fase_nome="tipo_programa",
+            tabela_origem="tipo_programa",
+            tabela_destino="tipo_programa",
+            etapa="fase_concluida",
+            chunk_atual=1,
+            linhas_lidas=10,
+            linhas_escritas=10,
+            linhas_ignoradas=0,
+        )
+
+        resultado = self.repo.obter_progresso_execucoes([self.id_exec])
+
+        self.assertIn(str(self.id_exec), resultado)
+        self.assertEqual(resultado[str(self.id_exec)][0]["fase_numero"], 1)

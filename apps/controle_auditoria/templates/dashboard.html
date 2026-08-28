@@ -171,6 +171,30 @@
       margin-top: .4rem;
       word-break: break-word;
     }
+    .exec-scope {
+      display: flex;
+      gap: .35rem;
+      flex-wrap: wrap;
+      margin-top: .65rem;
+    }
+    .scope-chip {
+      font-size: .68rem;
+      color: #cbd5e1;
+      border: 1px solid #334155;
+      background: #0f172a;
+      border-radius: 6px;
+      padding: .16rem .4rem;
+    }
+    .scope-chip span { color: #64748b; }
+    .metric-line {
+      display: flex;
+      gap: .75rem;
+      flex-wrap: wrap;
+      margin-top: .65rem;
+      font-size: .72rem;
+      color: #94a3b8;
+    }
+    .metric-line strong { color: #f1f5f9; font-weight: 600; }
 
     /* ── Pill Status ── */
     .pill {
@@ -306,7 +330,7 @@
 <main class="main">
 
   <div class="page-title"><i class="bi bi-activity me-2"></i>Painel de Execuções ETL</div>
-  <div class="page-sub">Monitoramento em tempo real · últimas 100 execuções</div>
+  <div class="page-sub">Monitoramento operacional · últimas 100 execuções</div>
 
   <!-- Cards por domínio -->
   <div class="section-title">Status atual por domínio</div>
@@ -334,11 +358,62 @@
         </div>
         <div class="mt-2" style="font-size:.75rem;color:#64748b">
           <i class="bi bi-database-check me-1"></i>
-          <strong style="color:#f1f5f9">{{ exec.total_processado|numero_br }}</strong> registros processados
+          <strong style="color:#f1f5f9">{{ exec.total_processado|numero_br }}</strong> token do checkpoint
         </div>
+        <div class="metric-line">
+          <span><i class="bi bi-stopwatch me-1"></i>{{ exec.duracao_prefixo }} <strong>{{ exec.duracao_label }}</strong></span>
+          {% if exec.progresso_atual and exec.situacao != "concluido" %}
+          <span><i class="bi bi-broadcast me-1"></i>progresso há <strong>{{ exec.progresso_atual.atualizado_ha }}</strong></span>
+          <span><i class="bi bi-speedometer2 me-1"></i><strong>{{ exec.progresso_atual.taxa_lidas_minuto|numero_br }}</strong>/min</span>
+          {% endif %}
+        </div>
+        {% if exec.parametros.execucao %}
+        {% with p=exec.parametros.execucao d=exec.parametros.disparo %}
+        <div class="exec-scope">
+          {% if p.anos_letivos %}
+          <span class="scope-chip"><span>anos</span> {{ p.anos_letivos|join:", " }}</span>
+          {% endif %}
+          {% if p.fases %}
+          <span class="scope-chip"><span>fases</span> {{ p.fases|join:", " }}</span>
+          {% endif %}
+          <span class="scope-chip"><span>volume</span> {{ p.volume }}</span>
+          <span class="scope-chip"><span>offset</span> {{ p.offset }}</span>
+          <span class="scope-chip"><span>continuar</span> {% if p.continuar %}sim{% else %}não{% endif %}</span>
+          {% if d.prioridade %}
+          <span class="scope-chip"><span>prioridade</span> {{ d.prioridade }}</span>
+          {% endif %}
+        </div>
+        {% endwith %}
+        {% endif %}
+        {% if exec.progresso_atual and exec.situacao != "concluido" %}
+        <div class="mt-2" style="font-size:.72rem;color:#94a3b8;line-height:1.5">
+          <div>
+            <i class="bi bi-geo-alt me-1"></i>
+            {% if exec.situacao == "erro" %}ponto da falha{% else %}ponto atual{% endif %} ·
+            fase {{ exec.progresso_atual.fase_numero }}/{{ exec.progresso_atual.total_fases }}:
+            <strong style="color:#f1f5f9">{{ exec.progresso_atual.fase_nome }}</strong>
+            <span style="color:#64748b">({{ exec.progresso_atual.percentual_fase }})</span>
+          </div>
+          <div>
+            <i class="bi bi-arrow-repeat me-1"></i>
+            {{ exec.progresso_atual.etapa }} · chunk {{ exec.progresso_atual.chunk_atual }}
+          </div>
+          <div>
+            <i class="bi bi-percent me-1"></i>
+            gravadas/lidas {{ exec.progresso_atual.taxa_gravacao }} · não gravadas {{ exec.progresso_atual.taxa_ignoradas }}
+          </div>
+        </div>
+        {% endif %}
         {% if exec.mensagem_erro %}
         <div class="domain-error">
           <i class="bi bi-exclamation-triangle-fill me-1"></i>{{ exec.mensagem_erro|truncatechars:90 }}
+          {% if exec.progresso_atual %}
+          <div style="color:#fca5a5;margin-top:.25rem">
+            {{ exec.progresso_atual.tabela_origem|default:"origem não registrada" }}
+            → {{ exec.progresso_atual.tabela_destino|default:"destino não registrado" }}
+            · chunk {{ exec.progresso_atual.chunk_atual }}
+          </div>
+          {% endif %}
         </div>
         {% endif %}
       </div>
@@ -362,8 +437,9 @@
           <th><i class="bi bi-diagram-3 me-1"></i>Domínio</th>
           <th>Situação</th>
           <th><i class="bi bi-play me-1"></i>Início</th>
+          <th><i class="bi bi-stopwatch me-1"></i>Duração</th>
           <th><i class="bi bi-table me-1"></i>Tabela</th>
-          <th style="text-align:right"><i class="bi bi-hash me-1"></i>Linhas escritas</th>
+          <th style="text-align:right"><i class="bi bi-hash me-1"></i>Linhas gravadas</th>
         </tr>
       </thead>
       <tbody>
@@ -383,6 +459,7 @@
                 </span>
               </td>
               <td class="text-nowrap" rowspan="{{ item.tabelas|length }}">{{ item.exec.iniciado_em|date:"d/m H:i" }}</td>
+              <td class="text-nowrap" rowspan="{{ item.tabelas|length }}">{{ item.exec.duracao_label }}</td>
               {% endif %}
               <td style="color:#94a3b8;font-size:.78rem">{{ tabela.tabela_destino }}</td>
               <td style="text-align:right;font-weight:600;color:#60a5fa">{{ tabela.linhas_escritas|numero_br }}</td>
@@ -401,7 +478,8 @@
               </span>
             </td>
             <td class="text-nowrap">{{ item.exec.iniciado_em|date:"d/m H:i" }}</td>
-            <td colspan="2" class="text-muted-dim" style="font-size:.78rem">sem registros escritos</td>
+            <td class="text-nowrap">{{ item.exec.duracao_label }}</td>
+            <td colspan="2" class="text-muted-dim" style="font-size:.78rem">sem gravações registradas</td>
           </tr>
           {% endif %}
         {% endfor %}
