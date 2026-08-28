@@ -84,12 +84,13 @@ class TestAlunosService(SimpleTestCase):
         transform = self.service._criar_transform(config)
 
         row = (1, "Desc", 10, None)
-        pk, h, obj = transform(row)
+        pk, h, payload = transform(row)
 
         self.assertEqual(pk, "1")
         self.assertIsInstance(h, str)
         self.assertEqual(len(h), 64)
-        self.assertEqual(obj.descricao, "Desc")
+        self.assertEqual(payload, row)
+        self.assertEqual(transform.materializar(payload).descricao, "Desc")
 
     def test_criar_transform_pk_composta(self) -> None:
         """Valida PK composta (Matricula-Turma-Situacao-Sequencia)."""
@@ -317,7 +318,8 @@ class TestAlunosService(SimpleTestCase):
             1,
         )
 
-        pk, _, obj = transform(row)
+        pk, _, payload = transform(row)
+        obj = transform.materializar(payload)
 
         self.assertEqual(pk, "1")
         self.assertEqual(obj.cns, "789")
@@ -649,7 +651,7 @@ class TestAlunosService(SimpleTestCase):
     def test_criar_transform_fases_lote_5(self) -> None:
         """Valida transformação e chaves naturais das fases do lote 5."""
         responsaveis = self.service._criar_transform(self.service._fases[9])
-        pk_responsavel, _, obj_responsavel = responsaveis(
+        pk_responsavel, _, payload_responsavel = responsaveis(
             (
                 10,
                 20,
@@ -670,7 +672,9 @@ class TestAlunosService(SimpleTestCase):
             )
         )
         historico = self.service._criar_transform(self.service._fases[10])
-        pk_historico, _, obj_historico = historico((2025, "UE01 ", 30, 27))
+        pk_historico, _, payload_historico = historico((2025, "UE01 ", 30, 27))
+        obj_responsavel = responsaveis.materializar(payload_responsavel)
+        obj_historico = historico.materializar(payload_historico)
 
         self.assertEqual(pk_responsavel, "10-20-30")
         self.assertEqual(obj_responsavel.codigo_ue, "UE01")

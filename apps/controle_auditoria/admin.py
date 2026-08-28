@@ -7,6 +7,7 @@ from apps.controle_auditoria.models import (
     EtlExecucao,
     EtlExecucaoTabelaEscrita,
     EtlExecucaoTabelaLida,
+    EtlProgressoExecucao,
 )
 
 _SEARCH_ID = "=id_execucao"
@@ -42,6 +43,7 @@ class EtlExecucaoAdmin(admin.ModelAdmin):
     )
     list_filter = ("situacao", "iniciado_em", "finalizado_em")
     search_fields = (_SEARCH_ID, "dominio")
+    readonly_fields = ("parametros",)
     ordering = ("-iniciado_em",)
 
 
@@ -72,3 +74,24 @@ class EtlExecucaoTabelaEscritaAdmin(admin.ModelAdmin):
     list_filter = ("tabela_destino", "modo_escrita", "escrito_em")
     search_fields = (_SEARCH_ID, "tabela_destino")
     ordering = ("-escrito_em",)
+
+
+@admin.register(EtlProgressoExecucao)
+class EtlProgressoExecucaoAdmin(admin.ModelAdmin):
+    """Admin do progresso operacional por execução/fase."""
+
+    list_display = (
+        _ID_EXECUCAO,
+        "dominio",
+        "fase_numero",
+        "fase_nome",
+        "etapa",
+        "chunk_atual",
+        "linhas_lidas",
+        "linhas_escritas",
+        "linhas_ignoradas",
+        "atualizado_em",
+    )
+    list_filter = ("dominio", "etapa", "atualizado_em")
+    search_fields = (_SEARCH_ID, "dominio", "fase_nome", "tabela_destino")
+    ordering = ("-atualizado_em",)

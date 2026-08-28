@@ -1,5 +1,6 @@
 """Testes dos modulos de biblioteca do app controle_auditoria."""
 
+import json
 from typing import Any
 from unittest.mock import MagicMock, patch
 from uuid import UUID
@@ -131,8 +132,8 @@ class ServicoSincRecDbTestCase(TestCase):
 class DominiosTestCase(TestCase):
     """Valida regras de parâmetros por domínio."""
 
-    def test_alunos_rejeita_ano_letivo(self) -> None:
-        """Domínio alunos não aceita filtro de ano letivo."""
+    def test_rejeita_ano_letivo_legado(self) -> None:
+        """Contrato atual não aceita parâmetro singular de ano letivo."""
         self.assertIsNotNone(
             validar_parametros_dominio("alunos", ano_letivo=2024)
         )
@@ -145,10 +146,22 @@ class DominiosTestCase(TestCase):
             )
         )
 
-    def test_pedagogico_rejeita_anos_letivos(self) -> None:
-        """Domínio pedagógico não aceita o parâmetro anos_letivos."""
-        self.assertIsNotNone(
+    def test_pedagogico_aceita_anos_letivos(self) -> None:
+        """Domínio pedagógico aceita lista de anos letivos."""
+        self.assertIsNone(
             validar_parametros_dominio("pedagogico", anos_letivos=[2024])
+        )
+
+    def test_professores_aceita_anos_letivos(self) -> None:
+        """Domínio professores aceita lista de anos letivos."""
+        self.assertIsNone(
+            validar_parametros_dominio("professores", anos_letivos=[2024])
+        )
+
+    def test_programas_aceita_anos_letivos(self) -> None:
+        """Domínio programas aceita lista de anos letivos."""
+        self.assertIsNone(
+            validar_parametros_dominio("programas", anos_letivos=[2024])
         )
 
 
@@ -191,8 +204,10 @@ class TasksControleAuditoriaTestCase(TestCase):
 
         self.assertEqual(retorno, "ok:150")
         self.assertEqual(call_command_mock.call_count, 2)
+        primeira_chamada = call_command_mock.call_args_list[0].args
+        segunda_chamada = call_command_mock.call_args_list[1].args
         self.assertEqual(
-            call_command_mock.call_args_list[0].args,
+            primeira_chamada[:7],
             (
                 "executar_dominio",
                 "--dominio",
@@ -203,8 +218,12 @@ class TasksControleAuditoriaTestCase(TestCase):
                 "10",
             ),
         )
+        self.assertIn("--parametros-disparo", primeira_chamada)
+        indice_parametros = primeira_chamada.index("--parametros-disparo")
+        parametros = json.loads(primeira_chamada[indice_parametros + 1])
+        self.assertIn("celery_task_id", parametros)
         self.assertEqual(
-            call_command_mock.call_args_list[1].args,
+            segunda_chamada[:8],
             (
                 "executar_dominio",
                 "--dominio",
@@ -240,16 +259,21 @@ class TasksControleAuditoriaTestCase(TestCase):
         )
 
         self.assertEqual(retorno, "ok:40")
-        call_command_mock.assert_called_once_with(
-            "executar_dominio",
-            "--dominio",
-            "institucional",
-            "--volume",
-            "90",
-            "--offset",
-            "0",
-            "--continuar",
+        chamada = call_command_mock.call_args.args
+        self.assertEqual(
+            chamada[:8],
+            (
+                "executar_dominio",
+                "--dominio",
+                "institucional",
+                "--volume",
+                "90",
+                "--offset",
+                "0",
+                "--continuar",
+            ),
         )
+        self.assertIn("--parametros-disparo", chamada)
 
     @patch("apps.controle_auditoria.libs.tasks.call_command")
     def test_executar_dominio_task_rejeita_parametro_sem_suporte(
@@ -258,14 +282,14 @@ class TasksControleAuditoriaTestCase(TestCase):
     ) -> None:
         """Task rejeita parâmetros incompatíveis com o domínio."""
         retorno = executar_dominio_task(
-            dominio="programas",
+            dominio="institucional",
             volume=100,
             offset=0,
-            ano_letivo=2025,
+            anos_letivos=[2025],
         )
 
         self.assertIn("erro:", retorno)
-        self.assertIn("ano_letivo", retorno)
+        self.assertIn("anos_letivos", retorno)
         call_command_mock.assert_not_called()
 
 

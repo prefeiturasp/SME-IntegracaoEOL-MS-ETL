@@ -1,10 +1,11 @@
 """Metadados serializáveis de uma fase do pipeline ETL Celery."""
 
 import importlib
-from dataclasses import asdict, dataclass, field
-from typing import Any, Callable
+from collections.abc import Callable
+from dataclasses import asdict, dataclass, field, fields
+from typing import Any
 
-from apps.core.libs.thread_processor import calcular_hash
+from apps.core.libs.thread_processor import calcular_hash_linha
 
 
 @dataclass
@@ -72,23 +73,55 @@ class BaseEtlFase:
         module = importlib.import_module(module_path)
         return getattr(module, func_name)
 
-    def get_transformer(self) -> Callable[[tuple], tuple[str, str, Any]]:
-        """Cria função de transformação Row -> (pk, hash, obj) para o chunk."""
-        model_class = self.resolver_model()
-        dto_in = self.resolver_dto_in()
-        hash_fields = sorted(self.update_fields)
-        pk_field = self.pk_field
+    def salt_hash(self) -> str:
+        """Salt da versão da transformação, igual ao do caminho síncrono."""
+        return f"{self.table_name}|{'|'.join(sorted(self.update_fields))}"
 
-        if isinstance(pk_field, list):
-            def _extrair_pk(dto: Any) -> str:
-                return "-".join(str(getattr(dto, f)) for f in pk_field)
-        else:
-            def _extrair_pk(dto: Any) -> str:
-                return str(getattr(dto, pk_field))
+    def get_transformer(self) -> Callable[[tuple], tuple[str, str, Any]]:
+        """Cria a transformação leve Row -> (pk, hash, linha crua).
+
+        Espelha ``BaseEtlService._criar_transform``: os dois caminhos, o
+        síncrono e o orquestrado por Celery, precisam gerar exatamente o
+        mesmo hash para a mesma linha — caso contrário, alternar entre eles
+        invalidaria todos os hashes e forçaria a regravação total.
+        """
+        dto_in = self.resolver_dto_in()
+        pk_field = self.pk_field
+        campos = pk_field if isinstance(pk_field, list) else [pk_field]
+        salt = self.salt_hash()
+
+        try:
+            nomes = [f.name for f in fields(dto_in)]
+            pk_idx: tuple[int, ...] | None = tuple(
+                nomes.index(campo) for campo in campos
+            )
+        except (ValueError, TypeError):
+            pk_idx = None
 
         def transform(row: tuple) -> tuple[str, str, Any]:
-            dto = dto_in(*row)
-            obj = model_class(**dto.to_domain())
-            return _extrair_pk(dto), calcular_hash(obj, hash_fields), obj
+            if pk_idx is not None:
+                pk = "-".join(str(row[i]) for i in pk_idx)
+            else:
+                dto = dto_in(*row)
+                pk = "-".join(str(getattr(dto, f)) for f in campos)
+            return pk, calcular_hash_linha(row, salt), row
 
         return transform
+
+    def materializar(self, row: tuple) -> Any:
+        """Constrói o objeto do model a partir da linha crua da origem.
+
+        O construtor fica fora do dataclass de propósito: ``to_dict`` usa
+        ``asdict`` para trafegar a fase pelo broker, e uma função aqui
+        quebraria a serialização.
+        """
+        construtor = self.__dict__.get("_materializador")
+        if construtor is None:
+            model_class = self.resolver_model()
+            dto_in = self.resolver_dto_in()
+
+            def construtor(linha: tuple) -> Any:  # noqa: F811
+                return model_class(**dto_in(*linha).to_domain())
+
+            self.__dict__["_materializador"] = construtor
+        return construtor(row)

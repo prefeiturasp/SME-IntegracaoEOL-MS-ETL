@@ -11,13 +11,16 @@ from apps.controle_auditoria.models import (
     EtlExecucao,
     EtlExecucaoTabelaEscrita,
     EtlExecucaoTabelaLida,
+    EtlProgressoExecucao,
 )
 
 
 class RepositorioAuditoriaPostgres:
     """Persiste estado de execucao e checkpoint por dominio."""
 
-    def iniciar_execucao(self, dominio: str) -> UUID:
+    def iniciar_execucao(
+        self, dominio: str, parametros: dict[str, object] | None = None
+    ) -> UUID:
         """Cria registro de execucao em andamento."""
         id_execucao = uuid4()
         EtlExecucao.objects.create(
@@ -25,6 +28,7 @@ class RepositorioAuditoriaPostgres:
             dominio=dominio,
             situacao="em_execucao",
             iniciado_em=timezone.now(),
+            parametros=parametros or {},
         )
         return id_execucao
 
@@ -104,6 +108,71 @@ class RepositorioAuditoriaPostgres:
 
         return cast(dict[str, object] | None, resultado)
 
+    def obter_progresso_execucoes(
+        self, ids_execucao: list[UUID]
+    ) -> dict[str, list[dict[str, object]]]:
+        """Retorna progresso operacional agrupado por id_execucao."""
+        progresso: dict[str, list[dict[str, object]]] = {}
+        qs = (
+            EtlProgressoExecucao.objects.filter(id_execucao__in=ids_execucao)
+            .values(
+                "id_execucao",
+                "dominio",
+                "fase_numero",
+                "total_fases",
+                "fase_nome",
+                "tabela_origem",
+                "tabela_destino",
+                "etapa",
+                "chunk_atual",
+                "linhas_lidas",
+                "linhas_escritas",
+                "linhas_ignoradas",
+                "mensagem",
+                "atualizado_em",
+            )
+            .order_by("id_execucao", "fase_numero")
+        )
+        for item in qs:
+            progresso.setdefault(str(item["id_execucao"]), []).append(item)
+        return progresso
+
+    def atualizar_progresso_execucao(
+        self,
+        *,
+        id_execucao: UUID,
+        dominio: str,
+        fase_numero: int,
+        total_fases: int,
+        fase_nome: str,
+        tabela_origem: str | None,
+        tabela_destino: str | None,
+        etapa: str,
+        chunk_atual: int,
+        linhas_lidas: int,
+        linhas_escritas: int,
+        linhas_ignoradas: int,
+        mensagem: str | None = None,
+    ) -> None:
+        """Atualiza uma linha leve de progresso operacional."""
+        EtlProgressoExecucao.objects.update_or_create(
+            id_execucao=id_execucao,
+            fase_numero=fase_numero,
+            defaults={
+                "dominio": dominio,
+                "total_fases": total_fases,
+                "fase_nome": fase_nome,
+                "tabela_origem": tabela_origem,
+                "tabela_destino": tabela_destino,
+                "etapa": etapa,
+                "chunk_atual": chunk_atual,
+                "linhas_lidas": linhas_lidas,
+                "linhas_escritas": linhas_escritas,
+                "linhas_ignoradas": linhas_ignoradas,
+                "mensagem": mensagem,
+            },
+        )
+
     @transaction.atomic
     def atualizar_checkpoint_dominio(
         self,
@@ -141,6 +210,19 @@ class RepositorioAuditoriaPostgres:
         if sucesso:
             checkpoint.ultimo_sucesso_em = timezone.now()
         checkpoint.save()
+
+    def marcar_checkpoint_interrompido(self, dominio: str) -> bool:
+        """Marca o checkpoint como interrompido preservando fase e token.
+
+        Usado pela limpeza de órfãs: a execução morreu sem passar pelo
+        tratamento de erro, então o checkpoint ficou preso em
+        ``em_execucao`` e o ``--continuar`` não conseguia retomar.
+        """
+        atualizados: int = EtlCheckpointDominio.objects.filter(
+            dominio=dominio.lower(),
+            ultima_situacao__in=("em_execucao", "em_andamento"),
+        ).update(ultima_situacao="interrompido")
+        return atualizados > 0
 
     def upsert_bulk_hashes(
         self,

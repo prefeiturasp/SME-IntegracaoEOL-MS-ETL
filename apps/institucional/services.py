@@ -1,13 +1,14 @@
 """Serviço de ETL do domínio INSTITUCIONAL_DB."""
 
 import logging
-from collections.abc import Callable, Iterator
+from collections.abc import Iterator
 from typing import Any
 from uuid import UUID
 
 from apps.core.libs.base_etl_service import (
     BaseEtlService,
     PhaseConfig,
+    TransformFase,
 )
 from apps.core.libs.cache import CacheService
 from apps.core.libs.thread_processor import calcular_hash
@@ -420,6 +421,39 @@ WHERE te.tp_escola IS NOT NULL
 """
 
 
+class _TransformadorUE(TransformFase):
+    """Transform da UE, enriquecido com o código de integração do cache.
+
+    Diferente das demais fases, o destino aqui não é função pura da linha
+    de origem — depende do cache do SSO. Por isso o objeto é construído na
+    hora e o hash sai dele, e não da linha crua; ``materializar`` só
+    devolve o que já foi montado.
+    """
+
+    def __init__(self, config: PhaseConfig, cache: Any) -> None:
+        """Guarda os campos de hash da fase e o cache de códigos por DRE."""
+        self._hash_fields = sorted(config.update_fields)
+        self._cache = cache
+        self._por_dre: dict[str, dict[str, str]] = {}
+
+    def __call__(self, row: tuple) -> tuple[str, str, Any]:
+        """Devolve (pk, hash do objeto, objeto já materializado)."""
+        dto = UnidadeEducacionalIn(*row)
+        codigo_dre = str(dto.codigo_dre) if dto.codigo_dre else ""
+        if codigo_dre not in self._por_dre:
+            key = f"etl_institucional:dre:{codigo_dre}:codigos_ues_integracao"
+            self._por_dre[codigo_dre] = self._cache.get_hash(key)
+        dto.codigo_ue_integracao = self._por_dre[codigo_dre].get(
+            str(dto.codigo_ue)
+        )
+        obj = UnidadeEducacional(**dto.to_domain())
+        return str(dto.codigo_ue), calcular_hash(obj, self._hash_fields), obj
+
+    def materializar(self, row: Any) -> Any:
+        """O objeto já vem pronto de ``__call__``."""
+        return row
+
+
 class EtlInstitucionalService(BaseEtlService):
     """Serviço de ETL do domínio Institucional.
 
@@ -580,7 +614,7 @@ class EtlInstitucionalService(BaseEtlService):
             dre = DREIn(*row)
             codigo_dre = str(dre.codigo_dre)
             key_cache = (
-                f"etl_institucional:dre:{codigo_dre}" ":codigos_ues_integracao"
+                f"etl_institucional:dre:{codigo_dre}:codigos_ues_integracao"
             )
             if self.cache.exist_hash_value(key_cache):
                 continue
@@ -609,31 +643,12 @@ class EtlInstitucionalService(BaseEtlService):
                 )
                 sso_offline = True
 
-    def _criar_transform(self, config: PhaseConfig) -> Callable:
+    def _criar_transform(self, config: PhaseConfig) -> TransformFase:
         """Delegado ao base, exceto para a fase UE."""
         if config.nome != "unidade_educacional":
             return super()._criar_transform(config)
         return self._build_transform_ue(config)
 
-    def _build_transform_ue(self, config: PhaseConfig) -> Callable:
+    def _build_transform_ue(self, config: PhaseConfig) -> TransformFase:
         """Transform para UE com código integração."""
-        hf = sorted(config.update_fields)
-        cache_por_dre: dict[str, dict[str, str]] = {}
-
-        def transform(row: tuple) -> tuple:
-            dto = UnidadeEducacionalIn(*row)
-            codigo_dre = str(dto.codigo_dre) if dto.codigo_dre else ""
-            if codigo_dre not in cache_por_dre:
-                key = (
-                    f"etl_institucional:dre:{codigo_dre}"
-                    ":codigos_ues_integracao"
-                )
-                cache_por_dre[codigo_dre] = self.cache.get_hash(key)
-            dto.codigo_ue_integracao = cache_por_dre[codigo_dre].get(
-                str(dto.codigo_ue)
-            )
-            data = dto.to_domain()
-            obj = UnidadeEducacional(**data)
-            return str(dto.codigo_ue), calcular_hash(obj, hf), obj
-
-        return transform
+        return _TransformadorUE(config, self.cache)

@@ -13,6 +13,7 @@ class EtlExecucao(models.Model):
     iniciado_em = models.DateTimeField()
     finalizado_em = models.DateTimeField(null=True)
     mensagem_erro = models.TextField(blank=True, null=True)  # NOSONAR
+    parametros = models.JSONField(default=dict, blank=True)
     criado_em = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -114,4 +115,47 @@ class EtlAuditoriaLinha(models.Model):
         db_table = "etl_auditoria_linha"
         indexes = [
             models.Index(fields=["atualizado_em"], name="idx_eal_atualizado"),
+        ]
+
+
+class EtlProgressoExecucao(models.Model):
+    """Estado operacional da fase atual de uma execução ETL.
+
+    Diferente das tabelas históricas de leitura/escrita, esta tabela existe
+    para monitoramento vivo. Cada execução mantém no máximo uma linha por fase,
+    atualizada periodicamente com contadores agregados.
+    """
+
+    id = models.BigAutoField(primary_key=True)
+    id_execucao = models.UUIDField(db_index=True)
+    dominio = models.CharField(max_length=120, db_index=True)
+    fase_numero = models.PositiveIntegerField(default=0)
+    total_fases = models.PositiveIntegerField(default=0)
+    fase_nome = models.CharField(max_length=200)
+    tabela_origem = models.CharField(max_length=200, blank=True, null=True)
+    tabela_destino = models.CharField(max_length=200, blank=True, null=True)
+    etapa = models.CharField(max_length=40, default="pendente")
+    chunk_atual = models.PositiveIntegerField(default=0)
+    linhas_lidas = models.BigIntegerField(default=0)
+    linhas_escritas = models.BigIntegerField(default=0)
+    linhas_ignoradas = models.BigIntegerField(default=0)
+    mensagem = models.TextField(blank=True, null=True)
+    iniciado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+
+        db_table = "etl_progresso_execucao"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["id_execucao", "fase_numero"],
+                name="uq_ep_execucao_fase",
+            )
+        ]
+        indexes = [
+            models.Index(
+                fields=["dominio", "atualizado_em"],
+                name="idx_ep_dominio_atualizado",
+            ),
+            models.Index(fields=["etapa"], name="idx_ep_etapa"),
         ]

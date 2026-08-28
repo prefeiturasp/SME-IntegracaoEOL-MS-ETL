@@ -1,83 +1,73 @@
 # SME-IntegracaoEOL-MS-ETL
 
-Microsserviço ETL em Django com execução assíncrona via Celery, usando KeyDB
-como broker.
+Microsserviço ETL em Django para sincronizar dados do EOL em bancos de domínio,
+com execução assíncrona via Celery e KeyDB.
 
-## Versão de Python
+## Requisitos
 
-- Python alvo do projeto: `3.12`
+- Python `3.12`
+- Docker e Docker Compose
+- `.env` configurado com conexões dos bancos, KeyDB e `API_KEY`
 
-## Regra de Execução
+## Como o ETL executa
 
-- O ETL não executa sozinho na inicialização.
-- Toda execução deve ser registrada na fila Celery/KeyDB (imediata ou agendada).
-- O serviço `etl` atua como worker Celery.
+- O ETL não executa sozinho ao subir a aplicação.
+- Execuções operacionais devem ser enfileiradas no Celery/KeyDB, de forma
+  imediata ou agendada.
+- O serviço `etl_auditoria_worker` processa a fila.
+- O serviço `etl_auditoria` expõe API, Swagger, admin e dashboards.
 
-## Compose
+## Serviços Docker
 
-- `docker-compose.yml` (base):
-  - `keydb`, `etl`, `web`
-- `docker-compose-dev.yml` (desenvolvimento):
-  - `postgres`, `keydb`, `etl`, `etl_auditoria`
+`docker-compose.yml`:
 
-## Subir Ambiente
+- `keydb`
+- `etl_auditoria_worker`
+- `etl_auditoria`
 
-Base:
+`docker-compose-dev.yml`:
 
-```bash
-docker compose up --build -d
-docker compose exec web python manage.py migrate --noinput --fake-initial
-```
+- `postgres`
+- `keydb`
+- `etl_auditoria_worker`
+- `etl_auditoria`
 
-Desenvolvimento:
+## Subir ambiente dev
 
 ```bash
 docker compose -f docker-compose-dev.yml up --build -d
-docker compose -f docker-compose-dev.yml exec etl_auditoria \
-  python manage.py migrate --noinput --fake-initial
 ```
 
-## Bancos de Dados (dev)
-
-Após subir o ambiente de desenvolvimento, crie os bancos e aplique as migrations:
+Crie os bancos e aplique as migrations:
 
 ```bash
-# Recriar containers com o .env atualizado
-docker compose -f docker-compose-dev.yml up -d --force-recreate
-
-# Criar os bancos (se ainda não existirem)
 docker exec -i sme_sgp_ms_etl_postgres psql -U postgres < scripts/criar_bancos.sql
-
-# Rodar migrations
 docker exec sme_sgp_ms_etl_auditoria sh scripts/executar_migrations.sh
 ```
 
-> Os URLs dos bancos no `.env` devem usar o nome do serviço Docker `postgres` (porta `5432`), não `localhost`.
-> O mapeamento `5438:5432` no docker-compose é apenas para acesso externo do host.
+No ambiente Docker dev, os hosts de banco no `.env` devem apontar para o
+serviço `postgres` na porta `5432`. O mapeamento `5438:5432` serve apenas para
+acesso externo a partir do host.
 
-## Admin
-
-Base:
-
-```bash
-docker compose sme_sgp_ms_etl_auditoria python manage.py createsuperuser
-```
+## URLs úteis
 
 Dev:
 
-```bash
-docker compose -f docker-compose-dev.yml exec etl_auditoria \
-  python manage.py createsuperuser
-```
+- App/admin: `http://localhost:8068/admin`
+- Swagger UI: `http://localhost:8068/api/v1/docs/`
+- Schema OpenAPI: `http://localhost:8068/api/v1/schema/`
+- Kanban ETL: `http://localhost:8068/dashboard/kanban/`
+- Debug attach: `localhost:5668`
 
-- URL: `http://localhost:8000/admin`
+Base:
 
-## API e Swagger
-
+- App/admin: `http://localhost:8000/admin`
 - Swagger UI: `http://localhost:8000/api/v1/docs/`
-- Schema: `http://localhost:8000/api/v1/schema/`
+- Schema OpenAPI: `http://localhost:8000/api/v1/schema/`
 
-Autenticação via API key:
+## API
+
+A API usa autenticação por API key:
 
 - Header: `X-API-Key`
 - Valor: variável `API_KEY` no `.env`
@@ -85,273 +75,150 @@ Autenticação via API key:
 Exemplo:
 
 ```bash
-curl -H "X-API-Key: sua_chave" http://localhost:8000/api/v1/checkpoints/
+curl -H "X-API-Key: sua_chave" \
+  http://localhost:8068/api/v1/checkpoints/
 ```
 
-## Enfileirar Execução
+## Enfileirar ETL
 
-### Via API
+Endpoint genérico:
 
-Endpoint:
-
-- `POST /api/v1/dominios/{dominio}/executar/`
-
-Payload imediato:
-
-```json
-{
-  "volume": 100,
-  "offset": 0,
-  "continuar": true
-}
+```text
+POST /api/v1/dominios/{dominio}/executar/
 ```
 
-Payload agendado:
-
-```json
-{
-  "volume": 100,
-  "offset": 0,
-  "continuar": true,
-  "executar_em": "2026-03-10T23:00:00-03:00"
-}
-```
-
-### Via command
-
-Imediato:
+Exemplo imediato:
 
 ```bash
-docker compose exec web python manage.py agendar_dominio \
-  --dominio institucional --volume 100 --continuar
-```
-
-Agendado:
-
-```bash
-docker compose exec web python manage.py agendar_dominio \
-  --dominio institucional --volume 100 --continuar \
-  --executar-em 2026-03-10T23:00:00-03:00
-```
-
-### Domínio Professores
-
-O domínio `professores` usa o endpoint genérico de execução. O agendamento passa pela
-fila Celery e executa o ETL completo do `professores_db`.
-
-Cadeia de execução:
-
-```
-POST /api/v1/dominios/professores/executar/
-  → executar_dominio_task (Celery)
-  → management command: executar_dominio --dominio professores
-  → management command: etl_professores
-  → EtlProfessoresService.executar()
-```
-
-Execução imediata via API:
-
-```bash
-curl -X POST http://localhost:8068/api/v1/dominios/professores/executar/ \
+curl -X POST http://localhost:8068/api/v1/dominios/programas/executar/ \
   -H "X-API-Key: sua_chave" \
   -H "Content-Type: application/json" \
-  -d '{}'
+  -d '{"anos_letivos": [2026], "continuar": true}'
 ```
 
-Execução agendada via API:
+Exemplo agendado:
 
 ```bash
-curl -X POST http://localhost:8068/api/v1/dominios/professores/executar/ \
+curl -X POST http://localhost:8068/api/v1/dominios/programas/executar/ \
   -H "X-API-Key: sua_chave" \
   -H "Content-Type: application/json" \
-  -d '{"executar_em": "2026-03-23T23:00:00-03:00"}'
+  -d '{"anos_letivos": [2026], "continuar": true, "executar_em": "2026-03-10T23:00:00-03:00"}'
 ```
 
-Resposta:
+Parâmetros principais:
 
-```json
-{ "task_id": "abc123-..." }
-```
+| Campo | Padrão | Uso |
+|---|---:|---|
+| `volume` | `100` | Quantidade de registros processados por lote da execução |
+| `offset` | `0` | Posição inicial da leitura; normalmente fica em `0` |
+| `continuar` | `false` | Retoma pelo checkpoint do domínio quando `true` |
+| `prioridade` | `5` | Prioridade da task: `0` mais urgente, `9` menos urgente |
+| `fases` | `null` | Lista opcional de fases |
+| `anos_letivos` | `null` | Lista opcional de anos letivos, para domínios/fases compatíveis |
+| `executar_em` | `null` | Data/hora ISO 8601 para agendamento |
 
-Execução direta via command (dev):
+Também é possível enfileirar via management command:
 
 ```bash
-docker exec sme_sgp_ms_etl_auditoria python manage.py etl_professores
+docker compose -f docker-compose-dev.yml exec etl_auditoria \
+  python manage.py agendar_dominio --dominio programas --continuar
 ```
 
-## Debug (dev)
+## Cron por ano letivo
+
+O script `scripts/disparar_etl_anos_letivos.sh` enfileira os domínios pela API
+e calcula os anos letivos pela data de referência:
+
+- diariamente: ano vigente;
+- dia 8: ano vigente e ano anterior;
+- dia 15: ano vigente e dois anos atrás;
+- dia 22: ano vigente e três anos atrás;
+- dia 29: ano vigente e quatro anos atrás.
+
+Simulação:
 
 ```bash
-docker compose -f docker-compose-dev.yml up --build -d etl_auditoria
+ETL_DRY_RUN=true ETL_DATA_REFERENCIA=2026-08-15 \
+  scripts/disparar_etl_anos_letivos.sh
 ```
 
-- App: `http://localhost:8000`
-- Debug attach: `localhost:5678`
+Exemplo de cron com trava para evitar sobreposição:
 
-## Documentação (Sphinx)
+```cron
+0 2 * * * flock -n /tmp/sme-sgp-ms-etl.lock /app/scripts/disparar_etl_anos_letivos.sh >> /var/log/sme-sgp-ms-etl-cron.log 2>&1
+```
 
-Gera a documentação HTML a partir dos arquivos em `docs/`:
+Para anos anteriores ao quarto ano, configure uma janela periódica:
+
+```bash
+ETL_ANO_MINIMO_ANTERIORES=2020 ETL_INTERVALO_MESES_ANTERIORES=3 \
+  scripts/disparar_etl_anos_letivos.sh
+```
+
+## Recovery
+
+O script `scripts/recuperar_etl.sh` executa o fluxo de recuperação:
+
+1. chama `POST /api/v1/execucoes/limpar-orfas/`;
+2. marca como `interrompido` execuções sem task viva no Celery;
+3. chama `POST /api/v1/execucoes/reprocessar-erros/`;
+4. reprocessa a última falha de cada domínio com `continuar=true`.
+
+Exemplo de cron:
+
+```cron
+*/30 * * * * cd /app && ./scripts/recuperar_etl.sh >> /var/log/sme-sgp-ms-etl-recovery.log 2>&1
+```
+
+## Comandos úteis
+
+```bash
+make help
+make up
+make migrate
+make etl-programas
+make agendar-institucional
+make test
+make lint
+```
+
+Execução direta de domínio em dev:
+
+```bash
+docker exec sme_sgp_ms_etl_auditoria python manage.py etl_programas
+```
+
+Criar superusuário:
+
+```bash
+docker compose -f docker-compose-dev.yml exec etl_auditoria \
+  python manage.py createsuperuser
+```
+
+## Documentação
+
+Gerar HTML com Sphinx:
 
 ```bash
 docker compose -f docker-compose-dev.yml run --rm etl_auditoria \
   sphinx-build -b html docs docs/_build
 ```
 
-Gera a documentação PDF a partir dos arquivos em `docs/`:
+Gerar PDF:
 
 ```bash
 docker compose -f docker-compose-dev.yml run --rm etl_auditoria \
   sh -c "sphinx-build -b latex docs docs/_build/latex && make -C docs/_build/latex"
 ```
 
-O resultado fica em `docs/_build/index.html` (acessível no host via volume).
+Referências principais:
 
-## Verificação de Compatibilidade — Professores
-
-Valida que o `professores_db` replica corretamente os dados do EOL para todas
-as queries do `ProfessorController`, sem necessidade de INNER JOINs externos.
-
-Cada verificador busca uma amostra de `--limite` linhas na origem (EolConnection/SQL Server),
-consulta o equivalente no destino (professores_db/PostgreSQL) e compara os campos-chave.
-Aprovação: ≥ 80% de correspondência por query.
-
-### Pré-requisito
-
-O `professores_db` deve ter dados. Use `--rodar-etl` para popular automaticamente
-antes de verificar, ou execute o ETL separadamente:
-
-```bash
-docker exec sme_sgp_ms_etl_etl_auditoria python manage.py etl_professores
-```
-
-### Execução
-
-Verificação simples (ETL já rodou):
-
-```bash
-docker exec sme_sgp_ms_etl_etl_auditoria \
-  python manage.py compat_professores
-```
-
-Rodar ETL amostral (30 linhas) e verificar:
-
-```bash
-docker exec sme_sgp_ms_etl_etl_auditoria \
-  python manage.py compat_professores --rodar-etl
-```
-
-Alterar tamanho da amostra:
-
-```bash
-docker exec sme_sgp_ms_etl_etl_auditoria \
-  python manage.py compat_professores --rodar-etl --limite 50
-```
-
-Exibir exemplos de divergências nos verificadores reprovados:
-
-```bash
-docker exec sme_sgp_ms_etl_etl_auditoria \
-  python manage.py compat_professores --detalhes
-```
-
-Salvar resultado completo em JSON:
-
-```bash
-docker exec sme_sgp_ms_etl_etl_auditoria \
-  python manage.py compat_professores --saida resultado.json
-```
-
-Tudo junto:
-
-```bash
-docker exec sme_sgp_ms_etl_etl_auditoria \
-  python manage.py compat_professores \
-    --rodar-etl --limite 30 --detalhes --saida resultado.json
-```
-
-### Saída esperada
-
-```
-========================================================================
-RELATÓRIO DE COMPATIBILIDADE — PROFESSORES_DB
-========================================================================
-[OK  ] FuncionarioRepository.BuscaFuncionarioPorRfAsync: 30/30 (100%) | destino=30
-[OK  ] ProfessorRepository.VerificarValidadeProfessorAsync: 28/30 (93%) | destino=30
-[IGNORADO] ProfessorRepository.BuscaProfessoresAsync_externo: sem dados na origem
-...
-========================================================================
-Total: 12  OK: 10  FALHA: 0  IGNORADO: 2  ERRO: 0
-
-✓ professores_db está COMPATÍVEL com EolConnection.
-```
-
-O comando retorna código de saída `0` se compatível ou `1` se algum verificador reprovar.
-
-### Verificadores cobertos
-
-| Verificador | Query do ProfessorController |
-|---|---|
-| `VerificadorCargoBaseAtivo` | `BuscaFuncionarioPorRfAsync` |
-| `VerificadorValidadeProf` | `VerificarValidadeProfessorAsync` |
-| `VerificadorAtribuicaoAula` | `BuscaProfessoresAsync` (servidor) |
-| `VerificadorTitularServidor` | `BuscarProfessorTitularPorDisciplinaAsync` (servidor) |
-| `VerificadorPerfilProfServidor` | `BuscarInformacoesPerfilProfAsync` (servidor) |
-| `VerificadorAtribuicaoExterno` | `BuscaProfessoresAsync` (externo) |
-| `VerificadorTitularExterno` | `BuscarProfessorTitularPorDisciplinaAsync` (externo) |
-| `VerificadorPerfilProfExterno` | `BuscarInformacoesPerfilProf` (externo) |
-| `VerificadorTurmaEscola` | `VerificaSeEhTurmaDeProgramaAsync` |
-| `VerificadorTurmaEscolaGradePrograma` | `VerificaSeTemAtribuicaoNaTurmaDeProgramaNaDisciplina` |
-| `VerificadorTerritorioReplicado` | `ObterComponentesCurricularesTerritorioAtribuidos` |
-| `VerificadorTerritorioAtribuicao` | cadeia JOIN com `AtribuicaoAula` |
-
-## Atalhos Make
-
-Use `make help` para listar todos os comandos disponíveis. Os principais:
-
-**Infraestrutura**
-
-| Comando | Descrição |
-|---|---|
-| `make build` | Build da imagem `etl_auditoria` |
-| `make up` | Sobe `postgres` e `keydb` em background |
-| `make down` | Derruba todos os containers |
-| `make logs` | Acompanha logs do `etl_auditoria` em tempo real |
-| `make shell` | Abre shell Django interativo |
-
-**Migrações**
-
-| Comando | Descrição |
-|---|---|
-| `make migrate` | Aplica migrations com `--fake-initial` |
-
-**ETL — execução direta (sem broker)**
-
-| Comando | Descrição |
-|---|---|
-| `make etl-institucional` | ETL institucional completo (DRE + TipoEscola + SubPrefeitura + UE) |
-| `make etl-institucional-ue` | Somente fase 4: `unidade_educacional` |
-| `make etl-alunos` | ETL do domínio alunos |
-| `make etl-pedagogico` | ETL do domínio pedagógico |
-| `make etl-professores` | ETL do domínio professores |
-| `make etl-programas` | ETL do domínio programas |
-| `make etl` | Roda todos os domínios em sequência |
-
-**ETL — agendamento via Celery (requer worker e broker ativos)**
-
-| Comando | Descrição |
-|---|---|
-| `make agendar-institucional` | Enfileira ETL institucional na fila Celery |
-
-**Qualidade**
-
-| Comando | Descrição |
-|---|---|
-| `make test` | Roda testes com coverage (mínimo 80%) |
-| `make lint` | Roda pre-commit nos arquivos do projeto |
+- [API de auditoria](docs/auditoria/api.md)
+- [Tasks de auditoria](docs/auditoria/tasks.md)
+- [Manutenção da auditoria](docs/auditoria/manutencao.md)
+- [Compatibilidade do domínio professores](docs/dominios/professores/compatibilidade.md)
 
 ## Testes
-
-Executa testes no container via ambiente dev:
 
 ```bash
 ./executar_testes_docker.sh

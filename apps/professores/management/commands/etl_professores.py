@@ -83,10 +83,12 @@ class Command(BaseCommand):
             ),
         )
         parser.add_argument(
-            "--ano-letivo",
+            "--anos-letivos",
             type=int,
+            nargs="+",
             default=None,
-            help="Processa apenas o ano letivo informado.",
+            metavar="ANO",
+            help="Processa apenas os anos letivos informados.",
         )
         parser.add_argument(
             "--skip-audit-hash",
@@ -99,7 +101,7 @@ class Command(BaseCommand):
     def handle(self, *args: Any, **options: Any) -> None:
         """Executa o ETL e registra auditoria e checkpoint."""
         continuar: bool = options["continuar"]
-        ano_letivo: int | None = options.get("ano_letivo")
+        anos_letivos: list[int] | None = options.get("anos_letivos")
         if options.get("skip_audit_hash"):
             os.environ["ETL_SKIP_AUDIT_HASH"] = "1"
 
@@ -113,7 +115,7 @@ class Command(BaseCommand):
         # Executar ETL
         # ------------------------------------------------------------------
         id_execucao: UUID = repositorio.iniciar_execucao("professores")
-        servico = EtlProfessoresService(ano_letivo=ano_letivo)
+        servico = EtlProfessoresService(anos_letivos=anos_letivos)
         ultimo_indice_salvo: str | None = None
 
         def _salvar_checkpoint_lote(tabela: str, lote: int) -> None:

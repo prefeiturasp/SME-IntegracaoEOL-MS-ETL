@@ -25,6 +25,19 @@ class Command(BaseEtlCommand):
 | `--fase N` | Força início a partir da fase N. Ignora checkpoint |
 | `--continuar` | Lê o checkpoint mais recente; se `ultima_situacao == "erro"`, retoma em `ultima_pagina + 1` |
 | `--carga-inicial` | Passa `primeiro_run=True` para o service |
+| `--anos-letivos ANO [ANO ...]` | Processa apenas os anos letivos informados nas fases que possuem filtro anual |
+
+O filtro `--anos-letivos` é aplicado às fases:
+
+- `turma_programa`
+- `matricula_turma_programa`
+- `matricula_turma_programa_historico`
+- `aluno_pap_ano_letivo`
+- `aluno_pap_ano_letivo_historico`
+
+As fases de catálogo e relacionamento sem coluna anual continuam sem filtro:
+`tipo_programa`, `componente_curricular_programa` e
+`turma_programa_componente_curricular`.
 
 ## Comportamento real
 
@@ -67,4 +80,5 @@ _TABELAS_UPSERT = frozenset({
 python manage.py etl_programas --volume 500
 python manage.py etl_programas --volume 500 --continuar
 python manage.py etl_programas --fase 5
+python manage.py etl_programas --anos-letivos 2025 2026
 ```

@@ -7,8 +7,8 @@ Arquivo: `apps/professores/management/commands/etl_professores.py`
 - `--volume`
 - `--offset`
 - `--continuar`
-- `--ano-letivo N` — processa apenas atribuições (SME e externas) a partir do ano
-  letivo N. Sem o argumento, faz carga completa.
+- `--anos-letivos ANO [ANO ...]` — processa apenas os anos letivos informados
+  nas fases com recorte anual. Sem o argumento, faz carga completa.
 - `--skip-audit-hash` (alias `--skip-salvar-dados-auditoria`) — pula a gravação dos
   hashes de auditoria por linha. Útil em recargas amplas em que a auditoria por
   linha não é necessária.
@@ -34,6 +34,7 @@ As tabelas em `_TABELAS_UPSERT` recebem `modo_escrita="upsert"`; as demais, `ful
 ```bash
 python manage.py etl_professores --volume 500
 python manage.py etl_professores --volume 500 --continuar
+python manage.py etl_professores --anos-letivos 2025 2026
 ```
 
 ## FuncionarioUnidadeEducacional

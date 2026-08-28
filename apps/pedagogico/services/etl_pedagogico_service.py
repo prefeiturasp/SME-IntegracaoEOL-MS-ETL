@@ -136,7 +136,7 @@ class EtlPedagogicoService(BaseEtlService):
         primeiro_run: bool = False,
         eol: EOLService | None = None,
         api_eol: ApiEOLService | None = None,
-        ano_letivo: int | None = None,
+        anos_letivos: list[int] | None = None,
         fases: list[str] | None = None,
     ) -> None:
         super().__init__(
@@ -151,7 +151,9 @@ class EtlPedagogicoService(BaseEtlService):
         self._agora = timezone.now()
         self._total_itens_agrupamento: int = 0
         self._cache_anos: list[int] | None = None
-        self._ano_letivo: int | None = ano_letivo
+        self._anos_letivos_filtro = (
+            [int(ano) for ano in anos_letivos] if anos_letivos else None
+        )
         self._fases = self._init_fases()
         if self._fases_selecionadas and (
             _AGRUPAMENTO_GERADO_BACKUP in self._fases_selecionadas
@@ -367,8 +369,8 @@ class EtlPedagogicoService(BaseEtlService):
                 for chunk in self.eol.iter_query(SQL_ANOS_LETIVOS)
                 for r in chunk
             ]
-            if self._ano_letivo is not None:
-                anos = [a for a in anos if a >= self._ano_letivo]
+            if self._anos_letivos_filtro is not None:
+                anos = [a for a in anos if a in self._anos_letivos_filtro]
             self._cache_anos = anos
         return self._cache_anos
 
@@ -516,9 +518,7 @@ class EtlPedagogicoService(BaseEtlService):
         modalidade vêm de ``parametros`` e não de constante hardcoded.
         """
         parametros = self._parametros_abrangencia()
-        etapas_por_modalidade = json.loads(
-            parametros["etapas_por_modalidade"]
-        )
+        etapas_por_modalidade = json.loads(parametros["etapas_por_modalidade"])
         return SQL_TURMAS_ATRIBUIDAS_DRE_UE.format(
             tipos_escola=parametros["tipo_escola_sgp"],
             tipos_escola_infantil=parametros["tipo_escola_infantil_sgp"],
@@ -529,9 +529,7 @@ class EtlPedagogicoService(BaseEtlService):
             etapas_fundamental=",".join(
                 str(v) for v in etapas_por_modalidade["5"]
             ),
-            etapas_medio=",".join(
-                str(v) for v in etapas_por_modalidade["6"]
-            ),
+            etapas_medio=",".join(str(v) for v in etapas_por_modalidade["6"]),
         )
 
     # ------------------------------------------------------------------

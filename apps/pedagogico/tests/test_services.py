@@ -1,13 +1,18 @@
 from datetime import UTC, date, datetime
 from queue import Empty
 from types import SimpleNamespace
+from typing import cast
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 from django.test import TestCase
 from django.utils import timezone
 
-from apps.core.libs.base_etl_service import PhaseConfig, PipelineMetrics
+from apps.core.libs.base_etl_service import (
+    PhaseConfig,
+    PipelineMetrics,
+    TransformFase,
+)
 from apps.pedagogico.dtos.model_in import (
     AtribuicaoTerritorioSaberIn,
 )
@@ -84,9 +89,7 @@ class TestPedagogicoService(TestCase):
     def test_criar_transform_ciclo_ensino(self) -> None:
         """Transforma o catálogo de ciclos com chave pelo código."""
         config = next(
-            fase
-            for fase in self.service._fases
-            if fase.nome == "ciclo_ensino"
+            fase for fase in self.service._fases if fase.nome == "ciclo_ensino"
         )
         transform = self.service._criar_transform(config)
         data_atualizacao = datetime(2026, 8, 20, 10, 30, tzinfo=UTC)
@@ -280,11 +283,12 @@ class TestPedagogicoService(TestCase):
     ) -> None:
         """Fase API EOL usa transform genérico da base."""
         config = self.service._fases[5]
-        transform = self.service._criar_transform(config)
+        transform = cast(TransformFase, self.service._criar_transform(config))
 
         result = transform((1, 512, 513, "2021-12-31T00:00:00"))
         assert result is not None
-        pk, _, obj = result
+        pk, _, payload = result
+        obj = transform.materializar(payload)
 
         self.assertEqual(pk, "1")
         self.assertEqual(obj.id_componente_curricular_pai, 512)
@@ -296,11 +300,12 @@ class TestPedagogicoService(TestCase):
     ) -> None:
         """Regência da API EOL não depende de id físico de origem."""
         config = self.service._fases[7]
-        transform = self.service._criar_transform(config)
+        transform = cast(TransformFase, self.service._criar_transform(config))
 
         result = transform((218, 4, 5))
         assert result is not None
-        pk, _, obj = result
+        pk, _, payload = result
+        obj = transform.materializar(payload)
 
         self.assertEqual(pk, "218-4-5")
         self.assertEqual(obj.id_componente_curricular, 218)
@@ -851,11 +856,12 @@ class TestPedagogicoService(TestCase):
         self,
     ) -> None:
         config = self.service._fases[4]
-        transform = self.service._criar_transform(config)
+        transform = cast(TransformFase, self.service._criar_transform(config))
 
         result = transform((None, 513, True, False, " Arte ", None, None))
         assert result is not None
-        pk, _, obj = result
+        pk, _, payload = result
+        obj = transform.materializar(payload)
 
         self.assertEqual(pk, "None-513")
         self.assertIsNone(obj.id_relacao_origem)
@@ -930,7 +936,9 @@ class TestPedagogicoService(TestCase):
     ) -> None:
         """Fase de abrangência troca o SQL pelo montado em tempo real."""
         config = next(
-            f for f in self.service._fases if f.nome == "turma_atribuida_dre_ue"
+            f
+            for f in self.service._fases
+            if f.nome == "turma_atribuida_dre_ue"
         )
         sql_montado = "SELECT 1 -- sql montado"
 
@@ -1029,19 +1037,21 @@ class TestPedagogicoService(TestCase):
         self.assertEqual((escritos, ignorados), (0, 2))
         mock_sync.assert_not_called()
 
-    def test_anos_letivos_filtra_por_ano_letivo_minimo(self) -> None:
-        """Quando ``ano_letivo`` é informado, anos anteriores são removidos."""
+    def test_anos_letivos_filtra_lista_exata(self) -> None:
+        """Quando ``anos_letivos`` é informado, só esses anos são usados."""
         service = EtlPedagogicoService(
             db_alias="pedagogico_db",
             eol=self.mock_eol,
             id_execucao=uuid4(),
-            ano_letivo=2025,
+            anos_letivos=[2024, 2026],
         )
-        self.mock_eol.iter_query.return_value = [[(2023,), (2024,), (2025,)]]
+        self.mock_eol.iter_query.return_value = [
+            [(2023,), (2024,), (2025,), (2026,)]
+        ]
 
         anos = service._anos_letivos()
 
-        self.assertEqual(anos, [2025])
+        self.assertEqual(anos, [2024, 2026])
 
     def test_executar_fase_roteia_agrupamentos_para_metodo_dedicado(
         self,

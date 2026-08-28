@@ -99,9 +99,9 @@ class EtlProfessoresServiceFiltroAnoLetivoTest(TestCase):
         self.assertNotIn("AnoLetivo IN (2025, 2026)", sql)
         self.assertNotIn("AnoLetivo =", sql)
 
-    def test_ano_letivo_aplica_igualdade(self) -> None:
-        """Valida filtro pelo ano informado."""
-        srv = EtlProfessoresService(eol=MagicMock(), ano_letivo=2026)
+    def test_anos_letivos_aplica_filtro_in(self) -> None:
+        """Valida filtro pelos anos informados."""
+        srv = EtlProfessoresService(eol=MagicMock(), anos_letivos=[2025, 2026])
 
         sql_turmas = srv._sql_com_filtro_ano_letivo(SQL_TURMAS_ATRIBUIDAS_UE)
         sql_disciplinas = srv._sql_com_filtro_ano_letivo(
@@ -109,10 +109,10 @@ class EtlProfessoresServiceFiltroAnoLetivoTest(TestCase):
         )
         sql_atribuicoes = srv._sql_com_filtro_ano_letivo(SQL_ATRIBUICOES_AULA)
 
-        self.assertIn("AND AnoLetivo = 2026", sql_turmas)
-        self.assertIn("AND tau.AnoLetivo = 2026", sql_disciplinas)
-        self.assertIn("AND aa.an_atribuicao = 2026", sql_atribuicoes)
-        self.assertNotIn("AnoLetivo IN (2025, 2026)", sql_turmas)
+        self.assertIn("AND AnoLetivo IN (2025, 2026)", sql_turmas)
+        self.assertIn("AND tau.AnoLetivo IN (2025, 2026)", sql_disciplinas)
+        self.assertIn("AND aa.an_atribuicao IN (2025, 2026)", sql_atribuicoes)
+        self.assertNotIn("AnoLetivo = 2026", sql_turmas)
         self.assertNotIn("AnoLetivo >= 2026", sql_turmas)
 
 

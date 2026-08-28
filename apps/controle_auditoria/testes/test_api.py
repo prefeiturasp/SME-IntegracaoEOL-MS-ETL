@@ -2,7 +2,7 @@
 
 from datetime import timedelta
 from typing import Any
-from unittest.mock import patch
+from unittest.mock import ANY, patch
 from uuid import uuid4
 
 from django.test import Client, TestCase, override_settings
@@ -16,6 +16,7 @@ from apps.controle_auditoria.models import (
     EtlExecucao,
     EtlExecucaoTabelaEscrita,
     EtlExecucaoTabelaLida,
+    EtlProgressoExecucao,
 )
 
 
@@ -122,8 +123,15 @@ class ViewsApiControleAuditoriaTestCase(TestCase):
                 "volume": 10,
                 "offset": 1,
                 "continuar": True,
+                "parametros_disparo": {
+                    "origem": "api",
+                    "prioridade": 5,
+                    "executar_em": None,
+                    "celery_task_id": ANY,
+                },
             },
             priority=5,
+            task_id=ANY,
         )
 
     @patch("apps.controle_auditoria.api.views.executar_dominio_task")
@@ -148,24 +156,115 @@ class ViewsApiControleAuditoriaTestCase(TestCase):
                 "offset": 0,
                 "continuar": False,
                 "anos_letivos": [2021, 2022, 2023, 2024, 2025],
+                "parametros_disparo": {
+                    "origem": "api",
+                    "prioridade": 5,
+                    "executar_em": None,
+                    "celery_task_id": ANY,
+                },
             },
             priority=5,
+            task_id=ANY,
         )
 
     @patch("apps.controle_auditoria.api.views.executar_dominio_task")
-    def test_deve_rejeitar_anos_letivos_em_dominio_sem_suporte(
+    def test_deve_enfileirar_pedagogico_com_anos_letivos(
         self, tarefa_mock: Any
     ) -> None:
-        """Retorna 400 quando domínio sem suporte recebe anos_letivos."""
+        """POST em pedagógico aceita anos_letivos e repassa para a task."""
+        tarefa_mock.apply_async.return_value = type(
+            "Result", (), {"id": "task-pedagogico"}
+        )()
         resposta = self.client.post(
             "/api/v1/dominios/pedagogico/executar/",
             data={"anos_letivos": [2024]},
             format="json",
             **self.headers,
         )
-        self.assertEqual(resposta.status_code, 400)
-        self.assertIn("anos_letivos", resposta.json()["erro"])
-        tarefa_mock.apply_async.assert_not_called()
+        self.assertEqual(resposta.status_code, 202)
+        tarefa_mock.apply_async.assert_called_once_with(
+            kwargs={
+                "dominio": "pedagogico",
+                "volume": 100,
+                "offset": 0,
+                "continuar": False,
+                "anos_letivos": [2024],
+                "parametros_disparo": {
+                    "origem": "api",
+                    "prioridade": 5,
+                    "executar_em": None,
+                    "celery_task_id": ANY,
+                },
+            },
+            priority=5,
+            task_id=ANY,
+        )
+
+    @patch("apps.controle_auditoria.api.views.executar_dominio_task")
+    def test_deve_enfileirar_programas_com_anos_letivos(
+        self, tarefa_mock: Any
+    ) -> None:
+        """POST em programas aceita anos_letivos e repassa para a task."""
+        tarefa_mock.apply_async.return_value = type(
+            "Result", (), {"id": "task-programas"}
+        )()
+        resposta = self.client.post(
+            "/api/v1/dominios/programas/executar/",
+            data={"anos_letivos": [2025, 2026]},
+            format="json",
+            **self.headers,
+        )
+        self.assertEqual(resposta.status_code, 202)
+        tarefa_mock.apply_async.assert_called_once_with(
+            kwargs={
+                "dominio": "programas",
+                "volume": 100,
+                "offset": 0,
+                "continuar": False,
+                "anos_letivos": [2025, 2026],
+                "parametros_disparo": {
+                    "origem": "api",
+                    "prioridade": 5,
+                    "executar_em": None,
+                    "celery_task_id": ANY,
+                },
+            },
+            priority=5,
+            task_id=ANY,
+        )
+
+    @patch("apps.controle_auditoria.api.views.executar_dominio_task")
+    def test_deve_normalizar_ano_letivo_unico_em_programas(
+        self, tarefa_mock: Any
+    ) -> None:
+        """POST em programas aceita ano único em anos_letivos."""
+        tarefa_mock.apply_async.return_value = type(
+            "Result", (), {"id": "task-programas"}
+        )()
+        resposta = self.client.post(
+            "/api/v1/dominios/programas/executar/",
+            data={"anos_letivos": 2026},
+            format="json",
+            **self.headers,
+        )
+        self.assertEqual(resposta.status_code, 202)
+        tarefa_mock.apply_async.assert_called_once_with(
+            kwargs={
+                "dominio": "programas",
+                "volume": 100,
+                "offset": 0,
+                "continuar": False,
+                "anos_letivos": [2026],
+                "parametros_disparo": {
+                    "origem": "api",
+                    "prioridade": 5,
+                    "executar_em": None,
+                    "celery_task_id": ANY,
+                },
+            },
+            priority=5,
+            task_id=ANY,
+        )
 
     @patch("apps.controle_auditoria.api.views.executar_dominio_task")
     def test_deve_agendar_execucao_com_data_hora(
@@ -385,6 +484,332 @@ class ViewsApiControleAuditoriaTestCase(TestCase):
         )
         self.assertEqual(resposta.status_code, 200)
         self.assertEqual(len(resposta.json()), 1)
+
+    @patch("apps.controle_auditoria.api.views.aplicacao_celery")
+    def test_deve_marcar_execucao_orfa_como_interrompida(
+        self, celery_mock: Any
+    ) -> None:
+        """Limpeza marca em_execucao sem heartbeat recente."""
+        celery_mock.control.inspect.return_value.active.return_value = {}
+        celery_mock.control.inspect.return_value.reserved.return_value = {}
+        celery_mock.control.inspect.return_value.scheduled.return_value = {}
+        id_exec = uuid4()
+        EtlExecucao.objects.create(
+            id_execucao=id_exec,
+            dominio="programas",
+            situacao="em_execucao",
+            iniciado_em=timezone.now() - timedelta(hours=2),
+        )
+
+        resposta = self.client.post(
+            "/api/v1/execucoes/limpar-orfas/",
+            data={},
+            format="json",
+            **self.headers,
+        )
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertEqual(resposta.json()["total_interrompido"], 1)
+        execucao = EtlExecucao.objects.get(id_execucao=id_exec)
+        self.assertEqual(execucao.situacao, "interrompido")
+        self.assertIsNotNone(execucao.finalizado_em)
+
+    @patch("apps.controle_auditoria.api.views.aplicacao_celery")
+    def test_deve_interromper_execucao_sem_task_mesmo_com_heartbeat_recente(
+        self, celery_mock: Any
+    ) -> None:
+        """Limpeza usa Celery como fonte da verdade, não janela de tempo."""
+        celery_mock.control.inspect.return_value.active.return_value = {}
+        celery_mock.control.inspect.return_value.reserved.return_value = {}
+        celery_mock.control.inspect.return_value.scheduled.return_value = {}
+        id_exec = uuid4()
+        EtlExecucao.objects.create(
+            id_execucao=id_exec,
+            dominio="programas",
+            situacao="em_execucao",
+            iniciado_em=timezone.now() - timedelta(hours=2),
+        )
+        EtlProgressoExecucao.objects.create(
+            id_execucao=id_exec,
+            dominio="programas",
+            fase_numero=1,
+            total_fases=8,
+            fase_nome="tipo_programa",
+            etapa="processando_chunk",
+        )
+
+        resposta = self.client.post(
+            "/api/v1/execucoes/limpar-orfas/",
+            data={},
+            format="json",
+            **self.headers,
+        )
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertEqual(resposta.json()["total_interrompido"], 1)
+        self.assertEqual(resposta.json()["total_preservado"], 0)
+        self.assertEqual(resposta.json()["itens"][0]["motivo"], "sem_task_id")
+        execucao = EtlExecucao.objects.get(id_execucao=id_exec)
+        self.assertEqual(execucao.situacao, "interrompido")
+
+    @patch("apps.controle_auditoria.api.views.aplicacao_celery")
+    def test_nao_deve_interromper_execucao_com_task_celery_viva(
+        self, celery_mock: Any
+    ) -> None:
+        """Limpeza preserva execução se task_id ainda está ativo no Celery."""
+        task_id = "task-viva"
+        celery_mock.control.inspect.return_value.active.return_value = {
+            "worker@1": [{"id": task_id, "name": "etl.executar_dominio"}]
+        }
+        celery_mock.control.inspect.return_value.reserved.return_value = {}
+        celery_mock.control.inspect.return_value.scheduled.return_value = {}
+        id_exec = uuid4()
+        EtlExecucao.objects.create(
+            id_execucao=id_exec,
+            dominio="programas",
+            situacao="em_execucao",
+            iniciado_em=timezone.now() - timedelta(hours=2),
+            parametros={"disparo": {"celery_task_id": task_id}},
+        )
+
+        resposta = self.client.post(
+            "/api/v1/execucoes/limpar-orfas/",
+            data={},
+            format="json",
+            **self.headers,
+        )
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertEqual(resposta.json()["total_interrompido"], 0)
+        self.assertEqual(resposta.json()["total_preservado"], 1)
+        self.assertEqual(
+            resposta.json()["itens"][0]["motivo"], "task_celery_viva"
+        )
+        execucao = EtlExecucao.objects.get(id_execucao=id_exec)
+        self.assertEqual(execucao.situacao, "em_execucao")
+
+    @patch("apps.controle_auditoria.api.views.aplicacao_celery")
+    def test_nao_deve_limpar_orfas_sem_resposta_do_celery(
+        self, celery_mock: Any
+    ) -> None:
+        """Limpeza falha fechada quando nenhum worker responde."""
+        celery_mock.control.inspect.return_value.active.return_value = None
+        celery_mock.control.inspect.return_value.reserved.return_value = None
+        celery_mock.control.inspect.return_value.scheduled.return_value = None
+        id_exec = uuid4()
+        EtlExecucao.objects.create(
+            id_execucao=id_exec,
+            dominio="programas",
+            situacao="em_execucao",
+            iniciado_em=timezone.now() - timedelta(hours=2),
+        )
+
+        resposta = self.client.post(
+            "/api/v1/execucoes/limpar-orfas/",
+            data={},
+            format="json",
+            **self.headers,
+        )
+
+        self.assertEqual(resposta.status_code, 503)
+        execucao = EtlExecucao.objects.get(id_execucao=id_exec)
+        self.assertEqual(execucao.situacao, "em_execucao")
+
+    @patch("apps.controle_auditoria.api.views.aplicacao_celery")
+    def test_deve_liberar_checkpoint_ao_marcar_execucao_orfa(
+        self, celery_mock: Any
+    ) -> None:
+        """Órfã libera o checkpoint para o --continuar retomar a fase."""
+        celery_mock.control.inspect.return_value.active.return_value = {}
+        celery_mock.control.inspect.return_value.reserved.return_value = {}
+        celery_mock.control.inspect.return_value.scheduled.return_value = {}
+        id_exec = uuid4()
+        EtlExecucao.objects.create(
+            id_execucao=id_exec,
+            dominio="programas",
+            situacao="em_execucao",
+            iniciado_em=timezone.now() - timedelta(hours=2),
+        )
+        EtlCheckpointDominio.objects.create(
+            dominio="programas",
+            ultimo_id_execucao=id_exec,
+            ultima_pagina=4,
+            token_parada="602249",
+            indice_sincronizacao="programas:offset:602249",
+            ultima_situacao="em_execucao",
+        )
+
+        resposta = self.client.post(
+            "/api/v1/execucoes/limpar-orfas/",
+            data={},
+            format="json",
+            **self.headers,
+        )
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertTrue(resposta.json()["itens"][0]["checkpoint_liberado"])
+        checkpoint = EtlCheckpointDominio.objects.get(dominio="programas")
+        self.assertEqual(checkpoint.ultima_situacao, "interrompido")
+        self.assertEqual(checkpoint.ultima_pagina, 4)
+        self.assertEqual(checkpoint.token_parada, "602249")
+
+    @patch("apps.controle_auditoria.api.views.executar_dominio_task")
+    def test_deve_reprocessar_ultima_execucao_com_erro(
+        self, tarefa_mock: Any
+    ) -> None:
+        """Recovery reusa parâmetros da execução com erro e força continuar."""
+        id_exec = uuid4()
+        tarefa_mock.apply_async.return_value = type(
+            "Result", (), {"id": "task-recovery"}
+        )()
+        EtlExecucao.objects.create(
+            id_execucao=id_exec,
+            dominio="pedagogico",
+            situacao="erro",
+            iniciado_em=timezone.now(),
+            parametros={
+                "execucao": {
+                    "volume": 500,
+                    "offset": 0,
+                    "anos_letivos": [2026],
+                },
+                "disparo": {"origem": "api"},
+            },
+        )
+
+        resposta = self.client.post(
+            "/api/v1/execucoes/reprocessar-erros/",
+            data={"max_tentativas": 3},
+            format="json",
+            **self.headers,
+        )
+
+        self.assertEqual(resposta.status_code, 202)
+        self.assertEqual(resposta.json()["total_reprocessado"], 1)
+        tarefa_mock.apply_async.assert_called_once_with(
+            kwargs={
+                "dominio": "pedagogico",
+                "volume": 500,
+                "offset": 0,
+                "continuar": True,
+                "parametros_disparo": {
+                    "origem": "recovery",
+                    "execucao_origem": str(id_exec),
+                    "execucao_erro": str(id_exec),
+                    "tentativa": 1,
+                    "prioridade": 3,
+                    "continuar": True,
+                    "celery_task_id": ANY,
+                },
+                "anos_letivos": [2026],
+            },
+            priority=3,
+            task_id=ANY,
+        )
+
+    @patch("apps.controle_auditoria.api.views.executar_dominio_task")
+    def test_reprocessamento_deve_respeitar_limite_tentativas(
+        self, tarefa_mock: Any
+    ) -> None:
+        """Recovery ignora execução que atingiu limite de tentativas."""
+        id_origem = uuid4()
+        id_erro = uuid4()
+        EtlExecucao.objects.create(
+            id_execucao=id_erro,
+            dominio="programas",
+            situacao="erro",
+            iniciado_em=timezone.now(),
+            parametros={
+                "execucao": {"volume": 100, "anos_letivos": [2026]},
+                "disparo": {"execucao_origem": str(id_origem)},
+            },
+        )
+        for tentativa in range(3):
+            EtlExecucao.objects.create(
+                id_execucao=uuid4(),
+                dominio="programas",
+                situacao="erro",
+                iniciado_em=timezone.now() - timedelta(minutes=tentativa + 1),
+                parametros={
+                    "disparo": {
+                        "origem": "recovery",
+                        "execucao_origem": str(id_origem),
+                    }
+                },
+            )
+
+        resposta = self.client.post(
+            "/api/v1/execucoes/reprocessar-erros/",
+            data={"max_tentativas": 3},
+            format="json",
+            **self.headers,
+        )
+
+        self.assertEqual(resposta.status_code, 202)
+        dados = resposta.json()
+        self.assertEqual(dados["total_reprocessado"], 0)
+        self.assertEqual(dados["itens"][0]["status"], "ignorado")
+        self.assertEqual(dados["itens"][0]["motivo"], "limite_tentativas")
+        tarefa_mock.apply_async.assert_not_called()
+
+    @patch("apps.controle_auditoria.api.views.executar_dominio_task")
+    def test_reprocessamento_ignora_erro_antigo_com_sucesso_recente(
+        self, tarefa_mock: Any
+    ) -> None:
+        """Recovery considera apenas a última execução por domínio."""
+        EtlExecucao.objects.create(
+            id_execucao=uuid4(),
+            dominio="alunos",
+            situacao="erro",
+            iniciado_em=timezone.now() - timedelta(hours=1),
+        )
+        EtlExecucao.objects.create(
+            id_execucao=uuid4(),
+            dominio="alunos",
+            situacao="concluido",
+            iniciado_em=timezone.now(),
+        )
+
+        resposta = self.client.post(
+            "/api/v1/execucoes/reprocessar-erros/",
+            data={"max_tentativas": 3},
+            format="json",
+            **self.headers,
+        )
+
+        self.assertEqual(resposta.status_code, 202)
+        self.assertEqual(resposta.json()["total_analisado"], 0)
+        tarefa_mock.apply_async.assert_not_called()
+
+    @patch("apps.controle_auditoria.api.views.executar_dominio_task")
+    def test_deve_reprocessar_execucao_interrompida(
+        self, tarefa_mock: Any
+    ) -> None:
+        """Recovery também considera execução interrompida."""
+        tarefa_mock.apply_async.return_value = type(
+            "Result", (), {"id": "task-interrompido"}
+        )()
+        EtlExecucao.objects.create(
+            id_execucao=uuid4(),
+            dominio="programas",
+            situacao="interrompido",
+            iniciado_em=timezone.now(),
+            parametros={
+                "execucao": {"volume": 500, "anos_letivos": [2026]},
+                "disparo": {"origem": "api"},
+            },
+        )
+
+        resposta = self.client.post(
+            "/api/v1/execucoes/reprocessar-erros/",
+            data={"max_tentativas": 3},
+            format="json",
+            **self.headers,
+        )
+
+        self.assertEqual(resposta.status_code, 202)
+        self.assertEqual(resposta.json()["total_reprocessado"], 1)
+        self.assertTrue(tarefa_mock.apply_async.called)
 
 
 class MonitoramentoViewsTestCase(TestCase):

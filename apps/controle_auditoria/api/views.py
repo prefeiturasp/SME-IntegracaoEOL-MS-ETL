@@ -1,6 +1,7 @@
 """Views DRF para controle e auditoria de execuções ETL."""
 
 from typing import Any
+from uuid import uuid4
 
 from django.core.exceptions import ValidationError
 from django.db import connections
@@ -25,19 +26,56 @@ from apps.controle_auditoria.api.serializers import (
     EtlExecucaoTabelaLidaSerializer,
     HealthStatusSerializer,
 )
-from apps.controle_auditoria.libs.dominios import validar_parametros_dominio
+from apps.controle_auditoria.libs.celery_app import aplicacao_celery
+from apps.controle_auditoria.libs.dominios import (
+    FASES_COM_ANOS_LETIVOS,
+    FASES_POR_DOMINIO,
+    validar_parametros_dominio,
+)
+from apps.controle_auditoria.libs.repositorio_auditoria import (
+    RepositorioAuditoriaPostgres,
+)
 from apps.controle_auditoria.libs.tasks import executar_dominio_task
 from apps.controle_auditoria.models import (
-    EtlAuditoriaLinha,
     EtlCheckpointDominio,
     EtlExecucao,
     EtlExecucaoTabelaEscrita,
     EtlExecucaoTabelaLida,
+    EtlProgressoExecucao,
 )
 
 _LIMITE_EXECUCOES_RECENTES = 50
 _LIMITE_MONITORAMENTO = 100
 _LIMITE_EXECUCOES_KANBAN = 100
+_LIMITE_RECOVERY = 25
+_MAX_TENTATIVAS_RECOVERY = 3
+_STATUS_EM_EXECUCAO = frozenset({"em_execucao", "em_andamento"})
+
+
+def _descricao_execucao_dominio() -> str:
+    """Monta descrição do contrato de execução para o Swagger."""
+    linhas = [
+        "Agenda ou executa imediatamente a sincronização de um domínio ETL. "
+        "Se `executar_em` for informado, a task é agendada para aquela "
+        "data/hora (ISO 8601). Caso contrário, executa imediatamente via "
+        "Celery.",
+        "",
+        "Use `anos_letivos` para restringir cargas por ano.",
+        "",
+        "Domínios e fases:",
+    ]
+
+    for dominio, fases in FASES_POR_DOMINIO.items():
+        fases_ano = set(FASES_COM_ANOS_LETIVOS.get(dominio, ()))
+        linhas.append(f"- `{dominio}`")
+        linhas.append("  - fases:")
+        for fase in fases:
+            marcador = (
+                " - aceita filtro por ano letivo" if fase in fases_ano else ""
+            )
+            linhas.append(f"    - `{fase}`{marcador}")
+
+    return "\n".join(linhas)
 
 
 def _qs_ultima_execucao_por_dominio() -> QuerySet:
@@ -68,6 +106,193 @@ def _aplicar_filtros_execucao(
     if situacao:
         qs = qs.filter(situacao=situacao)
     return qs
+
+
+def _formatar_duracao(segundos: int | float | None) -> str:
+    """Formata duração curta para dashboard."""
+    if segundos is None:
+        return ""
+    total = max(int(segundos), 0)
+    horas, resto = divmod(total, 3600)
+    minutos, segs = divmod(resto, 60)
+    if horas:
+        return f"{horas}h {minutos}min"
+    if minutos:
+        return f"{minutos}min {segs}s"
+    return f"{segs}s"
+
+
+def _segundos_entre(inicio: Any, fim: Any) -> int:
+    """Calcula segundos entre duas datas."""
+    if not inicio or not fim:
+        return 0
+    return max(int((fim - inicio).total_seconds()), 0)
+
+
+def _percentual(parte: int | float, total: int | float) -> str:
+    """Formata percentual com uma casa decimal."""
+    if not total:
+        return "0%"
+    valor = (float(parte) / float(total)) * 100
+    return f"{valor:.1f}%".replace(".", ",")
+
+
+def _por_minuto(total: int | float, segundos: int) -> int:
+    """Calcula taxa por minuto."""
+    if segundos <= 0:
+        return 0
+    return int((float(total) / segundos) * 60)
+
+
+def _enriquecer_progresso_item(
+    progresso: dict[str, Any], execucao: EtlExecucao, agora: Any
+) -> None:
+    """Adiciona métricas derivadas ao item de progresso."""
+    total_fases = int(progresso.get("total_fases") or 0)
+    fase_numero = int(progresso.get("fase_numero") or 0)
+    linhas_lidas = int(progresso.get("linhas_lidas") or 0)
+    linhas_escritas = int(progresso.get("linhas_escritas") or 0)
+    linhas_ignoradas = int(progresso.get("linhas_ignoradas") or 0)
+    iniciado_em = progresso.get("iniciado_em")
+    atualizado_em = progresso.get("atualizado_em")
+    base_fim = atualizado_em or execucao.finalizado_em or agora
+    segundos = _segundos_entre(execucao.iniciado_em, base_fim)
+    segundos_fase = _segundos_entre(iniciado_em, base_fim)
+    segundos_update = _segundos_entre(atualizado_em, agora)
+
+    progresso["percentual_fase"] = _percentual(fase_numero, total_fases)
+    progresso["atualizado_ha"] = _formatar_duracao(segundos_update)
+    progresso["taxa_lidas_minuto"] = _por_minuto(linhas_lidas, segundos)
+    progresso["duracao_fase_segundos"] = segundos_fase
+    progresso["duracao_fase_label"] = _formatar_duracao(segundos_fase)
+    progresso["taxa_fase_lidas_minuto"] = _por_minuto(
+        linhas_lidas, segundos_fase
+    )
+    progresso["taxa_alteracao"] = _percentual(linhas_escritas, linhas_lidas)
+    progresso["taxa_gravacao"] = progresso["taxa_alteracao"]
+    progresso["taxa_ignoradas"] = _percentual(linhas_ignoradas, linhas_lidas)
+
+
+def _enriquecer_execucao(
+    execucao: EtlExecucao,
+    progresso: list[dict[str, Any]],
+    agora: Any,
+) -> None:
+    """Adiciona métricas derivadas usadas pelos templates."""
+    fim = execucao.finalizado_em or agora
+    segundos = _segundos_entre(execucao.iniciado_em, fim)
+    execucao.duracao_label = _formatar_duracao(segundos)
+    execucao.duracao_prefixo = (
+        "rodando há" if execucao.situacao in _STATUS_EM_EXECUCAO else "duração"
+    )
+    for item in progresso:
+        _enriquecer_progresso_item(item, execucao, agora)
+    execucao.progresso_atual = progresso[-1] if progresso else None
+    execucao.tempo_por_fase = sorted(
+        progresso,
+        key=lambda item: int(item.get("duracao_fase_segundos") or 0),
+        reverse=True,
+    )
+
+
+def _parametros_execucao(execucao: EtlExecucao) -> dict[str, Any]:
+    """Retorna parâmetros de execução gravados na auditoria."""
+    parametros = execucao.parametros or {}
+    if not isinstance(parametros, dict):
+        return {}
+    dados = parametros.get("execucao", {})
+    return dados if isinstance(dados, dict) else {}
+
+
+def _parametros_disparo(execucao: EtlExecucao) -> dict[str, Any]:
+    """Retorna parâmetros de disparo gravados na auditoria."""
+    parametros = execucao.parametros or {}
+    if not isinstance(parametros, dict):
+        return {}
+    dados = parametros.get("disparo", {})
+    return dados if isinstance(dados, dict) else {}
+
+
+def _normalizar_lista(valor: Any, tipo: type = str) -> list | None:
+    """Normaliza listas de parâmetros vindas da auditoria ou da request."""
+    if valor in (None, "", []):
+        return None
+    if isinstance(valor, list | tuple):
+        return [tipo(item) for item in valor]
+    return [tipo(valor)]
+
+
+def _id_origem_reprocessamento(execucao: EtlExecucao) -> str:
+    """Resolve a execução raiz para contabilizar tentativas de recovery."""
+    disparo = _parametros_disparo(execucao)
+    return str(disparo.get("execucao_origem") or execucao.id_execucao)
+
+
+def _contar_reprocessamentos(id_origem: str) -> int:
+    """Conta quantas execuções já foram disparadas pelo recovery."""
+    total: int = EtlExecucao.objects.filter(
+        parametros__disparo__origem="recovery",
+        parametros__disparo__execucao_origem=id_origem,
+    ).count()
+    return total
+
+
+def _task_id_execucao(execucao: EtlExecucao) -> str:
+    """Retorna o task_id Celery registrado na execução."""
+    disparo = _parametros_disparo(execucao)
+    return str(disparo.get("celery_task_id") or "")
+
+
+def _coletar_ids_tasks(payload: Any) -> set[str]:
+    """Coleta ids de tasks em respostas do Celery inspect."""
+    ids: set[str] = set()
+    if isinstance(payload, dict):
+        for chave, valor in payload.items():
+            if chave == "id" and valor:
+                ids.add(str(valor))
+            else:
+                ids.update(_coletar_ids_tasks(valor))
+    elif isinstance(payload, list):
+        for item in payload:
+            ids.update(_coletar_ids_tasks(item))
+    return ids
+
+
+def _ids_tasks_celery_vivas() -> tuple[set[str], bool]:
+    """Retorna task_ids active/reserved/scheduled conhecidos pelo Celery."""
+    try:
+        inspetor = aplicacao_celery.control.inspect(timeout=1.0)
+        payloads = [
+            inspetor.active(),
+            inspetor.reserved(),
+            inspetor.scheduled(),
+        ]
+    except Exception:
+        return set(), False
+
+    if all(payload is None for payload in payloads):
+        return set(), False
+
+    ids: set[str] = set()
+    for payload in payloads:
+        ids.update(_coletar_ids_tasks(payload or {}))
+    return ids, True
+
+
+def _ultimo_heartbeat_execucao(execucao: EtlExecucao) -> Any:
+    """Retorna último progresso da execução ou o início como fallback."""
+    progresso = (
+        EtlProgressoExecucao.objects.filter(id_execucao=execucao.id_execucao)
+        .order_by("-atualizado_em")
+        .values_list("atualizado_em", flat=True)
+        .first()
+    )
+    return progresso or execucao.iniciado_em
+
+
+def _novo_task_id() -> str:
+    """Gera task_id rastreável antes de enfileirar no Celery."""
+    return str(uuid4())
 
 
 @extend_schema(tags=["Checkpoints"])
@@ -187,6 +412,256 @@ class ExecucaoDetalheView(APIView):
 
 
 @extend_schema(tags=["Execuções"])
+class LimparOrfasView(APIView):
+    """Marca execuções sem task viva como interrompidas."""
+
+    @extend_schema(
+        summary="Limpa execuções órfãs",
+        description=(
+            "Marca como `interrompido` execuções que continuam em "
+            "`em_execucao`, mas não aparecem como tasks vivas no Celery "
+            "em `active`, `reserved` ou `scheduled`."
+        ),
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "tasks_vivas": {"type": "integer"},
+                    "total_analisado": {"type": "integer"},
+                    "total_interrompido": {"type": "integer"},
+                    "total_preservado": {"type": "integer"},
+                    "itens": {"type": "array", "items": {"type": "object"}},
+                },
+            }
+        },
+    )
+    def post(self, request: Request) -> Response:
+        """Interrompe execuções órfãs com base no estado do Celery."""
+        execucoes = list(
+            EtlExecucao.objects.filter(
+                situacao__in=_STATUS_EM_EXECUCAO
+            ).order_by("iniciado_em")
+        )
+        task_ids_vivos, celery_disponivel = _ids_tasks_celery_vivas()
+        if not celery_disponivel:
+            return Response(
+                {
+                    "erro": (
+                        "Não foi possível consultar o estado dos workers "
+                        "Celery. Nenhuma execução foi alterada."
+                    ),
+                    "total_analisado": len(execucoes),
+                    "total_interrompido": 0,
+                },
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        repositorio = RepositorioAuditoriaPostgres()
+        itens = []
+        for execucao in execucoes:
+            task_id = _task_id_execucao(execucao)
+            if task_id and task_id in task_ids_vivos:
+                itens.append(
+                    {
+                        "dominio": execucao.dominio,
+                        "id_execucao": str(execucao.id_execucao),
+                        "heartbeat": None,
+                        "task_id": task_id,
+                        "status": "preservado",
+                        "motivo": "task_celery_viva",
+                    }
+                )
+                continue
+
+            heartbeat = _ultimo_heartbeat_execucao(execucao)
+            motivo = "task_celery_ausente" if task_id else "sem_task_id"
+            agora = timezone.now()
+            execucao.situacao = "interrompido"
+            execucao.finalizado_em = agora
+            execucao.mensagem_erro = (
+                "Execução interrompida automaticamente: "
+                "task Celery não encontrada em active, reserved ou scheduled."
+            )
+            execucao.save(
+                update_fields=["situacao", "finalizado_em", "mensagem_erro"]
+            )
+            checkpoint_liberado = repositorio.marcar_checkpoint_interrompido(
+                execucao.dominio
+            )
+            itens.append(
+                {
+                    "dominio": execucao.dominio,
+                    "id_execucao": str(execucao.id_execucao),
+                    "heartbeat": heartbeat.isoformat() if heartbeat else None,
+                    "task_id": task_id or None,
+                    "status": "interrompido",
+                    "motivo": motivo,
+                    "checkpoint_liberado": checkpoint_liberado,
+                }
+            )
+
+        return Response(
+            {
+                "tasks_vivas": len(task_ids_vivos),
+                "total_analisado": len(execucoes),
+                "total_interrompido": sum(
+                    1 for item in itens if item["status"] == "interrompido"
+                ),
+                "total_preservado": sum(
+                    1 for item in itens if item["status"] == "preservado"
+                ),
+                "itens": itens,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+@extend_schema(tags=["Execuções"])
+class ReprocessarErrosView(APIView):
+    """Reprocessa execuções com erro de forma controlada."""
+
+    @extend_schema(
+        summary="Reprocessa últimas execuções com erro",
+        description=(
+            "Busca a última execução de cada domínio quando ela está em erro "
+            "ou interrompida e agenda uma nova execução com `continuar=true`, "
+            "reaproveitando os parâmetros rastreados na auditoria. Por padrão "
+            "não reprocessa falhas antigas se já existir execução mais "
+            "recente para o domínio."
+        ),
+        request={
+            "application/json": {
+                "type": "object",
+                "properties": {
+                    "max_tentativas": {
+                        "type": "integer",
+                        "default": 3,
+                        "description": (
+                            "Quantidade máxima de reprocessamentos "
+                            "automáticos por execução raiz."
+                        ),
+                    },
+                },
+            }
+        },
+        responses={
+            202: {
+                "type": "object",
+                "properties": {
+                    "total_analisado": {"type": "integer"},
+                    "total_reprocessado": {"type": "integer"},
+                    "itens": {"type": "array", "items": {"type": "object"}},
+                },
+            }
+        },
+    )
+    def post(self, request: Request) -> Response:
+        """Agenda recovery das últimas execuções com erro por domínio."""
+        max_tentativas = int(
+            request.data.get("max_tentativas", _MAX_TENTATIVAS_RECOVERY)
+        )
+        prioridade = 3
+        limite = _LIMITE_RECOVERY
+
+        qs = _qs_ultima_execucao_por_dominio().filter(
+            situacao__in=("erro", "interrompido")
+        )
+
+        itens = []
+        for execucao in qs.order_by("-iniciado_em")[:limite]:
+            parametros_execucao = _parametros_execucao(execucao)
+            id_origem = _id_origem_reprocessamento(execucao)
+            tentativas = _contar_reprocessamentos(id_origem)
+
+            if tentativas >= max_tentativas:
+                itens.append(
+                    {
+                        "dominio": execucao.dominio,
+                        "id_execucao": str(execucao.id_execucao),
+                        "status": "ignorado",
+                        "motivo": "limite_tentativas",
+                        "tentativas": tentativas,
+                        "max_tentativas": max_tentativas,
+                    }
+                )
+                continue
+
+            fases = _normalizar_lista(parametros_execucao.get("fases"), str)
+            anos_letivos = _normalizar_lista(
+                parametros_execucao.get("anos_letivos"), int
+            )
+            volume = int(parametros_execucao.get("volume") or 100)
+            offset = int(parametros_execucao.get("offset") or 0)
+
+            erro_parametros = validar_parametros_dominio(
+                execucao.dominio,
+                fases=fases,
+                anos_letivos=anos_letivos,
+            )
+            if erro_parametros:
+                itens.append(
+                    {
+                        "dominio": execucao.dominio,
+                        "id_execucao": str(execucao.id_execucao),
+                        "status": "ignorado",
+                        "motivo": erro_parametros,
+                    }
+                )
+                continue
+
+            task_id = _novo_task_id()
+            kwargs_task: dict[str, Any] = {
+                "dominio": execucao.dominio,
+                "volume": volume,
+                "offset": offset,
+                "continuar": True,
+                "parametros_disparo": {
+                    "origem": "recovery",
+                    "execucao_origem": id_origem,
+                    "execucao_erro": str(execucao.id_execucao),
+                    "tentativa": tentativas + 1,
+                    "prioridade": prioridade,
+                    "continuar": True,
+                    "celery_task_id": task_id,
+                },
+            }
+            if fases:
+                kwargs_task["fases"] = fases
+            if anos_letivos:
+                kwargs_task["anos_letivos"] = anos_letivos
+
+            resultado = executar_dominio_task.apply_async(
+                kwargs=kwargs_task,
+                priority=prioridade,
+                task_id=task_id,
+            )
+            itens.append(
+                {
+                    "dominio": execucao.dominio,
+                    "id_execucao": str(execucao.id_execucao),
+                    "status": "reprocessado",
+                    "task_id": resultado.id,
+                    "tentativa": tentativas + 1,
+                    "fases": fases,
+                    "anos_letivos": anos_letivos,
+                    "volume": volume,
+                }
+            )
+
+        total_reprocessado = sum(
+            1 for item in itens if item["status"] == "reprocessado"
+        )
+        return Response(
+            {
+                "total_analisado": len(itens),
+                "total_reprocessado": total_reprocessado,
+                "itens": itens,
+            },
+            status=status.HTTP_202_ACCEPTED,
+        )
+
+
+@extend_schema(tags=["Execuções"])
 class ExecucoesTabelaLidaView(APIView):
     """Lista registros de leitura por execucao ETL."""
 
@@ -236,12 +711,7 @@ class ExecutarDominioView(APIView):
 
     @extend_schema(
         summary="Disparar execução de domínio",
-        description=(
-            "Agenda ou executa imediatamente a sincronização de um "
-            "domínio ETL. Se `executar_em` for informado, a task é "
-            "agendada para aquela data/hora (ISO 8601). Caso contrário, "
-            "executa imediatamente via Celery."
-        ),
+        description=_descricao_execucao_dominio(),
         request={
             "application/json": {
                 "type": "object",
@@ -249,19 +719,35 @@ class ExecutarDominioView(APIView):
                     "volume": {
                         "type": "integer",
                         "default": 100,
+                        "description": (
+                            "Quantidade de registros processados por lote. "
+                            "Valores maiores reduzem ciclos, mas aumentam "
+                            "memória e duração de cada tentativa."
+                        ),
                     },
                     "offset": {
                         "type": "integer",
                         "default": 0,
+                        "description": (
+                            "Posição inicial da leitura. Normalmente fica 0; "
+                            "use apenas para iniciar de um ponto específico."
+                        ),
                     },
                     "continuar": {
                         "type": "boolean",
                         "default": False,
+                        "description": (
+                            "Quando true, retoma pelo checkpoint do domínio. "
+                            "Quando false, começa conforme offset informado."
+                        ),
                     },
                     "prioridade": {
                         "type": "integer",
                         "default": 5,
-                        "description": "0 = mais urgente, 9 = menos urgente.",
+                        "description": (
+                            "Prioridade da task no Celery/Redis. "
+                            "0 = mais urgente, 9 = menos urgente."
+                        ),
                     },
                     "executar_em": {
                         "type": "string",
@@ -270,49 +756,27 @@ class ExecutarDominioView(APIView):
                             "Agenda a execução para esta data/hora (ISO 8601)."
                         ),
                     },
-                    "ano_letivo": {
-                        "type": "integer",
-                        "nullable": True,
-                        "x-nullable": True,
-                        "description": (
-                            "Opcional. Quando informado, processa apenas "
-                            "anos letivos a partir deste valor (inclusive)."
-                            " Aplicável ao domínio pedagógico."
-                        ),
-                        "example": None,
-                    },
                     "fases": {
                         "type": "array",
                         "items": {"type": "string"},
                         "nullable": True,
                         "x-nullable": True,
+                        "default": None,
                         "description": (
                             "Opcional. Lista de nomes de fases a executar. "
                             "Quando omitido, todas as fases são executadas. "
-                            "Aplicável aos domínios alunos e pedagógico. "
-                            "Fases disponíveis para alunos: "
-                            "tipo_necessidade_especial, aluno, "
-                            "responsavel_aluno, nee_aluno, matricula, "
-                            "matricula_turma, matricula_ano_letivo, "
-                            "matricula_componente_curricular_ano_letivo, "
-                            "dados_aluno_acompanhamento_escolar, "
-                            "responsavel_aluno_turma, "
-                            "matricula_ano_anterior."
                         ),
-                        "example": ["aluno", "matricula"],
                     },
                     "anos_letivos": {
                         "type": "array",
                         "items": {"type": "integer"},
                         "nullable": True,
                         "x-nullable": True,
+                        "default": None,
                         "description": (
                             "Opcional. Lista de anos letivos a processar. "
                             "Quando omitido, processa todos os anos. "
-                            "Aplicável apenas ao domínio alunos: filtra "
-                            "matrículas e turmas aos anos informados."
                         ),
-                        "example": [2021, 2022, 2023, 2024, 2025],
                     },
                 },
             }
@@ -333,18 +797,27 @@ class ExecutarDominioView(APIView):
         # Prioridade: 0 = mais urgente, 9 = menos urgente (padrão: 5)
         prioridade = int(request.data.get("prioridade", 5))
         ano_letivo = request.data.get("ano_letivo")
-        fases = request.data.get("fases")
-        anos_letivos = request.data.get("anos_letivos")
+        try:
+            fases = _normalizar_lista(request.data.get("fases"), str)
+            anos_letivos = _normalizar_lista(
+                request.data.get("anos_letivos"), int
+            )
+        except (TypeError, ValueError):
+            return Response(
+                {
+                    "erro": (
+                        "Parâmetros inválidos. Use fases como lista de textos "
+                        "e anos_letivos como lista de números."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         erro_parametros = validar_parametros_dominio(
             dominio,
             ano_letivo=int(ano_letivo) if ano_letivo is not None else None,
-            fases=list(fases) if fases is not None else None,
-            anos_letivos=(
-                [int(a) for a in anos_letivos]
-                if anos_letivos is not None
-                else None
-            ),
+            fases=fases,
+            anos_letivos=anos_letivos,
         )
         if erro_parametros:
             return Response(
@@ -358,12 +831,18 @@ class ExecutarDominioView(APIView):
             "offset": offset,
             "continuar": continuar,
         }
-        if ano_letivo is not None:
-            kwargs_task["ano_letivo"] = int(ano_letivo)
         if fases is not None:
-            kwargs_task["fases"] = list(fases)
+            kwargs_task["fases"] = fases
         if anos_letivos is not None:
-            kwargs_task["anos_letivos"] = [int(a) for a in anos_letivos]
+            kwargs_task["anos_letivos"] = anos_letivos
+        task_id = _novo_task_id()
+        parametros_disparo = {
+            "origem": "api",
+            "prioridade": prioridade,
+            "executar_em": executar_em,
+            "celery_task_id": task_id,
+        }
+        kwargs_task["parametros_disparo"] = parametros_disparo
 
         if executar_em:
             eta = parse_datetime(executar_em)
@@ -377,11 +856,13 @@ class ExecutarDominioView(APIView):
                 kwargs=kwargs_task,
                 eta=eta,
                 priority=prioridade,
+                task_id=task_id,
             )
         else:
             resultado = executar_dominio_task.apply_async(
                 kwargs=kwargs_task,
                 priority=prioridade,
+                task_id=task_id,
             )
 
         return Response(
@@ -474,6 +955,7 @@ class DashboardView(View):
         data_inicio = request.GET.get("data_inicio", "")
         data_fim = request.GET.get("data_fim", "")
         situacao = request.GET.get("situacao", "")
+        agora = timezone.now()
 
         # Total de registros processados por domínio via checkpoint
         checkpoints = {
@@ -481,8 +963,13 @@ class DashboardView(View):
             for c in EtlCheckpointDominio.objects.all()
         }
         ultima_por_dominio = list(_qs_ultima_execucao_por_dominio())
+        progresso_map = _agregar_progresso_execucoes(
+            [e.id_execucao for e in ultima_por_dominio]
+        )
         for exec_obj in ultima_por_dominio:
             exec_obj.total_processado = checkpoints.get(exec_obj.dominio, 0)
+            progresso = progresso_map.get(str(exec_obj.id_execucao), [])
+            _enriquecer_execucao(exec_obj, progresso, agora)
 
         qs_filtrado = _aplicar_filtros_execucao(
             qs=EtlExecucao.objects.all(),
@@ -492,12 +979,28 @@ class DashboardView(View):
             situacao=situacao,
         ).order_by("-iniciado_em")
 
-        execucoes = qs_filtrado[:_LIMITE_MONITORAMENTO]
+        execucoes = list(qs_filtrado[:_LIMITE_MONITORAMENTO])
+        progresso_execucoes = _agregar_progresso_execucoes(
+            [e.id_execucao for e in execucoes]
+        )
+        for exec_obj in execucoes:
+            _enriquecer_execucao(
+                exec_obj,
+                progresso_execucoes.get(str(exec_obj.id_execucao), []),
+                agora,
+            )
 
         # Últimas 10 execuções com detalhes de tabelas escritas
         ultimas_10 = list(qs_filtrado[:10])
         ids_ultimas_10 = [e.id_execucao for e in ultimas_10]
         tabelas_map = _agregar_tabelas_escritas(ids_ultimas_10)
+        progresso_ultimas_10 = _agregar_progresso_execucoes(ids_ultimas_10)
+        for exec_obj in ultimas_10:
+            _enriquecer_execucao(
+                exec_obj,
+                progresso_ultimas_10.get(str(exec_obj.id_execucao), []),
+                agora,
+            )
         ultimas_10_com_tabelas = [
             {"exec": e, "tabelas": tabelas_map.get(str(e.id_execucao), [])}
             for e in ultimas_10
@@ -578,6 +1081,33 @@ def _agregar_tabelas_escritas(ids_execucao: list) -> dict[str, list]:
     }
 
 
+def _agregar_progresso_execucoes(ids_execucao: list) -> dict[str, list]:
+    """Agrupa progresso operacional por execução."""
+    progresso: dict[str, list] = {}
+    for item in (
+        EtlProgressoExecucao.objects.filter(id_execucao__in=ids_execucao)
+        .values(
+            "id_execucao",
+            "fase_numero",
+            "total_fases",
+            "fase_nome",
+            "tabela_origem",
+            "tabela_destino",
+            "etapa",
+            "chunk_atual",
+            "linhas_lidas",
+            "linhas_escritas",
+            "linhas_ignoradas",
+            "mensagem",
+            "iniciado_em",
+            "atualizado_em",
+        )
+        .order_by("id_execucao", "fase_numero")
+    ):
+        progresso.setdefault(str(item["id_execucao"]), []).append(item)
+    return progresso
+
+
 def _resolver_execucoes_kanban(
     qs_base: QuerySet,
     id_execucao_filtro: str,
@@ -606,6 +1136,26 @@ def _resolver_execucoes_kanban(
     return [selecionada], "Nenhuma execução encontrada."
 
 
+def _contar_hashes_por_tabela(tabelas: set[str]) -> dict[str, int]:
+    """Conta linhas de auditoria por tabela de destino numa varredura só.
+
+    Contar tabela a tabela com ``startswith`` custava uma varredura
+    completa da auditoria por tabela: o prefixo casa com boa parte das
+    linhas, entao o planner descarta o indice de padrao e varre tudo.
+    """
+    if not tabelas:
+        return {}
+
+    with connections["default"].cursor() as cursor:
+        cursor.execute(
+            "SELECT split_part(id_destino, ':', 1) AS tabela, COUNT(*) "
+            "FROM etl_auditoria_linha GROUP BY 1"
+        )
+        contagem = dict(cursor.fetchall())
+
+    return {tabela: contagem.get(tabela, 0) for tabela in tabelas}
+
+
 class KanbanView(View):
     """Kanban de processamento ETL por domínio."""
 
@@ -613,6 +1163,7 @@ class KanbanView(View):
         """Renderiza kanban com estágios de leitura, hash e escrita."""
         dominio_filtro = request.GET.get("dominio", "")
         id_execucao_filtro = request.GET.get("id_execucao", "").strip()
+        agora = timezone.now()
 
         qs_execucoes_select = EtlExecucao.objects.all()
         if dominio_filtro:
@@ -640,24 +1191,28 @@ class KanbanView(View):
 
         lidas_map = _agregar_tabelas_lidas(ids_execucao)
         escritas_map = _agregar_tabelas_escritas(ids_execucao)
+        progresso_map = _agregar_progresso_execucoes(ids_execucao)
 
         tabelas_unicas = {
             te["tabela_destino"]
             for lista in escritas_map.values()
             for te in lista
         }
-        hash_por_tabela: dict[str, int] = {
-            tabela: EtlAuditoriaLinha.objects.filter(
-                id_destino__startswith=f"{tabela}:"
-            ).count()
-            for tabela in tabelas_unicas
-        }
+        hash_por_tabela = _contar_hashes_por_tabela(tabelas_unicas)
 
         dominios_kanban = []
         for exec_obj in ultima_por_dominio:
             key = str(exec_obj.id_execucao)
             tabelas_lidas = lidas_map.get(key, [])
             tabelas_escritas = escritas_map.get(key, [])
+            progresso = progresso_map.get(key, [])
+            _enriquecer_execucao(exec_obj, progresso, agora)
+            total_lido = sum(t["linhas_lidas"] for t in tabelas_lidas)
+            total_escrito = sum(t["linhas_escritas"] for t in tabelas_escritas)
+            total_nao_gravado = max(total_lido - total_escrito, 0)
+            duracao_segundos = _segundos_entre(
+                exec_obj.iniciado_em, exec_obj.finalizado_em or agora
+            )
             cp = checkpoints.get(exec_obj.dominio)
             cp_da_execucao = bool(
                 cp and str(cp.ultimo_id_execucao) == str(exec_obj.id_execucao)
@@ -667,13 +1222,20 @@ class KanbanView(View):
                     "exec": exec_obj,
                     "checkpoint": cp,
                     "checkpoint_da_execucao": cp_da_execucao,
+                    "progresso": progresso,
+                    "progresso_atual": exec_obj.progresso_atual,
                     "tabelas_lidas": tabelas_lidas,
                     "tabelas_escritas": tabelas_escritas,
-                    "total_lido": sum(
-                        t["linhas_lidas"] for t in tabelas_lidas
+                    "total_lido": total_lido,
+                    "total_escrito": total_escrito,
+                    "total_nao_gravado": total_nao_gravado,
+                    "taxa_lidas_minuto": _por_minuto(
+                        total_lido, duracao_segundos
                     ),
-                    "total_escrito": sum(
-                        t["linhas_escritas"] for t in tabelas_escritas
+                    "taxa_alteracao": _percentual(total_escrito, total_lido),
+                    "taxa_gravacao": _percentual(total_escrito, total_lido),
+                    "taxa_nao_gravadas": _percentual(
+                        total_nao_gravado, total_lido
                     ),
                     "hash_por_tabela": {
                         te["tabela_destino"]: hash_por_tabela.get(

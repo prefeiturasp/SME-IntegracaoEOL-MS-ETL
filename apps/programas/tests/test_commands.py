@@ -1,6 +1,6 @@
 """Testes do comando de gerenciamento etl_programas."""
 
-from unittest.mock import patch
+from unittest.mock import ANY, patch
 from uuid import UUID
 
 from django.core.management import call_command
@@ -50,7 +50,9 @@ class EtlProgramasCommandTestCase(TestCase):
 
         call_command("etl_programas")
 
-        self.repo.iniciar_execucao.assert_called_once_with("programas")
+        self.repo.iniciar_execucao.assert_called_once_with(
+            "programas", parametros=ANY
+        )
         self.servico.executar.assert_called_once_with(fase_inicial=1)
         self.repo.finalizar_execucao.assert_called_once_with(
             _ID_EXECUCAO, situacao="concluido"
@@ -74,6 +76,17 @@ class EtlProgramasCommandTestCase(TestCase):
         call_command("etl_programas", "--volume", "100")
         self.servico.executar.assert_called()
 
+    def test_extra_service_kwargs_com_anos_letivos(self) -> None:
+        """Valida repasse de anos_letivos para o service."""
+        from apps.programas.management.commands.etl_programas import Command
+
+        cmd = Command()
+        self.assertEqual(
+            cmd._extra_service_kwargs(anos_letivos=[2025, 2026]),
+            {"anos_letivos": [2025, 2026]},
+        )
+        self.assertEqual(cmd._extra_service_kwargs(anos_letivos=None), {})
+
     def test_tratamento_erro_na_execucao(self) -> None:
         """Valida que erros no serviço são registrados no log de auditoria."""
         self.servico.executar.side_effect = Exception("Erro Fatal")
@@ -87,7 +100,7 @@ class EtlProgramasCommandTestCase(TestCase):
         self.repo.atualizar_checkpoint_dominio.assert_called_once()
 
     def test_execucao_com_continuar_sem_erro_anterior(self) -> None:
-        """Valida retomada para fase 1 caso o checkpoint não indique erro parcial."""
+        """Valida retomada para fase 1 sem erro parcial."""
         self.repo.obter_checkpoint_dominio.return_value = {
             "ultima_situacao": "concluido",
             "ultima_pagina": 5,

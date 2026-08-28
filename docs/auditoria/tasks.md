@@ -32,6 +32,9 @@ max_retries=5
 | `volume` | int | `100` | Tamanho do lote por ciclo |
 | `offset` | int | `0` | Deslocamento inicial |
 | `continuar` | bool | `False` | Retomada por checkpoint |
+| `fases` | list[str] | `None` | Fases específicas do domínio |
+| `anos_letivos` | list[int] | `None` | Anos letivos usados como recorte |
+| `parametros_disparo` | dict | `None` | Metadados do disparo, como origem, prioridade e agendamento |
 
 **Fluxo do loop interno:**
 
@@ -52,7 +55,111 @@ max_retries=5
 
 **Observação sobre `token_parada`:**
 
-O `token_parada` do `EtlCheckpointDominio` acumula o total de linhas
-*efetivamente alteradas* entre todas as execuções. O delta entre leituras
-antes/depois de cada chamada a `executar_dominio` é o sinal de progresso
-que o loop usa para decidir se continua ou para.
+O `token_parada` do `EtlCheckpointDominio` registra o ponto salvo pelo ETL,
+normalmente derivado do total de linhas lidas na fase atual. O delta entre
+leituras antes/depois de cada chamada a `executar_dominio` é o sinal que o
+loop usa para decidir se continua ou para.
+
+---
+
+## Parâmetros da execução
+
+Cada nova linha de `EtlExecucao` grava o campo JSON `parametros`.
+
+- `parametros.execucao` guarda o que o comando ETL recebeu de fato: `volume`,
+  `offset`, `continuar`, `fase`, `fase_inicial`, `fases`, `anos_letivos`,
+  `carga_inicial` e `celery`.
+- `parametros.disparo` guarda metadados da camada que enfileirou a task, quando
+  existirem: `origem`, `prioridade` e `executar_em`.
+
+Esse campo alimenta o dashboard/kanban e evita inferir anos ou fases a partir
+do último checkpoint.
+
+Quando uma execução é reenfileirada pelo recovery, `parametros.disparo` recebe:
+
+```json
+{
+  "origem": "recovery",
+  "execucao_origem": "<uuid da primeira execução com erro>",
+  "execucao_erro": "<uuid da execução reprocessada>",
+  "tentativa": 1,
+  "prioridade": 3,
+  "continuar": true
+}
+```
+
+Durante a execução da task, o worker acrescenta metadados do Celery ao mesmo
+bloco:
+
+```json
+{
+  "celery_task_id": "<id da task>",
+  "celery_worker": "<hostname do worker>",
+  "celery_retries": 0
+}
+```
+
+O campo `execucao_origem` permite limitar tentativas mesmo quando uma tentativa
+de recovery também falha e gera uma nova execução em erro.
+
+---
+
+## Recovery automático
+
+O script `scripts/recuperar_etl.sh` implementa o fluxo recomendado de recovery:
+
+1. Chama `POST /api/v1/execucoes/limpar-orfas/`.
+2. Consulta tasks `active`, `reserved` e `scheduled` no Celery.
+3. Preserva execuções cujo `celery_task_id` ainda aparece vivo no Celery.
+4. Marca como `interrompido` execuções `em_execucao` ou `em_andamento` sem
+   task viva no Celery.
+5. Chama `POST /api/v1/execucoes/reprocessar-erros/`.
+6. Localiza a última execução de cada domínio.
+7. Mantém apenas as que estão em `erro` ou `interrompido`.
+8. Reaproveita `volume`, `offset`, `fases` e `anos_letivos` gravados em
+   `parametros.execucao`.
+9. Força `continuar=true`.
+10. Conta tentativas anteriores com base em `parametros.disparo.execucao_origem`.
+11. Agenda uma nova `etl.executar_dominio` quando o limite não foi atingido.
+
+O script adiciona timeout e retry HTTP ao acionamento dos endpoints, mas não
+executa ETL diretamente.
+
+Payload fixo usado pelo script:
+
+```json
+{
+  "max_tentativas": 3
+}
+```
+
+A retomada é sempre feita por checkpoint, portanto `continuar=true` não precisa
+ser enviado no body. O recovery usa prioridade `3`, analisa até 25 domínios por
+chamada e mantém o volume original registrado na execução com erro.
+
+---
+
+## Progresso operacional
+
+A tabela `etl_progresso_execucao` registra o ponto atual de uma execução em
+andamento. Ela não substitui o checkpoint: o objetivo é alimentar dashboard e
+kanban com uma visão viva da fase/chunk atual.
+
+O ETL grava no máximo uma linha por execução/fase e atualiza essa linha com
+throttle. O intervalo padrão é controlado por:
+
+```env
+ETL_PROGRESS_INTERVAL_SECONDS=15
+```
+
+Campos principais:
+
+| Campo | Uso |
+|---|---|
+| `fase_numero` / `total_fases` | Posição da fase no pipeline |
+| `fase_nome` | Nome da fase atual |
+| `etapa` | Estado operacional: `fase_iniciada`, `processando_chunk`, `fase_concluida` ou `erro` |
+| `chunk_atual` | Número do chunk já processado na fase |
+| `linhas_lidas` | Total lido até o momento na fase |
+| `linhas_escritas` | Total escrito até o momento na fase |
+| `linhas_ignoradas` | Total ignorado por hash igual até o momento |

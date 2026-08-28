@@ -112,11 +112,87 @@
     .td-val.write-color { color: var(--col-write); }
     .td-paginas { font-size: .6rem; color: #475569; margin-left: .3rem; white-space: nowrap; }
 
-    /* ── Checkpoint card ── */
+    /* ── Ponto de retomada ── */
     .cp-row { display: flex; justify-content: space-between; font-size: .78rem; padding: .25rem 0; border-bottom: 1px solid #263245; }
     .cp-row:last-child { border-bottom: none; }
     .cp-key { color: #64748b; }
     .cp-val { color: #f1f5f9; font-weight: 600; font-family: monospace; font-size: .75rem; }
+    .resume-point {
+      display: grid;
+      gap: .2rem;
+      margin-bottom: .75rem;
+    }
+    .resume-phase {
+      color: #f1f5f9;
+      font-size: .82rem;
+      font-weight: 700;
+      line-height: 1.25;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .resume-meta {
+      color: #64748b;
+      font-size: .7rem;
+    }
+    .scope-row { display: flex; flex-wrap: wrap; gap: .35rem; margin-bottom: .75rem; }
+    .scope-chip { font-size: .68rem; color: #cbd5e1; border: 1px solid #334155; background: #0f172a; border-radius: 6px; padding: .16rem .4rem; }
+    .scope-chip span { color: #64748b; }
+    .run-metrics { display: flex; gap: .8rem; flex-wrap: wrap; font-size: .74rem; color: #64748b; margin-left: auto; }
+    .run-metrics strong { color: #f1f5f9; font-weight: 600; }
+    .insight-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .75rem; margin-top: 1rem; }
+    .insight-card { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: .75rem 1rem; }
+    .insight-title { font-size: .66rem; color: #64748b; text-transform: uppercase; letter-spacing: 1px; margin-bottom: .35rem; font-weight: 700; }
+    .insight-value { font-size: .92rem; color: #f1f5f9; font-weight: 700; }
+    .insight-sub { font-size: .7rem; color: #64748b; margin-top: .2rem; }
+    .phase-time { margin-top: 1rem; background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: .85rem 1rem; }
+    .phase-time-list { display: flex; flex-direction: column; gap: .2rem; }
+    .phase-time-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 88px 86px 86px 86px 80px;
+      gap: .75rem;
+      align-items: center;
+      padding: .35rem 0;
+      border-bottom: 1px solid #263245;
+      font-size: .76rem;
+    }
+    .phase-time-row:last-child { border-bottom: none; }
+    .phase-time-head {
+      color: #64748b;
+      font-size: .62rem;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      padding-top: 0;
+    }
+    .phase-time-name {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: #94a3b8;
+    }
+    .phase-time-val {
+      color: #f1f5f9;
+      font-family: monospace;
+      font-weight: 600;
+      font-size: .74rem;
+      text-align: right;
+      white-space: nowrap;
+    }
+    .phase-time-head .phase-time-val {
+      color: #64748b;
+      font-family: inherit;
+      font-size: .62rem;
+    }
+    @media (max-width: 900px) { .insight-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .run-metrics { margin-left: 0; } }
+    @media (max-width: 600px) {
+      .insight-grid { grid-template-columns: 1fr; }
+      .phase-time-row { grid-template-columns: minmax(0, 1fr) 72px 72px; }
+      .phase-time-row .phase-time-val:nth-child(4),
+      .phase-time-row .phase-time-val:nth-child(5),
+      .phase-time-row .phase-time-val:nth-child(6) { display: none; }
+    }
 
     /* ── JSON toggle ── */
     .json-toggle { font-size: .7rem; color: #475569; cursor: pointer; display: flex; align-items: center; gap: .3rem; margin-top: .75rem; user-select: none; background: none; border: none; padding: 0; }
@@ -160,7 +236,7 @@
 <!-- Main -->
 <main class="main">
   <div class="page-title"><i class="bi bi-kanban me-2"></i>Kanban de Processamento ETL</div>
-  <div class="page-sub">Último lote processado por domínio · leitura → hash → escrita → checkpoint</div>
+  <div class="page-sub">Estado operacional por domínio · leitura → hash → escrita → checkpoint</div>
 
   <!-- Filter -->
   <div class="filter-bar">
@@ -216,6 +292,12 @@
         {% endif %}
         &nbsp;·&nbsp;<span style="font-family:monospace;font-size:.68rem;color:#334155">{{ item.exec.id_execucao }}</span>
       </span>
+      <span class="run-metrics">
+        <span><i class="bi bi-stopwatch me-1"></i>{{ item.exec.duracao_prefixo }} <strong>{{ item.exec.duracao_label }}</strong></span>
+        {% if item.progresso_atual and item.exec.situacao != "concluido" %}
+        <span><i class="bi bi-broadcast me-1"></i>progresso há <strong>{{ item.progresso_atual.atualizado_ha }}</strong></span>
+        {% endif %}
+      </span>
     </div>
 
     <!-- Kanban columns -->
@@ -226,7 +308,10 @@
         <div class="kcard-header read"><i class="bi bi-database-down"></i> Leitura EOL</div>
         <div class="kcard-body">
           <div class="kcard-total" style="color:var(--col-read)">{{ item.total_lido|numero_br }}</div>
-          <div class="kcard-label">registros lidos</div>
+          <div class="kcard-label">linhas lidas na execução</div>
+          <div style="font-size:.72rem;color:#64748b;margin-bottom:.75rem">
+            <i class="bi bi-speedometer2 me-1"></i>{{ item.taxa_lidas_minuto|numero_br }} linhas/min
+          </div>
           {% if item.tabelas_lidas %}
           <div class="ktable-wrap">
           <table class="ktable">
@@ -257,10 +342,10 @@
 
       <!-- Col 2: Hash -->
       <div class="kcard">
-        <div class="kcard-header hash"><i class="bi bi-shield-check"></i> Hash Control</div>
+        <div class="kcard-header hash"><i class="bi bi-shield-check"></i> Auditoria de hash</div>
         <div class="kcard-body">
           <div class="kcard-total" style="color:var(--col-hash)">{{ item.total_hashes|numero_br }}</div>
-          <div class="kcard-label">hashes rastreados</div>
+          <div class="kcard-label">hashes cadastrados na auditoria</div>
           {% if item.hash_por_tabela %}
           <div class="ktable-wrap">
           <table class="ktable">
@@ -288,17 +373,20 @@
 
       <!-- Col 3: Escrita -->
       <div class="kcard">
-        <div class="kcard-header write"><i class="bi bi-database-up"></i> Escrita (Upsert)</div>
+        <div class="kcard-header write"><i class="bi bi-database-up"></i> Escrita no destino</div>
         <div class="kcard-body">
           <div class="kcard-total" style="color:var(--col-write)">{{ item.total_escrito|numero_br }}</div>
-          <div class="kcard-label">registros escritos</div>
+          <div class="kcard-label">linhas gravadas no destino</div>
+          <div style="font-size:.72rem;color:#64748b;margin-bottom:.75rem">
+            <i class="bi bi-percent me-1"></i>{{ item.taxa_gravacao }} gravadas/lidas
+          </div>
           {% if item.tabelas_escritas %}
           <div class="ktable-wrap">
           <table class="ktable">
             <thead>
               <tr style="border-bottom: 2px solid #334155;">
                 <th scope="col" style="font-size: .6rem; color: #475569; text-transform: uppercase;">Destino</th>
-                <th scope="col" style="font-size: .6rem; color: #475569; text-transform: uppercase; text-align: right;">Escritas</th>
+                <th scope="col" style="font-size: .6rem; color: #475569; text-transform: uppercase; text-align: right;">Gravadas</th>
               </tr>
             </thead>
             <tbody>
@@ -315,20 +403,81 @@
           </table>
           </div>
           {% else %}
-          <div style="font-size:.75rem;color:#475569">sem escritas registradas</div>
+          <div style="font-size:.75rem;color:#475569">sem gravações registradas</div>
           {% endif %}
         </div>
       </div>
 
-      <!-- Col 4: Checkpoint -->
+      <!-- Col 4: Ponto de retomada -->
       <div class="kcard">
-        <div class="kcard-header check"><i class="bi bi-bookmark-check"></i> Checkpoint</div>
+        <div class="kcard-header check"><i class="bi bi-bookmark-check"></i> Ponto de retomada</div>
         <div class="kcard-body">
           {% if item.checkpoint and item.checkpoint_da_execucao %}
+          <div class="resume-point">
+            <div class="resume-meta">fase salva</div>
+            {% if item.progresso_atual %}
+            <div class="resume-phase" title="{{ item.progresso_atual.fase_nome }}">
+              {{ item.progresso_atual.fase_numero }}/{{ item.progresso_atual.total_fases }} · {{ item.progresso_atual.fase_nome }}
+            </div>
+            {% else %}
+            <div class="resume-phase">fase {{ item.checkpoint.ultima_pagina }}</div>
+            {% endif %}
+          </div>
           <div class="kcard-total" style="color:var(--col-check)">{{ item.checkpoint.token_parada|default:"0"|numero_br }}</div>
-          <div class="kcard-label">token acumulado</div>
+          <div class="kcard-label">linhas lidas na fase salva</div>
+          {% if item.exec.parametros.execucao %}
+          {% with p=item.exec.parametros.execucao d=item.exec.parametros.disparo %}
+          <div class="scope-row">
+            {% if p.anos_letivos %}
+            <span class="scope-chip"><span>anos</span> {{ p.anos_letivos|join:", " }}</span>
+            {% endif %}
+            {% if p.fases %}
+            <span class="scope-chip"><span>fases</span> {{ p.fases|join:", " }}</span>
+            {% endif %}
+            <span class="scope-chip"><span>volume</span> {{ p.volume }}</span>
+            <span class="scope-chip"><span>offset</span> {{ p.offset }}</span>
+            <span class="scope-chip"><span>continuar</span> {% if p.continuar %}sim{% else %}não{% endif %}</span>
+            {% if d.prioridade %}
+            <span class="scope-chip"><span>prioridade</span> {{ d.prioridade }}</span>
+            {% endif %}
+            {% if d.celery_task_id %}
+            <span class="scope-chip" title="{{ d.celery_task_id }}"><span>task</span> {{ d.celery_task_id|stringformat:"s"|slice:":8" }}</span>
+            {% endif %}
+          </div>
+          {% endwith %}
+          {% endif %}
+          {% if item.progresso_atual and item.exec.situacao != "concluido" %}
+          <div class="cp-row">
+            <span class="cp-key">{% if item.exec.situacao == "erro" %}ponto da falha{% else %}fase atual{% endif %}</span>
+            <span class="cp-val">{{ item.progresso_atual.fase_numero }}/{{ item.progresso_atual.total_fases }} · {{ item.progresso_atual.percentual_fase }}</span>
+          </div>
+          <div class="cp-row">
+            <span class="cp-key">nome</span>
+            <span class="cp-val" title="{{ item.progresso_atual.fase_nome }}">{{ item.progresso_atual.fase_nome|truncatechars:24 }}</span>
+          </div>
+          <div class="cp-row">
+            <span class="cp-key">etapa</span>
+            <span class="cp-val">{{ item.progresso_atual.etapa }}</span>
+          </div>
+          <div class="cp-row">
+            <span class="cp-key">chunk</span>
+            <span class="cp-val">{{ item.progresso_atual.chunk_atual }}</span>
+          </div>
+          <div class="cp-row">
+            <span class="cp-key">lidas/gravadas</span>
+            <span class="cp-val">{{ item.progresso_atual.linhas_lidas|numero_br }}/{{ item.progresso_atual.linhas_escritas|numero_br }}</span>
+          </div>
+          <div class="cp-row">
+            <span class="cp-key">não gravadas</span>
+            <span class="cp-val">{{ item.progresso_atual.linhas_ignoradas|numero_br }} · {{ item.progresso_atual.taxa_ignoradas }}</span>
+          </div>
+          <div class="cp-row">
+            <span class="cp-key">atualização</span>
+            <span class="cp-val">há {{ item.progresso_atual.atualizado_ha }}</span>
+          </div>
+          {% endif %}
           <div class="cp-row"><span class="cp-key">situação</span><span class="cp-val">{{ item.checkpoint.ultima_situacao }}</span></div>
-          <div class="cp-row"><span class="cp-key">fase</span><span class="cp-val">{{ item.checkpoint.ultima_pagina }}</span></div>
+          <div class="cp-row"><span class="cp-key">checkpoint</span><span class="cp-val">fase {{ item.checkpoint.ultima_pagina }} · {{ item.checkpoint.token_parada|default:"0"|numero_br }}</span></div>
           <div class="cp-row"><span class="cp-key">atualizado</span><span class="cp-val">{{ item.checkpoint.atualizado_em|date:"d/m H:i:s" }}</span></div>
           {% if item.checkpoint.ultimo_sucesso_em %}
           <div class="cp-row"><span class="cp-key">último sucesso</span><span class="cp-val">{{ item.checkpoint.ultimo_sucesso_em|date:"d/m H:i:s" }}</span></div>
@@ -336,13 +485,62 @@
           {% else %}
           <div class="empty-state" style="padding:1.5rem">
             <i class="bi bi-bookmark-x" style="font-size:1.5rem;color:#334155"></i>
-            <div style="font-size:.75rem;color:#475569;margin-top:.5rem">checkpoint não disponível<br>para execuções históricas</div>
+            <div style="font-size:.75rem;color:#475569;margin-top:.5rem">ponto de retomada não disponível<br>para execuções históricas</div>
           </div>
           {% endif %}
         </div>
       </div>
 
     </div><!-- /kanban-row -->
+
+    <div class="insight-grid">
+      <div class="insight-card">
+        <div class="insight-title">Duração</div>
+        <div class="insight-value">{{ item.exec.duracao_label }}</div>
+        <div class="insight-sub">{{ item.exec.duracao_prefixo }}</div>
+      </div>
+      <div class="insight-card">
+        <div class="insight-title">Taxa de leitura</div>
+        <div class="insight-value">{{ item.taxa_lidas_minuto|numero_br }}/min</div>
+        <div class="insight-sub">com base no total registrado</div>
+      </div>
+      <div class="insight-card">
+        <div class="insight-title">Gravação</div>
+        <div class="insight-value">{{ item.taxa_gravacao }}</div>
+        <div class="insight-sub">{{ item.total_escrito|numero_br }} linhas gravadas</div>
+      </div>
+      <div class="insight-card">
+        <div class="insight-title">Não gravadas</div>
+        <div class="insight-value">{{ item.taxa_nao_gravadas }}</div>
+        <div class="insight-sub">{{ item.total_nao_gravado|numero_br }} deduplicadas ou hash igual</div>
+      </div>
+    </div>
+
+    {% if item.exec.tempo_por_fase %}
+    <div class="phase-time">
+      <div class="insight-title">Tempo por fase</div>
+      <div class="phase-time-list">
+        <div class="phase-time-row phase-time-head">
+          <div class="phase-time-name">Fase</div>
+          <div class="phase-time-val">Duração</div>
+          <div class="phase-time-val">Lidas</div>
+          <div class="phase-time-val">Gravadas</div>
+          <div class="phase-time-val">Lidas/min</div>
+          <div class="phase-time-val">Etapa</div>
+        </div>
+        {% for fase in item.exec.tempo_por_fase %}
+        <div class="phase-time-row">
+          <div class="phase-time-name" title="{{ fase.fase_nome }}">{{ fase.fase_nome }}</div>
+          <div class="phase-time-val">{{ fase.duracao_fase_label }}</div>
+          <div class="phase-time-val read-color">{{ fase.linhas_lidas|numero_br }}</div>
+          <div class="phase-time-val write-color">{{ fase.linhas_escritas|numero_br }}</div>
+          <div class="phase-time-val">{{ fase.taxa_fase_lidas_minuto|numero_br }}</div>
+          <div class="phase-time-val" title="{{ fase.etapa }}">{{ fase.etapa|truncatechars:14 }}</div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
 
     <!-- JSON detail toggle -->
     <button type="button" class="json-toggle" onclick="toggleJson('json-{{ forloop.counter }}')">
@@ -355,9 +553,25 @@
   "iniciado_em": "{{ item.exec.iniciado_em|date:"c" }}",
   "finalizado_em": "{{ item.exec.finalizado_em|date:"c"|default:"null" }}",
   "mensagem_erro": {{ item.exec.mensagem_erro|default:"null"|escapejs|default:"null" }},
+  "parametros": {{ item.exec.parametros|json_bruto }},
   "total_lido": {{ item.total_lido }},
   "total_escrito": {{ item.total_escrito }},
+  "total_nao_gravado": {{ item.total_nao_gravado }},
   "total_hashes": {{ item.total_hashes }},
+  "taxa_lidas_minuto": {{ item.taxa_lidas_minuto }},
+  "taxa_gravacao": "{{ item.taxa_gravacao }}",
+  "taxa_nao_gravadas": "{{ item.taxa_nao_gravadas }}",
+  "progresso_atual": {% if item.progresso_atual %}{
+    "fase_numero": {{ item.progresso_atual.fase_numero }},
+    "total_fases": {{ item.progresso_atual.total_fases }},
+    "fase_nome": "{{ item.progresso_atual.fase_nome }}",
+    "etapa": "{{ item.progresso_atual.etapa }}",
+    "chunk_atual": {{ item.progresso_atual.chunk_atual }},
+    "linhas_lidas": {{ item.progresso_atual.linhas_lidas }},
+    "linhas_escritas": {{ item.progresso_atual.linhas_escritas }},
+    "linhas_ignoradas": {{ item.progresso_atual.linhas_ignoradas }},
+    "atualizado_em": "{{ item.progresso_atual.atualizado_em|date:"c" }}"
+  }{% else %}null{% endif %},
   "tabelas_lidas": [{% for tl in item.tabelas_lidas %}
     { "tabela": "{{ tl.tabela_origem }}", "linhas_lidas": {{ tl.linhas_lidas }}, "paginas": {{ tl.num_paginas }} }{% if not forloop.last %},{% endif %}{% endfor %}
   ],
