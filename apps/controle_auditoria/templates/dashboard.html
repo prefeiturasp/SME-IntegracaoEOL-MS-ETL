@@ -415,6 +415,9 @@
           {% if d.prioridade %}
           <span class="scope-chip"><span>prioridade</span> {{ d.prioridade }}</span>
           {% endif %}
+          {% if d.celery_task_id %}
+          <span class="scope-chip" title="{{ d.celery_task_id }}"><span>task</span> {{ d.celery_task_id|stringformat:"s"|slice:":8" }}</span>
+          {% endif %}
         </div>
         {% endwith %}
         {% endif %}
