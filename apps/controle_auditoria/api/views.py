@@ -26,6 +26,7 @@ from apps.controle_auditoria.api.serializers import (
     EtlExecucaoTabelaLidaSerializer,
     HealthStatusSerializer,
 )
+from apps.controle_auditoria.libs.celery_app import aplicacao_celery
 from apps.controle_auditoria.libs.dominios import (
     FASES_COM_ANOS_LETIVOS,
     FASES_POR_DOMINIO,
@@ -44,6 +45,8 @@ from apps.controle_auditoria.models import (
 _LIMITE_EXECUCOES_RECENTES = 50
 _LIMITE_MONITORAMENTO = 100
 _LIMITE_EXECUCOES_KANBAN = 100
+_LIMITE_RECOVERY = 25
+_MAX_TENTATIVAS_RECOVERY = 3
 _STATUS_EM_EXECUCAO = frozenset({"em_execucao", "em_andamento"})
 
 
@@ -183,6 +186,24 @@ def _enriquecer_execucao(
     )[:5]
 
 
+def _parametros_execucao(execucao: EtlExecucao) -> dict[str, Any]:
+    """Retorna parâmetros de execução gravados na auditoria."""
+    parametros = execucao.parametros or {}
+    if not isinstance(parametros, dict):
+        return {}
+    dados = parametros.get("execucao", {})
+    return dados if isinstance(dados, dict) else {}
+
+
+def _parametros_disparo(execucao: EtlExecucao) -> dict[str, Any]:
+    """Retorna parâmetros de disparo gravados na auditoria."""
+    parametros = execucao.parametros or {}
+    if not isinstance(parametros, dict):
+        return {}
+    dados = parametros.get("disparo", {})
+    return dados if isinstance(dados, dict) else {}
+
+
 def _normalizar_lista(valor: Any, tipo: type = str) -> list | None:
     """Normaliza listas de parâmetros vindas da auditoria ou da request."""
     if valor in (None, "", []):
@@ -190,6 +211,74 @@ def _normalizar_lista(valor: Any, tipo: type = str) -> list | None:
     if isinstance(valor, list | tuple):
         return [tipo(item) for item in valor]
     return [tipo(valor)]
+
+
+def _id_origem_reprocessamento(execucao: EtlExecucao) -> str:
+    """Resolve a execução raiz para contabilizar tentativas de recovery."""
+    disparo = _parametros_disparo(execucao)
+    return str(disparo.get("execucao_origem") or execucao.id_execucao)
+
+
+def _contar_reprocessamentos(id_origem: str) -> int:
+    """Conta quantas execuções já foram disparadas pelo recovery."""
+    total: int = EtlExecucao.objects.filter(
+        parametros__disparo__origem="recovery",
+        parametros__disparo__execucao_origem=id_origem,
+    ).count()
+    return total
+
+
+def _task_id_execucao(execucao: EtlExecucao) -> str:
+    """Retorna o task_id Celery registrado na execução."""
+    disparo = _parametros_disparo(execucao)
+    return str(disparo.get("celery_task_id") or "")
+
+
+def _coletar_ids_tasks(payload: Any) -> set[str]:
+    """Coleta ids de tasks em respostas do Celery inspect."""
+    ids: set[str] = set()
+    if isinstance(payload, dict):
+        for chave, valor in payload.items():
+            if chave == "id" and valor:
+                ids.add(str(valor))
+            else:
+                ids.update(_coletar_ids_tasks(valor))
+    elif isinstance(payload, list):
+        for item in payload:
+            ids.update(_coletar_ids_tasks(item))
+    return ids
+
+
+def _ids_tasks_celery_vivas() -> tuple[set[str], bool]:
+    """Retorna task_ids active/reserved/scheduled conhecidos pelo Celery."""
+    try:
+        inspetor = aplicacao_celery.control.inspect(timeout=1.0)
+        payloads = [
+            inspetor.active(),
+            inspetor.reserved(),
+            inspetor.scheduled(),
+        ]
+    except Exception:
+        return set(), False
+
+    if all(payload is None for payload in payloads):
+        return set(), False
+
+    ids: set[str] = set()
+    for payload in payloads:
+        ids.update(_coletar_ids_tasks(payload or {}))
+    return ids, True
+
+
+def _ultimo_heartbeat_execucao(execucao: EtlExecucao) -> Any:
+    """Retorna último progresso da execução ou o início como fallback."""
+    progresso = (
+        EtlProgressoExecucao.objects.filter(id_execucao=execucao.id_execucao)
+        .order_by("-atualizado_em")
+        .values_list("atualizado_em", flat=True)
+        .first()
+    )
+    return progresso or execucao.iniciado_em
 
 
 def _novo_task_id() -> str:
@@ -311,6 +400,251 @@ class ExecucaoDetalheView(APIView):
             update_fields=["situacao", "finalizado_em", "mensagem_erro"]
         )
         return Response({"cancelado": str(execucao.id_execucao)})
+
+
+@extend_schema(tags=["Execuções"])
+class LimparOrfasView(APIView):
+    """Marca execuções sem task viva como interrompidas."""
+
+    @extend_schema(
+        summary="Limpa execuções órfãs",
+        description=(
+            "Marca como `interrompido` execuções que continuam em "
+            "`em_execucao`, mas não aparecem como tasks vivas no Celery "
+            "em `active`, `reserved` ou `scheduled`."
+        ),
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "tasks_vivas": {"type": "integer"},
+                    "total_analisado": {"type": "integer"},
+                    "total_interrompido": {"type": "integer"},
+                    "total_preservado": {"type": "integer"},
+                    "itens": {"type": "array", "items": {"type": "object"}},
+                },
+            }
+        },
+    )
+    def post(self, request: Request) -> Response:
+        """Interrompe execuções órfãs com base no estado do Celery."""
+        execucoes = list(
+            EtlExecucao.objects.filter(
+                situacao__in=_STATUS_EM_EXECUCAO
+            ).order_by("iniciado_em")
+        )
+        task_ids_vivos, celery_disponivel = _ids_tasks_celery_vivas()
+        if not celery_disponivel:
+            return Response(
+                {
+                    "erro": (
+                        "Não foi possível consultar o estado dos workers "
+                        "Celery. Nenhuma execução foi alterada."
+                    ),
+                    "total_analisado": len(execucoes),
+                    "total_interrompido": 0,
+                },
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        itens = []
+        for execucao in execucoes:
+            task_id = _task_id_execucao(execucao)
+            if task_id and task_id in task_ids_vivos:
+                itens.append(
+                    {
+                        "dominio": execucao.dominio,
+                        "id_execucao": str(execucao.id_execucao),
+                        "heartbeat": None,
+                        "task_id": task_id,
+                        "status": "preservado",
+                        "motivo": "task_celery_viva",
+                    }
+                )
+                continue
+
+            heartbeat = _ultimo_heartbeat_execucao(execucao)
+            motivo = "task_celery_ausente" if task_id else "sem_task_id"
+            agora = timezone.now()
+            execucao.situacao = "interrompido"
+            execucao.finalizado_em = agora
+            execucao.mensagem_erro = (
+                "Execução interrompida automaticamente: "
+                "task Celery não encontrada em active, reserved ou scheduled."
+            )
+            execucao.save(
+                update_fields=["situacao", "finalizado_em", "mensagem_erro"]
+            )
+            itens.append(
+                {
+                    "dominio": execucao.dominio,
+                    "id_execucao": str(execucao.id_execucao),
+                    "heartbeat": heartbeat.isoformat() if heartbeat else None,
+                    "task_id": task_id or None,
+                    "status": "interrompido",
+                    "motivo": motivo,
+                }
+            )
+
+        return Response(
+            {
+                "tasks_vivas": len(task_ids_vivos),
+                "total_analisado": len(execucoes),
+                "total_interrompido": sum(
+                    1 for item in itens if item["status"] == "interrompido"
+                ),
+                "total_preservado": sum(
+                    1 for item in itens if item["status"] == "preservado"
+                ),
+                "itens": itens,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+@extend_schema(tags=["Execuções"])
+class ReprocessarErrosView(APIView):
+    """Reprocessa execuções com erro de forma controlada."""
+
+    @extend_schema(
+        summary="Reprocessa últimas execuções com erro",
+        description=(
+            "Busca a última execução de cada domínio quando ela está em erro "
+            "ou interrompida e agenda uma nova execução com `continuar=true`, "
+            "reaproveitando os parâmetros rastreados na auditoria. Por padrão "
+            "não reprocessa falhas antigas se já existir execução mais "
+            "recente para o domínio."
+        ),
+        request={
+            "application/json": {
+                "type": "object",
+                "properties": {
+                    "max_tentativas": {
+                        "type": "integer",
+                        "default": 3,
+                        "description": (
+                            "Quantidade máxima de reprocessamentos "
+                            "automáticos por execução raiz."
+                        ),
+                    },
+                },
+            }
+        },
+        responses={
+            202: {
+                "type": "object",
+                "properties": {
+                    "total_analisado": {"type": "integer"},
+                    "total_reprocessado": {"type": "integer"},
+                    "itens": {"type": "array", "items": {"type": "object"}},
+                },
+            }
+        },
+    )
+    def post(self, request: Request) -> Response:
+        """Agenda recovery das últimas execuções com erro por domínio."""
+        max_tentativas = int(
+            request.data.get("max_tentativas", _MAX_TENTATIVAS_RECOVERY)
+        )
+        prioridade = 3
+        limite = _LIMITE_RECOVERY
+
+        qs = _qs_ultima_execucao_por_dominio().filter(
+            situacao__in=("erro", "interrompido")
+        )
+
+        itens = []
+        for execucao in qs.order_by("-iniciado_em")[:limite]:
+            parametros_execucao = _parametros_execucao(execucao)
+            id_origem = _id_origem_reprocessamento(execucao)
+            tentativas = _contar_reprocessamentos(id_origem)
+
+            if tentativas >= max_tentativas:
+                itens.append(
+                    {
+                        "dominio": execucao.dominio,
+                        "id_execucao": str(execucao.id_execucao),
+                        "status": "ignorado",
+                        "motivo": "limite_tentativas",
+                        "tentativas": tentativas,
+                        "max_tentativas": max_tentativas,
+                    }
+                )
+                continue
+
+            fases = _normalizar_lista(parametros_execucao.get("fases"), str)
+            anos_letivos = _normalizar_lista(
+                parametros_execucao.get("anos_letivos"), int
+            )
+            volume = int(parametros_execucao.get("volume") or 100)
+            offset = int(parametros_execucao.get("offset") or 0)
+
+            erro_parametros = validar_parametros_dominio(
+                execucao.dominio,
+                fases=fases,
+                anos_letivos=anos_letivos,
+            )
+            if erro_parametros:
+                itens.append(
+                    {
+                        "dominio": execucao.dominio,
+                        "id_execucao": str(execucao.id_execucao),
+                        "status": "ignorado",
+                        "motivo": erro_parametros,
+                    }
+                )
+                continue
+
+            task_id = _novo_task_id()
+            kwargs_task: dict[str, Any] = {
+                "dominio": execucao.dominio,
+                "volume": volume,
+                "offset": offset,
+                "continuar": True,
+                "parametros_disparo": {
+                    "origem": "recovery",
+                    "execucao_origem": id_origem,
+                    "execucao_erro": str(execucao.id_execucao),
+                    "tentativa": tentativas + 1,
+                    "prioridade": prioridade,
+                    "continuar": True,
+                    "celery_task_id": task_id,
+                },
+            }
+            if fases:
+                kwargs_task["fases"] = fases
+            if anos_letivos:
+                kwargs_task["anos_letivos"] = anos_letivos
+
+            resultado = executar_dominio_task.apply_async(
+                kwargs=kwargs_task,
+                priority=prioridade,
+                task_id=task_id,
+            )
+            itens.append(
+                {
+                    "dominio": execucao.dominio,
+                    "id_execucao": str(execucao.id_execucao),
+                    "status": "reprocessado",
+                    "task_id": resultado.id,
+                    "tentativa": tentativas + 1,
+                    "fases": fases,
+                    "anos_letivos": anos_letivos,
+                    "volume": volume,
+                }
+            )
+
+        total_reprocessado = sum(
+            1 for item in itens if item["status"] == "reprocessado"
+        )
+        return Response(
+            {
+                "total_analisado": len(itens),
+                "total_reprocessado": total_reprocessado,
+                "itens": itens,
+            },
+            status=status.HTTP_202_ACCEPTED,
+        )
 
 
 @extend_schema(tags=["Execuções"])

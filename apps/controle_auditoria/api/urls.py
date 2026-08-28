@@ -10,8 +10,10 @@ from apps.controle_auditoria.api.views import (
     ExecucoesView,
     ExecutarDominioView,
     HealthSincRecView,
+    LimparOrfasView,
     MonitoramentoExecucoesView,
     MonitoramentoResumoView,
+    ReprocessarErrosView,
 )
 
 urlpatterns = [
@@ -29,6 +31,16 @@ urlpatterns = [
     ),
     # Execuções — rotas fixas antes da rota com parâmetro
     path("execucoes/", ExecucoesView.as_view(), name="execucoes"),
+    path(
+        "execucoes/limpar-orfas/",
+        LimparOrfasView.as_view(),
+        name="limpar-orfas",
+    ),
+    path(
+        "execucoes/reprocessar-erros/",
+        ReprocessarErrosView.as_view(),
+        name="reprocessar-erros",
+    ),
     path(
         "execucoes/tabelas-lidas/",
         ExecucoesTabelaLidaView.as_view(),

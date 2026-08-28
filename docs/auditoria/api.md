@@ -15,6 +15,8 @@ Registradas em `apps/controle_auditoria/api/urls.py` e incluídas via `config/ur
 |---|---|---|---|---|
 | `GET` | `checkpoints/` | `CheckpointsView` | sim | Lista checkpoints por domínio |
 | `GET` | `execucoes/` | `ExecucoesView` | sim | 50 execuções mais recentes |
+| `POST` | `execucoes/limpar-orfas/` | `LimparOrfasView` | sim | Marca execuções órfãs como interrompidas |
+| `POST` | `execucoes/reprocessar-erros/` | `ReprocessarErrosView` | sim | Reprocessa últimas execuções com erro |
 | `GET` | `execucoes/<id_execucao>/` | `ExecucaoDetalheView` | sim | Detalhe com tabelas lidas e escritas |
 | `GET` | `execucoes/tabelas-lidas/` | `ExecucoesTabelaLidaView` | sim | 50 registros de leitura mais recentes |
 | `GET` | `execucoes/tabelas-escritas/` | `ExecucoesTabelaEscritaView` | sim | 50 registros de escrita mais recentes |
@@ -55,6 +57,8 @@ Exibe por domínio:
 - Coluna **Escrita (Upsert)** — tabelas escritas e modo.
 - Coluna **Checkpoint** — token acumulado, escopo da execução, fase em
   andamento ou ponto de falha, último sucesso.
+- Tabela **Tempo por fase** — fases ordenadas pela maior duração, com linhas
+  lidas, gravadas, taxa por minuto e etapa atual.
 
 ---
 
@@ -104,6 +108,84 @@ O campo `parametros` registra o escopo usado no disparo:
 ```
 
 Retorna `404` se o UUID não existir.
+
+---
+
+### `POST execucoes/limpar-orfas/`
+
+Marca como `interrompido` execuções que continuam em `em_execucao` ou
+`em_andamento`, mas não têm task viva no Celery.
+
+Critério:
+
+- se `parametros.disparo.celery_task_id` ainda aparece em
+  `active`, `reserved` ou `scheduled` no Celery, a execução é preservada;
+- se não houver `celery_task_id`, a execução é considerada órfã;
+- se houver `celery_task_id`, mas ele não aparecer no Celery, marca como
+  `interrompido`;
+- o `celery_task_id` é gravado no disparo da API e reaproveitado pelo worker;
+- se o estado dos workers Celery não puder ser consultado, retorna `503` e não
+  altera nenhuma execução.
+
+O body é vazio:
+
+```json
+{}
+```
+
+Retorna `200` com a quantidade analisada, interrompida, preservada e a lista
+de itens analisados. Quando uma execução é preservada, o campo `motivo` indica
+`task_celery_viva`. Quando é interrompida, o campo `motivo` indica
+`sem_task_id` ou `task_celery_ausente`.
+
+---
+
+### `POST execucoes/reprocessar-erros/`
+
+Busca a última execução de cada domínio quando ela está em `erro` ou
+`interrompido` e agenda uma nova task com `continuar=true`, reaproveitando os
+parâmetros gravados em `parametros.execucao`.
+
+Por segurança, erros antigos não são reprocessados se o domínio já tiver uma
+execução mais recente em andamento ou concluída.
+
+**Body JSON:**
+
+| Campo | Tipo | Padrão | Descrição |
+|---|---|---|---|
+| `max_tentativas` | int | `3` | Máximo de reprocessamentos automáticos por execução raiz |
+
+Exemplo:
+
+```json
+{
+  "max_tentativas": 3
+}
+```
+
+Retorna `202`:
+
+```json
+{
+  "total_analisado": 1,
+  "total_reprocessado": 1,
+  "itens": [
+    {
+      "dominio": "programas",
+      "id_execucao": "585358e1-8233-49c2-b224-06085d8bc501",
+      "status": "reprocessado",
+      "task_id": "task-recovery",
+      "tentativa": 1,
+      "fases": null,
+      "anos_letivos": [2026],
+      "volume": 500
+    }
+  ]
+}
+```
+
+Quando o limite de tentativas é atingido, o item volta como `ignorado` e nenhuma
+task é enfileirada para aquela execução.
 
 ---
 
@@ -160,3 +242,31 @@ Endpoint público. Retorna a execução mais recente de cada domínio ETL.
 Endpoint público. Verifica se o banco `default` responde com `SELECT 1`.
 
 Retorna `200` com `{"status": "healthy"}` ou `503` com `{"status": "unhealthy"}`.
+
+---
+
+## Script `recuperar_etl.sh`
+
+O script `scripts/recuperar_etl.sh` pode rodar em cron separado do disparo
+diário. Ele executa duas chamadas:
+
+1. `POST /api/v1/execucoes/limpar-orfas/` com body `{}`.
+2. `POST /api/v1/execucoes/reprocessar-erros/` com:
+
+```json
+{
+  "max_tentativas": 3
+}
+```
+
+O recovery sempre usa `continuar=true`, prioridade `3`, limite interno de 25
+domínios por chamada e o volume original registrado na execução com erro.
+
+O `curl` usa timeout de conexão de 10 segundos, timeout total de 60 segundos
+e até 3 tentativas HTTP com intervalo de 5 segundos.
+
+Exemplo de cron a cada 30 minutos:
+
+```cron
+*/30 * * * * cd /app && ./scripts/recuperar_etl.sh >> /var/log/etl_recovery.log 2>&1
+```

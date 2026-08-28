@@ -75,6 +75,68 @@ Cada nova linha de `EtlExecucao` grava o campo JSON `parametros`.
 Esse campo alimenta o dashboard/kanban e evita inferir anos ou fases a partir
 do último checkpoint.
 
+Quando uma execução é reenfileirada pelo recovery, `parametros.disparo` recebe:
+
+```json
+{
+  "origem": "recovery",
+  "execucao_origem": "<uuid da primeira execução com erro>",
+  "execucao_erro": "<uuid da execução reprocessada>",
+  "tentativa": 1,
+  "prioridade": 3,
+  "continuar": true
+}
+```
+
+Durante a execução da task, o worker acrescenta metadados do Celery ao mesmo
+bloco:
+
+```json
+{
+  "celery_task_id": "<id da task>",
+  "celery_worker": "<hostname do worker>",
+  "celery_retries": 0
+}
+```
+
+O campo `execucao_origem` permite limitar tentativas mesmo quando uma tentativa
+de recovery também falha e gera uma nova execução em erro.
+
+---
+
+## Recovery automático
+
+O script `scripts/recuperar_etl.sh` implementa o fluxo recomendado de recovery:
+
+1. Chama `POST /api/v1/execucoes/limpar-orfas/`.
+2. Consulta tasks `active`, `reserved` e `scheduled` no Celery.
+3. Preserva execuções cujo `celery_task_id` ainda aparece vivo no Celery.
+4. Marca como `interrompido` execuções `em_execucao` ou `em_andamento` sem
+   task viva no Celery.
+5. Chama `POST /api/v1/execucoes/reprocessar-erros/`.
+6. Localiza a última execução de cada domínio.
+7. Mantém apenas as que estão em `erro` ou `interrompido`.
+8. Reaproveita `volume`, `offset`, `fases` e `anos_letivos` gravados em
+   `parametros.execucao`.
+9. Força `continuar=true`.
+10. Conta tentativas anteriores com base em `parametros.disparo.execucao_origem`.
+11. Agenda uma nova `etl.executar_dominio` quando o limite não foi atingido.
+
+O script adiciona timeout e retry HTTP ao acionamento dos endpoints, mas não
+executa ETL diretamente.
+
+Payload fixo usado pelo script:
+
+```json
+{
+  "max_tentativas": 3
+}
+```
+
+A retomada é sempre feita por checkpoint, portanto `continuar=true` não precisa
+ser enviado no body. O recovery usa prioridade `3`, analisa até 25 domínios por
+chamada e mantém o volume original registrado na execução com erro.
+
 ---
 
 ## Progresso operacional
