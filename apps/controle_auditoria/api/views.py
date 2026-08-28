@@ -182,6 +182,15 @@ def _enriquecer_execucao(
     )[:5]
 
 
+def _normalizar_lista(valor: Any, tipo: type = str) -> list | None:
+    """Normaliza listas de parâmetros vindas da auditoria ou da request."""
+    if valor in (None, "", []):
+        return None
+    if isinstance(valor, list | tuple):
+        return [tipo(item) for item in valor]
+    return [tipo(valor)]
+
+
 @extend_schema(tags=["Checkpoints"])
 class CheckpointsView(APIView):
     """Endpoint para listagem de checkpoints de execução ETL por domínio."""
@@ -434,18 +443,27 @@ class ExecutarDominioView(APIView):
         # Prioridade: 0 = mais urgente, 9 = menos urgente (padrão: 5)
         prioridade = int(request.data.get("prioridade", 5))
         ano_letivo = request.data.get("ano_letivo")
-        fases = request.data.get("fases")
-        anos_letivos = request.data.get("anos_letivos")
+        try:
+            fases = _normalizar_lista(request.data.get("fases"), str)
+            anos_letivos = _normalizar_lista(
+                request.data.get("anos_letivos"), int
+            )
+        except (TypeError, ValueError):
+            return Response(
+                {
+                    "erro": (
+                        "Parâmetros inválidos. Use fases como lista de textos "
+                        "e anos_letivos como lista de números."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         erro_parametros = validar_parametros_dominio(
             dominio,
             ano_letivo=int(ano_letivo) if ano_letivo is not None else None,
-            fases=list(fases) if fases is not None else None,
-            anos_letivos=(
-                [int(a) for a in anos_letivos]
-                if anos_letivos is not None
-                else None
-            ),
+            fases=fases,
+            anos_letivos=anos_letivos,
         )
         if erro_parametros:
             return Response(
@@ -460,9 +478,9 @@ class ExecutarDominioView(APIView):
             "continuar": continuar,
         }
         if fases is not None:
-            kwargs_task["fases"] = list(fases)
+            kwargs_task["fases"] = fases
         if anos_letivos is not None:
-            kwargs_task["anos_letivos"] = [int(a) for a in anos_letivos]
+            kwargs_task["anos_letivos"] = anos_letivos
         parametros_disparo = {
             "origem": "api",
             "prioridade": prioridade,
