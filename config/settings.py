@@ -24,7 +24,9 @@ _POOL_OPTIONS = {
     "PRE_PING": True,
 }
 
-THREAD_POOL_MAX_WORKERS = int(os.getenv("THREAD_POOL_MAX_WORKERS", "4"))
+# 1 = serial. As transformações do ETL são CPU puro sob o GIL, então
+# threads só acrescentam overhead. Aumente apenas para funções com I/O.
+THREAD_POOL_MAX_WORKERS = int(os.getenv("THREAD_POOL_MAX_WORKERS", "1"))
 THREAD_POOL_CHUNK_TIMEOUT = int(os.getenv("THREAD_POOL_CHUNK_TIMEOUT", "120"))
 PRODUCER_MAX_WAIT_SECONDS = int(os.getenv("PRODUCER_MAX_WAIT_SECONDS", "600"))
 

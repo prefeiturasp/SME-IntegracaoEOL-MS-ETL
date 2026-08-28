@@ -45,9 +45,13 @@ class TestThreadPoolProcessor(TestCase):
             logger.disabled = False
 
     def test_timeout_lanca_timeout_error(self) -> None:
-        """Timeout excedido lança ``TimeoutError``."""
+        """Timeout excedido lança ``TimeoutError``.
+
+        Exige o caminho paralelo: com ``max_workers=1`` o processamento é
+        serial e não há future para cancelar por timeout.
+        """
         processor = ThreadPoolProcessor(
-            max_workers=1, timeout=1, prefixo_log="TEST_TIMEOUT"
+            max_workers=2, timeout=1, prefixo_log="TEST_TIMEOUT"
         )
 
         def func_lenta(x: int) -> int:
@@ -59,7 +63,9 @@ class TestThreadPoolProcessor(TestCase):
 
     def test_max_workers_1_resultado_identico_serial(self) -> None:
         """``max_workers=1`` produz resultado idêntico ao processamento serial."""
-        processor = ThreadPoolProcessor(max_workers=1, prefixo_log="TEST_SERIAL")
+        processor = ThreadPoolProcessor(
+            max_workers=1, prefixo_log="TEST_SERIAL"
+        )
         items = list(range(15))
         resultado = processor.processar(items, lambda x: x**2)
         esperado = [x**2 for x in items]
@@ -67,7 +73,9 @@ class TestThreadPoolProcessor(TestCase):
 
     def test_log_throughput_registrado(self) -> None:
         """Log de throughput é registrado com métricas de itens/s."""
-        with self.assertLogs("apps.core.libs.thread_processor", level="INFO") as logs:
+        with self.assertLogs(
+            "apps.core.libs.thread_processor", level="INFO"
+        ) as logs:
             self.processor.processar([1, 2, 3], lambda x: x)
 
         mensagens = " ".join(logs.output)
@@ -96,7 +104,11 @@ class TestThreadPoolProcessor(TestCase):
 
         def _decorar(item: tuple) -> tuple:
             pk_val, obj = item
-            return (f"{tabela}:{pk_val}", _calcular_hash(obj, update_fields), obj)
+            return (
+                f"{tabela}:{pk_val}",
+                _calcular_hash(obj, update_fields),
+                obj,
+            )
 
         items = list(objetos.items())
         resultado = self.processor.processar(items, _decorar)
