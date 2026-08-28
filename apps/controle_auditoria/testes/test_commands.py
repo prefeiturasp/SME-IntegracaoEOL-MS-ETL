@@ -77,10 +77,10 @@ class AgendarDominioCommandTestCase(TestCase):
         "apps.controle_auditoria.management.commands.agendar_dominio.executar_dominio_task"
     )
     def test_deve_enfileirar_task_imediata(self, task_mock: MagicMock) -> None:
-        """Sem data/hora, usa delay diretamente."""
+        """Sem data/hora, enfileira já com task_id rastreável."""
         resultado = MagicMock()
         resultado.id = "task-imediata-1"
-        task_mock.delay.return_value = resultado
+        task_mock.apply_async.return_value = resultado
 
         call_command(
             "agendar_dominio",
@@ -93,14 +93,21 @@ class AgendarDominioCommandTestCase(TestCase):
             "--continuar",
         )
 
-        task_mock.delay.assert_called_once_with(
-            dominio="institucional",
-            volume=120,
-            offset=10,
-            continuar=True,
-            parametros_disparo={
-                "origem": "management_command",
-                "executar_em": None,
+        task_mock.apply_async.assert_called_once()
+        kwargs_apply = task_mock.apply_async.call_args.kwargs
+        task_id = kwargs_apply["task_id"]
+        self.assertEqual(
+            kwargs_apply["kwargs"],
+            {
+                "dominio": "institucional",
+                "volume": 120,
+                "offset": 10,
+                "continuar": True,
+                "parametros_disparo": {
+                    "origem": "management_command",
+                    "executar_em": None,
+                    "celery_task_id": task_id,
+                },
             },
         )
 
@@ -135,6 +142,7 @@ class AgendarDominioCommandTestCase(TestCase):
                 "parametros_disparo": {
                     "origem": "management_command",
                     "executar_em": "2026-03-10T23:00:00-03:00",
+                    "celery_task_id": kwargs_apply["task_id"],
                 },
             },
         )
@@ -158,7 +166,9 @@ class AgendarDominioCommandTestCase(TestCase):
         self, task_mock: MagicMock
     ) -> None:
         """OperationalError no broker vira CommandError."""
-        task_mock.delay.side_effect = OperationalError("broker indisponível")
+        task_mock.apply_async.side_effect = OperationalError(
+            "broker indisponível"
+        )
 
         with self.assertRaises(CommandError):
             call_command("agendar_dominio", "--dominio", "institucional")

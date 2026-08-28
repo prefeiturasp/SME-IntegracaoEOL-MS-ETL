@@ -1,6 +1,7 @@
 """Views DRF para controle e auditoria de execuções ETL."""
 
 from typing import Any
+from uuid import uuid4
 
 from django.core.exceptions import ValidationError
 from django.db import connections
@@ -189,6 +190,11 @@ def _normalizar_lista(valor: Any, tipo: type = str) -> list | None:
     if isinstance(valor, list | tuple):
         return [tipo(item) for item in valor]
     return [tipo(valor)]
+
+
+def _novo_task_id() -> str:
+    """Gera task_id rastreável antes de enfileirar no Celery."""
+    return str(uuid4())
 
 
 @extend_schema(tags=["Checkpoints"])
@@ -481,10 +487,12 @@ class ExecutarDominioView(APIView):
             kwargs_task["fases"] = fases
         if anos_letivos is not None:
             kwargs_task["anos_letivos"] = anos_letivos
+        task_id = _novo_task_id()
         parametros_disparo = {
             "origem": "api",
             "prioridade": prioridade,
             "executar_em": executar_em,
+            "celery_task_id": task_id,
         }
         kwargs_task["parametros_disparo"] = parametros_disparo
 
@@ -500,11 +508,13 @@ class ExecutarDominioView(APIView):
                 kwargs=kwargs_task,
                 eta=eta,
                 priority=prioridade,
+                task_id=task_id,
             )
         else:
             resultado = executar_dominio_task.apply_async(
                 kwargs=kwargs_task,
                 priority=prioridade,
+                task_id=task_id,
             )
 
         return Response(

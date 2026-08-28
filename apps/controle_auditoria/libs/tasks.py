@@ -64,6 +64,14 @@ def executar_dominio_task(
     parametros_disparo: dict[str, object] | None = None,
 ) -> str:
     """Executa domínio ETL via fila Celery com retomada por checkpoint."""
+    parametros_disparo_task = dict(parametros_disparo or {})
+    parametros_disparo_task.update(
+        {
+            "celery_task_id": self.request.id,
+            "celery_worker": self.request.hostname,
+            "celery_retries": self.request.retries,
+        }
+    )
     erro_parametros = validar_parametros_dominio(
         dominio,
         ano_letivo=ano_letivo,
@@ -89,7 +97,7 @@ def executar_dominio_task(
                 continuar_execucao,
                 fases,
                 anos_letivos,
-                parametros_disparo,
+                parametros_disparo_task,
             )
             call_command("executar_dominio", *argumentos)
 
@@ -121,7 +129,7 @@ def executar_dominio_task(
             "continuar": True,
             "fases": fases,
             "anos_letivos": anos_letivos,
-            "parametros_disparo": parametros_disparo,
+            "parametros_disparo": parametros_disparo_task,
         }
 
         raise self.retry(

@@ -2,6 +2,7 @@
 
 import logging
 from typing import Any
+from uuid import uuid4
 
 from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
@@ -76,9 +77,11 @@ class Command(BaseCommand):
             kwargs_tarefa["fases"] = fases
         if anos_letivos:
             kwargs_tarefa["anos_letivos"] = anos_letivos
+        task_id = str(uuid4())
         kwargs_tarefa["parametros_disparo"] = {
             "origem": "management_command",
             "executar_em": executar_em,
+            "celery_task_id": task_id,
         }
 
         if executar_em:
@@ -94,6 +97,7 @@ class Command(BaseCommand):
                 resultado = executar_dominio_task.apply_async(
                     kwargs=kwargs_tarefa,
                     eta=data_hora,
+                    task_id=task_id,
                 )
             except OperationalError as erro:
                 logger.error(
@@ -111,7 +115,10 @@ class Command(BaseCommand):
             return
 
         try:
-            resultado = executar_dominio_task.delay(**kwargs_tarefa)
+            resultado = executar_dominio_task.apply_async(
+                kwargs=kwargs_tarefa,
+                task_id=task_id,
+            )
         except OperationalError as erro:
             logger.error(
                 "Broker indisponível ao enfileirar domínio '%s': %s",
