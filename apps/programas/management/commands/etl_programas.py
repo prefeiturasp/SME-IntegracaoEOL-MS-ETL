@@ -23,7 +23,7 @@ class Command(BaseEtlCommand):
 
     help = "Executa pipeline ETL do domínio PROGRAMAS_DB (Sync ou Celery)"
     dominio = "programas"
-    fase_final = 6
+    fase_final = 8
     service_class = EtlProgramasService
     orquestrador_class = EtlProgramasOrquestrador
 

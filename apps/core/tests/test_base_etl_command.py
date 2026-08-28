@@ -167,6 +167,20 @@ class BaseEtlCommandTestCase(SimpleTestCase):
 
         self.servico.executar.assert_called_with(fase_inicial=1)
 
+    def test_continuar_retoma_execucao_interrompida(self) -> None:
+        """Checkpoint interrompido retoma da fase seguinte, não do 1."""
+        self.repo.obter_checkpoint_dominio.return_value = {
+            "ultima_pagina": 2,
+            "ultima_situacao": "interrompido",
+            "token_parada": "602249",
+        }
+        self.servico.executar.return_value = {}
+        self.servico.ultima_fase_concluida = 3
+
+        self.cmd.handle(volume=100, offset=0, continuar=True)
+
+        self.servico.executar.assert_called_with(fase_inicial=3)
+
     def test_checkpoint_usa_id_execucao_proprio(self) -> None:
         """Checkpoint é atualizado pelo serviço durante a execução."""
         pass
@@ -215,7 +229,7 @@ class BaseEtlCommandTestCase(SimpleTestCase):
         self.repo.atualizar_checkpoint_dominio.assert_called_with(
             dominio="teste_base",
             ultimo_id_execucao=id_exec,
-            ultima_pagina=2,
+            ultima_pagina=1,
             token_parada="200",
             indice_sincronizacao="CTRL+C:offset:200",
             ultima_situacao="interrompido",

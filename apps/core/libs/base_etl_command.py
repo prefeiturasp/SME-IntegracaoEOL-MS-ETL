@@ -11,6 +11,9 @@ from apps.controle_auditoria.libs.repositorio_auditoria import (
 )
 from apps.core.libs.contextual_logger import ContextualLogger
 
+# Situações de checkpoint que permitem retomar da fase seguinte.
+_SITUACOES_RETOMAVEIS = frozenset({"erro", "interrompido"})
+
 
 class BaseEtlCommand(BaseCommand):
     """Base para comandos que executam serviços de ETL.
@@ -238,7 +241,7 @@ class BaseEtlCommand(BaseCommand):
     ) -> None:
         """Registra interrupção manual pelo usuário."""
         token = getattr(servico, "ultimo_token", None) or str(token_ant)
-        fase = getattr(servico, "ultima_fase_concluida", 0) + 1
+        fase = getattr(servico, "ultima_fase_concluida", 0)
         repositorio.atualizar_checkpoint_dominio(
             dominio=self.dominio.lower(),
             ultimo_id_execucao=id_exec,
@@ -265,7 +268,7 @@ class BaseEtlCommand(BaseCommand):
         if not options.get("continuar", False):
             return 1, 0
 
-        checkpoint = repositorio.obter_checkpoint_dominio(self.dominio)
+        checkpoint = repositorio.obter_checkpoint_dominio(self.dominio.lower())
         if not checkpoint:
             return 1, 0
 
@@ -273,7 +276,7 @@ class BaseEtlCommand(BaseCommand):
         fase = int(str(checkpoint.get("ultima_pagina") or 0))
         token = int(str(checkpoint.get("token_parada") or 0))
 
-        if situacao == "erro" and 0 < fase < self.fase_final:
+        if situacao in _SITUACOES_RETOMAVEIS and 0 < fase < self.fase_final:
             return fase + 1, token
 
         return 1, 0
@@ -327,7 +330,7 @@ class BaseEtlCommand(BaseCommand):
         fase = getattr(servico, "ultima_fase_concluida", 0)
 
         repositorio.atualizar_checkpoint_dominio(
-            dominio=self.dominio,
+            dominio=self.dominio.lower(),
             ultimo_id_execucao=id_exec,
             ultima_pagina=fase,
             token_parada=token_erro,

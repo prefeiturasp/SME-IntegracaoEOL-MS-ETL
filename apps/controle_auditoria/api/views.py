@@ -32,6 +32,9 @@ from apps.controle_auditoria.libs.dominios import (
     FASES_POR_DOMINIO,
     validar_parametros_dominio,
 )
+from apps.controle_auditoria.libs.repositorio_auditoria import (
+    RepositorioAuditoriaPostgres,
+)
 from apps.controle_auditoria.libs.tasks import executar_dominio_task
 from apps.controle_auditoria.models import (
     EtlAuditoriaLinha,
@@ -454,6 +457,7 @@ class LimparOrfasView(APIView):
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
+        repositorio = RepositorioAuditoriaPostgres()
         itens = []
         for execucao in execucoes:
             task_id = _task_id_execucao(execucao)
@@ -482,6 +486,9 @@ class LimparOrfasView(APIView):
             execucao.save(
                 update_fields=["situacao", "finalizado_em", "mensagem_erro"]
             )
+            checkpoint_liberado = repositorio.marcar_checkpoint_interrompido(
+                execucao.dominio
+            )
             itens.append(
                 {
                     "dominio": execucao.dominio,
@@ -490,6 +497,7 @@ class LimparOrfasView(APIView):
                     "task_id": task_id or None,
                     "status": "interrompido",
                     "motivo": motivo,
+                    "checkpoint_liberado": checkpoint_liberado,
                 }
             )
 

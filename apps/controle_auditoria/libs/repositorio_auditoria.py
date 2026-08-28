@@ -211,6 +211,19 @@ class RepositorioAuditoriaPostgres:
             checkpoint.ultimo_sucesso_em = timezone.now()
         checkpoint.save()
 
+    def marcar_checkpoint_interrompido(self, dominio: str) -> bool:
+        """Marca o checkpoint como interrompido preservando fase e token.
+
+        Usado pela limpeza de órfãs: a execução morreu sem passar pelo
+        tratamento de erro, então o checkpoint ficou preso em
+        ``em_execucao`` e o ``--continuar`` não conseguia retomar.
+        """
+        atualizados: int = EtlCheckpointDominio.objects.filter(
+            dominio=dominio.lower(),
+            ultima_situacao__in=("em_execucao", "em_andamento"),
+        ).update(ultima_situacao="interrompido")
+        return atualizados > 0
+
     def upsert_bulk_hashes(
         self,
         rows: list[tuple[str, str]],

@@ -615,6 +615,44 @@ class ViewsApiControleAuditoriaTestCase(TestCase):
         execucao = EtlExecucao.objects.get(id_execucao=id_exec)
         self.assertEqual(execucao.situacao, "em_execucao")
 
+    @patch("apps.controle_auditoria.api.views.aplicacao_celery")
+    def test_deve_liberar_checkpoint_ao_marcar_execucao_orfa(
+        self, celery_mock: Any
+    ) -> None:
+        """Órfã libera o checkpoint para o --continuar retomar a fase."""
+        celery_mock.control.inspect.return_value.active.return_value = {}
+        celery_mock.control.inspect.return_value.reserved.return_value = {}
+        celery_mock.control.inspect.return_value.scheduled.return_value = {}
+        id_exec = uuid4()
+        EtlExecucao.objects.create(
+            id_execucao=id_exec,
+            dominio="programas",
+            situacao="em_execucao",
+            iniciado_em=timezone.now() - timedelta(hours=2),
+        )
+        EtlCheckpointDominio.objects.create(
+            dominio="programas",
+            ultimo_id_execucao=id_exec,
+            ultima_pagina=4,
+            token_parada="602249",
+            indice_sincronizacao="programas:offset:602249",
+            ultima_situacao="em_execucao",
+        )
+
+        resposta = self.client.post(
+            "/api/v1/execucoes/limpar-orfas/",
+            data={},
+            format="json",
+            **self.headers,
+        )
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertTrue(resposta.json()["itens"][0]["checkpoint_liberado"])
+        checkpoint = EtlCheckpointDominio.objects.get(dominio="programas")
+        self.assertEqual(checkpoint.ultima_situacao, "interrompido")
+        self.assertEqual(checkpoint.ultima_pagina, 4)
+        self.assertEqual(checkpoint.token_parada, "602249")
+
     @patch("apps.controle_auditoria.api.views.executar_dominio_task")
     def test_deve_reprocessar_ultima_execucao_com_erro(
         self, tarefa_mock: Any
