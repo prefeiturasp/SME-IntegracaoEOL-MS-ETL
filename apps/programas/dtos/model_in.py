@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Any
 
-from apps.core.libs.helpers import aware_or_none
+from apps.core.libs.helpers import aware_or_none, parse_date
 from apps.programas.enums import (
     CategoriaPrograma,
     ComponenteCurricularEOL,
@@ -173,7 +173,7 @@ class MatriculaTurmaProgramaIn:
                 self.codigo_situacao_matricula
             ),
             "data_matricula": aware_or_none(self.data_matricula),
-            "data_situacao": self.data_situacao,
+            "data_situacao": parse_date(self.data_situacao),
             "ano_letivo": int(self.ano_letivo),
             "codigo_ue": str(self.codigo_ue),
             "codigo_dre": str(self.codigo_dre),

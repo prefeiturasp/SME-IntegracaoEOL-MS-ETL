@@ -168,7 +168,7 @@ ORDER BY tegp.cd_turma_escola
 """
 
 SQL_MATRICULA_TURMA_PROGRAMA = """
-SELECT
+SELECT DISTINCT
       vm.cd_aluno
     , m.cd_turma_escola
     , gcc.cd_componente_curricular
