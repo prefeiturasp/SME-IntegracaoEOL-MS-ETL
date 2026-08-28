@@ -151,14 +151,21 @@ def _enriquecer_progresso_item(
     linhas_lidas = int(progresso.get("linhas_lidas") or 0)
     linhas_escritas = int(progresso.get("linhas_escritas") or 0)
     linhas_ignoradas = int(progresso.get("linhas_ignoradas") or 0)
+    iniciado_em = progresso.get("iniciado_em")
     atualizado_em = progresso.get("atualizado_em")
     base_fim = atualizado_em or execucao.finalizado_em or agora
     segundos = _segundos_entre(execucao.iniciado_em, base_fim)
+    segundos_fase = _segundos_entre(iniciado_em, base_fim)
     segundos_update = _segundos_entre(atualizado_em, agora)
 
     progresso["percentual_fase"] = _percentual(fase_numero, total_fases)
     progresso["atualizado_ha"] = _formatar_duracao(segundos_update)
     progresso["taxa_lidas_minuto"] = _por_minuto(linhas_lidas, segundos)
+    progresso["duracao_fase_segundos"] = segundos_fase
+    progresso["duracao_fase_label"] = _formatar_duracao(segundos_fase)
+    progresso["taxa_fase_lidas_minuto"] = _por_minuto(
+        linhas_lidas, segundos_fase
+    )
     progresso["taxa_alteracao"] = _percentual(linhas_escritas, linhas_lidas)
     progresso["taxa_gravacao"] = progresso["taxa_alteracao"]
     progresso["taxa_ignoradas"] = _percentual(linhas_ignoradas, linhas_lidas)
@@ -179,11 +186,11 @@ def _enriquecer_execucao(
     for item in progresso:
         _enriquecer_progresso_item(item, execucao, agora)
     execucao.progresso_atual = progresso[-1] if progresso else None
-    execucao.fases_mais_caras = sorted(
+    execucao.tempo_por_fase = sorted(
         progresso,
-        key=lambda item: int(item.get("linhas_lidas") or 0),
+        key=lambda item: int(item.get("duracao_fase_segundos") or 0),
         reverse=True,
-    )[:5]
+    )
 
 
 def _parametros_execucao(execucao: EtlExecucao) -> dict[str, Any]:
@@ -1085,6 +1092,7 @@ def _agregar_progresso_execucoes(ids_execucao: list) -> dict[str, list]:
             "linhas_escritas",
             "linhas_ignoradas",
             "mensagem",
+            "iniciado_em",
             "atualizado_em",
         )
         .order_by("id_execucao", "fase_numero")
@@ -1194,7 +1202,6 @@ class KanbanView(View):
                     "checkpoint_da_execucao": cp_da_execucao,
                     "progresso": progresso,
                     "progresso_atual": exec_obj.progresso_atual,
-                    "fases_mais_caras": exec_obj.fases_mais_caras,
                     "tabelas_lidas": tabelas_lidas,
                     "tabelas_escritas": tabelas_escritas,
                     "total_lido": total_lido,

@@ -145,19 +145,19 @@
     .insight-title { font-size: .66rem; color: #64748b; text-transform: uppercase; letter-spacing: 1px; margin-bottom: .35rem; font-weight: 700; }
     .insight-value { font-size: .92rem; color: #f1f5f9; font-weight: 700; }
     .insight-sub { font-size: .7rem; color: #64748b; margin-top: .2rem; }
-    .phase-rank { margin-top: 1rem; background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: .85rem 1rem; }
-    .phase-rank-list { display: flex; flex-direction: column; gap: .2rem; }
-    .phase-rank-row {
+    .phase-time { margin-top: 1rem; background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: .85rem 1rem; }
+    .phase-time-list { display: flex; flex-direction: column; gap: .2rem; }
+    .phase-time-row {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) 96px 96px 64px;
+      grid-template-columns: minmax(0, 1fr) 88px 86px 86px 86px 80px;
       gap: .75rem;
       align-items: center;
       padding: .35rem 0;
       border-bottom: 1px solid #263245;
       font-size: .76rem;
     }
-    .phase-rank-row:last-child { border-bottom: none; }
-    .phase-rank-head {
+    .phase-time-row:last-child { border-bottom: none; }
+    .phase-time-head {
       color: #64748b;
       font-size: .62rem;
       font-weight: 700;
@@ -165,14 +165,14 @@
       text-transform: uppercase;
       padding-top: 0;
     }
-    .phase-rank-name {
+    .phase-time-name {
       min-width: 0;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
       color: #94a3b8;
     }
-    .phase-rank-val {
+    .phase-time-val {
       color: #f1f5f9;
       font-family: monospace;
       font-weight: 600;
@@ -180,7 +180,7 @@
       text-align: right;
       white-space: nowrap;
     }
-    .phase-rank-head .phase-rank-val {
+    .phase-time-head .phase-time-val {
       color: #64748b;
       font-family: inherit;
       font-size: .62rem;
@@ -188,8 +188,10 @@
     @media (max-width: 900px) { .insight-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .run-metrics { margin-left: 0; } }
     @media (max-width: 600px) {
       .insight-grid { grid-template-columns: 1fr; }
-      .phase-rank-row { grid-template-columns: minmax(0, 1fr) 72px 72px; }
-      .phase-rank-row .phase-rank-val:last-child { display: none; }
+      .phase-time-row { grid-template-columns: minmax(0, 1fr) 72px 72px; }
+      .phase-time-row .phase-time-val:nth-child(4),
+      .phase-time-row .phase-time-val:nth-child(5),
+      .phase-time-row .phase-time-val:nth-child(6) { display: none; }
     }
 
     /* ── JSON toggle ── */
@@ -511,34 +513,26 @@
       </div>
     </div>
 
-    {% if item.exec.situacao == "erro" and item.progresso_atual %}
-    <div class="phase-rank" style="border-color:#7f1d1d">
-      <div class="insight-title" style="color:#fca5a5">Contexto do erro</div>
-      <div style="font-size:.8rem;color:#cbd5e1">
-        {{ item.progresso_atual.fase_nome }} · {{ item.progresso_atual.tabela_origem|default:"origem não registrada" }}
-        → {{ item.progresso_atual.tabela_destino|default:"destino não registrado" }}
-        · chunk {{ item.progresso_atual.chunk_atual }}
-        · {{ item.progresso_atual.linhas_lidas|numero_br }} lidas
-      </div>
-    </div>
-    {% endif %}
-
-    {% if item.fases_mais_caras %}
-    <div class="phase-rank">
-      <div class="insight-title">Fases com maior leitura</div>
-      <div class="phase-rank-list">
-        <div class="phase-rank-row phase-rank-head">
-          <div class="phase-rank-name">Fase</div>
-          <div class="phase-rank-val">Lidas</div>
-          <div class="phase-rank-val">Gravadas</div>
-          <div class="phase-rank-val">Grav./Lidas</div>
+    {% if item.exec.tempo_por_fase %}
+    <div class="phase-time">
+      <div class="insight-title">Tempo por fase</div>
+      <div class="phase-time-list">
+        <div class="phase-time-row phase-time-head">
+          <div class="phase-time-name">Fase</div>
+          <div class="phase-time-val">Duração</div>
+          <div class="phase-time-val">Lidas</div>
+          <div class="phase-time-val">Gravadas</div>
+          <div class="phase-time-val">Lidas/min</div>
+          <div class="phase-time-val">Etapa</div>
         </div>
-        {% for fase in item.fases_mais_caras %}
-        <div class="phase-rank-row">
-          <div class="phase-rank-name" title="{{ fase.fase_nome }}">{{ forloop.counter }}. {{ fase.fase_nome }}</div>
-          <div class="phase-rank-val read-color">{{ fase.linhas_lidas|numero_br }}</div>
-          <div class="phase-rank-val write-color">{{ fase.linhas_escritas|numero_br }}</div>
-          <div class="phase-rank-val">{{ fase.taxa_gravacao }}</div>
+        {% for fase in item.exec.tempo_por_fase %}
+        <div class="phase-time-row">
+          <div class="phase-time-name" title="{{ fase.fase_nome }}">{{ fase.fase_nome }}</div>
+          <div class="phase-time-val">{{ fase.duracao_fase_label }}</div>
+          <div class="phase-time-val read-color">{{ fase.linhas_lidas|numero_br }}</div>
+          <div class="phase-time-val write-color">{{ fase.linhas_escritas|numero_br }}</div>
+          <div class="phase-time-val">{{ fase.taxa_fase_lidas_minuto|numero_br }}</div>
+          <div class="phase-time-val" title="{{ fase.etapa }}">{{ fase.etapa|truncatechars:14 }}</div>
         </div>
         {% endfor %}
       </div>

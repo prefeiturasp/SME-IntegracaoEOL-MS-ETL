@@ -275,8 +275,41 @@
     }
     .exec-table .td-domain { font-weight: 600; color: #f1f5f9; }
     .exec-table .td-uuid   { font-size: .7rem; color: #475569; font-family: monospace; }
-    .exec-table .td-error  { color: #f87171; font-size: .75rem; max-width: 200px; }
+    .exec-table .td-error  { color: #f87171; font-size: .75rem; max-width: 220px; }
     .exec-table .text-muted-dim { color: #475569; }
+    .error-copy-wrap {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: .45rem;
+      align-items: center;
+      max-width: 320px;
+    }
+    .error-copy-btn {
+      min-height: 28px;
+      padding: .25rem .5rem;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: .3rem;
+      border: 1px solid #7f1d1d;
+      background: #1e293b;
+      color: #fca5a5;
+      border-radius: 6px;
+      font-size: .68rem;
+      font-weight: 700;
+      line-height: 1;
+      flex-shrink: 0;
+      white-space: nowrap;
+    }
+    .error-copy-btn:hover { background: #7f1d1d; color: #fecaca; }
+    .error-copy-text {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: #f87171;
+    }
+    .copy-source { display: none; }
 
     .empty-state {
       text-align: center;
@@ -571,7 +604,25 @@
             {% endif %}
           </td>
           <td class="td-uuid">{{ exec.id_execucao }}</td>
-          <td class="td-error">{{ exec.mensagem_erro|default:""|truncatechars:60 }}</td>
+          <td class="td-error">
+            {% if exec.mensagem_erro %}
+            <div class="error-copy-wrap">
+              <button type="button"
+                      class="error-copy-btn"
+                      title="Copiar erro completo"
+                      aria-label="Copiar erro completo"
+                      onclick="copyTextFromElement('erro-exec-{{ forloop.counter }}', this)">
+                <i class="bi bi-clipboard"></i> Copiar
+              </button>
+              <span class="error-copy-text" title="{{ exec.mensagem_erro|truncatechars:180 }}">
+                {{ exec.mensagem_erro|truncatechars:120 }}
+              </span>
+              <span id="erro-exec-{{ forloop.counter }}" class="copy-source">{{ exec.mensagem_erro }}</span>
+            </div>
+            {% else %}
+            <span class="text-muted-dim">—</span>
+            {% endif %}
+          </td>
         </tr>
         {% empty %}
         <tr>
@@ -589,5 +640,41 @@
 
 </main>
 
+<script>
+  function copyTextFromElement(elementId, button) {
+    const source = document.getElementById(elementId);
+    if (!source) return;
+
+    const text = source.textContent || "";
+    const markCopied = () => {
+      const original = button.innerHTML;
+      button.innerHTML = '<i class="bi bi-check-lg"></i> Copiado';
+      button.setAttribute("title", "Copiado");
+      setTimeout(() => {
+        button.innerHTML = original;
+        button.setAttribute("title", "Copiar erro completo");
+      }, 1600);
+    };
+    const copyWithTextarea = () => {
+      const textarea = document.createElement("textarea");
+      textarea.value = text;
+      textarea.setAttribute("readonly", "");
+      textarea.style.position = "fixed";
+      textarea.style.left = "-9999px";
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      document.body.removeChild(textarea);
+      markCopied();
+    };
+
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(markCopied).catch(copyWithTextarea);
+      return;
+    }
+
+    copyWithTextarea();
+  }
+</script>
 </body>
 </html>
