@@ -1,6 +1,11 @@
--- Cria os bancos destino do ETL se nao existirem.
+-- Cria os bancos do ETL se nao existirem.
 -- Executar no postgres do docker-compose:
 --   docker exec -i sme_sgp_ms_etl_postgres psql -U postgres < scripts/criar_bancos.sql
+
+-- Banco default/auditoria. Nao faz DROP para preservar historico de execucoes,
+-- checkpoints e hashes.
+SELECT 'CREATE DATABASE etl_db'
+WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'etl_db')\gexec
 
 -- Drop com force (desconecta sessões ativas) antes de recriar.
 SELECT 'DROP DATABASE IF EXISTS institucional_db WITH (FORCE)'\gexec
