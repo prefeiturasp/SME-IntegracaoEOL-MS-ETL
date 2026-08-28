@@ -15,6 +15,33 @@ from apps.core.libs.contextual_logger import ContextualLogger
 _SITUACOES_RETOMAVEIS = frozenset({"erro", "interrompido"})
 
 
+def montar_parametros_execucao(
+    fase_inicial: int,
+    options: dict[str, Any],
+    extras: dict[str, object] | None = None,
+) -> dict[str, object]:
+    """Monta parâmetros rastreáveis da execução."""
+    disparo_raw = options.get("parametros_disparo")
+    disparo: dict[str, object] = {}
+    if disparo_raw:
+        try:
+            disparo = json.loads(disparo_raw)
+        except (TypeError, json.JSONDecodeError):
+            disparo = {"raw": str(disparo_raw)}
+
+    execucao = {
+        "volume": options.get("volume"),
+        "offset": options.get("offset"),
+        "continuar": options.get("continuar", False),
+        "fase_inicial": fase_inicial,
+        "anos_letivos": options.get("anos_letivos"),
+    }
+    if extras:
+        execucao.update(extras)
+
+    return {"execucao": execucao, "disparo": disparo}
+
+
 class BaseEtlCommand(BaseCommand):
     """Base para comandos que executam serviços de ETL.
 
@@ -176,26 +203,16 @@ class BaseEtlCommand(BaseCommand):
         self, fase_inicial: int, **options: Any
     ) -> dict[str, object]:
         """Monta parâmetros rastreáveis da execução."""
-        disparo_raw = options.get("parametros_disparo")
-        disparo: dict[str, object] = {}
-        if disparo_raw:
-            try:
-                disparo = json.loads(disparo_raw)
-            except (TypeError, json.JSONDecodeError):
-                disparo = {"raw": str(disparo_raw)}
-
-        execucao = {
-            "volume": options.get("volume"),
-            "offset": options.get("offset"),
-            "continuar": options.get("continuar", False),
-            "fase": options.get("fase", 0),
-            "fase_inicial": fase_inicial,
-            "fases": options.get("fases"),
-            "anos_letivos": options.get("anos_letivos"),
-            "carga_inicial": options.get("carga_inicial", False),
-            "celery": options.get("celery", False),
-        }
-        return {"execucao": execucao, "disparo": disparo}
+        return montar_parametros_execucao(
+            fase_inicial,
+            options,
+            {
+                "fase": options.get("fase", 0),
+                "fases": options.get("fases"),
+                "carga_inicial": options.get("carga_inicial", False),
+                "celery": options.get("celery", False),
+            },
+        )
 
     def _handle_sync(
         self,

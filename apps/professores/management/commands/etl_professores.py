@@ -18,7 +18,6 @@ Formato de indice_sincronizacao:
     None                — execução concluída ou nunca iniciada
 """
 
-import json
 import os
 from argparse import SUPPRESS
 from typing import Any
@@ -29,6 +28,7 @@ from django.core.management.base import BaseCommand
 from apps.controle_auditoria.libs.repositorio_auditoria import (
     RepositorioAuditoriaPostgres,
 )
+from apps.core.libs.base_etl_command import montar_parametros_execucao
 from apps.professores.services import (
     _ORDEM_TABELAS,
     _TABELAS_FULL_REFRESH,
@@ -234,23 +234,11 @@ class Command(BaseCommand):
         self, fase_inicial: int, **options: Any
     ) -> dict[str, object]:
         """Monta parâmetros rastreáveis da execução."""
-        disparo_raw = options.get("parametros_disparo")
-        disparo: dict[str, object] = {}
-        if disparo_raw:
-            try:
-                disparo = json.loads(disparo_raw)
-            except (TypeError, json.JSONDecodeError):
-                disparo = {"raw": str(disparo_raw)}
-
-        execucao = {
-            "volume": options.get("volume"),
-            "offset": options.get("offset"),
-            "continuar": options.get("continuar", False),
-            "fase_inicial": fase_inicial,
-            "anos_letivos": options.get("anos_letivos"),
-            "skip_audit_hash": options.get("skip_audit_hash", False),
-        }
-        return {"execucao": execucao, "disparo": disparo}
+        return montar_parametros_execucao(
+            fase_inicial,
+            options,
+            {"skip_audit_hash": options.get("skip_audit_hash", False)},
+        )
 
     def _interpretar_checkpoint(
         self, checkpoint: dict
