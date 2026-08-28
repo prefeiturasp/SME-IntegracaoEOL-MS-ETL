@@ -1,6 +1,7 @@
 """Enums e mapeamentos do domínio Programas."""
 
 from enum import IntEnum, StrEnum
+from typing import cast
 
 from django.db import models
 
@@ -38,10 +39,10 @@ class TipoProgramaEOL(IntEnum):
         """
         textos = " ".join(t.upper() for t in (sigla, descricao) if t)
         if "PAEE" in textos or "SRM" in textos:
-            return CategoriaPrograma.PAEE
+            return cast(CategoriaPrograma, CategoriaPrograma.PAEE)
         if "PAP" in textos:
-            return CategoriaPrograma.PAP
-        return CategoriaPrograma.OUTROS
+            return cast(CategoriaPrograma, CategoriaPrograma.PAP)
+        return cast(CategoriaPrograma, CategoriaPrograma.OUTROS)
 
     @classmethod
     def codigos(cls) -> tuple[int, ...]:
@@ -71,13 +72,13 @@ class ComponenteCurricularEOL(IntEnum):
         try:
             cod = int(codigo) if codigo is not None else None
         except (ValueError, TypeError):
-            return CategoriaPrograma.OUTROS
+            return cast(CategoriaPrograma, CategoriaPrograma.OUTROS)
 
         if cod in _COMPONENTES_PAEE:
-            return CategoriaPrograma.PAEE
+            return cast(CategoriaPrograma, CategoriaPrograma.PAEE)
         if cod in _COMPONENTES_PAP_CONHECIDOS:
-            return CategoriaPrograma.PAP
-        return CategoriaPrograma.OUTROS
+            return cast(CategoriaPrograma, CategoriaPrograma.PAP)
+        return cast(CategoriaPrograma, CategoriaPrograma.OUTROS)
 
     @classmethod
     def vigente(cls, codigo: int | str | None) -> bool:
