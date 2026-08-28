@@ -11,7 +11,7 @@ from apps.controle_auditoria.libs.repositorio_auditoria import (
 )
 from apps.core.libs.contextual_logger import ContextualLogger
 
-# Situações de checkpoint que permitem retomar da fase seguinte.
+# Situações de checkpoint que permitem retomada automática.
 _SITUACOES_RETOMAVEIS = frozenset({"erro", "interrompido"})
 
 
@@ -241,7 +241,9 @@ class BaseEtlCommand(BaseCommand):
     ) -> None:
         """Registra interrupção manual pelo usuário."""
         token = getattr(servico, "ultimo_token", None) or str(token_ant)
-        fase = getattr(servico, "ultima_fase_concluida", 0)
+        fase = self._fase_atual_servico(servico) or getattr(
+            servico, "ultima_fase_concluida", 0
+        )
         repositorio.atualizar_checkpoint_dominio(
             dominio=self.dominio.lower(),
             ultimo_id_execucao=id_exec,
@@ -276,10 +278,23 @@ class BaseEtlCommand(BaseCommand):
         fase = int(str(checkpoint.get("ultima_pagina") or 0))
         token = int(str(checkpoint.get("token_parada") or 0))
 
-        if situacao in _SITUACOES_RETOMAVEIS and 0 < fase < self.fase_final:
+        if situacao not in _SITUACOES_RETOMAVEIS:
+            return 1, 0
+
+        if situacao == "erro" and 0 < fase < self.fase_final:
             return fase + 1, token
 
+        if situacao == "interrompido" and 0 < fase <= self.fase_final:
+            return fase, token
+
         return 1, 0
+
+    def _fase_atual_servico(self, servico: Any | None) -> int:
+        """Retorna a fase em andamento informada pelo serviço."""
+        try:
+            return int(getattr(servico, "fase_atual", 0) or 0)
+        except (TypeError, ValueError):
+            return 0
 
     def _finalizar_com_sucesso(
         self,
@@ -327,7 +342,10 @@ class BaseEtlCommand(BaseCommand):
     ) -> None:
         """Registra falha na auditoria e no checkpoint para retomada."""
         token_erro = getattr(servico, "ultimo_token", None) or str(token_ant)
+        fase_atual = self._fase_atual_servico(servico)
         fase = getattr(servico, "ultima_fase_concluida", 0)
+        if fase_atual:
+            fase = max(int(fase or 0), fase_atual - 1)
 
         repositorio.atualizar_checkpoint_dominio(
             dominio=self.dominio.lower(),

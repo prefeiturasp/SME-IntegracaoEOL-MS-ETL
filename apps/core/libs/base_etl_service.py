@@ -465,6 +465,7 @@ class BaseEtlService:
         self.pg_engine = PostgresUpsertEngine()
         self._max_workers = getattr(settings, "THREAD_POOL_MAX_WORKERS", 4)
         self.ultima_fase_concluida = 0
+        self.fase_atual = 0
         self._fases: list[PhaseConfig] = []
         self._fases_selecionadas: list[str] | None = fases
         self._thread_processor: ThreadPoolProcessor | None = None
@@ -821,7 +822,7 @@ class BaseEtlService:
         self.auditor.atualizar_checkpoint_dominio(
             dominio=self._dominio.lower(),
             ultimo_id_execucao=self.id_execucao,
-            ultima_pagina=self.ultima_fase_concluida + 1,
+            ultima_pagina=self.fase_atual or self.ultima_fase_concluida + 1,
             token_parada=token,
             indice_sincronizacao=f"{config.nome}:offset:{token}",
             ultima_situacao="em_execucao",
@@ -941,9 +942,11 @@ class BaseEtlService:
                 )
                 continue
             logger.info("Executando fase %d/%d: %s", i, total, config.nome)
+            self.fase_atual = i
             m = self._executar_fase(config, numero_fase=i)
             res[config.nome] = m.total_escritos
             self.ultima_fase_concluida = i
+            self.fase_atual = 0
         return res
 
     def _buscar_hashes_por_copy(self, ids: list[str]) -> dict[str, str]:
