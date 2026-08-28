@@ -667,11 +667,11 @@
       document.body.appendChild(textarea);
       textarea.select();
       document.execCommand("copy");
-      document.body.removeChild(textarea);
+      textarea.remove();
       markCopied();
     };
 
-    if (navigator.clipboard && window.isSecureContext) {
+    if (navigator.clipboard && globalThis.isSecureContext) {
       navigator.clipboard.writeText(text).then(markCopied).catch(copyWithTextarea);
       return;
     }
