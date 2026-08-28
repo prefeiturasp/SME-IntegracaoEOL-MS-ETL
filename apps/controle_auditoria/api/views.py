@@ -37,7 +37,6 @@ from apps.controle_auditoria.libs.repositorio_auditoria import (
 )
 from apps.controle_auditoria.libs.tasks import executar_dominio_task
 from apps.controle_auditoria.models import (
-    EtlAuditoriaLinha,
     EtlCheckpointDominio,
     EtlExecucao,
     EtlExecucaoTabelaEscrita,
@@ -1137,6 +1136,26 @@ def _resolver_execucoes_kanban(
     return [selecionada], "Nenhuma execução encontrada."
 
 
+def _contar_hashes_por_tabela(tabelas: set[str]) -> dict[str, int]:
+    """Conta linhas de auditoria por tabela de destino numa varredura só.
+
+    Contar tabela a tabela com ``startswith`` custava uma varredura
+    completa da auditoria por tabela: o prefixo casa com boa parte das
+    linhas, entao o planner descarta o indice de padrao e varre tudo.
+    """
+    if not tabelas:
+        return {}
+
+    with connections["default"].cursor() as cursor:
+        cursor.execute(
+            "SELECT split_part(id_destino, ':', 1) AS tabela, COUNT(*) "
+            "FROM etl_auditoria_linha GROUP BY 1"
+        )
+        contagem = dict(cursor.fetchall())
+
+    return {tabela: contagem.get(tabela, 0) for tabela in tabelas}
+
+
 class KanbanView(View):
     """Kanban de processamento ETL por domínio."""
 
@@ -1179,12 +1198,7 @@ class KanbanView(View):
             for lista in escritas_map.values()
             for te in lista
         }
-        hash_por_tabela: dict[str, int] = {
-            tabela: EtlAuditoriaLinha.objects.filter(
-                id_destino__startswith=f"{tabela}:"
-            ).count()
-            for tabela in tabelas_unicas
-        }
+        hash_por_tabela = _contar_hashes_por_tabela(tabelas_unicas)
 
         dominios_kanban = []
         for exec_obj in ultima_por_dominio:
