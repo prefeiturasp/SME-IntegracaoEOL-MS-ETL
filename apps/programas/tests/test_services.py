@@ -6,7 +6,12 @@ from uuid import uuid4
 from django.test import TestCase
 
 from apps.core.libs.base_etl_service import PhaseConfig, PipelineMetrics
-from apps.programas.services import SQL_TURMA_PROGRAMA, EtlProgramasService
+from apps.programas.services import (
+    SQL_MATRICULA_TURMA_PROGRAMA,
+    SQL_MATRICULA_TURMA_PROGRAMA_HISTORICO,
+    SQL_TURMA_PROGRAMA,
+    EtlProgramasService,
+)
 
 
 class TestProgramasService(TestCase):
@@ -80,6 +85,25 @@ class TestProgramasService(TestCase):
         sql = service._sql_com_filtro_anos_letivos(SQL_TURMA_PROGRAMA)
 
         self.assertIn("AND te.an_letivo IN (2025, 2026)", sql)
+
+    def test_sql_matriculas_deduplica_por_chave_logica(self) -> None:
+        """Matrículas selecionam uma linha canônica por chave lógica."""
+        for sql in (
+            SQL_MATRICULA_TURMA_PROGRAMA,
+            SQL_MATRICULA_TURMA_PROGRAMA_HISTORICO,
+        ):
+            with self.subTest(sql=sql[:40]):
+                self.assertIn("ROW_NUMBER() OVER", sql)
+                self.assertIn("PARTITION BY", sql)
+                self.assertIn("m.cd_turma_escola", sql)
+                self.assertIn("vm.cd_aluno", sql)
+                self.assertIn("gcc.cd_componente_curricular", sql)
+                self.assertIn("WHERE rn = 1", sql)
+                self.assertIn(
+                    "ORDER BY cd_turma_escola, cd_aluno, "
+                    "cd_componente_curricular",
+                    sql,
+                )
 
     def test_criar_transform_retorna_tripla(self) -> None:
         """Transform devolve (pk, hash, linha crua) sem materializar model."""

@@ -18,7 +18,9 @@ Formato de indice_sincronizacao:
     None                — execução concluída ou nunca iniciada
 """
 
+import json
 import os
+from argparse import SUPPRESS
 from typing import Any
 from uuid import UUID
 
@@ -97,6 +99,12 @@ class Command(BaseCommand):
             dest="skip_audit_hash",
             help="Não grava hashes em etl_auditoria_linha.",
         )
+        parser.add_argument(
+            "--parametros-disparo",
+            type=str,
+            default=None,
+            help=SUPPRESS,
+        )
 
     def handle(self, *args: Any, **options: Any) -> None:
         """Executa o ETL e registra auditoria e checkpoint."""
@@ -114,7 +122,10 @@ class Command(BaseCommand):
         # ------------------------------------------------------------------
         # Executar ETL
         # ------------------------------------------------------------------
-        id_execucao: UUID = repositorio.iniciar_execucao("professores")
+        id_execucao: UUID = repositorio.iniciar_execucao(
+            "professores",
+            parametros=self._parametros_execucao(fase_inicial, **options),
+        )
         servico = EtlProfessoresService(anos_letivos=anos_letivos)
         ultimo_indice_salvo: str | None = None
 
@@ -218,6 +229,28 @@ class Command(BaseCommand):
     # ------------------------------------------------------------------
     # Helpers de retomada
     # ------------------------------------------------------------------
+
+    def _parametros_execucao(
+        self, fase_inicial: int, **options: Any
+    ) -> dict[str, object]:
+        """Monta parâmetros rastreáveis da execução."""
+        disparo_raw = options.get("parametros_disparo")
+        disparo: dict[str, object] = {}
+        if disparo_raw:
+            try:
+                disparo = json.loads(disparo_raw)
+            except (TypeError, json.JSONDecodeError):
+                disparo = {"raw": str(disparo_raw)}
+
+        execucao = {
+            "volume": options.get("volume"),
+            "offset": options.get("offset"),
+            "continuar": options.get("continuar", False),
+            "fase_inicial": fase_inicial,
+            "anos_letivos": options.get("anos_letivos"),
+            "skip_audit_hash": options.get("skip_audit_hash", False),
+        }
+        return {"execucao": execucao, "disparo": disparo}
 
     def _interpretar_checkpoint(
         self, checkpoint: dict

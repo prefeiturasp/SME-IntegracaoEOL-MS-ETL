@@ -168,7 +168,8 @@ ORDER BY tegp.cd_turma_escola
 """
 
 SQL_MATRICULA_TURMA_PROGRAMA = """
-SELECT DISTINCT
+WITH base AS (
+SELECT
       vm.cd_aluno
     , m.cd_turma_escola
     , gcc.cd_componente_curricular
@@ -180,6 +181,16 @@ SELECT DISTINCT
     , CAST(te.cd_escola AS VARCHAR(20)) AS codigo_ue
     , CAST(vcue.cd_unidade_administrativa_referencia AS VARCHAR(20))
           AS codigo_dre
+    , ROW_NUMBER() OVER (
+          PARTITION BY
+              m.cd_turma_escola,
+              vm.cd_aluno,
+              gcc.cd_componente_curricular
+          ORDER BY
+              m.dt_situacao_aluno DESC,
+              vm.dt_status_matricula DESC,
+              m.cd_matricula DESC
+      ) AS rn
   FROM matricula_turma_escola m
   INNER JOIN v_matricula_cotic vm
       ON vm.cd_matricula = m.cd_matricula
@@ -200,11 +211,27 @@ SELECT DISTINCT
     AND te.st_turma_escola IN ('O', 'A', 'C', 'E')
     AND tegp.dt_fim IS NULL
     AND cc.dt_cancelamento IS NULL
+)
+SELECT
+      cd_aluno
+    , cd_turma_escola
+    , cd_componente_curricular
+    , nome_componente_curricular
+    , cd_situacao_aluno
+    , dt_matricula
+    , dt_situacao
+    , an_letivo
+    , codigo_ue
+    , codigo_dre
+FROM base
+WHERE rn = 1
+ORDER BY cd_turma_escola, cd_aluno, cd_componente_curricular
 OPTION (FAST 1)
 """
 
 
 SQL_MATRICULA_TURMA_PROGRAMA_HISTORICO = """
+WITH base AS (
 SELECT
       vm.cd_aluno
     , m.cd_turma_escola
@@ -217,6 +244,15 @@ SELECT
     , CAST(te.cd_escola AS VARCHAR(20)) AS codigo_ue
     , CAST(vcue.cd_unidade_administrativa_referencia AS VARCHAR(20))
           AS codigo_dre
+    , ROW_NUMBER() OVER (
+          PARTITION BY
+              m.cd_turma_escola,
+              vm.cd_aluno,
+              gcc.cd_componente_curricular
+          ORDER BY
+              vm.dt_status_matricula DESC,
+              m.cd_matricula DESC
+      ) AS rn
   FROM v_historico_matricula_cotic vm WITH (NOLOCK)
   INNER JOIN historico_matricula_turma_escola m WITH (NOLOCK)
       ON vm.cd_matricula = m.cd_matricula
@@ -237,6 +273,21 @@ SELECT
     AND te.st_turma_escola IN ('O', 'A', 'C')
     AND tegp.dt_fim IS NULL
     AND cc.dt_cancelamento IS NULL
+)
+SELECT
+      cd_aluno
+    , cd_turma_escola
+    , cd_componente_curricular
+    , nome_componente_curricular
+    , cd_situacao_aluno
+    , dt_matricula
+    , dt_situacao
+    , an_letivo
+    , codigo_ue
+    , codigo_dre
+FROM base
+WHERE rn = 1
+ORDER BY cd_turma_escola, cd_aluno, cd_componente_curricular
 OPTION (FAST 1)
 """
 
