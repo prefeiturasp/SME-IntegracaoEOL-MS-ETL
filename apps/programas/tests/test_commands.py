@@ -1,6 +1,6 @@
 """Testes do comando de gerenciamento etl_programas."""
 
-from unittest.mock import patch
+from unittest.mock import ANY, patch
 from uuid import UUID
 
 from django.core.management import call_command
@@ -50,7 +50,9 @@ class EtlProgramasCommandTestCase(TestCase):
 
         call_command("etl_programas")
 
-        self.repo.iniciar_execucao.assert_called_once_with("programas")
+        self.repo.iniciar_execucao.assert_called_once_with(
+            "programas", parametros=ANY
+        )
         self.servico.executar.assert_called_once_with(fase_inicial=1)
         self.repo.finalizar_execucao.assert_called_once_with(
             _ID_EXECUCAO, situacao="concluido"
