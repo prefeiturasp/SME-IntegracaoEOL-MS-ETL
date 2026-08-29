@@ -153,7 +153,13 @@ check:
 	$(RUN) check
 
 test:
-	bash executar_testes_docker.sh
+	$(DC) build etl_auditoria
+	$(DC) up -d postgres keydb
+	$(RUN) migrate --noinput --fake-initial
+	$(DC) run --rm etl_auditoria \
+		python -m coverage run --source=apps manage.py test --no-input
+	$(DC) run --rm etl_auditoria \
+		python -m coverage report --show-missing --fail-under=80
 
 lint:
-	$(DC) run --rm etl_auditoria bash executar_precommit.sh
+	$(DC) run --rm etl_auditoria pre-commit run --all-files

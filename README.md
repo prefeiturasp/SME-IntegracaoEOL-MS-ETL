@@ -215,7 +215,7 @@ Referências principais:
 ## Testes
 
 ```bash
-./executar_testes_docker.sh
+make test
 ```
 
-O script executa cobertura com `coverage` e exige mínimo de `80%`.
+O target executa cobertura com `coverage` e exige mínimo de `80%`.
