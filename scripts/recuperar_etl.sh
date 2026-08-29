@@ -39,4 +39,4 @@ post_json() {
 }
 
 post_json "/execucoes/limpar-orfas/" "{}"
-post_json "/execucoes/reprocessar-erros/" '{"max_tentativas":3}'
+post_json "/execucoes/retomar/" '{"max_tentativas":3}'

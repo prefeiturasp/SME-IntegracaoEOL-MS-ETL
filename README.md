@@ -109,8 +109,6 @@ Parâmetros principais:
 
 | Campo | Padrão | Uso |
 |---|---:|---|
-| `volume` | `100` | Quantidade de registros processados por lote da execução |
-| `offset` | `0` | Posição inicial da leitura; normalmente fica em `0` |
 | `continuar` | `false` | Retoma pelo checkpoint do domínio quando `true` |
 | `prioridade` | `5` | Prioridade da task: `0` mais urgente, `9` menos urgente |
 | `fases` | `null` | Lista opcional de fases |
@@ -161,8 +159,8 @@ O script `scripts/recuperar_etl.sh` executa o fluxo de recuperação:
 
 1. chama `POST /api/v1/execucoes/limpar-orfas/`;
 2. marca como `interrompido` execuções sem task viva no Celery;
-3. chama `POST /api/v1/execucoes/reprocessar-erros/`;
-4. reprocessa a última falha de cada domínio com `continuar=true`.
+3. chama `POST /api/v1/execucoes/retomar/`;
+4. retoma a última execução interrompida de cada domínio com `continuar=true`.
 
 Exemplo de cron:
 

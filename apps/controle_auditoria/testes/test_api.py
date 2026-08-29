@@ -82,7 +82,7 @@ class ViewsApiControleAuditoriaTestCase(TestCase):
             ultimo_id_execucao=uuid4(),
             ultima_pagina=2,
             token_parada="200",
-            indice_sincronizacao="institucional:offset:200",
+            indice_sincronizacao="institucional:token:200",
             ultima_situacao="sucesso",
         )
 
@@ -111,7 +111,7 @@ class ViewsApiControleAuditoriaTestCase(TestCase):
         )()
         resposta = self.client.post(
             "/api/v1/dominios/institucional/executar/",
-            data={"volume": 10, "offset": 1, "continuar": True},
+            data={"continuar": True},
             format="json",
             **self.headers,
         )
@@ -120,8 +120,6 @@ class ViewsApiControleAuditoriaTestCase(TestCase):
         tarefa_mock.apply_async.assert_called_once_with(
             kwargs={
                 "dominio": "institucional",
-                "volume": 10,
-                "offset": 1,
                 "continuar": True,
                 "parametros_disparo": {
                     "origem": "api",
@@ -152,8 +150,6 @@ class ViewsApiControleAuditoriaTestCase(TestCase):
         tarefa_mock.apply_async.assert_called_once_with(
             kwargs={
                 "dominio": "alunos",
-                "volume": 100,
-                "offset": 0,
                 "continuar": False,
                 "anos_letivos": [2021, 2022, 2023, 2024, 2025],
                 "parametros_disparo": {
@@ -185,8 +181,6 @@ class ViewsApiControleAuditoriaTestCase(TestCase):
         tarefa_mock.apply_async.assert_called_once_with(
             kwargs={
                 "dominio": "pedagogico",
-                "volume": 100,
-                "offset": 0,
                 "continuar": False,
                 "anos_letivos": [2024],
                 "parametros_disparo": {
@@ -218,8 +212,6 @@ class ViewsApiControleAuditoriaTestCase(TestCase):
         tarefa_mock.apply_async.assert_called_once_with(
             kwargs={
                 "dominio": "programas",
-                "volume": 100,
-                "offset": 0,
                 "continuar": False,
                 "anos_letivos": [2025, 2026],
                 "parametros_disparo": {
@@ -251,8 +243,6 @@ class ViewsApiControleAuditoriaTestCase(TestCase):
         tarefa_mock.apply_async.assert_called_once_with(
             kwargs={
                 "dominio": "programas",
-                "volume": 100,
-                "offset": 0,
                 "continuar": False,
                 "anos_letivos": [2026],
                 "parametros_disparo": {
@@ -279,8 +269,6 @@ class ViewsApiControleAuditoriaTestCase(TestCase):
         resposta = self.client.post(
             "/api/v1/dominios/institucional/executar/",
             data={
-                "volume": 20,
-                "offset": 2,
                 "continuar": False,
                 "executar_em": "2026-03-10T23:00:00-03:00",
             },
@@ -635,7 +623,7 @@ class ViewsApiControleAuditoriaTestCase(TestCase):
             ultimo_id_execucao=id_exec,
             ultima_pagina=4,
             token_parada="602249",
-            indice_sincronizacao="programas:offset:602249",
+            indice_sincronizacao="programas:token:602249",
             ultima_situacao="em_execucao",
         )
 
@@ -668,11 +656,7 @@ class ViewsApiControleAuditoriaTestCase(TestCase):
             situacao="erro",
             iniciado_em=timezone.now(),
             parametros={
-                "execucao": {
-                    "volume": 500,
-                    "offset": 0,
-                    "anos_letivos": [2026],
-                },
+                "execucao": {"anos_letivos": [2026]},
                 "disparo": {"origem": "api"},
             },
         )
@@ -689,11 +673,9 @@ class ViewsApiControleAuditoriaTestCase(TestCase):
         tarefa_mock.apply_async.assert_called_once_with(
             kwargs={
                 "dominio": "pedagogico",
-                "volume": 500,
-                "offset": 0,
                 "continuar": True,
                 "parametros_disparo": {
-                    "origem": "recovery",
+                    "origem": "reprocessar-erros",
                     "execucao_origem": str(id_exec),
                     "execucao_erro": str(id_exec),
                     "tentativa": 1,
@@ -720,7 +702,7 @@ class ViewsApiControleAuditoriaTestCase(TestCase):
             situacao="erro",
             iniciado_em=timezone.now(),
             parametros={
-                "execucao": {"volume": 100, "anos_letivos": [2026]},
+                "execucao": {"anos_letivos": [2026]},
                 "disparo": {"execucao_origem": str(id_origem)},
             },
         )
@@ -785,7 +767,7 @@ class ViewsApiControleAuditoriaTestCase(TestCase):
     def test_deve_reprocessar_execucao_interrompida(
         self, tarefa_mock: Any
     ) -> None:
-        """Recovery também considera execução interrompida."""
+        """Reprocessamento manual também considera execução interrompida."""
         tarefa_mock.apply_async.return_value = type(
             "Result", (), {"id": "task-interrompido"}
         )()
@@ -795,7 +777,7 @@ class ViewsApiControleAuditoriaTestCase(TestCase):
             situacao="interrompido",
             iniciado_em=timezone.now(),
             parametros={
-                "execucao": {"volume": 500, "anos_letivos": [2026]},
+                "execucao": {"anos_letivos": [2026]},
                 "disparo": {"origem": "api"},
             },
         )
@@ -810,6 +792,78 @@ class ViewsApiControleAuditoriaTestCase(TestCase):
         self.assertEqual(resposta.status_code, 202)
         self.assertEqual(resposta.json()["total_reprocessado"], 1)
         self.assertTrue(tarefa_mock.apply_async.called)
+
+    @patch("apps.controle_auditoria.api.views.executar_dominio_task")
+    def test_deve_retomar_execucao_interrompida(
+        self, tarefa_mock: Any
+    ) -> None:
+        """Retomada agenda apenas execução interrompida."""
+        id_exec = uuid4()
+        tarefa_mock.apply_async.return_value = type(
+            "Result", (), {"id": "task-retomada"}
+        )()
+        EtlExecucao.objects.create(
+            id_execucao=id_exec,
+            dominio="programas",
+            situacao="interrompido",
+            iniciado_em=timezone.now(),
+            parametros={
+                "execucao": {"anos_letivos": [2026]},
+                "disparo": {"origem": "api"},
+            },
+        )
+
+        resposta = self.client.post(
+            "/api/v1/execucoes/retomar/",
+            data={"max_tentativas": 3},
+            format="json",
+            **self.headers,
+        )
+
+        self.assertEqual(resposta.status_code, 202)
+        self.assertEqual(resposta.json()["total_reprocessado"], 1)
+        tarefa_mock.apply_async.assert_called_once_with(
+            kwargs={
+                "dominio": "programas",
+                "continuar": True,
+                "parametros_disparo": {
+                    "origem": "retomar",
+                    "execucao_origem": str(id_exec),
+                    "execucao_erro": str(id_exec),
+                    "tentativa": 1,
+                    "prioridade": 3,
+                    "continuar": True,
+                    "celery_task_id": ANY,
+                },
+                "anos_letivos": [2026],
+            },
+            priority=3,
+            task_id=ANY,
+        )
+
+    @patch("apps.controle_auditoria.api.views.executar_dominio_task")
+    def test_retomada_nao_deve_reprocessar_execucao_com_erro(
+        self, tarefa_mock: Any
+    ) -> None:
+        """Retomada automática não processa execuções em erro."""
+        EtlExecucao.objects.create(
+            id_execucao=uuid4(),
+            dominio="programas",
+            situacao="erro",
+            iniciado_em=timezone.now(),
+        )
+
+        resposta = self.client.post(
+            "/api/v1/execucoes/retomar/",
+            data={"max_tentativas": 3},
+            format="json",
+            **self.headers,
+        )
+
+        self.assertEqual(resposta.status_code, 202)
+        self.assertEqual(resposta.json()["total_analisado"], 0)
+        self.assertEqual(resposta.json()["total_reprocessado"], 0)
+        tarefa_mock.apply_async.assert_not_called()
 
 
 class MonitoramentoViewsTestCase(TestCase):
@@ -1009,21 +1063,32 @@ class KanbanViewTestCase(TestCase):
             linhas_lidas=10,
         )
 
-    def test_kanban_sem_filtro_mantem_ultima_execucao_por_dominio(
+    def test_kanban_sem_filtro_abre_sem_carregar_dominios(
         self,
     ) -> None:
-        """Sem filtros, kanban exibe a última execução de cada domínio."""
+        """Sem filtros, kanban não carrega cards de todos os domínios."""
         resposta = self.client.get("/dashboard/kanban/")
         self.assertEqual(resposta.status_code, 200)
 
-        ids = {
-            item["exec"].id_execucao
-            for item in resposta.context["dominios_kanban"]
-        }
+        self.assertEqual(resposta.context["dominios_kanban"], [])
+        self.assertContains(
+            resposta,
+            "Selecione um domínio ou uma execução para carregar o kanban.",
+        )
 
-        self.assertIn(self.exec_institucional_atual.id_execucao, ids)
-        self.assertIn(self.exec_pedagogico.id_execucao, ids)
-        self.assertNotIn(self.exec_institucional_antiga.id_execucao, ids)
+    def test_kanban_com_dominio_renderiza_ultima_execucao_do_dominio(
+        self,
+    ) -> None:
+        """Filtro por domínio exibe apenas a última execução do domínio."""
+        resposta = self.client.get("/dashboard/kanban/?dominio=institucional")
+        self.assertEqual(resposta.status_code, 200)
+
+        dominios_kanban = resposta.context["dominios_kanban"]
+        self.assertEqual(len(dominios_kanban), 1)
+        self.assertEqual(
+            dominios_kanban[0]["exec"].id_execucao,
+            self.exec_institucional_atual.id_execucao,
+        )
 
     def test_kanban_com_id_execucao_renderiza_execucao_especifica(
         self,

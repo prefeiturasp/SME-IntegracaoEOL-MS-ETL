@@ -29,8 +29,6 @@ max_retries=5
 | Nome | Tipo | Padrão | Descrição |
 |---|---|---|---|
 | `dominio` | str | obrigatório | Nome do domínio ETL |
-| `volume` | int | `100` | Tamanho do lote por ciclo |
-| `offset` | int | `0` | Deslocamento inicial |
 | `continuar` | bool | `False` | Retomada por checkpoint |
 | `fases` | list[str] | `None` | Fases específicas do domínio |
 | `anos_letivos` | list[int] | `None` | Anos letivos usados como recorte |
@@ -43,9 +41,7 @@ max_retries=5
 3. Chama `call_command("executar_dominio", --dominio <dominio>, ...)`.
 4. Lê checkpoint novamente → extrai `token_depois`.
 5. `linhas = max(token_depois − token_antes, 0)`.
-6. Se `linhas < volume` → encerra o loop (não há mais trabalho no lote atual).
-7. Caso contrário: define `continuar_execucao = True` e repete.
-8. Retorna `f"ok:{total_linhas_processadas}"`.
+6. Retorna `f"ok:{linhas}"`.
 
 **Em exceção (retry):**
 
@@ -66,8 +62,8 @@ loop usa para decidir se continua ou para.
 
 Cada nova linha de `EtlExecucao` grava o campo JSON `parametros`.
 
-- `parametros.execucao` guarda o que o comando ETL recebeu de fato: `volume`,
-  `offset`, `continuar`, `fase`, `fase_inicial`, `fases`, `anos_letivos`,
+- `parametros.execucao` guarda o que o comando ETL recebeu de fato:
+  `continuar`, `fase`, `fase_inicial`, `fases`, `anos_letivos`,
   `carga_inicial` e `celery`.
 - `parametros.disparo` guarda metadados da camada que enfileirou a task, quando
   existirem: `origem`, `prioridade` e `executar_em`.
@@ -113,14 +109,16 @@ O script `scripts/recuperar_etl.sh` implementa o fluxo recomendado de recovery:
 3. Preserva execuções cujo `celery_task_id` ainda aparece vivo no Celery.
 4. Marca como `interrompido` execuções `em_execucao` ou `em_andamento` sem
    task viva no Celery.
-5. Chama `POST /api/v1/execucoes/reprocessar-erros/`.
+5. Chama `POST /api/v1/execucoes/retomar/`.
 6. Localiza a última execução de cada domínio.
-7. Mantém apenas as que estão em `erro` ou `interrompido`.
-8. Reaproveita `volume`, `offset`, `fases` e `anos_letivos` gravados em
-   `parametros.execucao`.
+7. Mantém apenas as que estão em `interrompido`.
+8. Reaproveita `fases` e `anos_letivos` gravados em `parametros.execucao`.
 9. Força `continuar=true`.
 10. Conta tentativas anteriores com base em `parametros.disparo.execucao_origem`.
 11. Agenda uma nova `etl.executar_dominio` quando o limite não foi atingido.
+
+Execuções em `erro` não entram no fluxo automático; elas ficam para retry do
+Celery ou para o endpoint manual `POST /api/v1/execucoes/reprocessar-erros/`.
 
 O script adiciona timeout e retry HTTP ao acionamento dos endpoints, mas não
 executa ETL diretamente.
@@ -134,8 +132,8 @@ Payload fixo usado pelo script:
 ```
 
 A retomada é sempre feita por checkpoint, portanto `continuar=true` não precisa
-ser enviado no body. O recovery usa prioridade `3`, analisa até 25 domínios por
-chamada e mantém o volume original registrado na execução com erro.
+ser enviado no body. O recovery usa prioridade `3` e analisa até 25 domínios
+por chamada.
 
 ---
 

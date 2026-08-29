@@ -409,8 +409,6 @@
           {% if p.fases %}
           <span class="scope-chip"><span>fases</span> {{ p.fases|join:", " }}</span>
           {% endif %}
-          <span class="scope-chip"><span>volume</span> {{ p.volume }}</span>
-          <span class="scope-chip"><span>offset</span> {{ p.offset }}</span>
           <span class="scope-chip"><span>continuar</span> {% if p.continuar %}sim{% else %}não{% endif %}</span>
           {% if d.prioridade %}
           <span class="scope-chip"><span>prioridade</span> {{ d.prioridade }}</span>
@@ -475,7 +473,8 @@
           <th><i class="bi bi-play me-1"></i>Início</th>
           <th><i class="bi bi-stopwatch me-1"></i>Duração</th>
           <th><i class="bi bi-table me-1"></i>Tabela</th>
-          <th style="text-align:right"><i class="bi bi-hash me-1"></i>Linhas gravadas</th>
+          <th>Modo</th>
+          <th style="text-align:right"><i class="bi bi-hash me-1"></i>Linhas</th>
         </tr>
       </thead>
       <tbody>
@@ -498,7 +497,16 @@
               <td class="text-nowrap" rowspan="{{ item.tabelas|length }}">{{ item.exec.duracao_label }}</td>
               {% endif %}
               <td style="color:#94a3b8;font-size:.78rem">{{ tabela.tabela_destino }}</td>
-              <td style="text-align:right;font-weight:600;color:#60a5fa">{{ tabela.linhas_escritas|numero_br }}</td>
+              <td style="font-size:.72rem">
+                {% if tabela.modo_escrita == "full_refresh" %}
+                <span class="pill" title="Tabela recriada na execução">full refresh</span>
+                {% else %}
+                <span class="pill" title="Grava somente linhas novas, alteradas ou ausentes no destino">upsert</span>
+                {% endif %}
+              </td>
+              <td style="text-align:right;font-weight:600;color:#60a5fa">
+                {{ tabela.linhas_escritas|numero_br }}
+              </td>
             </tr>
             {% endfor %}
           {% else %}
@@ -515,7 +523,7 @@
             </td>
             <td class="text-nowrap">{{ item.exec.iniciado_em|date:"d/m H:i" }}</td>
             <td class="text-nowrap">{{ item.exec.duracao_label }}</td>
-            <td colspan="2" class="text-muted-dim" style="font-size:.78rem">sem gravações registradas</td>
+            <td colspan="3" class="text-muted-dim" style="font-size:.78rem">sem gravações registradas</td>
           </tr>
           {% endif %}
         {% endfor %}

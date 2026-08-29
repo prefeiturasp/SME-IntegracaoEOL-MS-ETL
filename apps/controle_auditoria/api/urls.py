@@ -14,6 +14,7 @@ from apps.controle_auditoria.api.views import (
     MonitoramentoExecucoesView,
     MonitoramentoResumoView,
     ReprocessarErrosView,
+    RetomarInterrompidasView,
 )
 
 urlpatterns = [
@@ -40,6 +41,11 @@ urlpatterns = [
         "execucoes/reprocessar-erros/",
         ReprocessarErrosView.as_view(),
         name="reprocessar-erros",
+    ),
+    path(
+        "execucoes/retomar/",
+        RetomarInterrompidasView.as_view(),
+        name="retomar-execucoes",
     ),
     path(
         "execucoes/tabelas-lidas/",

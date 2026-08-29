@@ -244,7 +244,7 @@
       <div class="filter-field">
         <label class="filter-label" for="dominio_select">Domínio</label>
         <select id="dominio_select" name="dominio" class="form-select" style="width:auto" onchange="document.getElementById('id_execucao_select').value=''; this.form.submit()">
-          <option value="">Todos os domínios</option>
+          <option value="">Selecione um domínio</option>
           {% for d in todos_dominios %}
           <option value="{{ d }}" {% if dominio_filtro == d %}selected{% endif %}>{{ d }}</option>
           {% endfor %}
@@ -414,7 +414,13 @@
         <div class="kcard-body">
           {% if item.checkpoint and item.checkpoint_da_execucao %}
           <div class="resume-point">
-            <div class="resume-meta">fase salva</div>
+            <div class="resume-meta">
+              {% if item.exec.dominio == "professores" and item.checkpoint.indice_sincronizacao %}
+              ponto salvo
+              {% else %}
+              fase salva
+              {% endif %}
+            </div>
             {% if item.progresso_atual %}
             <div class="resume-phase" title="{{ item.progresso_atual.fase_nome }}">
               {{ item.progresso_atual.fase_numero }}/{{ item.progresso_atual.total_fases }} · {{ item.progresso_atual.fase_nome }}
@@ -423,8 +429,13 @@
             <div class="resume-phase">fase {{ item.checkpoint.ultima_pagina }}</div>
             {% endif %}
           </div>
+          {% if item.exec.dominio == "professores" and item.progresso_atual %}
+          <div class="kcard-total" style="color:var(--col-check)">{{ item.progresso_atual.linhas_lidas|numero_br }}</div>
+          <div class="kcard-label">linhas lidas na fase atual</div>
+          {% else %}
           <div class="kcard-total" style="color:var(--col-check)">{{ item.checkpoint.token_parada|default:"0"|numero_br }}</div>
-          <div class="kcard-label">linhas lidas na fase salva</div>
+          <div class="kcard-label">token salvo para retomada</div>
+          {% endif %}
           {% if item.exec.parametros.execucao %}
           {% with p=item.exec.parametros.execucao d=item.exec.parametros.disparo %}
           <div class="scope-row">
@@ -434,8 +445,6 @@
             {% if p.fases %}
             <span class="scope-chip"><span>fases</span> {{ p.fases|join:", " }}</span>
             {% endif %}
-            <span class="scope-chip"><span>volume</span> {{ p.volume }}</span>
-            <span class="scope-chip"><span>offset</span> {{ p.offset }}</span>
             <span class="scope-chip"><span>continuar</span> {% if p.continuar %}sim{% else %}não{% endif %}</span>
             {% if d.prioridade %}
             <span class="scope-chip"><span>prioridade</span> {{ d.prioridade }}</span>
@@ -477,7 +486,14 @@
           </div>
           {% endif %}
           <div class="cp-row"><span class="cp-key">situação</span><span class="cp-val">{{ item.checkpoint.ultima_situacao }}</span></div>
+          {% if item.checkpoint.indice_sincronizacao %}
+          <div class="cp-row"><span class="cp-key">retomada</span><span class="cp-val">{{ item.checkpoint.indice_sincronizacao }}</span></div>
+          {% endif %}
+          {% if item.exec.dominio == "professores" %}
+          <div class="cp-row"><span class="cp-key">token acumulado</span><span class="cp-val">{{ item.checkpoint.token_parada|default:"0"|numero_br }}</span></div>
+          {% else %}
           <div class="cp-row"><span class="cp-key">checkpoint</span><span class="cp-val">fase {{ item.checkpoint.ultima_pagina }} · {{ item.checkpoint.token_parada|default:"0"|numero_br }}</span></div>
+          {% endif %}
           <div class="cp-row"><span class="cp-key">atualizado</span><span class="cp-val">{{ item.checkpoint.atualizado_em|date:"d/m H:i:s" }}</span></div>
           {% if item.checkpoint.ultimo_sucesso_em %}
           <div class="cp-row"><span class="cp-key">último sucesso</span><span class="cp-val">{{ item.checkpoint.ultimo_sucesso_em|date:"d/m H:i:s" }}</span></div>
@@ -512,7 +528,7 @@
       <div class="insight-card">
         <div class="insight-title">Não gravadas</div>
         <div class="insight-value">{{ item.taxa_nao_gravadas }}</div>
-        <div class="insight-sub">{{ item.total_nao_gravado|numero_br }} deduplicadas ou hash igual</div>
+        <div class="insight-sub">{{ item.total_nao_gravado|numero_br }} não materializadas no destino</div>
       </div>
     </div>
 
