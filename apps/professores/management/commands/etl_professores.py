@@ -54,6 +54,36 @@ _TABELAS_UPSERT = frozenset(
         "agrupamento_atribuicao_territorio_saber",
     }
 )
+_TOTAL_TABELAS = len(_ORDEM_TABELAS)
+_FASE_TABELA = {tabela: i for i, tabela in enumerate(_ORDEM_TABELAS, 1)}
+_FASES_MACRO: tuple[tuple[str, ...], ...] = (
+    ("professor", "pessoa", "administrador_escola"),
+    ("cargo_base_servidor", "contrato_externo"),
+    (
+        "lotacao_servidor",
+        "cargo_sobreposto_servidor",
+        "funcao_atividade_cargo_servidor",
+        "laudo_medico",
+        "atribuicao_aula",
+        "atribuicao_externo",
+    ),
+    (
+        "funcionario_unidade_educacional",
+        "funcionario_cargo",
+        "funcionario_vinculo_funcional",
+        "funcionario_conecta_modalidade_escola",
+        "funcionario_conecta_formacao",
+        "funcionario_sistema_perfil",
+        "turma_atribuida_ue",
+        "disciplina_turma_atribuida_ue",
+        "professor_escola_ano",
+    ),
+)
+_FASE_MACRO_TABELA = {
+    tabela: fase
+    for fase, tabelas in enumerate(_FASES_MACRO, 1)
+    for tabela in tabelas
+}
 
 
 class Command(BaseCommand):
@@ -63,18 +93,6 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser: Any) -> None:
         """Declara argumentos do comando."""
-        parser.add_argument(
-            "--volume",
-            type=int,
-            default=500,
-            help="Tamanho de lote para controle de progresso pelo Celery.",
-        )
-        parser.add_argument(
-            "--offset",
-            type=int,
-            default=0,
-            help="Deslocamento inicial (reservado para uso futuro).",
-        )
         parser.add_argument(
             "--continuar",
             action="store_true",
@@ -128,11 +146,57 @@ class Command(BaseCommand):
         )
         servico = EtlProfessoresService(anos_letivos=anos_letivos)
         ultimo_indice_salvo: str | None = None
+        tabela_atual: str | None = None
+        linhas_lidas_por_tabela: dict[str, int] = {}
+        ultimo_lote_por_tabela: dict[str, int] = {}
 
-        def _salvar_checkpoint_lote(tabela: str, lote: int) -> None:
+        def _numero_fase_tabela(tabela: str) -> int:
+            """Retorna posição operacional da tabela no dashboard."""
+            return _FASE_TABELA.get(tabela, servico.ultima_fase_concluida)
+
+        def _registrar_progresso(
+            tabela: str,
+            etapa: str,
+            *,
+            chunk_atual: int = 0,
+            linhas_lidas: int = 0,
+            linhas_escritas: int = 0,
+            linhas_ignoradas: int = 0,
+            mensagem: str | None = None,
+        ) -> None:
+            repositorio.atualizar_progresso_execucao(
+                id_execucao=id_execucao,
+                dominio="professores",
+                fase_numero=_numero_fase_tabela(tabela),
+                total_fases=_TOTAL_TABELAS,
+                fase_nome=tabela,
+                tabela_origem=tabela,
+                tabela_destino=tabela,
+                etapa=etapa,
+                chunk_atual=chunk_atual,
+                linhas_lidas=linhas_lidas,
+                linhas_escritas=linhas_escritas,
+                linhas_ignoradas=linhas_ignoradas,
+                mensagem=mensagem,
+            )
+
+        def _registrar_tabela_iniciada(tabela: str) -> None:
+            """Registra início da tabela no monitoramento operacional."""
+            nonlocal tabela_atual
+            tabela_atual = tabela
+            linhas_lidas_por_tabela[tabela] = 0
+            _registrar_progresso(tabela, "fase_iniciada")
+
+        def _salvar_checkpoint_lote(
+            tabela: str, lote: int, linhas_lidas_lote: int = 0
+        ) -> None:
             """Salva checkpoint após cada lote — formato 'tabela:lote'."""
             nonlocal ultimo_indice_salvo
             ultimo_indice_salvo = f"{tabela}:{lote}"
+            linhas_lidas_por_tabela[tabela] = (
+                linhas_lidas_por_tabela.get(tabela, 0) + linhas_lidas_lote
+            )
+            ultimo_lote_por_tabela[tabela] = lote
             repositorio.atualizar_checkpoint_dominio(
                 dominio="professores",
                 ultimo_id_execucao=id_execucao,
@@ -142,11 +206,31 @@ class Command(BaseCommand):
                 ultima_situacao="parcial",
                 sucesso=False,
             )
+            _registrar_progresso(
+                tabela,
+                "processando_chunk",
+                chunk_atual=lote,
+                linhas_lidas=linhas_lidas_por_tabela[tabela],
+            )
 
         def _salvar_checkpoint_tabela(tabela: str, _linhas: int) -> None:
             """Salva checkpoint após tabela concluída — formato 'tabela'."""
             nonlocal ultimo_indice_salvo
             ultimo_indice_salvo = tabela
+            linhas_lidas = linhas_lidas_por_tabela.get(tabela) or _linhas
+            modo = "upsert" if tabela in _TABELAS_UPSERT else "full_refresh"
+            repositorio.registrar_tabela_escrita(
+                id_execucao=id_execucao,
+                tabela_destino=tabela,
+                linhas_escritas=_linhas,
+                modo_escrita=modo,
+            )
+            repositorio.registrar_tabela_lida(
+                id_execucao=id_execucao,
+                tabela_origem=tabela,
+                numero_pagina=ultimo_lote_por_tabela.get(tabela, 1),
+                linhas_lidas=linhas_lidas,
+            )
             repositorio.atualizar_checkpoint_dominio(
                 dominio="professores",
                 ultimo_id_execucao=id_execucao,
@@ -155,6 +239,14 @@ class Command(BaseCommand):
                 indice_sincronizacao=ultimo_indice_salvo,
                 ultima_situacao="parcial",
                 sucesso=False,
+            )
+            _registrar_progresso(
+                tabela,
+                "fase_concluida",
+                chunk_atual=ultimo_lote_por_tabela.get(tabela, 0),
+                linhas_lidas=linhas_lidas,
+                linhas_escritas=_linhas,
+                linhas_ignoradas=max(linhas_lidas - _linhas, 0),
             )
 
         try:
@@ -163,25 +255,13 @@ class Command(BaseCommand):
                 pular_ate=pular_ate,
                 lote_inicial=lote_inicial,
                 on_lote=_salvar_checkpoint_lote,
+                on_tabela_iniciada=_registrar_tabela_iniciada,
                 on_tabela_concluida=_salvar_checkpoint_tabela,
             )
-
-            # Registrar métricas por tabela no log de auditoria
-            for tabela, linhas in resultado.items():
-                modo = (
-                    "upsert" if tabela in _TABELAS_UPSERT else "full_refresh"
-                )
-                repositorio.registrar_tabela_escrita(
-                    id_execucao=id_execucao,
-                    tabela_destino=tabela,
-                    linhas_escritas=linhas,
-                    modo_escrita=modo,
-                )
-                repositorio.registrar_tabela_lida(
-                    id_execucao=id_execucao,
-                    tabela_origem=tabela,
-                    numero_pagina=1,
-                    linhas_lidas=linhas,
+            if not resultado:
+                raise RuntimeError(
+                    "Retomada não executou nenhuma tabela. "
+                    "Verifique o checkpoint de professores."
                 )
 
             total_alterado = sum(resultado.values())
@@ -207,6 +287,13 @@ class Command(BaseCommand):
             )
 
         except Exception as erro:
+            if tabela_atual is not None:
+                _registrar_progresso(
+                    tabela_atual,
+                    "erro",
+                    linhas_lidas=linhas_lidas_por_tabela.get(tabela_atual, 0),
+                    mensagem=str(erro),
+                )
             # O callback já salvou o indice_sincronizacao da última tabela
             # concluída. Aqui apenas marca a situação como "erro" preservando
             # esse valor para que --continuar retome após essa tabela.
@@ -313,6 +400,19 @@ class Command(BaseCommand):
         self._log_retomada(fase_inicial, None, None, pular_ate)
         return pular_ate, 0
 
+    def _fase_inicial_por_checkpoint(
+        self,
+        ultima_fase: int,
+        raw_indice: str,
+    ) -> int:
+        """Resolve fase macro considerando tabela/lote salvo no checkpoint."""
+        tabela_checkpoint = raw_indice.split(":", 1)[0] if raw_indice else ""
+        fase_tabela = _FASE_MACRO_TABELA.get(tabela_checkpoint)
+        if fase_tabela:
+            return fase_tabela
+
+        return ultima_fase + 1 if ultima_fase < len(_FASES_MACRO) else 1
+
     def _obter_contexto_retomada(
         self,
         continuar: bool,
@@ -329,8 +429,12 @@ class Command(BaseCommand):
         ultima_fase, raw_indice, token_anterior = self._interpretar_checkpoint(
             checkpoint
         )
-        # Se tudo foi concluído (fase 4), reinicia do zero.
-        fase_inicial = ultima_fase + 1 if ultima_fase < 4 else 1
+        # Se tudo foi concluído, reinicia do zero. Se houver tabela/lote salvo,
+        # volta à fase macro dessa tabela para que o pular_ate seja encontrado.
+        fase_inicial = self._fase_inicial_por_checkpoint(
+            ultima_fase,
+            raw_indice,
+        )
         pular_ate, lote_inicial = self._calcular_pulo_e_lote(
             raw_indice, fase_inicial
         )

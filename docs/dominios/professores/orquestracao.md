@@ -5,7 +5,7 @@
 ### 1. CLI direto
 
 ```bash
-python manage.py etl_professores [--volume 500] [--continuar]
+python manage.py etl_professores [--continuar]
 ```
 
 Execução síncrona direta, sem passar pelo roteador de domínios.
@@ -15,7 +15,7 @@ Execução síncrona direta, sem passar pelo roteador de domínios.
 ### 2. Via roteador de domínios
 
 ```bash
-python manage.py executar_dominio --dominio professores [--volume 500] [--continuar]
+python manage.py executar_dominio --dominio professores [--continuar]
 ```
 
 Rota padrão usada pela task Celery e pela API.
@@ -26,7 +26,7 @@ Rota padrão usada pela task Celery e pela API.
 
 ```bash
 # Imediato
-python manage.py agendar_dominio --dominio professores --volume 500
+python manage.py agendar_dominio --dominio professores
 
 # Agendado
 python manage.py agendar_dominio --dominio professores --executar-em "2026-04-02T02:00:00-03:00"
@@ -35,15 +35,15 @@ python manage.py agendar_dominio --dominio professores --executar-em "2026-04-02
 POST /api/v1/dominios/professores/executar/
 ```
 
-A task `executar_dominio_task` executa em loop enquanto houver linhas alteradas
-(delta de `token_parada >= volume`), com retry automático em falha (`continuar=True`).
+A task `executar_dominio_task` executa o domínio e usa retry automático em
+falha (`continuar=True`).
 
 ---
 
 ### 4. Via loop contínuo (container)
 
 ```bash
-python manage.py executar_dominios_loop --intervalo 300 --volume 200
+python manage.py executar_dominios_loop --intervalo 300
 ```
 
 Executa `executar_dominios` em loop. **Nota:** hoje o comando roda o domínio `institucional`.
