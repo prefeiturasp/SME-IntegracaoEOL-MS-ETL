@@ -30,8 +30,6 @@ def montar_parametros_execucao(
             disparo = {"raw": str(disparo_raw)}
 
     execucao = {
-        "volume": options.get("volume"),
-        "offset": options.get("offset"),
         "continuar": options.get("continuar", False),
         "fase_inicial": fase_inicial,
         "anos_letivos": options.get("anos_letivos"),
@@ -67,18 +65,6 @@ class BaseEtlCommand(BaseCommand):
 
     def add_arguments(self, parser: Any) -> None:
         """Declara argumentos padrão para todos os comandos de ETL."""
-        parser.add_argument(
-            "--volume",
-            type=int,
-            default=500,
-            help="Tamanho de lote para controle de progresso pelo Celery.",
-        )
-        parser.add_argument(
-            "--offset",
-            type=int,
-            default=0,
-            help="Deslocamento inicial (reservado para uso futuro).",
-        )
         parser.add_argument(
             "--continuar",
             action="store_true",
@@ -266,7 +252,7 @@ class BaseEtlCommand(BaseCommand):
             ultimo_id_execucao=id_exec,
             ultima_pagina=fase,
             token_parada=token,
-            indice_sincronizacao=f"CTRL+C:offset:{token}",
+            indice_sincronizacao=f"CTRL+C:token:{token}",
             ultima_situacao="interrompido",
             sucesso=False,
         )
@@ -334,7 +320,7 @@ class BaseEtlCommand(BaseCommand):
             ultimo_id_execucao=id_exec,
             ultima_pagina=fase,
             token_parada=token,
-            indice_sincronizacao=f"{nome_tabela}:offset:{token}",
+            indice_sincronizacao=f"{nome_tabela}:token:{token}",
             ultima_situacao="concluido",
             sucesso=True,
         )
@@ -369,7 +355,7 @@ class BaseEtlCommand(BaseCommand):
             ultimo_id_execucao=id_exec,
             ultima_pagina=fase,
             token_parada=token_erro,
-            indice_sincronizacao=f"ERRO:offset:{token_erro}",
+            indice_sincronizacao=f"ERRO:token:{token_erro}",
             ultima_situacao="erro",
             sucesso=False,
         )

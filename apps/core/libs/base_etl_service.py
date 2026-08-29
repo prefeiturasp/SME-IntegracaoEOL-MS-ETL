@@ -824,7 +824,7 @@ class BaseEtlService:
             ultimo_id_execucao=self.id_execucao,
             ultima_pagina=self.fase_atual or self.ultima_fase_concluida + 1,
             token_parada=token,
-            indice_sincronizacao=f"{config.nome}:offset:{token}",
+            indice_sincronizacao=f"{config.nome}:token:{token}",
             ultima_situacao="em_execucao",
             sucesso=False,
         )
@@ -874,7 +874,7 @@ class BaseEtlService:
             ultimo_id_execucao=self.id_execucao,
             ultima_pagina=numero_fase or self.ultima_fase_concluida,
             token_parada=token,
-            indice_sincronizacao=f"{config.nome}:offset:{token}",
+            indice_sincronizacao=f"{config.nome}:token:{token}",
             ultima_situacao="concluido" if is_ultima else "em_execucao",
             sucesso=is_ultima,
         )

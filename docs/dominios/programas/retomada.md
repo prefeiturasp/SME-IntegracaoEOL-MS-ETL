@@ -44,10 +44,10 @@ Ao iniciar com `--continuar`, o `_obter_ponto_partida` do `BaseEtlCommand`:
 
 ```bash
 # Primeira execução
-python manage.py etl_programas --volume 500
+python manage.py etl_programas
 
 # Retomar do ponto de falha (fases 1-5)
-python manage.py etl_programas --volume 500 --continuar
+python manage.py etl_programas --continuar
 
 # Forçar início numa fase específica (qualquer fase de 1 a 8)
 python manage.py etl_programas --fase 7

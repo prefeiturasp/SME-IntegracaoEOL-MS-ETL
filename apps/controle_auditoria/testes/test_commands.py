@@ -17,23 +17,15 @@ class ExecutarDominioCommandTestCase(TestCase):
     def test_deve_executar_dominio_institucional(
         self, call_command_mock: MagicMock
     ) -> None:
-        """Encaminha para listar_institucional_offset com argumentos."""
+        """Encaminha para o comando do domínio com argumentos válidos."""
         call_command(
             "executar_dominio",
             "--dominio",
             "institucional",
-            "--volume",
-            "200",
-            "--offset",
-            "100",
             "--continuar",
         )
         call_command_mock.assert_called_once_with(
             "etl_institucional",
-            "--volume",
-            "200",
-            "--offset",
-            "100",
             "--continuar",
         )
 
@@ -86,10 +78,6 @@ class AgendarDominioCommandTestCase(TestCase):
             "agendar_dominio",
             "--dominio",
             "institucional",
-            "--volume",
-            "120",
-            "--offset",
-            "10",
             "--continuar",
         )
 
@@ -100,8 +88,6 @@ class AgendarDominioCommandTestCase(TestCase):
             kwargs_apply["kwargs"],
             {
                 "dominio": "institucional",
-                "volume": 120,
-                "offset": 10,
                 "continuar": True,
                 "parametros_disparo": {
                     "origem": "management_command",
@@ -136,8 +122,6 @@ class AgendarDominioCommandTestCase(TestCase):
             kwargs_apply["kwargs"],
             {
                 "dominio": "institucional",
-                "volume": 100,
-                "offset": 0,
                 "continuar": False,
                 "parametros_disparo": {
                     "origem": "management_command",
@@ -204,7 +188,7 @@ class ExecutarDominiosCommandTestCase(TestCase):
         self, call_command_mock: MagicMock
     ) -> None:
         """Executa institucional sem flag continuar."""
-        call_command("executar_dominios", "--volume", "200")
+        call_command("executar_dominios")
 
         self.assertEqual(call_command_mock.call_count, 1)
         self.assertEqual(
@@ -213,8 +197,6 @@ class ExecutarDominiosCommandTestCase(TestCase):
                 "executar_dominio",
                 "--dominio",
                 "institucional",
-                "--volume",
-                "200",
             ),
         )
 
@@ -225,7 +207,7 @@ class ExecutarDominiosCommandTestCase(TestCase):
         self, call_command_mock: MagicMock
     ) -> None:
         """Inclui flag continuar no domínio institucional."""
-        call_command("executar_dominios", "--volume", "100", "--continuar")
+        call_command("executar_dominios", "--continuar")
 
         self.assertEqual(
             call_command_mock.call_args_list[0].args,
@@ -233,8 +215,6 @@ class ExecutarDominiosCommandTestCase(TestCase):
                 "executar_dominio",
                 "--dominio",
                 "institucional",
-                "--volume",
-                "100",
                 "--continuar",
             ),
         )
@@ -272,13 +252,9 @@ class ExecutarDominiosLoopCommandTestCase(TestCase):
         ]
         repositorio_cls_mock.return_value = repositorio
 
-        call_command(
-            "executar_dominios_loop", "--volume", "100", "--intervalo", "1"
-        )
+        call_command("executar_dominios_loop", "--intervalo", "1")
 
-        call_command_mock.assert_called_once_with(
-            "executar_dominios", "--volume", "100"
-        )
+        call_command_mock.assert_called_once_with("executar_dominios")
         sleep_mock.assert_not_called()
 
     @patch(
@@ -297,7 +273,7 @@ class ExecutarDominiosLoopCommandTestCase(TestCase):
         call_command_mock: MagicMock,
         sleep_mock: MagicMock,
     ) -> None:
-        """Calcula volume da execução com base no restante do limite."""
+        """Respeita limite de linhas sem alterar tamanho de lote."""
         repositorio = MagicMock()
         repositorio.obter_checkpoint_dominio.side_effect = [
             {"token_parada": "0"},
@@ -309,8 +285,6 @@ class ExecutarDominiosLoopCommandTestCase(TestCase):
 
         call_command(
             "executar_dominios_loop",
-            "--volume",
-            "100",
             "--intervalo",
             "1",
             "--limite-linhas",
@@ -321,23 +295,13 @@ class ExecutarDominiosLoopCommandTestCase(TestCase):
         self.assertEqual(call_command_mock.call_count, 2)
         self.assertEqual(
             call_command_mock.call_args_list[0].args,
-            ("executar_dominios", "--volume", "100", "--continuar"),
+            ("executar_dominios", "--continuar"),
         )
         self.assertEqual(
             call_command_mock.call_args_list[1].args,
-            ("executar_dominios", "--volume", "50", "--continuar"),
+            ("executar_dominios", "--continuar"),
         )
         sleep_mock.assert_called_once_with(1)
-
-    def test_deve_retornar_volume_restante_no_limite_linhas(self) -> None:
-        """Calcula volume quando restam menos linhas que o total."""
-        from apps.controle_auditoria.management.commands import (
-            executar_dominios_loop,
-        )
-
-        cmd = executar_dominios_loop.Command()
-        # limite 100, total 70 -> volume restante 30
-        self.assertEqual(cmd._calcular_volume(100, 100, 70), 30)
 
 
 class CancelarExecucoesCommandTestCase(TestCase):

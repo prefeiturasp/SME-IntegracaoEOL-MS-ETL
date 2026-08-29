@@ -45,7 +45,7 @@ class BaseEtlCommandTestCase(SimpleTestCase):
         mock_fase.table_name = "tabela_teste"
         self.servico._fases = [mock_fase]
 
-        self.cmd.handle(volume=100, offset=0, continuar=False)
+        self.cmd.handle(continuar=False)
 
         self.assertTrue(self.repo.iniciar_execucao.called)
 
@@ -56,7 +56,7 @@ class BaseEtlCommandTestCase(SimpleTestCase):
             ultimo_id_execucao=id_exec,
             ultima_pagina=1,
             token_parada="0",
-            indice_sincronizacao="tabela_teste:offset:0",
+            indice_sincronizacao="tabela_teste:token:0",
             ultima_situacao="concluido",
             sucesso=True,
         )
@@ -75,7 +75,7 @@ class BaseEtlCommandTestCase(SimpleTestCase):
         self.servico.executar.return_value = {"tabela_teste": 10}
         self.servico.ultima_fase_concluida = 3
 
-        self.cmd.handle(volume=100, offset=0, continuar=True)
+        self.cmd.handle(continuar=True)
 
         self.repo.obter_checkpoint_dominio.assert_called_with("teste_base")
         self.servico.executar.assert_called_with(fase_inicial=3)
@@ -86,7 +86,7 @@ class BaseEtlCommandTestCase(SimpleTestCase):
         self.servico.ultima_fase_concluida = 0
 
         with self.assertRaises(CommandError):
-            self.cmd.handle(volume=100, offset=0, continuar=False)
+            self.cmd.handle(continuar=False)
 
         id_exec = self.repo.iniciar_execucao.return_value
 
@@ -100,7 +100,7 @@ class BaseEtlCommandTestCase(SimpleTestCase):
             ultimo_id_execucao=id_exec,
             ultima_pagina=0,
             token_parada="0",
-            indice_sincronizacao="ERRO:offset:0",
+            indice_sincronizacao="ERRO:token:0",
             ultima_situacao="erro",
             sucesso=False,
         )
@@ -110,7 +110,7 @@ class BaseEtlCommandTestCase(SimpleTestCase):
         self.mock_servico_class.side_effect = Exception("Falha no setup")
 
         with self.assertRaises(CommandError):
-            self.cmd.handle(volume=100, offset=0, continuar=False)
+            self.cmd.handle(continuar=False)
 
         id_exec = self.repo.iniciar_execucao.return_value
         self.repo.finalizar_execucao.assert_called_with(
@@ -123,7 +123,7 @@ class BaseEtlCommandTestCase(SimpleTestCase):
             ultimo_id_execucao=id_exec,
             ultima_pagina=0,
             token_parada="0",
-            indice_sincronizacao="ERRO:offset:0",
+            indice_sincronizacao="ERRO:token:0",
             ultima_situacao="erro",
             sucesso=False,
         )
@@ -149,7 +149,7 @@ class BaseEtlCommandTestCase(SimpleTestCase):
         self.servico.executar.return_value = {}
         self.servico.ultima_fase_concluida = 1
 
-        self.cmd.handle(volume=100, offset=0, continuar=True)
+        self.cmd.handle(continuar=True)
 
         self.servico.executar.assert_called_with(fase_inicial=1)
 
@@ -163,7 +163,7 @@ class BaseEtlCommandTestCase(SimpleTestCase):
         self.servico.executar.return_value = {}
         self.servico.ultima_fase_concluida = 1
 
-        self.cmd.handle(volume=100, offset=0, continuar=True)
+        self.cmd.handle(continuar=True)
 
         self.servico.executar.assert_called_with(fase_inicial=1)
 
@@ -177,7 +177,7 @@ class BaseEtlCommandTestCase(SimpleTestCase):
         self.servico.executar.return_value = {}
         self.servico.ultima_fase_concluida = 3
 
-        self.cmd.handle(volume=100, offset=0, continuar=True)
+        self.cmd.handle(continuar=True)
 
         self.servico.executar.assert_called_with(fase_inicial=2)
 
@@ -191,7 +191,7 @@ class BaseEtlCommandTestCase(SimpleTestCase):
         self.servico.ultimo_token = "285516"
 
         with self.assertRaises(CommandError):
-            self.cmd.handle(volume=100, offset=0, continuar=False)
+            self.cmd.handle(continuar=False)
 
         id_exec = self.repo.iniciar_execucao.return_value
         self.repo.atualizar_checkpoint_dominio.assert_called_with(
@@ -199,7 +199,7 @@ class BaseEtlCommandTestCase(SimpleTestCase):
             ultimo_id_execucao=id_exec,
             ultima_pagina=2,
             token_parada="285516",
-            indice_sincronizacao="ERRO:offset:285516",
+            indice_sincronizacao="ERRO:token:285516",
             ultima_situacao="erro",
             sucesso=False,
         )
@@ -218,8 +218,6 @@ class BaseEtlCommandTestCase(SimpleTestCase):
         self.cmd.add_arguments(mock_parser)
 
         calls = [c[0][0] for c in mock_parser.add_argument.call_args_list]
-        self.assertIn("--volume", calls)
-        self.assertIn("--offset", calls)
         self.assertIn("--continuar", calls)
         self.assertIn("--fase", calls)
         self.assertIn("--carga-inicial", calls)
@@ -230,7 +228,7 @@ class BaseEtlCommandTestCase(SimpleTestCase):
             "ultima_pagina": 2,
             "ultima_situacao": "erro",
         }
-        self.cmd.handle(volume=100, fase=4, continuar=True)
+        self.cmd.handle(fase=4, continuar=True)
 
         self.servico.executar.assert_called_with(fase_inicial=4)
 
@@ -243,7 +241,7 @@ class BaseEtlCommandTestCase(SimpleTestCase):
         self.servico.ultimo_token = "200"
 
         with self.assertRaises(KeyboardInterrupt):
-            self.cmd.handle(volume=100, offset=0, continuar=False)
+            self.cmd.handle(continuar=False)
 
         id_exec = self.repo.iniciar_execucao.return_value
         self.repo.finalizar_execucao.assert_called_with(
@@ -254,7 +252,7 @@ class BaseEtlCommandTestCase(SimpleTestCase):
             ultimo_id_execucao=id_exec,
             ultima_pagina=1,
             token_parada="200",
-            indice_sincronizacao="CTRL+C:offset:200",
+            indice_sincronizacao="CTRL+C:token:200",
             ultima_situacao="interrompido",
             sucesso=False,
         )
@@ -265,6 +263,6 @@ class BaseEtlCommandTestCase(SimpleTestCase):
     ) -> None:
         """Garante que handle com celery=True delega ao orquestrador."""
         mock_orq = mock_orq_cls.return_value
-        self.cmd.handle(celery=True, volume=100, offset=0, continuar=False)
+        self.cmd.handle(celery=True, continuar=False)
         mock_orq_cls.assert_called_once()
         mock_orq.lancar.assert_called_once()

@@ -13,19 +13,15 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser: Any) -> None:
         """Adiciona argumentos ao comando."""
-        parser.add_argument("--volume", type=int, default=100)
         parser.add_argument("--continuar", action="store_true")
 
     def handle(self, *args: Any, **options: Any) -> None:
         """Executa todos os dominios ativos no momento."""
-        volume = options["volume"]
         continuar = options["continuar"]
 
         argumentos = [
             "--dominio",
             "institucional",
-            "--volume",
-            str(volume),
         ]
         if continuar:
             argumentos.append("--continuar")
