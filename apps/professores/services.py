@@ -1309,6 +1309,64 @@ class EtlProfessoresService:
                 else:
                     on_lote(nome, lote_counter[0])
 
+    def _executar_tabela_rastreada(
+        self,
+        nome: str,
+        metodo: Callable[[], int],
+        resultados: dict[str, int],
+        pular_ref: dict[str, str | None],
+        lote_ref: list[int],
+        original_iter_query: Callable,
+        on_lote: Callable[..., None] | None,
+        on_tabela_iniciada: Callable[[str], None] | None,
+        on_tabela_concluida: Callable[[str, int], None] | None,
+    ) -> None:
+        """Executa uma tabela com suporte a checkpoint por lote."""
+        if pular_ref["nome"] is not None:
+            if pular_ref["nome"] == nome:
+                pular_ref["nome"] = None
+                lote_ref[0] = 0
+            logger.info("[ETL PROF] Pulando %s (já concluída).", nome)
+            return
+
+        lote_inicial = 0 if nome in _TABELAS_FULL_REFRESH else lote_ref[0]
+        lote_ref[0] = 0
+
+        if lote_inicial:
+            logger.info(
+                "[ETL PROF] %s: retomando do lote %d.",
+                nome,
+                lote_inicial + 1,
+            )
+
+        lote_counter = [lote_inicial]
+        if on_tabela_iniciada is not None:
+            on_tabela_iniciada(nome)
+
+        def _iter_rastreavel(
+            sql: str,
+            parametros: list | dict | None = None,
+        ) -> Iterator[list[tuple[Any, ...]]]:
+            return self._iter_lotes(
+                sql,
+                parametros,
+                original_iter_query,
+                lote_inicial,
+                nome,
+                lote_counter,
+                on_lote,
+            )
+
+        self.eol.iter_query = _iter_rastreavel  # type: ignore[method-assign]
+        try:
+            resultados[nome] = metodo()
+        finally:
+            self.eol.iter_query = original_iter_query  # type: ignore[method-assign]
+
+        logger.info("[ETL PROF] %s: %d", nome, resultados[nome])
+        if on_tabela_concluida is not None:
+            on_tabela_concluida(nome, resultados[nome])
+
     def executar(
         self,
         fase_inicial: int = 1,
@@ -1320,70 +1378,37 @@ class EtlProfessoresService:
     ) -> dict[str, int]:
         """Executa ETL_PROFESSORES a partir de ``fase_inicial``."""
         r: dict[str, int] = {}
-        log = logger.info
 
-        log("[ETL PROF] Iniciando carga a partir da fase %d...", fase_inicial)
+        logger.info(
+            "[ETL PROF] Iniciando carga a partir da fase %d...", fase_inicial
+        )
 
-        _pular = pular_ate
-        _li = [lote_inicial]
+        pular_ref = {"nome": pular_ate}
+        lote_ref = [lote_inicial]
 
         original_iter_query = self.eol.iter_query
 
         def _executar_tabela(nome: str, metodo: Callable[[], int]) -> None:
-            """Executa tabela, pulando se ainda no intervalo a pular."""
-            nonlocal _pular
-            if _pular is not None:
-                if _pular == nome:
-                    _pular = None
-                    _li[0] = 0
-                log("[ETL PROF] Pulando %s (já concluída).", nome)
-                return
-
-            li = 0 if nome in _TABELAS_FULL_REFRESH else _li[0]
-            _li[0] = 0
-
-            if li:
-                log(
-                    "[ETL PROF] %s: retomando do lote %d.",
-                    nome,
-                    li + 1,
-                )
-
-            _lote_counter = [li]
-            if on_tabela_iniciada is not None:
-                on_tabela_iniciada(nome)
-
-            def _iter_rastreavel(
-                sql: str,
-                parametros: list | dict | None = None,
-            ) -> Iterator[list[tuple[Any, ...]]]:
-                return self._iter_lotes(
-                    sql,
-                    parametros,
-                    original_iter_query,
-                    li,
-                    nome,
-                    _lote_counter,
-                    on_lote,
-                )
-
-            self.eol.iter_query = _iter_rastreavel  # type: ignore[method-assign]
-            try:
-                r[nome] = metodo()
-            finally:
-                self.eol.iter_query = original_iter_query  # type: ignore[method-assign]
-
-            log("[ETL PROF] %s: %d", nome, r[nome])
-            if on_tabela_concluida is not None:
-                on_tabela_concluida(nome, r[nome])
+            """Executa tabela usando rastreamento de checkpoint."""
+            self._executar_tabela_rastreada(
+                nome,
+                metodo,
+                r,
+                pular_ref,
+                lote_ref,
+                original_iter_query,
+                on_lote,
+                on_tabela_iniciada,
+                on_tabela_concluida,
+            )
 
         if fase_inicial <= 1:
             self._fase_1(_executar_tabela)
-            _pular = None  # fases seguintes rodam completas
+            pular_ref["nome"] = None  # fases seguintes rodam completas
 
         if fase_inicial <= 2:
             self._fase_2(_executar_tabela)
-            _pular = None
+            pular_ref["nome"] = None
 
         if fase_inicial <= 3:
             self._fase_3(_executar_tabela)
@@ -1392,7 +1417,7 @@ class EtlProfessoresService:
             self._fase_4(_executar_tabela)
 
         total = sum(r.values())
-        log(
+        logger.info(
             "[ETL PROF] Concluído. Linhas alteradas: %d (fases %d-4).",
             total,
             fase_inicial,
