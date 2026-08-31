@@ -33,9 +33,13 @@ A ordem abaixo é exatamente a que o método `executar` aplica em `EtlPedagogico
 ## Fase 13 — sem dependências internas
 13. `turma_atribuida_dre_ue`
 
+## Fases 14 e 15 — catálogos do EOL (`full_refresh`)
+14. `etapa_ensino`
+15. `ciclo_ensino`
+
 ---
 
-> **Nota:** as fases 2 a 12 são independentes entre si no banco de destino. A ordem é mantida por conveniência operacional e por compatibilidade com a auditoria por fase.
+> **Nota:** as fases 2 a 15 são independentes entre si no banco de destino. A ordem é mantida por conveniência operacional e por compatibilidade com a auditoria por fase.
 > A fase `agrupamento_territorio_saber_gerado` é backup selecionável e não faz parte da execução padrão.
 
 ## Diagrama
@@ -54,7 +58,9 @@ digraph G {
     F11 [label="Fase 11\ngrade_componente_curricular"];
     F12 [label="Fase 12\nturma"];
     F13 [label="Fase 13\nturma_atribuida_dre_ue"];
+    F14 [label="Fase 14\netapa_ensino"];
+    F15 [label="Fase 15\nciclo_ensino"];
 
-    F1 -> F2 -> F3 -> F4 -> F5 -> F10 -> F11 -> F12 -> F13;
+    F1 -> F2 -> F3 -> F4 -> F5 -> F10 -> F11 -> F12 -> F13 -> F14 -> F15;
 }
 ```

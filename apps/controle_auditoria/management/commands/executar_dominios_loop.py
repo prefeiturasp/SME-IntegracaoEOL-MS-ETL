@@ -15,7 +15,9 @@ from apps.controle_auditoria.libs.repositorio_auditoria import (
 class Command(BaseCommand):
     """Executa dominios em loop com intervalo configurável."""
 
-    help = "Executa os dominios continuamente respeitando intervalo em segundos"
+    help = (
+        "Executa os dominios continuamente respeitando intervalo em segundos"
+    )
 
     def add_arguments(self, parser: Any) -> None:
         """Adiciona argumentos do comando."""
@@ -24,14 +26,12 @@ class Command(BaseCommand):
             type=int,
             default=settings.INTERVALO_EXECUCAO_ETL_SEGUNDOS,
         )
-        parser.add_argument("--volume", type=int, default=100)
         parser.add_argument("--continuar", action="store_true")
         parser.add_argument("--limite-linhas", type=int, default=None)
 
     def handle(self, *args: Any, **options: Any) -> None:
-        """Executa os dominios continuamente respeitando intervalo em segundos."""
+        """Executa os dominios continuamente respeitando intervalo."""
         intervalo: int = options["intervalo"]
-        volume: int = options["volume"]
         continuar: bool = options["continuar"]
         limite_linhas: int | None = options["limite_linhas"]
 
@@ -42,13 +42,7 @@ class Command(BaseCommand):
         total_linhas_processadas: int = 0
 
         while True:
-            volume_execucao = self._calcular_volume(
-                volume, limite_linhas, total_linhas_processadas
-            )
-            if volume_execucao <= 0:
-                break
-
-            argumentos: list[str] = ["--volume", str(volume_execucao)]
+            argumentos: list[str] = []
             if continuar:
                 argumentos.append("--continuar")
 
@@ -64,18 +58,16 @@ class Command(BaseCommand):
 
         self.stdout.write(
             self.style.SUCCESS(
-                f"Loop finalizado. linhas_processadas={total_linhas_processadas}"
+                "Loop finalizado. "
+                f"linhas_processadas={total_linhas_processadas}"
             )
         )
 
-    def _calcular_volume(self, volume: int, limite: int | None, total: int) -> int:
-        """Calcula volume do próximo lote considerando limite total."""
-        if limite is None:
-            return volume
-        restante = limite - total
-        return min(volume, restante) if restante > 0 else 0
-
-    def _executar_e_contar(self, repositorio: Any, argumentos: list[str]) -> int:
+    def _executar_e_contar(
+        self,
+        repositorio: Any,
+        argumentos: list[str],
+    ) -> int:
         """Executa comando e retorna delta de linhas processadas."""
 
         def _get_token() -> int:

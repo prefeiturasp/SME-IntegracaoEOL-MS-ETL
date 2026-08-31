@@ -9,6 +9,7 @@ from django.db.models.query import QuerySet
 from django.test import TestCase
 from django.utils import timezone
 
+from apps.core.libs.base_etl_service import PhaseConfig
 from apps.professores.dtos.model_in import (
     FuncionarioSistemaPerfilIn,
     FuncionarioUnidadeEducacionalIn,
@@ -99,9 +100,9 @@ class EtlProfessoresServiceFiltroAnoLetivoTest(TestCase):
         self.assertNotIn("AnoLetivo IN (2025, 2026)", sql)
         self.assertNotIn("AnoLetivo =", sql)
 
-    def test_ano_letivo_aplica_igualdade(self) -> None:
-        """Valida filtro pelo ano informado."""
-        srv = EtlProfessoresService(eol=MagicMock(), ano_letivo=2026)
+    def test_anos_letivos_aplica_filtro_in(self) -> None:
+        """Valida filtro pelos anos informados."""
+        srv = EtlProfessoresService(eol=MagicMock(), anos_letivos=[2025, 2026])
 
         sql_turmas = srv._sql_com_filtro_ano_letivo(SQL_TURMAS_ATRIBUIDAS_UE)
         sql_disciplinas = srv._sql_com_filtro_ano_letivo(
@@ -109,10 +110,10 @@ class EtlProfessoresServiceFiltroAnoLetivoTest(TestCase):
         )
         sql_atribuicoes = srv._sql_com_filtro_ano_letivo(SQL_ATRIBUICOES_AULA)
 
-        self.assertIn("AND AnoLetivo = 2026", sql_turmas)
-        self.assertIn("AND tau.AnoLetivo = 2026", sql_disciplinas)
-        self.assertIn("AND aa.an_atribuicao = 2026", sql_atribuicoes)
-        self.assertNotIn("AnoLetivo IN (2025, 2026)", sql_turmas)
+        self.assertIn("AND AnoLetivo IN (2025, 2026)", sql_turmas)
+        self.assertIn("AND tau.AnoLetivo IN (2025, 2026)", sql_disciplinas)
+        self.assertIn("AND aa.an_atribuicao IN (2025, 2026)", sql_atribuicoes)
+        self.assertNotIn("AnoLetivo = 2026", sql_turmas)
         self.assertNotIn("AnoLetivo >= 2026", sql_turmas)
 
 
@@ -1258,6 +1259,20 @@ class EtlProfessoresServiceFase1Test(TestCase):
 
     databases = ["default", "professores_db"]
 
+    def test_fases_padronizadas_usam_phase_config(self) -> None:
+        """Fases simples são descritas por PhaseConfig."""
+        srv = EtlProfessoresService(eol=MagicMock(), core_sso=MagicMock())
+        fases = {fase.nome: fase for fase in srv._fases}
+
+        self.assertIsInstance(fases["professor"], PhaseConfig)
+        self.assertEqual(fases["professor"].modo_escrita, "upsert")
+        self.assertEqual(fases["professor"].unique_fields, ("codigo_rf",))
+        self.assertEqual(
+            fases["lotacao_servidor"].modo_escrita, "full_refresh"
+        )
+        self.assertNotIn("administrador_escola", fases)
+        self.assertNotIn("professor_escola_ano", fases)
+
     @patch(_UPSERT_PATCH, return_value=4)
     @patch(_EOL_PATCH)
     def test_popular_professores(
@@ -1270,6 +1285,7 @@ class EtlProfessoresServiceFase1Test(TestCase):
         srv = EtlProfessoresService()
         resultado = srv.popular_professores()
         self.assertEqual(resultado, 4)
+        self.assertEqual(mock_upsert.call_args.args[4], ["codigo_rf"])
 
     @patch(_UPSERT_PATCH, return_value=1)
     @patch(_EOL_PATCH)
@@ -1719,7 +1735,7 @@ class EtlProfessoresServiceExecutarTest(TestCase):
         self.assertTrue(all(v == 3 for v in resultado.values()))
 
     def test_iter_lotes_aplica_offset_e_callback(self) -> None:
-        """Verifica offset e callback de lote na iteracao rastreada."""
+        """Verifica lotes ignorados e callback na iteracao rastreada."""
         srv = self._make_service_com_populares_mockados()
         original = MagicMock(return_value=iter([["lote-1"], ["lote-2"]]))
         lotes: list[tuple[str, int]] = []

@@ -4,13 +4,15 @@ Entidades extraídas das queries do EOL (EolConnection):
     - tipo_escola                    → TipoEscola
     - sub_prefeitura                 → SubPrefeitura
     - unidade_administrativa         → DRE
+    - oferta educacional por DRE     → DREAbrangencia
     - v_unidade_educacao_dados_gerais → UnidadeEducacional
 
 Ordem de carga ETL:
-    1. TipoEscola        (sem dependências internas)
-    2. DRE               (sem dependências internas)
+    1. DRE               (sem dependências internas)
+    2. TipoEscola        (sem dependências internas)
     3. SubPrefeitura     (sem dependências internas)
     4. UnidadeEducacional (depende de: DRE, TipoEscola, SubPrefeitura)
+    5. DREAbrangencia    (read model de compatibilidade)
 
 Modelos de auditoria (roteados para `default` via DominioRouter):
     - InstitucionalConsultaLog
@@ -65,6 +67,25 @@ class DRE(models.Model):
 
     def __str__(self) -> str:
         return f"{self.codigo_dre} - {self.sigla or self.nome}"
+
+
+class DREAbrangencia(models.Model):
+    """DRE elegível para consultas de abrangência educacional."""
+
+    codigo_dre = models.CharField(max_length=20, primary_key=True)
+    nome = models.CharField(max_length=200)
+    abreviacao = models.CharField(max_length=100, null=True, blank=True)
+    ordem = models.PositiveIntegerField()
+
+    class Meta:
+
+        app_label = "institucional"
+        db_table = "dre_abrangencia"
+        verbose_name = "DRE de abrangência"
+        verbose_name_plural = "DREs de abrangência"
+
+    def __str__(self) -> str:
+        return f"{self.codigo_dre} - {self.abreviacao or self.nome}"
 
 
 class SubPrefeitura(models.Model):

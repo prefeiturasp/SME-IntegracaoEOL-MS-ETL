@@ -6,7 +6,12 @@ from uuid import uuid4
 from django.test import TestCase
 
 from apps.core.libs.base_etl_service import PhaseConfig, PipelineMetrics
-from apps.programas.services import EtlProgramasService
+from apps.programas.services import (
+    SQL_MATRICULA_TURMA_PROGRAMA,
+    SQL_MATRICULA_TURMA_PROGRAMA_HISTORICO,
+    SQL_TURMA_PROGRAMA,
+    EtlProgramasService,
+)
 
 
 class TestProgramasService(TestCase):
@@ -20,7 +25,7 @@ class TestProgramasService(TestCase):
             eol=self.mock_eol,
             id_execucao=uuid4(),
         )
-        self.service._truncar_tabela = MagicMock()
+        self.service._truncar_tabela = MagicMock()  # type: ignore[method-assign]
 
     def test_phase_config_e_imutavel(self) -> None:
         """Valida que PhaseConfig é frozen."""
@@ -35,7 +40,7 @@ class TestProgramasService(TestCase):
             unique_fields=("id",),
         )
         with self.assertRaises(AttributeError):
-            config.nome = "mudar"  # type: ignore[misc]
+            config.nome = "mudar"  # type: ignore[method-assign,misc]
 
     def test_fases_contem_8_configs(self) -> None:
         """Valida que o service define as 8 fases esperadas."""
@@ -61,18 +66,72 @@ class TestProgramasService(TestCase):
         list(self.service._iter_chunks("SELECT 1"))
         self.mock_eol.iter_query.assert_called_once_with("SELECT 1")
 
+    def test_sql_com_filtro_anos_letivos_remove_marcadores(self) -> None:
+        """Sem filtro anual, marcadores são removidos."""
+        sql = self.service._sql_com_filtro_anos_letivos(SQL_TURMA_PROGRAMA)
+
+        self.assertNotIn("FILTRO_ANOS_LETIVOS_TURMA_PROGRAMA", sql)
+        self.assertNotIn("te.an_letivo IN", sql)
+
+    def test_sql_com_filtro_anos_letivos_aplica_in(self) -> None:
+        """Com anos informados, aplica filtro IN nas queries anuais."""
+        service = EtlProgramasService(
+            db_alias="programas_db",
+            eol=self.mock_eol,
+            id_execucao=uuid4(),
+            anos_letivos=[2025, 2026],
+        )
+
+        sql = service._sql_com_filtro_anos_letivos(SQL_TURMA_PROGRAMA)
+
+        self.assertIn("AND te.an_letivo IN (2025, 2026)", sql)
+
+    def test_sql_matriculas_deduplica_por_chave_logica(self) -> None:
+        """Matrículas selecionam uma linha canônica por chave lógica."""
+        for sql in (
+            SQL_MATRICULA_TURMA_PROGRAMA,
+            SQL_MATRICULA_TURMA_PROGRAMA_HISTORICO,
+        ):
+            with self.subTest(sql=sql[:40]):
+                self.assertIn("ROW_NUMBER() OVER", sql)
+                self.assertIn("PARTITION BY", sql)
+                self.assertIn("m.cd_turma_escola", sql)
+                self.assertIn("vm.cd_aluno", sql)
+                self.assertIn("gcc.cd_componente_curricular", sql)
+                self.assertIn("WHERE rn = 1", sql)
+                self.assertIn(
+                    "ORDER BY cd_turma_escola, cd_aluno, "
+                    "cd_componente_curricular",
+                    sql,
+                )
+
     def test_criar_transform_retorna_tripla(self) -> None:
-        """Valida que a factory de transform gera a tripla (pk, hash, obj)."""
+        """Transform devolve (pk, hash, linha crua) sem materializar model."""
         config = self.service._fases[0]  # tipo_programa
         transform = self.service._criar_transform(config)
 
         row = (649, "PAP-RECUP", "PAP Recuperação")
-        pk, h, obj = transform(row)
+        pk, h, payload = transform(row)
 
         self.assertEqual(pk, "649")
         self.assertIsInstance(h, str)
         self.assertEqual(len(h), 64)
+        self.assertEqual(payload, row)
+
+        obj = transform.materializar(payload)
         self.assertEqual(obj.codigo_tipo_programa, 649)
+
+    def test_transform_ignora_colunas_fora_do_hash(self) -> None:
+        """Linhas iguais geram o mesmo hash; diferentes, hashes distintos."""
+        config = self.service._fases[0]
+        transform = self.service._criar_transform(config)
+
+        base = (649, "PAP-RECUP", "PAP Recuperação")
+        self.assertEqual(transform(base)[1], transform(base)[1])
+        self.assertNotEqual(
+            transform(base)[1],
+            transform((649, "PAP-RECUP", "PAP Recuperação II"))[1],
+        )
 
     def test_criar_transform_pk_composta_turma_componente(self) -> None:
         """Valida geração de PK composta para turma_programa_componente."""

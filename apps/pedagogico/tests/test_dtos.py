@@ -10,6 +10,7 @@ from apps.pedagogico.dtos.model_in import (
     ApiEolComponenteCurricularPAPIn,
     ApiEolComponenteCurricularPlanejamentoRegenciaIn,
     ApiEolTurmaItinerarioEnsinoMedioIn,
+    CicloEnsinoIn,
     ComponenteCurricularSimplesIn,
     ComponenteTurmaIn,
     EtapaEnsinoIn,
@@ -266,6 +267,29 @@ class EtapaEnsinoInTest(SimpleTestCase):
         self.assertEqual(data["transferido_em"], "agora")
 
 
+class CicloEnsinoInTest(SimpleTestCase):
+    """Testes de ``CicloEnsinoIn.to_domain()``."""
+
+    def test_mapeamento_basico(self) -> None:
+        data_atualizacao = datetime(2026, 8, 20, 10, 30)
+        dto = CicloEnsinoIn(
+            codigo_modalidade_ensino="5",
+            codigo_etapa_ensino="4",
+            codigo="3",
+            descricao="Alfabetização ",
+            data_atualizacao=data_atualizacao,
+        )
+
+        data = dto.to_domain("agora")
+
+        self.assertEqual(data["codigo_modalidade_ensino"], 5)
+        self.assertEqual(data["codigo_etapa_ensino"], 4)
+        self.assertEqual(data["codigo"], 3)
+        self.assertEqual(data["descricao"], "Alfabetização ")
+        self.assertTrue(timezone.is_aware(data["data_atualizacao"]))
+        self.assertEqual(data["transferido_em"], "agora")
+
+
 class ComponenteTurmaInTest(SimpleTestCase):
     """Testes de ``ComponenteTurmaIn.to_domain()``."""
 
@@ -336,6 +360,7 @@ def _turma_in_completa(**overrides: object) -> TurmaIn:
         "nome_turma": " 5A Manhã ",
         "duracao_turno": 5,
         "tipo_turno": 2,
+        "data_inicio": datetime(2025, 2, 4, 0, 0, 0),
         "data_inicio_turma": datetime(2025, 2, 5, 8, 0, 0),
         "data_fim": None,
         "data_fim_turma": None,
@@ -495,6 +520,7 @@ class TurmaInTest(SimpleTestCase):
             " 5A Manhã ",
             5,
             2,
+            datetime(2025, 2, 4, 0, 0, 0),
             datetime(2025, 2, 5, 8, 0, 0),
             None,
             None,

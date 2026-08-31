@@ -1,5 +1,7 @@
 """Base para implementação de comandos de ETL com controle de auditoria."""
 
+import json
+from argparse import SUPPRESS
 from typing import Any
 
 from django.core.management.base import BaseCommand
@@ -8,6 +10,34 @@ from apps.controle_auditoria.libs.repositorio_auditoria import (
     RepositorioAuditoriaPostgres,
 )
 from apps.core.libs.contextual_logger import ContextualLogger
+
+# Situações de checkpoint que permitem retomada automática.
+_SITUACOES_RETOMAVEIS = frozenset({"erro", "interrompido"})
+
+
+def montar_parametros_execucao(
+    fase_inicial: int,
+    options: dict[str, Any],
+    extras: dict[str, object] | None = None,
+) -> dict[str, object]:
+    """Monta parâmetros rastreáveis da execução."""
+    disparo_raw = options.get("parametros_disparo")
+    disparo: dict[str, object] = {}
+    if disparo_raw:
+        try:
+            disparo = json.loads(disparo_raw)
+        except (TypeError, json.JSONDecodeError):
+            disparo = {"raw": str(disparo_raw)}
+
+    execucao = {
+        "continuar": options.get("continuar", False),
+        "fase_inicial": fase_inicial,
+        "anos_letivos": options.get("anos_letivos"),
+    }
+    if extras:
+        execucao.update(extras)
+
+    return {"execucao": execucao, "disparo": disparo}
 
 
 class BaseEtlCommand(BaseCommand):
@@ -35,18 +65,6 @@ class BaseEtlCommand(BaseCommand):
 
     def add_arguments(self, parser: Any) -> None:
         """Declara argumentos padrão para todos os comandos de ETL."""
-        parser.add_argument(
-            "--volume",
-            type=int,
-            default=500,
-            help="Tamanho de lote para controle de progresso pelo Celery.",
-        )
-        parser.add_argument(
-            "--offset",
-            type=int,
-            default=0,
-            help="Deslocamento inicial (reservado para uso futuro).",
-        )
         parser.add_argument(
             "--continuar",
             action="store_true",
@@ -88,6 +106,12 @@ class BaseEtlCommand(BaseCommand):
                 "Ex: --fases turma componente_curricular"
             ),
         )
+        parser.add_argument(
+            "--parametros-disparo",
+            type=str,
+            default=None,
+            help=SUPPRESS,
+        )
 
     def handle(self, *args: Any, **options: Any) -> None:
         """Execução padronizada do fluxo de ETL (Sync ou Async).
@@ -109,7 +133,10 @@ class BaseEtlCommand(BaseCommand):
             job_name=job_name,
         )
 
-        id_execucao = repositorio.iniciar_execucao(self.dominio)
+        id_execucao = repositorio.iniciar_execucao(
+            self.dominio,
+            parametros=self._parametros_execucao(fase_inicial, **options),
+        )
         self._etl_logger.update_context(execution_id=str(id_execucao))
 
         if options.get("celery"):
@@ -158,6 +185,21 @@ class BaseEtlCommand(BaseCommand):
         """Kwargs extras para o service."""
         return {}
 
+    def _parametros_execucao(
+        self, fase_inicial: int, **options: Any
+    ) -> dict[str, object]:
+        """Monta parâmetros rastreáveis da execução."""
+        return montar_parametros_execucao(
+            fase_inicial,
+            options,
+            {
+                "fase": options.get("fase", 0),
+                "fases": options.get("fases"),
+                "carga_inicial": options.get("carga_inicial", False),
+                "celery": options.get("celery", False),
+            },
+        )
+
     def _handle_sync(
         self,
         fase_inicial: int,
@@ -202,13 +244,15 @@ class BaseEtlCommand(BaseCommand):
     ) -> None:
         """Registra interrupção manual pelo usuário."""
         token = getattr(servico, "ultimo_token", None) or str(token_ant)
-        fase = getattr(servico, "ultima_fase_concluida", 0) + 1
+        fase = self._fase_atual_servico(servico) or getattr(
+            servico, "ultima_fase_concluida", 0
+        )
         repositorio.atualizar_checkpoint_dominio(
             dominio=self.dominio.lower(),
             ultimo_id_execucao=id_exec,
             ultima_pagina=fase,
             token_parada=token,
-            indice_sincronizacao=f"CTRL+C:offset:{token}",
+            indice_sincronizacao=f"CTRL+C:token:{token}",
             ultima_situacao="interrompido",
             sucesso=False,
         )
@@ -229,7 +273,7 @@ class BaseEtlCommand(BaseCommand):
         if not options.get("continuar", False):
             return 1, 0
 
-        checkpoint = repositorio.obter_checkpoint_dominio(self.dominio)
+        checkpoint = repositorio.obter_checkpoint_dominio(self.dominio.lower())
         if not checkpoint:
             return 1, 0
 
@@ -237,10 +281,23 @@ class BaseEtlCommand(BaseCommand):
         fase = int(str(checkpoint.get("ultima_pagina") or 0))
         token = int(str(checkpoint.get("token_parada") or 0))
 
+        if situacao not in _SITUACOES_RETOMAVEIS:
+            return 1, 0
+
         if situacao == "erro" and 0 < fase < self.fase_final:
             return fase + 1, token
 
+        if situacao == "interrompido" and 0 < fase <= self.fase_final:
+            return fase, token
+
         return 1, 0
+
+    def _fase_atual_servico(self, servico: Any | None) -> int:
+        """Retorna a fase em andamento informada pelo serviço."""
+        try:
+            return int(getattr(servico, "fase_atual", 0) or 0)
+        except (TypeError, ValueError):
+            return 0
 
     def _finalizar_com_sucesso(
         self,
@@ -263,7 +320,7 @@ class BaseEtlCommand(BaseCommand):
             ultimo_id_execucao=id_exec,
             ultima_pagina=fase,
             token_parada=token,
-            indice_sincronizacao=f"{nome_tabela}:offset:{token}",
+            indice_sincronizacao=f"{nome_tabela}:token:{token}",
             ultima_situacao="concluido",
             sucesso=True,
         )
@@ -288,14 +345,17 @@ class BaseEtlCommand(BaseCommand):
     ) -> None:
         """Registra falha na auditoria e no checkpoint para retomada."""
         token_erro = getattr(servico, "ultimo_token", None) or str(token_ant)
+        fase_atual = self._fase_atual_servico(servico)
         fase = getattr(servico, "ultima_fase_concluida", 0)
+        if fase_atual:
+            fase = max(int(fase or 0), fase_atual - 1)
 
         repositorio.atualizar_checkpoint_dominio(
-            dominio=self.dominio,
+            dominio=self.dominio.lower(),
             ultimo_id_execucao=id_exec,
             ultima_pagina=fase,
             token_parada=token_erro,
-            indice_sincronizacao=f"ERRO:offset:{token_erro}",
+            indice_sincronizacao=f"ERRO:token:{token_erro}",
             ultima_situacao="erro",
             sucesso=False,
         )

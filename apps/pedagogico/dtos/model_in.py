@@ -53,6 +53,37 @@ class EtapaEnsinoIn:
 
 
 @dataclass
+class CicloEnsinoIn:
+    """Linha bruta da query de catálogo de ciclos de ensino."""
+
+    codigo_modalidade_ensino: Any
+    codigo_etapa_ensino: Any
+    codigo: Any
+    descricao: Any
+    data_atualizacao: Any
+
+    def to_domain(self, transferido_em: Any) -> dict:
+        """Converte a linha extraída para os campos do domínio.
+
+        Args:
+            transferido_em: Momento em que o registro foi processado.
+
+        Returns:
+            Campos normalizados do ciclo de ensino.
+        """
+        return {
+            "codigo_modalidade_ensino": int(
+                self.codigo_modalidade_ensino
+            ),
+            "codigo_etapa_ensino": int(self.codigo_etapa_ensino),
+            "codigo": int(self.codigo),
+            "descricao": str_value_or_none(self.descricao) or "",
+            "data_atualizacao": aware_or_none(self.data_atualizacao),
+            "transferido_em": transferido_em,
+        }
+
+
+@dataclass
 class ApiEolComponenteCurricularIn:
     """Linha consolidada de componente curricular da API EOL."""
 
@@ -213,6 +244,7 @@ class TurmaIn:
     nome_turma: Any
     duracao_turno: Any
     tipo_turno: Any
+    data_inicio: Any
     data_inicio_turma: Any
     data_fim: Any
     data_fim_turma: Any
@@ -246,6 +278,7 @@ class TurmaIn:
             "nome_turma": strip_str(self.nome_turma),
             "duracao_turno": int_or_none(self.duracao_turno),
             "tipo_turno": int_or_none(self.tipo_turno),
+            "data_inicio": aware_or_none(self.data_inicio),
             "data_inicio_turma": aware_or_none(self.data_inicio_turma),
             "data_fim": aware_or_none(self.data_fim),
             "data_fim_turma": aware_or_none(self.data_fim_turma),

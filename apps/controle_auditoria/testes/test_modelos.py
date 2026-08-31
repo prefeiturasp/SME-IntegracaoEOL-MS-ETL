@@ -53,7 +53,9 @@ class ModelosAuditoriaCrudTestCase(TestCase):
         self.assertEqual(salvo.linhas_lidas, 200)
 
         registro.delete()
-        self.assertFalse(EtlExecucaoTabelaLida.objects.filter(pk=registro.pk).exists())
+        self.assertFalse(
+            EtlExecucaoTabelaLida.objects.filter(pk=registro.pk).exists()
+        )
 
     def test_crud_etl_execucao_tabela_escrita(self) -> None:
         """Cria, atualiza e remove registro de tabela escrita."""
@@ -83,7 +85,7 @@ class ModelosAuditoriaCrudTestCase(TestCase):
             ultimo_id_execucao=uuid4(),
             ultima_pagina=1,
             token_parada="100",
-            indice_sincronizacao="institucional:offset:100",
+            indice_sincronizacao="institucional:token:100",
             ultima_situacao="sucesso",
         )
         checkpoint.ultima_pagina = 2
@@ -95,4 +97,6 @@ class ModelosAuditoriaCrudTestCase(TestCase):
         self.assertEqual(salvo.token_parada, "200")
 
         checkpoint.delete()
-        self.assertFalse(EtlCheckpointDominio.objects.filter(pk=checkpoint.pk).exists())
+        self.assertFalse(
+            EtlCheckpointDominio.objects.filter(pk=checkpoint.pk).exists()
+        )

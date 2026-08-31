@@ -1,13 +1,18 @@
 from datetime import UTC, date, datetime
 from queue import Empty
 from types import SimpleNamespace
+from typing import cast
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 from django.test import TestCase
 from django.utils import timezone
 
-from apps.core.libs.base_etl_service import PhaseConfig, PipelineMetrics
+from apps.core.libs.base_etl_service import (
+    PhaseConfig,
+    PipelineMetrics,
+    TransformFase,
+)
 from apps.pedagogico.dtos.model_in import (
     AtribuicaoTerritorioSaberIn,
 )
@@ -58,8 +63,8 @@ class TestPedagogicoService(TestCase):
         with self.assertRaises(AttributeError):
             config.nome = "mudar"  # type: ignore[misc]
 
-    def test_fases_contem_14_configs_esperados(self) -> None:
-        self.assertEqual(len(self.service._fases), 14)
+    def test_fases_contem_15_configs_esperados(self) -> None:
+        self.assertEqual(len(self.service._fases), 15)
         self.assertEqual(
             [fase.nome for fase in self.service._fases],
             [
@@ -77,8 +82,28 @@ class TestPedagogicoService(TestCase):
                 "turma",
                 "turma_atribuida_dre_ue",
                 "etapa_ensino",
+                "ciclo_ensino",
             ],
         )
+
+    def test_criar_transform_ciclo_ensino(self) -> None:
+        """Transforma o catálogo de ciclos com chave pelo código."""
+        config = next(
+            fase for fase in self.service._fases if fase.nome == "ciclo_ensino"
+        )
+        transform = self.service._criar_transform(config)
+        data_atualizacao = datetime(2026, 8, 20, 10, 30, tzinfo=UTC)
+
+        result = transform((5, 4, 3, "Alfabetização", data_atualizacao))
+
+        assert result is not None
+        pk, hash_val, obj = result
+        self.assertEqual(pk, "3")
+        self.assertEqual(len(hash_val), 64)
+        self.assertEqual(obj.codigo_modalidade_ensino, 5)
+        self.assertEqual(obj.codigo_etapa_ensino, 4)
+        self.assertEqual(obj.descricao, "Alfabetização")
+        self.assertEqual(obj.data_atualizacao, data_atualizacao)
 
     def test_criar_transform_componente_curricular_retorna_tripla(
         self,
@@ -165,6 +190,7 @@ class TestPedagogicoService(TestCase):
             " 5A Manhã ",  # nome_turma
             5,  # duracao_turno
             2,  # tipo_turno
+            "2025-02-04T00:00:00",  # data_inicio
             "2025-02-05T08:00:00",  # data_inicio_turma
             None,  # data_fim
             None,  # data_fim_turma
@@ -257,11 +283,12 @@ class TestPedagogicoService(TestCase):
     ) -> None:
         """Fase API EOL usa transform genérico da base."""
         config = self.service._fases[5]
-        transform = self.service._criar_transform(config)
+        transform = cast(TransformFase, self.service._criar_transform(config))
 
         result = transform((1, 512, 513, "2021-12-31T00:00:00"))
         assert result is not None
-        pk, _, obj = result
+        pk, _, payload = result
+        obj = transform.materializar(payload)
 
         self.assertEqual(pk, "1")
         self.assertEqual(obj.id_componente_curricular_pai, 512)
@@ -273,11 +300,12 @@ class TestPedagogicoService(TestCase):
     ) -> None:
         """Regência da API EOL não depende de id físico de origem."""
         config = self.service._fases[7]
-        transform = self.service._criar_transform(config)
+        transform = cast(TransformFase, self.service._criar_transform(config))
 
         result = transform((218, 4, 5))
         assert result is not None
-        pk, _, obj = result
+        pk, _, payload = result
+        obj = transform.materializar(payload)
 
         self.assertEqual(pk, "218-4-5")
         self.assertEqual(obj.id_componente_curricular, 218)
@@ -315,6 +343,24 @@ class TestPedagogicoService(TestCase):
         processed_data = mock_sync.call_args.args[0]
         self.assertEqual(len(processed_data), 1)
         self.assertEqual(processed_data[0][0], "T1-513")
+
+    @patch.object(EtlPedagogicoService, "sync_batch", return_value=(1, 0))
+    def test_processar_batch_repassa_materializacao_do_transform_generico(
+        self, mock_sync: MagicMock
+    ) -> None:
+        """Transform genérico precisa materializar payload antes do bulk."""
+        config = self.service._fases[5]
+        transform = self.service._criar_transform(config)
+
+        self.service._processar_batch(
+            config=config,
+            chunk=[(1, 512, 513, "2021-12-31T00:00:00")],
+            transform=transform,
+            batch_num=0,
+        )
+
+        meta = mock_sync.call_args.args[1]
+        self.assertTrue(callable(meta["materializar"]))
 
     def test_anos_letivos_usa_cache_por_instancia(self) -> None:
         self.mock_eol.iter_query.return_value = [[(2024,), (2025,)]]
@@ -514,10 +560,7 @@ class TestPedagogicoService(TestCase):
         self.assertEqual(itens, [])
 
     def test_executar_preenche_duas_chaves_a_partir_da_fase_3(self) -> None:
-        with (
-            patch.object(self.service, "_executar_fase") as mock_fase,
-            patch.object(self.service, "_registrar_auditoria_fase"),
-        ):
+        with patch.object(self.service, "_executar_fase") as mock_fase:
             mock_fase.return_value = PipelineMetrics(total_escritos=10)
             self.service._total_itens_agrupamento = 7
 
@@ -529,7 +572,8 @@ class TestPedagogicoService(TestCase):
         self.assertNotIn("componente_curricular_agrupamento", resultado)
         self.assertIn("grade_componente_curricular", resultado)
         self.assertIn("turma", resultado)
-        self.assertEqual(mock_fase.call_count, 12)
+        self.assertEqual(mock_fase.call_count, 13)
+        self.assertEqual(mock_fase.call_args_list[0].kwargs["numero_fase"], 3)
 
     def test_cod_agrupamento_gera_proximo_sequencial_quando_novo(self) -> None:
         """Novo agrupamento deve receber o próximo ID acima do piso."""
@@ -828,11 +872,12 @@ class TestPedagogicoService(TestCase):
         self,
     ) -> None:
         config = self.service._fases[4]
-        transform = self.service._criar_transform(config)
+        transform = cast(TransformFase, self.service._criar_transform(config))
 
         result = transform((None, 513, True, False, " Arte ", None, None))
         assert result is not None
-        pk, _, obj = result
+        pk, _, payload = result
+        obj = transform.materializar(payload)
 
         self.assertEqual(pk, "None-513")
         self.assertIsNone(obj.id_relacao_origem)
@@ -855,6 +900,81 @@ class TestPedagogicoService(TestCase):
             SQL_API_EOL_COMPONENTE_CURRICULAR
         )
         self.mock_eol.iter_query.assert_not_called()
+
+    def test_parametros_abrangencia_le_chave_valor(self) -> None:
+        """Lê a tabela ``parametros`` (api_eol_db) como dict nome->valor."""
+        self.mock_api_eol.iter_query.return_value = [
+            [
+                ("tipo_escola_sgp", "1,2,3"),
+                ("tipo_escola_infantil_sgp", "2,11"),
+            ],
+            [("etapas_por_modalidade", '{"1": [1, 10]}')],
+        ]
+
+        parametros = self.service._parametros_abrangencia()
+
+        self.assertEqual(
+            parametros,
+            {
+                "tipo_escola_sgp": "1,2,3",
+                "tipo_escola_infantil_sgp": "2,11",
+                "etapas_por_modalidade": '{"1": [1, 10]}',
+            },
+        )
+
+    def test_sql_turmas_atribuidas_dre_ue_formata_placeholders(self) -> None:
+        """Monta a SQL de abrangência com os parâmetros vigentes."""
+        self.mock_api_eol.iter_query.return_value = [
+            [
+                ("tipo_escola_sgp", "1,2,3,4"),
+                ("tipo_escola_infantil_sgp", "2,11"),
+                (
+                    "etapas_por_modalidade",
+                    '{"1": [1, 10], "3": [2, 3, 11], '
+                    '"5": [4, 5, 12, 13], "6": [6, 7, 8]}',
+                ),
+            ]
+        ]
+
+        sql = self.service._sql_turmas_atribuidas_dre_ue()
+
+        self.assertIn("esc.tp_escola IN (1,2,3,4)", sql)
+        self.assertIn("tp_escola IN (2,11)", sql)
+        self.assertIn("ee.cd_etapa_ensino IN (1,10)", sql)
+        self.assertIn("ee.cd_etapa_ensino IN (2,3,11)", sql)
+        self.assertIn("ee.cd_etapa_ensino IN (4,5,12,13)", sql)
+        self.assertIn("ee.cd_etapa_ensino IN (6,7,8)", sql)
+        self.assertNotIn("{tipos_escola}", sql)
+        self.assertNotIn("{etapas_infantil}", sql)
+
+    def test_executar_fase_turma_atribuida_dre_ue_monta_sql_antes_de_delegar(
+        self,
+    ) -> None:
+        """Fase de abrangência troca o SQL pelo montado em tempo real."""
+        config = next(
+            f
+            for f in self.service._fases
+            if f.nome == "turma_atribuida_dre_ue"
+        )
+        sql_montado = "SELECT 1 -- sql montado"
+
+        with (
+            patch.object(
+                self.service,
+                "_sql_turmas_atribuidas_dre_ue",
+                return_value=sql_montado,
+            ),
+            patch.object(
+                self.service.__class__.__bases__[0], "_executar_fase"
+            ) as mock_base,
+        ):
+            self.service._executar_fase(config, numero_fase=13)
+
+        mock_base.assert_called_once()
+        config_chamado = mock_base.call_args.args[0]
+        self.assertEqual(config_chamado.sql, sql_montado)
+        self.assertEqual(config_chamado.nome, "turma_atribuida_dre_ue")
+        self.mock_api_eol.iter_query.assert_not_called()
 
     def test_criar_transform_fase_sem_factory_usa_implementacao_base(
         self,
@@ -933,19 +1053,21 @@ class TestPedagogicoService(TestCase):
         self.assertEqual((escritos, ignorados), (0, 2))
         mock_sync.assert_not_called()
 
-    def test_anos_letivos_filtra_por_ano_letivo_minimo(self) -> None:
-        """Quando ``ano_letivo`` é informado, anos anteriores são removidos."""
+    def test_anos_letivos_filtra_lista_exata(self) -> None:
+        """Quando ``anos_letivos`` é informado, só esses anos são usados."""
         service = EtlPedagogicoService(
             db_alias="pedagogico_db",
             eol=self.mock_eol,
             id_execucao=uuid4(),
-            ano_letivo=2025,
+            anos_letivos=[2024, 2026],
         )
-        self.mock_eol.iter_query.return_value = [[(2023,), (2024,), (2025,)]]
+        self.mock_eol.iter_query.return_value = [
+            [(2023,), (2024,), (2025,), (2026,)]
+        ]
 
         anos = service._anos_letivos()
 
-        self.assertEqual(anos, [2025])
+        self.assertEqual(anos, [2024, 2026])
 
     def test_executar_fase_roteia_agrupamentos_para_metodo_dedicado(
         self,
@@ -988,7 +1110,7 @@ class TestPedagogicoService(TestCase):
             fases=["agrupamento_territorio_saber_gerado"],
         )
 
-        self.assertEqual(len(service._fases), 15)
+        self.assertEqual(len(service._fases), 16)
         self.assertEqual(
             service._fases[-1].nome,
             "agrupamento_territorio_saber_gerado",
@@ -1000,14 +1122,12 @@ class TestPedagogicoService(TestCase):
         """``executar`` pula fases abaixo do início e fora da seleção."""
         self.service._fases_selecionadas = ["turma"]
 
-        with (
-            patch.object(self.service, "_executar_fase") as mock_fase,
-            patch.object(self.service, "_registrar_auditoria_fase"),
-        ):
+        with patch.object(self.service, "_executar_fase") as mock_fase:
             mock_fase.return_value = PipelineMetrics(total_escritos=3)
             resultado = self.service.executar(fase_inicial=2)
 
         self.assertEqual(mock_fase.call_count, 1)
+        self.assertEqual(mock_fase.call_args.kwargs["numero_fase"], 12)
         self.assertEqual(resultado, {"turma": 3})
 
     @patch("apps.core.libs.base_etl_service.Queue")

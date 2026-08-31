@@ -7,6 +7,7 @@ from apps.controle_auditoria.models import (
     EtlExecucao,
     EtlExecucaoTabelaEscrita,
     EtlExecucaoTabelaLida,
+    EtlProgressoExecucao,
 )
 from apps.core.api.serializers import (
     HealthStatusSerializer as BaseHealthStatusSerializer,
@@ -49,6 +50,15 @@ class EtlExecucaoTabelaEscritaSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
 
+class EtlProgressoExecucaoSerializer(serializers.ModelSerializer):
+    """Serializa progresso operacional de uma execução ETL."""
+
+    class Meta:
+
+        model = EtlProgressoExecucao
+        fields = "__all__"
+
+
 class EtlExecucaoDetalheSerializer(serializers.ModelSerializer):
     """Serializa execucao ETL com tabelas relacionadas via id_execucao."""
 
@@ -57,6 +67,9 @@ class EtlExecucaoDetalheSerializer(serializers.ModelSerializer):
     )
     tabelas_escritas = serializers.SerializerMethodField(
         help_text="Tabelas escritas nesta execução (EtlExecucaoTabelaEscrita)"
+    )
+    progresso = serializers.SerializerMethodField(
+        help_text="Progresso operacional por fase."
     )
 
     class Meta:
@@ -70,9 +83,11 @@ class EtlExecucaoDetalheSerializer(serializers.ModelSerializer):
             "iniciado_em",
             "finalizado_em",
             "mensagem_erro",
+            "parametros",
             "criado_em",
             "tabelas_lidas",
             "tabelas_escritas",
+            "progresso",
         ]
 
     def get_tabelas_lidas(self, obj: EtlExecucao) -> list:
@@ -86,6 +101,13 @@ class EtlExecucaoDetalheSerializer(serializers.ModelSerializer):
             id_execucao=obj.id_execucao
         )
         return list(EtlExecucaoTabelaEscritaSerializer(qs, many=True).data)
+
+    def get_progresso(self, obj: EtlExecucao) -> list:
+        """Retorna progresso operacional com o mesmo id_execucao."""
+        qs = EtlProgressoExecucao.objects.filter(
+            id_execucao=obj.id_execucao
+        ).order_by("fase_numero")
+        return list(EtlProgressoExecucaoSerializer(qs, many=True).data)
 
 
 class HealthStatusSerializer(BaseHealthStatusSerializer):

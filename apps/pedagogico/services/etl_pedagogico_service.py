@@ -5,8 +5,10 @@ banco `pedagogico_db`. As regras de origem, chaves e filtros ficam
 documentadas em `docs/dominios/pedagogico/`.
 """
 
+import json
 import logging
 from collections.abc import Callable, Iterator
+from dataclasses import replace
 from typing import Any, cast
 from uuid import UUID
 
@@ -29,6 +31,7 @@ from apps.pedagogico.dtos.model_in import (
     ApiEolTurmaItinerarioEnsinoMedioIn,
     AtribuicaoComponenteIn,
     AtribuicaoTerritorioSaberIn,
+    CicloEnsinoIn,
     ComponenteCurricularSimplesIn,
     ComponenteTurmaIn,
     EtapaEnsinoIn,
@@ -40,6 +43,7 @@ from apps.pedagogico.models import (
     AgrupamentoAtribuicaoTerritorioSaber,
     AtribuicaoComponente,
     AtribuicaoTerritorioSaber,
+    CicloEnsino,
     ComponenteCurricular,
     ComponenteCurricularAgrupamento,
     ComponenteCurricularApiEol,
@@ -64,10 +68,12 @@ from apps.pedagogico.queries import (
     SQL_API_EOL_TURMA_ITINERARIO_ENSINO_MEDIO,
     SQL_ATRIBUICAO_COMPONENTE,
     SQL_ATRIBUICOES_TERRITORIO_SABER,
+    SQL_CICLO_ENSINO,
     SQL_COMPONENTE_TURMA,
     SQL_COMPONENTES_NAO_CANCELADOS,
     SQL_ETAPA_ENSINO,
     SQL_GRADE_COMPONENTE_CURRICULAR,
+    SQL_PARAMETROS_ABRANGENCIA,
     SQL_TURMAS,
     SQL_TURMAS_ATRIBUIDAS_DRE_UE,
 )
@@ -130,7 +136,7 @@ class EtlPedagogicoService(BaseEtlService):
         primeiro_run: bool = False,
         eol: EOLService | None = None,
         api_eol: ApiEOLService | None = None,
-        ano_letivo: int | None = None,
+        anos_letivos: list[int] | None = None,
         fases: list[str] | None = None,
     ) -> None:
         super().__init__(
@@ -145,7 +151,9 @@ class EtlPedagogicoService(BaseEtlService):
         self._agora = timezone.now()
         self._total_itens_agrupamento: int = 0
         self._cache_anos: list[int] | None = None
-        self._ano_letivo: int | None = ano_letivo
+        self._anos_letivos_filtro = (
+            [int(ano) for ano in anos_letivos] if anos_letivos else None
+        )
         self._fases = self._init_fases()
         if self._fases_selecionadas and (
             _AGRUPAMENTO_GERADO_BACKUP in self._fases_selecionadas
@@ -200,6 +208,7 @@ class EtlPedagogicoService(BaseEtlService):
             "turma": self._transform_componente_curricular,
             "turma_atribuida_dre_ue": self._transform_turma_atribuida_dre_ue,
             "etapa_ensino": self._transform_componente_curricular,
+            "ciclo_ensino": self._transform_componente_curricular,
         }
         factory = transform_factories.get(config.nome)
         if factory is None:
@@ -341,7 +350,9 @@ class EtlPedagogicoService(BaseEtlService):
         if not lote_transformado:
             return 0, len(chunk)
 
-        meta = self._get_batch_meta(config)
+        meta = self._get_batch_meta(
+            config, materializar=getattr(transform, "materializar", None)
+        )
         return self.sync_batch(
             cast(list[ProcessedRecord], lote_transformado),
             meta,
@@ -360,8 +371,8 @@ class EtlPedagogicoService(BaseEtlService):
                 for chunk in self.eol.iter_query(SQL_ANOS_LETIVOS)
                 for r in chunk
             ]
-            if self._ano_letivo is not None:
-                anos = [a for a in anos if a >= self._ano_letivo]
+            if self._anos_letivos_filtro is not None:
+                anos = [a for a in anos if a in self._anos_letivos_filtro]
             self._cache_anos = anos
         return self._cache_anos
 
@@ -489,7 +500,42 @@ class EtlPedagogicoService(BaseEtlService):
         )
 
     # ------------------------------------------------------------------
-    # Override _executar_fase para fase de agrupamentos
+    # Parâmetros de abrangência (parametros, api_eol_db) — usados para
+    # montar a SQL de turma_atribuida_dre_ue em tempo de execução.
+    # ------------------------------------------------------------------
+
+    def _parametros_abrangencia(self) -> dict[str, str]:
+        """Lê os parâmetros de abrangência da API EOL (chave/valor)."""
+        linhas = [
+            row
+            for chunk in self.api_eol.iter_query(SQL_PARAMETROS_ABRANGENCIA)
+            for row in chunk
+        ]
+        return {str(nome): str(valor) for nome, valor in linhas}
+
+    def _sql_turmas_atribuidas_dre_ue(self) -> str:
+        """Monta a SQL de abrangência com os parâmetros vigentes.
+
+        Recorte de tipo de escola e etapas por
+        modalidade vêm de ``parametros`` e não de constante hardcoded.
+        """
+        parametros = self._parametros_abrangencia()
+        etapas_por_modalidade = json.loads(parametros["etapas_por_modalidade"])
+        return SQL_TURMAS_ATRIBUIDAS_DRE_UE.format(
+            tipos_escola=parametros["tipo_escola_sgp"],
+            tipos_escola_infantil=parametros["tipo_escola_infantil_sgp"],
+            etapas_infantil=",".join(
+                str(v) for v in etapas_por_modalidade["1"]
+            ),
+            etapas_eja=",".join(str(v) for v in etapas_por_modalidade["3"]),
+            etapas_fundamental=",".join(
+                str(v) for v in etapas_por_modalidade["5"]
+            ),
+            etapas_medio=",".join(str(v) for v in etapas_por_modalidade["6"]),
+        )
+
+    # ------------------------------------------------------------------
+    # Override _executar_fase para fases com lógica própria
     # ------------------------------------------------------------------
 
     def _executar_fase(
@@ -499,6 +545,8 @@ class EtlPedagogicoService(BaseEtlService):
             return self._executar_atribuicoes_territorio(config)
         if config.nome == _AGRUPAMENTO_GERADO_BACKUP:
             return self._executar_agrupamentos(config)
+        if config.nome == "turma_atribuida_dre_ue":
+            config = replace(config, sql=self._sql_turmas_atribuidas_dre_ue())
         return super()._executar_fase(config, numero_fase=numero_fase)
 
     # ------------------------------------------------------------------
@@ -750,6 +798,7 @@ class EtlPedagogicoService(BaseEtlService):
                     "nome_turma",
                     "duracao_turno",
                     "tipo_turno",
+                    "data_inicio",
                     "data_inicio_turma",
                     "data_fim",
                     "data_fim_turma",
@@ -781,7 +830,7 @@ class EtlPedagogicoService(BaseEtlService):
                 nome="turma_atribuida_dre_ue",
                 sql=SQL_TURMAS_ATRIBUIDAS_DRE_UE,
                 table_name="turma_atribuida_dre_ue",
-                source_table="turmas_atribuidas_dre_ue",
+                source_table="turma_escola",
                 model_class=TurmaAtribuidaDreUe,
                 dto_in=TurmaAtribuidaDreUeIn,
                 pk_field=["codigo_escola", "codigo_turma", "ano_letivo"],
@@ -821,6 +870,25 @@ class EtlPedagogicoService(BaseEtlService):
                 modo_escrita="full_refresh",
                 truncate_on_full_sync=True,
             ),
+            PhaseConfig(
+                nome="ciclo_ensino",
+                sql=SQL_CICLO_ENSINO,
+                table_name="ciclo_ensino",
+                source_table="ciclo_ensino",
+                model_class=CicloEnsino,
+                dto_in=CicloEnsinoIn,
+                pk_field="codigo",
+                update_fields=(
+                    "codigo_modalidade_ensino",
+                    "codigo_etapa_ensino",
+                    "descricao",
+                    "data_atualizacao",
+                    "transferido_em",
+                ),
+                unique_fields=("codigo",),
+                modo_escrita="full_refresh",
+                truncate_on_full_sync=True,
+            ),
         ]
         return fases
 
@@ -846,6 +914,7 @@ class EtlPedagogicoService(BaseEtlService):
             12 — turma                       (por ano letivo)
             13 — turma_atribuida_dre_ue      (por ano letivo)
             14 — etapa_ensino                (catálogo)
+            15 — ciclo_ensino                (catálogo)
         """
         self._agora = timezone.now()
         self._cache_anos = None  # reseta cache de anos para o run
@@ -870,7 +939,8 @@ class EtlPedagogicoService(BaseEtlService):
                 continue
 
             logger.info("[ETL PEDAG] === Fase %d: %s ===", i, config.nome)
-            metrics = self._executar_fase(config)
+            self.fase_atual = i
+            metrics = self._executar_fase(config, numero_fase=i)
 
             if config.nome == _AGRUPAMENTO_GERADO_BACKUP:
                 resultados["agrupamento_atribuicao_territorio_saber"] = (
@@ -883,7 +953,7 @@ class EtlPedagogicoService(BaseEtlService):
                 resultados[config.table_name] = metrics.total_escritos
 
             self.ultima_fase_concluida = i
-            self._registrar_auditoria_fase(config, metrics)
+            self.fase_atual = 0
             logger.info("[ETL PEDAG] Fase %d concluída.", i)
 
         logger.info(

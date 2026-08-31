@@ -4,6 +4,7 @@ from django.test import TestCase
 
 from apps.institucional.models import (
     DRE,
+    DREAbrangencia,
     SubPrefeitura,
     TipoEscola,
     UnidadeEducacional,
@@ -20,6 +21,19 @@ class InstitucionalModelsTest(TestCase):
 
         dre2 = DRE(codigo_dre="456", nome="DRE SEM SIGLA", sigla=None)
         self.assertEqual(str(dre2), "456 - DRE SEM SIGLA")
+
+    def test_dre_abrangencia_str(self) -> None:
+        """Usa a abreviação e recorre ao nome quando ela está ausente."""
+        dre = DREAbrangencia(
+            codigo_dre="108700",
+            nome="DRE ITAQUERA",
+            abreviacao="DRE - IQ",
+            ordem=1,
+        )
+        self.assertEqual(str(dre), "108700 - DRE - IQ")
+
+        dre.abreviacao = None
+        self.assertEqual(str(dre), "108700 - DRE ITAQUERA")
 
     def test_tipo_escola_str(self) -> None:
         """Verifica representação string de TipoEscola."""

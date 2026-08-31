@@ -209,6 +209,7 @@ Origem: `turma_escola` (NOLOCK) com joins em `escola`, `serie_turma_escola`, `se
 | `dc_turma_escola` | `nome_turma` | `strip_str()` |
 | `cd_duracao` | `duracao_turno` | `int()` ou `None` |
 | `cd_tipo_turno` | `tipo_turno` | `int()` ou `None` |
+| `dt_inicio` | `data_inicio` | `make_aware()` ou `None` — **coluna EOL diferente de `dt_inicio_turma`**; é a que o legado usa em `dataInicioTurma` da abrangência (`QueriesAbrangencia.cs`) |
 | `dt_inicio_turma` | `data_inicio_turma` | `make_aware()` ou `None` |
 | `dt_fim` | `data_fim` | `make_aware()` ou `None` |
 | CASE `st_turma_escola = 'E'` | `extinta` | `bool()` |
@@ -232,7 +233,25 @@ Origem: `turma_escola` (NOLOCK) com joins em `escola`, `serie_turma_escola`, `se
 
 ## Fase 13 — TurmaAtribuidaDreUe
 
-**Origem:** turmas já consolidadas por DRE e UE no EOL, por ano letivo.
+**Query:** `SQL_TURMAS_ATRIBUIDAS_DRE_UE` — montada em tempo de execução por
+`EtlPedagogicoService._sql_turmas_atribuidas_dre_ue()` (sem parâmetro `?`, roda
+1x por execução do ETL, não 1x por ano letivo).
+
+**Origem (20/08/2026):** join ao vivo em `turma_escola`+`escola`+
+`v_cadastro_unidade_educacao`+`unidade_administrativa` no EOL, reimplementando
+`ObterEstruturaInstitucionalVigente` (`QueriesAbrangencia.cs` do legado) — **não**
+mais a view `turmas_atribuidas_dre_ue`, que só cobria `tp_escola` em
+`{1,3,4,13,16}` (bem mais estreito que o recorte real usado pelo legado).
+Sempre ano corrente (`YEAR(GETDATE())` no SQL Server, igual ao legado) — por
+isso a query não recebe `ano_letivo` como parâmetro.
+
+O recorte de `tp_escola`/etapas por modalidade vem de `parametros` (Postgres
+`api_eol_db`, mesma fonte que o legado chama de "ParametrosApiEol"), lido a
+cada execução via `_parametros_abrangencia()` — chaves `tipo_escola_sgp`,
+`tipo_escola_infantil_sgp`, `etapas_por_modalidade`. Os IDs de componente PAP
+usados no filtro de turma tipo 3 são constante fixa
+(`_IDS_COMPONENTES_PAP` em `queries.py`, espelha
+`ComponentesCurricularesConstants.IDS_COMPONENTES_CURRICULARES_PAP` do legado).
 
 A origem entrega a turma final, então a carga substitui o conteúdo do ano letivo
 sem detecção de mudança por linha. Linhas sem escola ou turma são descartadas.
@@ -257,7 +276,7 @@ sem detecção de mudança por linha. Linhas sem escola ou turma são descartada
 
 ---
 
-## Fase 13 — EtapaEnsino
+## Fase 14 — EtapaEnsino
 
 **Query:** `SQL_ETAPA_ENSINO` (sem parâmetro de ano, `full_refresh` + `truncate_on_full_sync=True`)
 
@@ -269,4 +288,23 @@ devolve as descrições como lista de strings.
 | :--- | :--- | :--- |
 | `cd_etapa_ensino` | `codigo` | `int()` |
 | `dc_etapa_ensino` | `descricao` | `strip_str()` (já com `LTRIM`/`RTRIM` na query) |
+| — | `transferido_em` | `timezone.now()` |
+
+---
+
+## Fase 15 — CicloEnsino
+
+**Query:** `SQL_CICLO_ENSINO` (sem parâmetro de ano, `full_refresh` + `truncate_on_full_sync=True`)
+
+Catálogo completo de ciclos de ensino (`ciclo_ensino` no EOL), sem filtro
+`WHERE`. Alimenta o endpoint de abrangência `ciclo-ensino` do domínio
+Pedagógico.
+
+| Campo EOL | Campo Destino | Transformação |
+| :--- | :--- | :--- |
+| `cd_modalidade_ensino` | `codigo_modalidade_ensino` | `int()` |
+| `cd_etapa_ensino` | `codigo_etapa_ensino` | `int()` |
+| `cd_ciclo_ensino` | `codigo` | `int()` |
+| `dc_ciclo_ensino` | `descricao` | `str_value_or_none()` |
+| `dt_atualizacao_tabela` | `data_atualizacao` | `aware_or_none()` |
 | — | `transferido_em` | `timezone.now()` |

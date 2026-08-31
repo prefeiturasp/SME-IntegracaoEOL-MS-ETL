@@ -1,6 +1,6 @@
 """Testes do comando de gerenciamento etl_institucional."""
 
-from unittest.mock import patch
+from unittest.mock import ANY, patch
 from uuid import UUID
 
 from django.core.management import call_command
@@ -30,7 +30,7 @@ class EtlInstitucionalCommandTestCase(TestCase):
         self.mock_servico_class = self.patcher_servico.start()
         self.servico = self.mock_servico_class.return_value
         self.servico.executar.return_value = {"dre": 10, "tipo_escola": 5}
-        self.servico.ultima_fase_concluida = 4
+        self.servico.ultima_fase_concluida = 5
 
     def tearDown(self) -> None:
         """Encerra os mocks de repositório e serviço."""
@@ -43,7 +43,9 @@ class EtlInstitucionalCommandTestCase(TestCase):
 
         call_command("etl_institucional")
 
-        self.repo.iniciar_execucao.assert_called_once_with("institucional")
+        self.repo.iniciar_execucao.assert_called_once_with(
+            "institucional", parametros=ANY
+        )
         self.servico.executar.assert_called_once_with(fase_inicial=1)
 
         self.repo.finalizar_execucao.assert_called_once_with(
@@ -63,11 +65,6 @@ class EtlInstitucionalCommandTestCase(TestCase):
 
         self.servico.executar.assert_called_once_with(fase_inicial=3)
 
-    def test_rejeita_volume_invalido(self) -> None:
-        """Valida validação básica de parâmetros."""
-        call_command("etl_institucional", "--volume", "100")
-        self.servico.executar.assert_called()
-
     def test_tratamento_erro_na_execucao(self) -> None:
         """Valida que erros no serviço são registrados no log de auditoria."""
         self.servico.executar.side_effect = Exception("Erro Fatal")
@@ -81,7 +78,7 @@ class EtlInstitucionalCommandTestCase(TestCase):
         self.repo.atualizar_checkpoint_dominio.assert_called_once()
 
     def test_execucao_com_continuar_sem_erro_anterior(self) -> None:
-        """Valida retomada para fase 1 caso o checkpoint não indique erro parcial."""
+        """Valida retomada quando o checkpoint não indica erro parcial."""
         self.repo.obter_checkpoint_dominio.return_value = {
             "ultima_situacao": "concluido",
             "ultima_pagina": 4,

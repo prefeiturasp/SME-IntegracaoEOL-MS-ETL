@@ -33,7 +33,6 @@ def _resolver_rate_limit() -> str | None:
     prefetch_multiplier=1,
     rate_limit=_resolver_rate_limit(),
 )
-
 def processar_chunk(
     self: Task,
     chunk: list[tuple],
@@ -112,7 +111,7 @@ def finalizar_fase(
         ),
         ultima_pagina=fase_meta.numero_fase,
         token_parada=str(total_escritos),
-        indice_sincronizacao=f"{fase_meta.nome}:offset:{total_escritos}",
+        indice_sincronizacao=f"{fase_meta.nome}:token:{total_escritos}",
         ultima_situacao="concluido" if is_ultima_fase else "em_execucao",
         sucesso=is_ultima_fase,
     )

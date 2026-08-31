@@ -34,6 +34,24 @@ class EtapaEnsino(ModeloBase):
         return f"{self.codigo} - {self.descricao}"
 
 
+class CicloEnsino(ModeloBase):
+    """Catálogo de ciclos de ensino."""
+
+    codigo_modalidade_ensino = models.IntegerField()
+    codigo_etapa_ensino = models.IntegerField()
+    codigo = models.IntegerField(unique=True)
+    descricao = models.CharField(max_length=300)
+    data_atualizacao = models.DateTimeField()
+
+    class Meta:
+        db_table = "ciclo_ensino"
+        verbose_name = "ciclo de ensino"
+        verbose_name_plural = "ciclos de ensino"
+
+    def __str__(self) -> str:
+        return f"{self.codigo} - {self.descricao}"
+
+
 class ComponenteCurricularApiEol(ModeloBase):
     """Componente curricular disponibilizado pela API EOL."""
 
@@ -414,6 +432,7 @@ class Turma(ModeloBase):
     nome_turma = models.CharField(max_length=200)
     duracao_turno = models.IntegerField(null=True, blank=True)
     tipo_turno = models.IntegerField(null=True, blank=True)
+    data_inicio = models.DateTimeField(null=True, blank=True)
     data_inicio_turma = models.DateTimeField(null=True, blank=True)
     data_fim = models.DateTimeField(null=True, blank=True)
     data_fim_turma = models.DateTimeField(null=True, blank=True)

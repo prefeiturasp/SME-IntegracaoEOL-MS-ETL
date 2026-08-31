@@ -1,8 +1,9 @@
 """Testes para BaseEtlFase (BaseEtlFase) serializável do core."""
 
-from unittest.mock import MagicMock, patch
 from django.test import TestCase
+
 from apps.core.libs.base_etl_fase import BaseEtlFase
+
 
 class TestBaseEtlFase(TestCase):
     """Testes de integridade e resolução do BaseEtlFase."""
@@ -26,7 +27,7 @@ class TestBaseEtlFase(TestCase):
             total_fases=1,
             dominio="teste",
             task_processamento_path="apps.core.tasks.processar_chunk",
-            task_callback_path="apps.core.tasks.finalizar_fase"
+            task_callback_path="apps.core.tasks.finalizar_fase",
         )
 
     def test_serialization_roundtrip(self) -> None:
@@ -35,17 +36,19 @@ class TestBaseEtlFase(TestCase):
         data = meta.to_dict()
         self.assertIsInstance(data, dict)
         self.assertEqual(data["nome"], "teste")
-        
+
         meta2 = BaseEtlFase.from_dict(data)
         self.assertEqual(meta2.nome, meta.nome)
-        self.assertEqual(meta2.task_processamento_path, meta.task_processamento_path)
+        self.assertEqual(
+            meta2.task_processamento_path, meta.task_processamento_path
+        )
 
     def test_resolver_model_e_dto(self) -> None:
         """Valida a resolução dinâmica de classes via importlib."""
         meta = self._get_meta()
         model = meta.resolver_model()
         self.assertEqual(model.__name__, "Aluno")
-        
+
         dto = meta.resolver_dto_in()
         self.assertEqual(dto.__name__, "AlunoIn")
 
@@ -61,7 +64,7 @@ class TestBaseEtlFase(TestCase):
         meta = self._get_meta()
         transform = meta.get_transformer()
         self.assertTrue(callable(transform))
-        
+
         fake_row = (
             1,
             "Teste",
@@ -77,16 +80,17 @@ class TestBaseEtlFase(TestCase):
             None,
             False,
         )
-        pk, _, obj = transform(fake_row)
-        
+        pk, _, payload = transform(fake_row)
+
         self.assertEqual(pk, "1")
-        self.assertEqual(obj.nome, "Teste")
+        self.assertEqual(payload, fake_row)
+        self.assertEqual(meta.materializar(payload).nome, "Teste")
 
     def test_resolver_tasks_vazias(self) -> None:
         """Valida retorno None quando paths de task não existem."""
         meta = self._get_meta()
-        meta.task_processamento_path = None
-        meta.task_callback_path = None
+        meta.task_processamento_path = ""
+        meta.task_callback_path = ""
         self.assertIsNone(meta.resolver_task_processamento())
         self.assertIsNone(meta.resolver_task_callback())
 
@@ -95,7 +99,7 @@ class TestBaseEtlFase(TestCase):
         meta = self._get_meta()
         meta.pk_field = ["codigo_aluno", "nome"]
         transform = meta.get_transformer()
-        
+
         fake_row = (
             1,
             "Teste",

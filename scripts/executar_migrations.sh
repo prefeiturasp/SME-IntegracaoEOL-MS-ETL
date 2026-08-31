@@ -8,7 +8,7 @@ set -e
 echo "==> makemigrations para todos os apps de dominio"
 python manage.py makemigrations institucional professores alunos pedagogico programas
 
-echo "==> migrate banco default (controle_auditoria, auth, etc.)"
+echo "==> migrate banco default/auditoria (controle_auditoria, auth, etc.)"
 python manage.py migrate
 
 echo "==> migrate institucional_db"

@@ -180,7 +180,7 @@ O caminho de origem é: `turma_escola → serie_turma_grade → grade → serie_
 
 Agrupamento pedagógico de séries dentro de uma etapa (ex.: Ciclo de Alfabetização, Ciclo Interdisciplinar, Autoral).
 
-No EOL: campo `cd_ciclo_ensino` na tabela `serie_ensino` (descrição em `dc_ciclo_ensino`, tabela `ciclo_ensino`). Desde a migration `0011`, o ETL materializa o código cru na turma como `codigo_ciclo_ensino` (via `se.cd_ciclo_ensino` na `SQL_TURMAS`), para paridade com o `CicloEnsino` do legado. A **descrição** (`dc_ciclo_ensino`) ainda não é materializada.
+No EOL: campo `cd_ciclo_ensino` na tabela `serie_ensino` (descrição em `dc_ciclo_ensino`, tabela `ciclo_ensino`). Desde a migration `0011`, o ETL materializa o código cru na turma como `codigo_ciclo_ensino` (via `se.cd_ciclo_ensino` na `SQL_TURMAS`). A migration `0025` adiciona o catálogo completo `ciclo_ensino`, incluindo modalidade, etapa, descrição e data de atualização.
 
 ---
 
@@ -405,6 +405,7 @@ Código que explica por que uma atribuição foi encerrada:
 | `v_cadastro_unidade_educacao` | View de unidades educacionais |
 | `unidade_administrativa` | DREs e outras unidades administrativas |
 | `etapa_ensino` | Etapas de ensino (EI, EF, EM, EJA...) |
+| `ciclo_ensino` | Catálogo de ciclos de ensino, com modalidade e etapa |
 | `turma_escola_grade_programa` | Grade de programa para turmas especiais |
 
 **Tabelas locais (Postgres da API Pedagógico):**

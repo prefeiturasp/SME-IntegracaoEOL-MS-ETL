@@ -24,25 +24,27 @@ class Command(BaseEtlCommand):
 
     help = "Popula pedagogico_db a partir do EOL e da API EOL"
     dominio = "pedagogico"
-    fase_final = 13
+    fase_final = 15
     service_class = EtlPedagogicoService
     orquestrador_class = EtlPedagogicoOrquestrador
 
     def add_arguments(self, parser: Any) -> None:
         super().add_arguments(parser)
         parser.add_argument(
-            "--ano-letivo",
+            "--anos-letivos",
             type=int,
+            nargs="+",
             default=None,
+            metavar="ANO",
             help=(
-                "Processa apenas anos letivos "
-                "a partir deste valor (inclusive)."
+                "Processa apenas os anos letivos informados. "
+                "Ex: --anos-letivos 2025 2026"
             ),
         )
 
     def _extra_service_kwargs(self, **options: Any) -> dict[str, Any]:
-        ano_letivo = options.get("ano_letivo")
-        return {"ano_letivo": ano_letivo} if ano_letivo is not None else {}
+        anos = options.get("anos_letivos")
+        return {"anos_letivos": anos} if anos else {}
 
     def get_modo_escrita(self, tabela: str) -> str:
         return "upsert" if tabela in _TABELAS_UPSERT else "full_refresh"

@@ -54,6 +54,17 @@ SELECT
 FROM etapa_ensino
 """
 
+# Catálogo de ciclos de ensino (EolConnection).
+SQL_CICLO_ENSINO = """
+SELECT
+    cd_modalidade_ensino AS CodigoModalidadeEnsino,
+    cd_etapa_ensino AS CodigoEtapaEnsino,
+    cd_ciclo_ensino AS Codigo,
+    dc_ciclo_ensino AS Descricao,
+    dt_atualizacao_tabela AS DtAtualizacao
+FROM ciclo_ensino
+"""
+
 # Anos letivos disponíveis no EOL (EolConnection)
 SQL_ANOS_LETIVOS = """
 SELECT DISTINCT an_letivo
@@ -583,6 +594,7 @@ SELECT DISTINCT
     tur.dc_turma_escola                                                        AS NomeTurma,
     dtt.qt_hora_duracao                                                        AS DuracaoTurno,
     tur.cd_tipo_turno                                                          AS TipoTurno,
+    tur.dt_inicio                                                              AS DataInicio,
     tur.dt_inicio_turma                                                        AS DataInicioTurma,
     tur.dt_fim                                                                 AS DataFim,
     tur.dt_fim_turma                                                           AS DataFimTurma,
@@ -676,32 +688,202 @@ WHERE tur.an_letivo = ?
   AND tur.st_turma_escola IN ('O', 'A', 'E', 'C')
 """
 
+# Parâmetros do domínio "abrangência" configuráveis pela SME, lidos via
+# API EOL (Postgres, api_eol_db).
+SQL_PARAMETROS_ABRANGENCIA = """
+SELECT nome, valor
+FROM parametros
+WHERE nome IN ('tipo_escola_sgp', 'tipo_escola_infantil_sgp', 'etapas_por_modalidade')
+"""
+
+# Componentes curriculares que caracterizam o PAP.
+_IDS_COMPONENTES_PAP = (
+    1322,  # Recuperação de Aprendizagens
+    1770,  # Projeto Colaborativo
+    1033,  # Recuperação Paralela Matemática
+    1051,  # Recuperação Paralela Ciências
+    1052,  # Recuperação Paralela Geografia
+    1053,  # Recuperação Paralela História
+    1054,  # Recuperação Paralela Português
+    1804,  # PAP 2º ano Alfabetização
+    1805,  # PAP 2º ano Colaborativo Alfabetização
+)
+_PLACEHOLDERS_PAP = ",".join(str(i) for i in _IDS_COMPONENTES_PAP)
+
 # Alimenta: turma_atribuida_dre_ue
-# Parâmetros (?):
-#   1 — AnoLetivo
-SQL_TURMAS_ATRIBUIDAS_DRE_UE = """
-SELECT
-    CodEscola       AS CodigoEscola,
-    CodTurma        AS CodigoTurma,
-    AnoLetivo       AS AnoLetivo,
-    Modalidade      AS Modalidade,
-    Semestre        AS Semestre,
-    CodModalidade   AS CodigoModalidade,
-    CodDre          AS CodigoDre,
-    Dre             AS Dre,
-    DreAbrev        AS DreAbreviacao,
-    UE              AS Ue,
-    UEAbrev         AS UeAbreviacao,
-    NomeTurma       AS NomeTurma,
-    Ano             AS Ano,
-    TipoUE          AS TipoUe,
-    CodTipoUE       AS CodigoTipoUe,
-    CodTipoEscola   AS CodigoTipoEscola,
-    TipoEscola      AS TipoEscola,
-    DuracaoTurno    AS DuracaoTurno,
-    TipoTurno       AS TipoTurno
-FROM turmas_atribuidas_dre_ue WITH (NOLOCK)
-WHERE AnoLetivo = ?
+# Cobre cerca de 26 tipos para abrangência além dos
+# {1,3,4,13,16} que os tipos de escola do SGP já cobrem.
+SQL_TURMAS_ATRIBUIDAS_DRE_UE = f"""
+WITH TurmasUe AS (
+    SELECT tur.cd_escola, tur.cd_turma_escola, eten.cd_etapa_ensino
+    FROM turma_escola tur
+    INNER JOIN v_cadastro_unidade_educacao vcue
+        ON vcue.cd_unidade_educacao = tur.cd_escola
+    INNER JOIN escola e
+        ON e.cd_escola = vcue.cd_unidade_educacao
+    INNER JOIN (
+        SELECT v_ua.cd_unidade_educacao,
+               v_ua.nm_unidade_educacao,
+               v_ua.nm_exibicao_unidade
+        FROM unidade_administrativa ua
+        INNER JOIN v_cadastro_unidade_educacao v_ua
+            ON v_ua.cd_unidade_educacao = ua.cd_unidade_administrativa
+        WHERE tp_unidade_administrativa = 24
+    ) dre
+        ON dre.cd_unidade_educacao = vcue.cd_unidade_administrativa_referencia
+    LEFT JOIN serie_turma_escola sturesc
+        ON tur.cd_turma_escola = sturesc.cd_turma_escola
+        AND sturesc.dt_fim IS NULL
+    LEFT JOIN serie_ensino see
+        ON see.cd_serie_ensino = sturesc.cd_serie_ensino
+    LEFT JOIN etapa_ensino eten
+        ON see.cd_etapa_ensino = eten.cd_etapa_ensino
+    WHERE tur.an_letivo = YEAR(GETDATE())
+        AND tur.st_turma_escola IN ('O', 'A', 'E')
+        AND e.tp_escola IN ({{tipos_escola}})
+)
+SELECT DISTINCT
+    tur.cd_escola AS CodigoEscola,
+    tur.cd_turma_escola AS CodigoTurma,
+    tur.an_letivo AS AnoLetivo,
+    IIF(tur.cd_tipo_turma IN (1, 2),
+        CASE
+            WHEN ee.cd_etapa_ensino IN ({{etapas_infantil}}) THEN 'Infantil'
+            WHEN ((ee.cd_etapa_ensino IN ({{etapas_medio}})) OR
+                  (tur.cd_tipo_turma = 2 AND EXISTS(
+                        SELECT 1 FROM TurmasUe te
+                        WHERE te.cd_escola = tur.cd_escola
+                          AND te.cd_turma_escola <> tur.cd_turma_escola
+                          AND te.cd_etapa_ensino IN ({{etapas_medio}})
+                  ))) THEN 'Médio'
+            WHEN ((ee.cd_etapa_ensino IN ({{etapas_eja}})) OR
+                  (tur.cd_tipo_turma = 2 AND EXISTS(
+                        SELECT 1 FROM TurmasUe te
+                        WHERE te.cd_escola = tur.cd_escola
+                          AND te.cd_turma_escola <> tur.cd_turma_escola
+                          AND te.cd_etapa_ensino IN ({{etapas_eja}})
+                  ))) THEN 'EJA'
+            WHEN ee.cd_etapa_ensino IN ({{etapas_fundamental}}) THEN 'Fundamental'
+        END, 'Fundamental') AS Modalidade,
+    IIF(tur.cd_tipo_turma IN (1, 2),
+        CASE
+            WHEN ((ee.cd_etapa_ensino IN ({{etapas_eja}})) OR
+                  (tur.cd_tipo_turma = 2 AND EXISTS(
+                        SELECT 1 FROM TurmasUe te
+                        WHERE te.cd_escola = tur.cd_escola
+                          AND te.cd_turma_escola <> tur.cd_turma_escola
+                          AND te.cd_etapa_ensino IN ({{etapas_eja}})
+                  ))) THEN IIF(DATEPART(MONTH, tur.dt_inicio_turma) > 6, 2, 1)
+            ELSE 0
+        END, 0) AS Semestre,
+    IIF(tur.cd_tipo_turma IN (1, 2, 3, 5),
+        CASE
+            WHEN ee.cd_etapa_ensino IN ({{etapas_infantil}}) THEN 1
+            WHEN ((ee.cd_etapa_ensino IN ({{etapas_medio}})) OR
+                  (tur.cd_tipo_turma = 2 AND EXISTS(
+                        SELECT 1 FROM TurmasUe te
+                        WHERE te.cd_escola = tur.cd_escola
+                          AND te.cd_turma_escola <> tur.cd_turma_escola
+                          AND te.cd_etapa_ensino IN ({{etapas_medio}})
+                  ))) THEN 6
+            WHEN ((ee.cd_etapa_ensino IN ({{etapas_eja}})) OR
+                  (tur.cd_tipo_turma = 2 AND EXISTS(
+                        SELECT 1 FROM TurmasUe te
+                        WHERE te.cd_escola = tur.cd_escola
+                          AND te.cd_turma_escola <> tur.cd_turma_escola
+                          AND te.cd_etapa_ensino IN ({{etapas_eja}})
+                  ))) THEN 3
+            WHEN ee.cd_etapa_ensino IN ({{etapas_fundamental}}) THEN 5
+            WHEN esc.tp_escola IN ({{tipos_escola_infantil}}) THEN 1
+            WHEN esc.tp_escola NOT IN ({{tipos_escola_infantil}}) AND tur.cd_tipo_turma <> 1 THEN 5
+        END, 5) AS CodigoModalidade,
+    dre.cd_unidade_educacao AS CodigoDre,
+    dre.nm_unidade_educacao AS Dre,
+    dre.nm_exibicao_unidade AS DreAbreviacao,
+    vue.nm_unidade_educacao AS Ue,
+    vue.nm_exibicao_unidade AS UeAbreviacao,
+    tur.dc_turma_escola AS NomeTurma,
+    IIF(tur.cd_tipo_turma = 1, se.sg_resumida_serie, '0') AS Ano,
+    tue.dc_tipo_unidade_educacao AS TipoUe,
+    vue.tp_unidade_educacao AS CodigoTipoUe,
+    esc.tp_escola AS CodigoTipoEscola,
+    tesc.sg_tp_escola AS TipoEscola,
+    dtt.qt_hora_duracao AS DuracaoTurno,
+    tur.cd_tipo_turno AS TipoTurno
+FROM turma_escola tur
+INNER JOIN tipo_turno t_trn
+    ON t_trn.cd_tipo_turno = tur.cd_tipo_turno
+INNER JOIN duracao_tipo_turno dtt
+    ON t_trn.cd_tipo_turno = dtt.cd_tipo_turno
+    AND tur.cd_duracao = dtt.cd_duracao
+INNER JOIN tipo_periodicidade tper
+    ON tur.cd_tipo_periodicidade = tper.cd_tipo_periodicidade
+INNER JOIN v_cadastro_unidade_educacao vue
+    ON vue.cd_unidade_educacao = tur.cd_escola
+INNER JOIN escola esc
+    ON esc.cd_escola = vue.cd_unidade_educacao
+INNER JOIN (
+    SELECT v_ua.cd_unidade_educacao,
+           v_ua.nm_unidade_educacao,
+           v_ua.nm_exibicao_unidade
+    FROM unidade_administrativa ua
+    INNER JOIN v_cadastro_unidade_educacao v_ua
+        ON v_ua.cd_unidade_educacao = ua.cd_unidade_administrativa
+    WHERE tp_unidade_administrativa = 24
+) dre
+    ON dre.cd_unidade_educacao = vue.cd_unidade_administrativa_referencia
+INNER JOIN tipo_escola tesc
+    ON esc.tp_escola = tesc.tp_escola
+    AND esc.tp_dependencia_administrativa = tesc.tp_dependencia_administrativa
+INNER JOIN tipo_unidade_educacao tue
+    ON tue.tp_unidade_educacao = vue.tp_unidade_educacao
+LEFT JOIN serie_turma_escola ste
+    ON tur.cd_turma_escola = ste.cd_turma_escola
+    AND ste.dt_fim IS NULL
+LEFT JOIN serie_ensino se
+    ON se.cd_serie_ensino = ste.cd_serie_ensino
+LEFT JOIN etapa_ensino ee
+    ON se.cd_etapa_ensino = ee.cd_etapa_ensino
+LEFT JOIN serie_turma_grade stg
+    ON tur.cd_turma_escola = stg.cd_turma_escola
+    AND tur.cd_escola = stg.cd_escola
+    AND ste.cd_serie_ensino = stg.cd_serie_ensino
+    AND stg.dt_fim IS NULL
+LEFT JOIN escola_grade egse
+    ON stg.cd_escola_grade = egse.cd_escola_grade
+    AND egse.cd_escola = tur.cd_escola
+LEFT JOIN turma_escola_grade_programa tegpro
+    ON tegpro.cd_turma_escola = tur.cd_turma_escola
+    AND tegpro.dt_fim IS NULL
+LEFT JOIN escola_grade egpro
+    ON egpro.cd_escola_grade = tegpro.cd_escola_grade
+    AND egpro.cd_escola = tur.cd_escola
+LEFT JOIN grade gpro
+    ON gpro.cd_grade = egpro.cd_grade
+LEFT JOIN grade_componente_curricular gccpro
+    ON gpro.cd_grade = gccpro.cd_grade
+LEFT JOIN componente_curricular ccpro
+    ON gccpro.cd_componente_curricular = ccpro.cd_componente_curricular
+WHERE tur.an_letivo = YEAR(GETDATE())
+    AND tur.st_turma_escola IN ('O', 'A', 'E')
+    AND esc.tp_escola IN ({{tipos_escola}})
+    AND (
+        (tur.cd_tipo_turma = 1)
+        OR (
+            tur.cd_tipo_turma = 3
+            AND YEAR(tur.dt_inicio_turma) = YEAR(GETDATE())
+            AND gccpro.cd_componente_curricular NOT IN ({_PLACEHOLDERS_PAP})
+            AND EXISTS (
+                SELECT 1 FROM matricula_turma_escola mte
+                WHERE mte.cd_turma_escola = tegpro.cd_turma_escola
+            )
+        )
+        OR (
+            (tur.cd_tipo_turma IN (2, 5) OR gccpro.cd_componente_curricular IN ({_PLACEHOLDERS_PAP}))
+            AND YEAR(tur.dt_inicio_turma) = YEAR(GETDATE())
+        )
+        OR tur.cd_tipo_turma = 7
+    )
 """
 
 SQL_COMPONENTES_NAO_CANCELADOS = f"""
