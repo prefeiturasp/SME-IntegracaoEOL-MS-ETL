@@ -65,11 +65,6 @@ class EtlInstitucionalCommandTestCase(TestCase):
 
         self.servico.executar.assert_called_once_with(fase_inicial=3)
 
-    def test_rejeita_volume_invalido(self) -> None:
-        """Valida validação básica de parâmetros."""
-        call_command("etl_institucional", "--volume", "100")
-        self.servico.executar.assert_called()
-
     def test_tratamento_erro_na_execucao(self) -> None:
         """Valida que erros no serviço são registrados no log de auditoria."""
         self.servico.executar.side_effect = Exception("Erro Fatal")

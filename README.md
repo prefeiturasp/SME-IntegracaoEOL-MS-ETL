@@ -35,14 +35,14 @@ com execução assíncrona via Celery e KeyDB.
 ## Subir ambiente dev
 
 ```bash
-docker compose -f docker-compose-dev.yml up --build -d
+make up
 ```
 
 Crie os bancos e aplique as migrations:
 
 ```bash
-docker exec -i sme_sgp_ms_etl_postgres psql -U postgres < scripts/criar_bancos.sql
-docker exec sme_sgp_ms_etl_auditoria sh scripts/executar_migrations.sh
+make setup-db
+make migrate-all
 ```
 
 No ambiente Docker dev, os hosts de banco no `.env` devem apontar para o
@@ -109,8 +109,6 @@ Parâmetros principais:
 
 | Campo | Padrão | Uso |
 |---|---:|---|
-| `volume` | `100` | Quantidade de registros processados por lote da execução |
-| `offset` | `0` | Posição inicial da leitura; normalmente fica em `0` |
 | `continuar` | `false` | Retoma pelo checkpoint do domínio quando `true` |
 | `prioridade` | `5` | Prioridade da task: `0` mais urgente, `9` menos urgente |
 | `fases` | `null` | Lista opcional de fases |
@@ -120,8 +118,7 @@ Parâmetros principais:
 Também é possível enfileirar via management command:
 
 ```bash
-docker compose -f docker-compose-dev.yml exec etl_auditoria \
-  python manage.py agendar_dominio --dominio programas --continuar
+make agendar DOMINIO=programas
 ```
 
 ## Cron por ano letivo
@@ -161,8 +158,8 @@ O script `scripts/recuperar_etl.sh` executa o fluxo de recuperação:
 
 1. chama `POST /api/v1/execucoes/limpar-orfas/`;
 2. marca como `interrompido` execuções sem task viva no Celery;
-3. chama `POST /api/v1/execucoes/reprocessar-erros/`;
-4. reprocessa a última falha de cada domínio com `continuar=true`.
+3. chama `POST /api/v1/execucoes/retomar/`;
+4. retoma a última execução interrompida de cada domínio com `continuar=true`.
 
 Exemplo de cron:
 
@@ -185,14 +182,13 @@ make lint
 Execução direta de domínio em dev:
 
 ```bash
-docker exec sme_sgp_ms_etl_auditoria python manage.py etl_programas
+make etl-programas
 ```
 
 Criar superusuário:
 
 ```bash
-docker compose -f docker-compose-dev.yml exec etl_auditoria \
-  python manage.py createsuperuser
+make createsuperuser
 ```
 
 ## Documentação
@@ -200,15 +196,13 @@ docker compose -f docker-compose-dev.yml exec etl_auditoria \
 Gerar HTML com Sphinx:
 
 ```bash
-docker compose -f docker-compose-dev.yml run --rm etl_auditoria \
-  sphinx-build -b html docs docs/_build
+make docs-html
 ```
 
 Gerar PDF:
 
 ```bash
-docker compose -f docker-compose-dev.yml run --rm etl_auditoria \
-  sh -c "sphinx-build -b latex docs docs/_build/latex && make -C docs/_build/latex"
+make docs-pdf
 ```
 
 Referências principais:
@@ -221,7 +215,7 @@ Referências principais:
 ## Testes
 
 ```bash
-./executar_testes_docker.sh
+make test
 ```
 
-O script executa cobertura com `coverage` e exige mínimo de `80%`.
+O target executa cobertura com `coverage` e exige mínimo de `80%`.

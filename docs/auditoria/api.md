@@ -16,7 +16,8 @@ Registradas em `apps/controle_auditoria/api/urls.py` e incluídas via `config/ur
 | `GET` | `checkpoints/` | `CheckpointsView` | sim | Lista checkpoints por domínio |
 | `GET` | `execucoes/` | `ExecucoesView` | sim | 50 execuções mais recentes |
 | `POST` | `execucoes/limpar-orfas/` | `LimparOrfasView` | sim | Marca execuções órfãs como interrompidas |
-| `POST` | `execucoes/reprocessar-erros/` | `ReprocessarErrosView` | sim | Reprocessa últimas execuções com erro |
+| `POST` | `execucoes/reprocessar-erros/` | `ReprocessarErrosView` | sim | Reprocessa manualmente últimas execuções com erro |
+| `POST` | `execucoes/retomar/` | `RetomarInterrompidasView` | sim | Retoma últimas execuções interrompidas |
 | `GET` | `execucoes/<id_execucao>/` | `ExecucaoDetalheView` | sim | Detalhe com tabelas lidas e escritas |
 | `GET` | `execucoes/tabelas-lidas/` | `ExecucoesTabelaLidaView` | sim | 50 registros de leitura mais recentes |
 | `GET` | `execucoes/tabelas-escritas/` | `ExecucoesTabelaEscritaView` | sim | 50 registros de escrita mais recentes |
@@ -42,8 +43,8 @@ Suporta filtros via query string: `dominio`, `data_inicio`, `data_fim`, `situaca
 
 Exibe:
 - Última execução por domínio com `total_processado` (via `token_parada`).
-- Escopo usado no disparo quando disponível: anos letivos, fases, volume,
-  offset, flag de retomada e prioridade.
+- Escopo usado no disparo quando disponível: anos letivos, fases, flag de
+  retomada e prioridade.
 - Até 100 execuções filtradas.
 - Últimas 10 execuções com detalhes de tabelas escritas.
 
@@ -89,8 +90,6 @@ O campo `parametros` registra o escopo usado no disparo:
 ```json
 {
   "execucao": {
-    "volume": 100,
-    "offset": 0,
     "continuar": true,
     "fase": 0,
     "fase_inicial": 1,
@@ -142,9 +141,9 @@ de itens analisados. Quando uma execução é preservada, o campo `motivo` indic
 
 ### `POST execucoes/reprocessar-erros/`
 
-Busca a última execução de cada domínio quando ela está em `erro` ou
-`interrompido` e agenda uma nova task com `continuar=true`, reaproveitando os
-parâmetros gravados em `parametros.execucao`.
+Endpoint manual. Busca a última execução de cada domínio quando ela está em
+`erro` ou `interrompido` e agenda uma nova task com `continuar=true`,
+reaproveitando os parâmetros gravados em `parametros.execucao`.
 
 Por segurança, erros antigos não são reprocessados se o domínio já tiver uma
 execução mais recente em andamento ou concluída.
@@ -177,8 +176,7 @@ Retorna `202`:
       "task_id": "task-recovery",
       "tentativa": 1,
       "fases": null,
-      "anos_letivos": [2026],
-      "volume": 500
+      "anos_letivos": [2026]
     }
   ]
 }
@@ -186,6 +184,26 @@ Retorna `202`:
 
 Quando o limite de tentativas é atingido, o item volta como `ignorado` e nenhuma
 task é enfileirada para aquela execução.
+
+---
+
+### `POST execucoes/retomar/`
+
+Endpoint usado pelo recovery automático. Busca a última execução de cada domínio
+somente quando ela está em `interrompido` e agenda uma nova task com
+`continuar=true`, reaproveitando os parâmetros gravados em
+`parametros.execucao`.
+
+Esse endpoint não retoma execuções em `erro`; falhas reais continuam dependendo
+do retry do Celery ou de reprocessamento manual em `execucoes/reprocessar-erros/`.
+
+**Body JSON:**
+
+| Campo | Tipo | Padrão | Descrição |
+|---|---|---|---|
+| `max_tentativas` | int | `3` | Máximo de retomadas por execução raiz |
+
+Retorna `202` no mesmo formato de `execucoes/reprocessar-erros/`.
 
 ---
 
@@ -204,9 +222,7 @@ Agenda ou executa imediatamente a sincronização de um domínio.
 
 | Campo | Tipo | Padrão | Descrição |
 |---|---|---|---|
-| `volume` | int | `100` | Quantidade de registros processados por lote. Valores maiores reduzem a quantidade de ciclos, mas aumentam memória e duração de cada tentativa |
-| `offset` | int | `0` | Posição inicial da leitura. Normalmente fica `0`; use apenas para iniciar de um ponto específico |
-| `continuar` | bool | `false` | Quando `true`, retoma pelo checkpoint do domínio. Quando `false`, começa conforme o `offset` informado |
+| `continuar` | bool | `false` | Quando `true`, retoma pelo checkpoint do domínio. Quando `false`, inicia uma nova execução |
 | `executar_em` | str | `null` | Data/hora ISO 8601 para agendamento |
 | `prioridade` | int | `5` | Prioridade da task no Celery/Redis. `0` = mais urgente, `9` = menos urgente |
 | `fases` | array[str] | `null` | Lista opcional de fases a executar. Quando omitido, executa todas as fases do domínio |
@@ -251,7 +267,7 @@ O script `scripts/recuperar_etl.sh` pode rodar em cron separado do disparo
 diário. Ele executa duas chamadas:
 
 1. `POST /api/v1/execucoes/limpar-orfas/` com body `{}`.
-2. `POST /api/v1/execucoes/reprocessar-erros/` com:
+2. `POST /api/v1/execucoes/retomar/` com:
 
 ```json
 {
@@ -259,8 +275,10 @@ diário. Ele executa duas chamadas:
 }
 ```
 
-O recovery sempre usa `continuar=true`, prioridade `3`, limite interno de 25
-domínios por chamada e o volume original registrado na execução com erro.
+O recovery sempre usa `continuar=true`, prioridade `3` e limite interno de 25
+domínios por chamada. Ele retoma somente execuções marcadas como
+`interrompido`; execuções em `erro` ficam para o endpoint manual
+`execucoes/reprocessar-erros/`.
 
 O `curl` usa timeout de conexão de 10 segundos, timeout total de 60 segundos
 e até 3 tentativas HTTP com intervalo de 5 segundos.

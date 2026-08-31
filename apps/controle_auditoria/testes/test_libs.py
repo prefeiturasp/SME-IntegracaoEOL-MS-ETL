@@ -63,7 +63,7 @@ class RepositorioAuditoriaTestCase(TestCase):
             ultimo_id_execucao=id_execucao,
             ultima_pagina=1,
             token_parada="100",
-            indice_sincronizacao="institucional:offset:100",
+            indice_sincronizacao="institucional:token:100",
             ultima_situacao="sucesso",
             sucesso=True,
         )
@@ -81,7 +81,7 @@ class RepositorioAuditoriaTestCase(TestCase):
             ultimo_id_execucao=id_1,
             ultima_pagina=1,
             token_parada="100",
-            indice_sincronizacao="institucional:offset:100",
+            indice_sincronizacao="institucional:token:100",
             ultima_situacao="sucesso",
             sucesso=True,
         )
@@ -95,7 +95,7 @@ class RepositorioAuditoriaTestCase(TestCase):
             ultimo_id_execucao=id_2,
             ultima_pagina=2,
             token_parada="200",
-            indice_sincronizacao="institucional:offset:200",
+            indice_sincronizacao="institucional:token:200",
             ultima_situacao="falha",
             sucesso=False,
         )
@@ -185,56 +185,31 @@ class TasksControleAuditoriaTestCase(TestCase):
         repositorio_cls_mock: Any,
         call_command_mock: Any,
     ) -> None:
-        """Task executa até o final e força continuidade após primeira página."""  # noqa: E501
+        """Task executa domínio uma vez e contabiliza avanço do token."""
         repositorio = MagicMock()
         repositorio.obter_checkpoint_dominio.side_effect = [
             {"token_parada": "0"},
             {"token_parada": "120"},
-            {"token_parada": "120"},
-            {"token_parada": "150"},
         ]
         repositorio_cls_mock.return_value = repositorio
 
-        retorno = executar_dominio_task(
-            dominio="institucional",
-            volume=120,
-            offset=10,
-            continuar=False,
-        )
+        retorno = executar_dominio_task(dominio="institucional")
 
-        self.assertEqual(retorno, "ok:150")
-        self.assertEqual(call_command_mock.call_count, 2)
+        self.assertEqual(retorno, "ok:120")
+        self.assertEqual(call_command_mock.call_count, 1)
         primeira_chamada = call_command_mock.call_args_list[0].args
-        segunda_chamada = call_command_mock.call_args_list[1].args
         self.assertEqual(
-            primeira_chamada[:7],
+            primeira_chamada[:3],
             (
                 "executar_dominio",
                 "--dominio",
                 "institucional",
-                "--volume",
-                "120",
-                "--offset",
-                "10",
             ),
         )
         self.assertIn("--parametros-disparo", primeira_chamada)
         indice_parametros = primeira_chamada.index("--parametros-disparo")
         parametros = json.loads(primeira_chamada[indice_parametros + 1])
         self.assertIn("celery_task_id", parametros)
-        self.assertEqual(
-            segunda_chamada[:8],
-            (
-                "executar_dominio",
-                "--dominio",
-                "institucional",
-                "--volume",
-                "120",
-                "--offset",
-                "10",
-                "--continuar",
-            ),
-        )
 
     @patch("apps.controle_auditoria.libs.tasks.call_command")
     @patch("apps.controle_auditoria.libs.tasks.RepositorioAuditoriaPostgres")
@@ -252,24 +227,17 @@ class TasksControleAuditoriaTestCase(TestCase):
         repositorio_cls_mock.return_value = repositorio
 
         retorno = executar_dominio_task(
-            dominio="institucional",
-            volume=90,
-            offset=0,
-            continuar=True,
+            dominio="institucional", continuar=True
         )
 
         self.assertEqual(retorno, "ok:40")
         chamada = call_command_mock.call_args.args
         self.assertEqual(
-            chamada[:8],
+            chamada[:4],
             (
                 "executar_dominio",
                 "--dominio",
                 "institucional",
-                "--volume",
-                "90",
-                "--offset",
-                "0",
                 "--continuar",
             ),
         )
@@ -283,8 +251,6 @@ class TasksControleAuditoriaTestCase(TestCase):
         """Task rejeita parâmetros incompatíveis com o domínio."""
         retorno = executar_dominio_task(
             dominio="institucional",
-            volume=100,
-            offset=0,
             anos_letivos=[2025],
         )
 

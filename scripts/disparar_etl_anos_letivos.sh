@@ -14,7 +14,6 @@ fi
 API_BASE_URL="${ETL_API_BASE_URL:-http://localhost:${PORT_WEB:-8068}/api/v1}"
 API_KEY_HEADER="${API_KEY_HEADER:-X-API-Key}"
 API_KEY="${API_KEY:-}"
-VOLUME="${ETL_VOLUME:-500}"
 PRIORIDADE="${ETL_PRIORIDADE:-5}"
 CONTINUAR="${ETL_CONTINUAR:-true}"
 DATA_REFERENCIA="${ETL_DATA_REFERENCIA:-$(date +%F)}"
@@ -76,8 +75,7 @@ if [[ -n "$ANO_MINIMO_ANTERIORES" && "$INTERVALO_MESES_ANTERIORES" -gt 0 ]]; the
 fi
 
 json_base() {
-  printf '{"volume":%s,"continuar":%s,"prioridade":%s' \
-    "$VOLUME" "$CONTINUAR" "$PRIORIDADE"
+  printf '{"continuar":%s,"prioridade":%s' "$CONTINUAR" "$PRIORIDADE"
 }
 
 json_com_anos_letivos() {

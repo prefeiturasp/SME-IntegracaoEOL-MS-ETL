@@ -46,7 +46,7 @@ class CheckpointsViewTest(TestCase):
         _setup_api_key(settings)
 
     def test_lista_vazia(self) -> None:
-        """Verifica que a listagem retorna lista vazia quando não há checkpoints."""
+        """Verifica listagem vazia quando não há checkpoints."""
         url = reverse("checkpoints")
         resp = self.client.get(url, **_AUTH_HEADER)
         self.assertEqual(resp.status_code, 200)
@@ -75,14 +75,14 @@ class ExecucoesViewTest(TestCase):
         _setup_api_key(settings)
 
     def test_lista_vazia(self) -> None:
-        """Verifica que a listagem retorna lista vazia quando não há execuções."""
+        """Verifica listagem vazia quando não há execuções."""
         url = reverse("execucoes")
         resp = self.client.get(url, **_AUTH_HEADER)
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.json(), [])
 
     def test_lista_execucoes_ordenadas_por_data(self) -> None:
-        """Verifica que as execuções são retornadas ordenadas pela data mais recente."""
+        """Verifica ordenação das execuções pela data mais recente."""
         from django.utils import timezone
 
         EtlExecucao.objects.create(
@@ -124,7 +124,7 @@ class ExecutarDominioViewTest(TestCase):
         url = reverse("executar-dominio", kwargs={"dominio": "professores"})
         resp = self.client.post(
             url,
-            data={"volume": 200, "continuar": False},
+            data={"continuar": False},
             content_type="application/json",
             **_AUTH_HEADER,
         )
@@ -133,7 +133,10 @@ class ExecutarDominioViewTest(TestCase):
         mock_task.apply_async.assert_called_once()
 
     @patch("apps.controle_auditoria.api.views.executar_dominio_task")
-    def test_prioridade_e_passada_ao_apply_async(self, mock_task: MagicMock) -> None:
+    def test_prioridade_e_passada_ao_apply_async(
+        self,
+        mock_task: MagicMock,
+    ) -> None:
         """Verifica que a prioridade informada é repassada ao apply_async."""
         task_mock = MagicMock()
         task_mock.id = "uuid-fake-456"
@@ -152,7 +155,7 @@ class ExecutarDominioViewTest(TestCase):
 
     @patch("apps.controle_auditoria.api.views.executar_dominio_task")
     def test_data_invalida_retorna_400(self, mock_task: MagicMock) -> None:
-        """Verifica que dados inválidos no payload retornam 400 sem disparar a task."""
+        """Verifica payload inválido retornando 400 sem disparar task."""
         url = reverse("executar-dominio", kwargs={"dominio": "professores"})
         resp = self.client.post(
             url,

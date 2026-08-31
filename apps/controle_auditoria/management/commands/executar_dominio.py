@@ -20,8 +20,6 @@ class Command(BaseCommand):
     def add_arguments(self, parser: Any) -> None:
         """Adiciona argumentos ao comando."""
         parser.add_argument("--dominio", required=True, type=str)
-        parser.add_argument("--volume", type=int, default=100)
-        parser.add_argument("--offset", type=int, default=0)
         parser.add_argument("--continuar", action="store_true")
         parser.add_argument(
             "--fases",
@@ -46,8 +44,6 @@ class Command(BaseCommand):
     def handle(self, *args: Any, **options: Any) -> None:
         """Executa o ETL do dominio especificado."""
         dominio = options["dominio"]
-        volume = options["volume"]
-        offset = options["offset"]
         continuar = options["continuar"]
         fases = options.get("fases")
         anos_letivos = options.get("anos_letivos")
@@ -62,7 +58,7 @@ class Command(BaseCommand):
 
         comando_etl = COMANDOS_POR_DOMINIO.get(dominio)
 
-        argumentos = ["--volume", str(volume), "--offset", str(offset)]
+        argumentos = []
         if continuar:
             argumentos.append("--continuar")
         if fases:

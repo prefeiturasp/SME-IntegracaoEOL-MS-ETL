@@ -71,11 +71,6 @@ class EtlProgramasCommandTestCase(TestCase):
 
         self.servico.executar.assert_called_once_with(fase_inicial=4)
 
-    def test_execucao_com_volume(self) -> None:
-        """Comando aceita --volume e executa normalmente."""
-        call_command("etl_programas", "--volume", "100")
-        self.servico.executar.assert_called()
-
     def test_extra_service_kwargs_com_anos_letivos(self) -> None:
         """Valida repasse de anos_letivos para o service."""
         from apps.programas.management.commands.etl_programas import Command

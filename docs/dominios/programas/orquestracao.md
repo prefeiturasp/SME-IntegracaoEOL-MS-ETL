@@ -141,6 +141,6 @@ curl -X POST http://localhost:8068/api/v1/dominios/programas/executar/ \
 ## Exemplo de execução direta (dev)
 
 ```bash
-docker exec sme_sgp_ms_etl_web_debug python manage.py etl_programas --volume 500
-docker exec sme_sgp_ms_etl_web_debug python manage.py etl_programas --volume 500 --continuar
+docker exec sme_sgp_ms_etl_web_debug python manage.py etl_programas
+docker exec sme_sgp_ms_etl_web_debug python manage.py etl_programas --continuar
 ```

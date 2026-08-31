@@ -5,7 +5,13 @@ from unittest.mock import MagicMock, patch
 
 from django.test import TestCase
 
-from apps.controle_auditoria.models import EtlCheckpointDominio, EtlExecucao
+from apps.controle_auditoria.models import (
+    EtlCheckpointDominio,
+    EtlExecucao,
+    EtlExecucaoTabelaEscrita,
+    EtlExecucaoTabelaLida,
+    EtlProgressoExecucao,
+)
 from apps.professores.management.commands.etl_professores import (
     _TABELAS_UPSERT,
     Command,
@@ -66,10 +72,6 @@ class EtlProfessoresCommandTest(TestCase):
 
         self._executar(
             [
-                "--volume",
-                "100",
-                "--offset",
-                "0",
                 "--continuar",
                 "--anos-letivos",
                 "2026",
@@ -82,8 +84,6 @@ class EtlProfessoresCommandTest(TestCase):
         self.assertEqual(
             execucao.parametros["execucao"],
             {
-                "volume": 100,
-                "offset": 0,
                 "continuar": True,
                 "fase_inicial": 1,
                 "anos_letivos": [2026],
@@ -190,6 +190,49 @@ class EtlProfessoresCommandTest(TestCase):
     @patch(
         "apps.professores.management.commands.etl_professores.EtlProfessoresService"
     )
+    def test_continuar_com_tabela_da_fase_3_retoma_fase_3(
+        self, mock_servico: MagicMock
+    ) -> None:
+        """Checkpoint por tabela define a fase macro correta da retomada."""
+        EtlCheckpointDominio.objects.create(
+            dominio="professores",
+            ultima_pagina=3,
+            token_parada="24111134",
+            indice_sincronizacao="atribuicao_aula:5358",
+            ultima_situacao="erro",
+        )
+        mock_servico.return_value.executar.return_value = {
+            "atribuicao_aula": 10
+        }
+        mock_servico.return_value.ultima_fase_concluida = 3
+
+        self._executar(["--continuar"])
+
+        _, kwargs = mock_servico.return_value.executar.call_args
+        self.assertEqual(kwargs["fase_inicial"], 3)
+        self.assertEqual(kwargs["pular_ate"], "laudo_medico")
+        self.assertEqual(kwargs["lote_inicial"], 5358)
+
+    @patch(
+        "apps.professores.management.commands.etl_professores.EtlProfessoresService"
+    )
+    def test_retomada_vazia_nao_finaliza_como_concluida(
+        self, mock_servico: MagicMock
+    ) -> None:
+        """Retomada sem nenhuma tabela executada vira erro auditável."""
+        mock_servico.return_value.executar.return_value = {}
+        mock_servico.return_value.ultima_fase_concluida = 4
+
+        with self.assertRaises(RuntimeError):
+            self._executar(["--continuar"])
+
+        execucao = EtlExecucao.objects.get(dominio="professores")
+        self.assertEqual(execucao.situacao, "erro")
+        self.assertIn("Retomada não executou", execucao.mensagem_erro)
+
+    @patch(
+        "apps.professores.management.commands.etl_professores.EtlProfessoresService"
+    )
     def test_callbacks_salvam_checkpoint_parcial(
         self, mock_servico: MagicMock
     ) -> None:
@@ -208,6 +251,50 @@ class EtlProfessoresCommandTest(TestCase):
         checkpoint = EtlCheckpointDominio.objects.get(dominio="professores")
         self.assertEqual(checkpoint.ultima_situacao, "concluido")
         self.assertIsNone(checkpoint.indice_sincronizacao)
+
+    @patch(
+        "apps.professores.management.commands.etl_professores.EtlProfessoresService"
+    )
+    def test_callbacks_registram_progresso_operacional(
+        self, mock_servico: MagicMock
+    ) -> None:
+        """Callbacks alimentam o monitoramento usado pelo kanban."""
+
+        def executar_com_callbacks(**kwargs: object) -> dict[str, int]:
+            kwargs["on_tabela_iniciada"]("professor")  # type: ignore[index,operator]
+            kwargs["on_lote"]("professor", 1, 80)  # type: ignore[index,operator]
+            kwargs["on_lote"]("professor", 2, 20)  # type: ignore[index,operator]
+            kwargs["on_tabela_concluida"]("professor", 70)  # type: ignore[index,operator]
+            return {"professor": 70}
+
+        mock_servico.return_value.executar.side_effect = executar_com_callbacks
+        mock_servico.return_value.ultima_fase_concluida = 1
+
+        self._executar()
+
+        execucao = EtlExecucao.objects.get(dominio="professores")
+        progresso = EtlProgressoExecucao.objects.get(
+            id_execucao=execucao.id_execucao,
+            fase_nome="professor",
+        )
+        self.assertEqual(progresso.etapa, "fase_concluida")
+        self.assertEqual(progresso.chunk_atual, 2)
+        self.assertEqual(progresso.linhas_lidas, 100)
+        self.assertEqual(progresso.linhas_escritas, 70)
+        self.assertEqual(progresso.linhas_ignoradas, 30)
+        self.assertGreater(progresso.total_fases, 1)
+        escrita = EtlExecucaoTabelaEscrita.objects.get(
+            id_execucao=execucao.id_execucao,
+            tabela_destino="professor",
+        )
+        leitura = EtlExecucaoTabelaLida.objects.get(
+            id_execucao=execucao.id_execucao,
+            tabela_origem="professor",
+        )
+        self.assertEqual(escrita.linhas_escritas, 70)
+        self.assertEqual(escrita.modo_escrita, "upsert")
+        self.assertEqual(leitura.linhas_lidas, 100)
+        self.assertEqual(leitura.numero_pagina, 2)
 
     def test_obter_contexto_sem_checkpoint_reinicia(self) -> None:
         """Sem checkpoint, --continuar inicia do zero."""
@@ -256,6 +343,7 @@ class EtlProfessoresCommandTest(TestCase):
         """Funcionario participa da ordem de carga e usa upsert."""
         self.assertIn("funcionario_unidade_educacional", _ORDEM_TABELAS)
         self.assertIn("funcionario_unidade_educacional", _TABELAS_UPSERT)
+        self.assertIn("funcionario_cargo", _ORDEM_TABELAS)
 
     def test_funcionario_sistema_perfil_na_ordem_e_upsert(self) -> None:
         """Perfil de sistema participa da ordem de carga e usa upsert."""

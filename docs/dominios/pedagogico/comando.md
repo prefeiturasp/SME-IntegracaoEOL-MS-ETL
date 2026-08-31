@@ -8,8 +8,6 @@ Herda de `BaseEtlCommand`. Toda a lógica de argumentos, checkpoint e auditoria 
 
 Herdados de `BaseEtlCommand`:
 
-- `--volume` — tamanho do batch de leitura
-- `--offset` — offset inicial
 - `--continuar` — retoma a partir do último checkpoint salvo
 - `--primeiro-run` — sinaliza primeiro run (sem filtro incremental)
 - `--anos-letivos ANO [ANO ...]` — processa apenas os anos letivos informados

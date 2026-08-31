@@ -410,7 +410,7 @@
             <span class="node node-svc">EtlProfessoresService</span>
           </div>
           <div style="font-size:0.7rem;color:var(--dim);margin-top:0.5rem">
-            <code style="font-size:0.68rem;color:var(--accent-teal)">python manage.py etl_professores [--volume 500] [--continuar]</code>
+            <code style="font-size:0.68rem;color:var(--accent-teal)">python manage.py etl_professores [--continuar]</code>
           </div>
         </div>
 
@@ -475,15 +475,15 @@
           <li>Chama <code>call_command("executar_dominio", --dominio professores, ...)</code></li>
           <li>Lê checkpoint novamente → captura <code>token_depois</code></li>
           <li><code>linhas = max(token_depois − token_antes, 0)</code></li>
-          <li>Se <code>linhas &lt; volume</code> → <strong>para o loop</strong>; caso contrário define <code>continuar_execucao = True</code> e repete</li>
+          <li>Retorna o delta de linhas alteradas como <code>ok:{linhas}</code></li>
           <li>Em exceção → <strong>retry</strong> com <code>continuar=True</code>, <code>countdown=60s</code>, máx. 5 tentativas</li>
         </ol>
         <div class="situation-grid">
           <div class="situation-card success">
             <div class="situation-card-title">Loop encerrado normalmente</div>
             <ul>
-              <li>linhas alteradas &lt; volume no ciclo</li>
-              <li>retorna <code>ok:{total_linhas_processadas}</code></li>
+              <li>execução do domínio concluída</li>
+              <li>retorna <code>ok:{linhas}</code></li>
             </ul>
           </div>
           <div class="situation-card error">
@@ -700,8 +700,8 @@
         </div>
         <div class="info-box" style="flex:1;min-width:200px;margin-bottom:0;border-left-color:var(--accent-teal)">
           <strong>token_parada</strong> acumula o total de linhas <em>efetivamente alteradas</em> entre execuções.
-          O Celery usa o delta do token para detectar se há mais trabalho a fazer
-          (<code>linhas &lt; volume</code> → encerra loop).
+          O Celery usa o delta do token apenas para relatar o total alterado
+          pela chamada.
         </div>
       </div>
     </div>

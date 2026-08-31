@@ -21,7 +21,5 @@ Enfileira ou agenda uma execução na fila Celery.
 
 Parâmetros relevantes:
 - `--dominio`
-- `--volume`
-- `--offset`
 - `--continuar`
 - `--executar-em`

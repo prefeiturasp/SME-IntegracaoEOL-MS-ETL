@@ -4,8 +4,6 @@ Arquivo: `apps/institucional/management/commands/etl_institucional.py`
 
 ## Argumentos suportados
 
-- `--volume`
-- `--offset`
 - `--continuar`
 
 ## Comportamento real
@@ -27,6 +25,6 @@ As tabelas em `_TABELAS_UPSERT` recebem `modo_escrita="upsert"`; as demais, `ful
 ## Exemplo
 
 ```bash
-python manage.py etl_professores --volume 500
-python manage.py etl_professores --volume 500 --continuar
+python manage.py etl_institucional
+python manage.py etl_institucional --continuar
 ```
