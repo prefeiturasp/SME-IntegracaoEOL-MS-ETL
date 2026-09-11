@@ -254,7 +254,16 @@ class MatriculaTurma(models.Model):
         indexes = [
             models.Index(
                 fields=["codigo_turma"], name="idx_matricula_turma_codigo"
-            )
+            ),
+            models.Index(
+                fields=[
+                    "codigo_ue_turma",
+                    "ano_letivo_turma",
+                    "origem_atual",
+                ],
+                condition=models.Q(codigo_tipo_turma=1),
+                name="idx_mt_regular_ue_ano_origem",
+            ),
         ]
 
     def __str__(self) -> str:
