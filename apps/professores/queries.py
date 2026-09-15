@@ -604,7 +604,7 @@ SQL_DISCIPLINAS_TURMAS_ATRIBUIDAS_UE = """
         tau.usuario_rf,
         componente_curricular.cd_componente_curricular
             AS codigo_componente_curricular,
-        componente_curricular.dc_componente_curricular
+        LTRIM(RTRIM(componente_curricular.dc_componente_curricular))
             AS descricao_componente_curricular,
         CAST(NULL AS int) AS codigo_componente_curricular_pai,
         CAST(0 AS bit) AS regencia,
@@ -663,7 +663,7 @@ SQL_DISCIPLINAS_TURMAS_ATRIBUIDAS_UE = """
         tau.usuario_rf,
         componente_curricular.cd_componente_curricular
             AS codigo_componente_curricular,
-        componente_curricular.dc_componente_curricular
+        LTRIM(RTRIM(componente_curricular.dc_componente_curricular))
             AS descricao_componente_curricular,
         CAST(NULL AS int) AS codigo_componente_curricular_pai,
         CAST(0 AS bit) AS regencia,
@@ -888,7 +888,7 @@ SQL_ATRIBUICOES_AULA = f"""
         aa.cd_turma_escola_grade_programa,
         aa.cd_grade,
         aa.cd_componente_curricular,
-        cc.dc_componente_curricular,
+        LTRIM(RTRIM(cc.dc_componente_curricular)) AS dc_componente_curricular,
         aa.cd_serie_grade,
         se.sg_resumida_serie as ano_escolar,
         aa.an_atribuicao,
@@ -974,7 +974,7 @@ SQL_ATRIBUICOES_EXTERNO = """
         te.dc_turma_escola,
         ae.cd_grade,
         ae.cd_componente_curricular,
-        cc.dc_componente_curricular,
+        LTRIM(RTRIM(cc.dc_componente_curricular)) AS dc_componente_curricular,
         ae.cd_serie_grade,
         ae.cd_turma_escola_grade_programa,
         se.sg_resumida_serie as ano_escolar,
