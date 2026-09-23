@@ -113,6 +113,11 @@ class ResponsavelAluno(models.Model):
                 fields=["cpf", "data_fim_vinculo", "aluno"],
                 name="idx_resp_cpf_fim_aluno",
             ),
+            models.Index(
+                fields=["aluno", "tipo_responsavel", "codigo_responsavel"],
+                condition=models.Q(data_fim_vinculo__isnull=True),
+                name="idx_resp_aluno_prioritario",
+            ),
         ]
 
     def __str__(self) -> str:
