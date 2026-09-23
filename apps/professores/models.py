@@ -3,6 +3,7 @@
 import datetime
 
 from django.db import models
+from django.db.models import Q
 
 _HELP_UE = "ID da unidade educacional — ref. domínio institucional."
 _HELP_GRADE = "ID da escola_grade — ref. domínio pedagógico."
@@ -90,6 +91,11 @@ class CargoBaseServidor(models.Model):
             models.Index(
                 fields=["dt_fim_nomeacao"],
                 name="idx_cbs_fim_nomeacao",
+            ),
+            models.Index(
+                fields=["professor"],
+                condition=Q(dt_fim_nomeacao__isnull=True),
+                name="idx_cargobaseservidor_ativorf",
             ),
         ]
 
