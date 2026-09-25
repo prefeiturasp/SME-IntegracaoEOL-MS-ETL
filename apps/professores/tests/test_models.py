@@ -3,6 +3,7 @@
 from django.test import TestCase
 
 from apps.professores.models import (
+    Cargo,
     CargoBaseServidor,
     FuncionarioCargo,
     FuncionarioSistemaPerfil,
@@ -19,6 +20,20 @@ class ProfessoresModelsTest(TestCase):
         """Verifica __str__ de Professor."""
         obj = Professor(codigo_rf="123456", nome="PROF TESTE")
         self.assertEqual(str(obj), "123456 - PROF TESTE")
+
+    def test_cargo_meta_e_str(self) -> None:
+        """Valida metadados e representação de Cargo."""
+        obj = Cargo(codigo_cargo=3360, nome_cargo="DIRETOR")
+
+        self.assertEqual(str(obj), "3360 - DIRETOR")
+        meta = Cargo._meta
+        self.assertEqual(meta.db_table, "cargo")
+        self.assertEqual(meta.pk.name, "codigo_cargo")
+        self.assertEqual(meta.get_field("nome_cargo").max_length, 100)
+        self.assertTrue(meta.get_field("dt_cancelamento").null)
+        self.assertIn(
+            "idx_cargo_cancel", {indice.name for indice in meta.indexes}
+        )
 
     def test_cargo_base_str(self) -> None:
         """Verifica __str__ de CargoBaseServidor."""

@@ -48,6 +48,14 @@ SQL_PROFESSORES = f"""
       AND sc.cd_registro_funcional IS NOT NULL
 """
 
+SQL_CARGOS = """
+    SELECT
+        c.cd_cargo,
+        LTRIM(RTRIM(c.dc_cargo)) AS dc_cargo,
+        c.dt_cancelamento
+    FROM cargo c
+"""
+
 SQL_CARGOS_BASE = f"""
     SELECT
         cbs.cd_cargo_base_servidor,
