@@ -34,6 +34,32 @@ class ProfessorOut:
 
 
 @dataclass(slots=True)
+class CargoOut:
+    """Estrutura para o model ``Cargo``."""
+
+    codigo_cargo: int
+    nome_cargo: str
+    dt_cancelamento: Any
+
+    def __post_init__(self) -> None:
+        """Normaliza campos do cargo."""
+        self.codigo_cargo = _normalizar_int(self.codigo_cargo)
+        self.nome_cargo = _normalizar_texto(self.nome_cargo)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Retorna dados do cargo.
+
+        Returns:
+            Dados prontos para persistência.
+        """
+        return {
+            "codigo_cargo": self.codigo_cargo,
+            "nome_cargo": self.nome_cargo,
+            "dt_cancelamento": self.dt_cancelamento,
+        }
+
+
+@dataclass(slots=True)
 class CargoBaseServidorOut:
     """Estrutura para o model ``CargoBaseServidor``."""
 

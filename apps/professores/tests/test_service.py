@@ -11,10 +11,12 @@ from django.utils import timezone
 
 from apps.core.libs.base_etl_service import PhaseConfig
 from apps.professores.dtos.model_in import (
+    CargoIn,
     FuncionarioSistemaPerfilIn,
     FuncionarioUnidadeEducacionalIn,
 )
 from apps.professores.models import (
+    Cargo,
     FuncionarioSistemaPerfil,
     FuncionarioUnidadeEducacional,
     Professor,
@@ -22,6 +24,7 @@ from apps.professores.models import (
 from apps.professores.queries import (
     CARGOS_PROFESSOR,
     SQL_ATRIBUICOES_AULA,
+    SQL_CARGOS,
     SQL_DISCIPLINAS_TURMAS_ATRIBUIDAS_UE,
     SQL_FUNCIONARIO_SISTEMA_PERFIL,
     SQL_FUNCIONARIOS_CONECTA_FORMACAO,
@@ -1267,6 +1270,8 @@ class EtlProfessoresServiceFase1Test(TestCase):
         self.assertIsInstance(fases["professor"], PhaseConfig)
         self.assertEqual(fases["professor"].modo_escrita, "upsert")
         self.assertEqual(fases["professor"].unique_fields, ("codigo_rf",))
+        self.assertEqual(fases["cargo"].modo_escrita, "full_refresh")
+        self.assertIs(fases["cargo"].model_class, Cargo)
         self.assertEqual(
             fases["lotacao_servidor"].modo_escrita, "full_refresh"
         )
@@ -1286,6 +1291,37 @@ class EtlProfessoresServiceFase1Test(TestCase):
         resultado = srv.popular_professores()
         self.assertEqual(resultado, 4)
         self.assertEqual(mock_upsert.call_args.args[4], ["codigo_rf"])
+
+    def test_cargo_in_normaliza_campos(self) -> None:
+        """Verifica normalização dos dados de cargo."""
+        cancelamento = datetime.date(2024, 1, 1)
+
+        cargo = CargoIn("3360", " DIRETOR ", cancelamento).to_domain()
+
+        self.assertEqual(
+            cargo.to_dict(),
+            {
+                "codigo_cargo": 3360,
+                "nome_cargo": "DIRETOR",
+                "dt_cancelamento": cancelamento,
+            },
+        )
+
+    @patch(_FULL_REFRESH_PATCH, return_value=2)
+    @patch(_EOL_PATCH)
+    def test_popular_cargos(
+        self, mock_eol: MagicMock, mock_refresh: MagicMock
+    ) -> None:
+        """Verifica que popular_cargos executa full refresh do catálogo."""
+        srv = EtlProfessoresService()
+
+        resultado = srv.popular_cargos()
+
+        self.assertEqual(resultado, 2)
+        mock_eol.return_value.iter_query.assert_called_once_with(
+            SQL_CARGOS, None
+        )
+        self.assertIs(mock_refresh.call_args.args[0], Cargo)
 
     @patch(_UPSERT_PATCH, return_value=1)
     @patch(_EOL_PATCH)

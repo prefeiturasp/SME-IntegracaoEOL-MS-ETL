@@ -18,6 +18,7 @@ from apps.professores.dtos.model_in import (
     AtribuicaoAulaIn,
     AtribuicaoExternoIn,
     CargoBaseServidorIn,
+    CargoIn,
     CargoSobrepostoServidorIn,
     ContratoExternoIn,
     DisciplinaTurmaAtribuidaUeIn,
@@ -46,6 +47,7 @@ from apps.professores.models import (
     AdministradorEscola,
     AtribuicaoAula,
     AtribuicaoExterno,
+    Cargo,
     CargoBaseServidor,
     CargoSobrepostoServidor,
     ContratoExterno,
@@ -69,6 +71,7 @@ from apps.professores.queries import (
     SQL_ADMINISTRADORES_SGP,
     SQL_ATRIBUICOES_AULA,
     SQL_ATRIBUICOES_EXTERNO,
+    SQL_CARGOS,
     SQL_CARGOS_BASE,
     SQL_CARGOS_SOBREPOSTOS,
     SQL_CODIGOS_ESCOLAS_PROFESSORES_ANO,
@@ -465,6 +468,7 @@ def _upsert_incremental(
 
 _TABELAS_FULL_REFRESH: frozenset[str] = frozenset(
     {
+        "cargo",
         "lotacao_servidor",
         "cargo_sobreposto_servidor",
         "funcao_atividade_cargo_servidor",
@@ -481,6 +485,7 @@ _TABELAS_FULL_REFRESH: frozenset[str] = frozenset(
 
 _ORDEM_TABELAS: tuple[str, ...] = (
     "professor",
+    "cargo",
     "pessoa",
     "administrador_escola",
     "cargo_base_servidor",
@@ -562,6 +567,18 @@ class EtlProfessoresService:
                 update_fields=("nome", "nome_social", "cpf"),
                 unique_fields=("codigo_rf",),
                 modo_escrita="upsert",
+            ),
+            PhaseConfig(
+                nome="cargo",
+                sql=SQL_CARGOS,
+                table_name="cargo",
+                source_table="cargo",
+                model_class=Cargo,
+                dto_in=CargoIn,
+                pk_field="codigo_cargo",
+                update_fields=(),
+                unique_fields=(),
+                modo_escrita="full_refresh",
             ),
             PhaseConfig(
                 nome="pessoa",
@@ -863,6 +880,10 @@ class EtlProfessoresService:
     def popular_professores(self) -> int:
         """Popula a tabela Professor."""
         return self._popular_config("professor")
+
+    def popular_cargos(self) -> int:
+        """Popula a tabela Cargo por lote."""
+        return self._popular_config("cargo")
 
     def popular_pessoas(self) -> int:
         """Popula a tabela Pessoa."""
@@ -1204,8 +1225,9 @@ class EtlProfessoresService:
         executar_tabela: Callable[[str, Callable[[], int]], None],
     ) -> None:
         """Fase 1 — tabelas sem dependências internas."""
-        logger.info("[ETL PROF] === Fase 1: Professores e Pessoas ===")
+        logger.info("[ETL PROF] === Fase 1: Professores, Cargos e Pessoas ===")
         executar_tabela("professor", self.popular_professores)
+        executar_tabela("cargo", self.popular_cargos)
         executar_tabela("pessoa", self.popular_pessoas)
         executar_tabela(
             "administrador_escola", self.popular_administradores_sgp
