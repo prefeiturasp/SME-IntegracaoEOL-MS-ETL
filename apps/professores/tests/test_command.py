@@ -22,6 +22,7 @@ _RESULTADO_MOCK = {
     "unidade_educacional": 10,
     "turma_escola": 5,
     "professor": 200,
+    "cargo": 25,
     "cargo_base_servidor": 350,
     "atribuicao_aula": 1500,
     "funcionario_unidade_educacional": 20,
@@ -344,6 +345,14 @@ class EtlProfessoresCommandTest(TestCase):
         self.assertIn("funcionario_unidade_educacional", _ORDEM_TABELAS)
         self.assertIn("funcionario_unidade_educacional", _TABELAS_UPSERT)
         self.assertIn("funcionario_cargo", _ORDEM_TABELAS)
+
+    def test_cargo_na_ordem_e_full_refresh(self) -> None:
+        """Cargo participa da carga antes dos vínculos e usa full-refresh."""
+        self.assertLess(
+            _ORDEM_TABELAS.index("cargo"),
+            _ORDEM_TABELAS.index("cargo_base_servidor"),
+        )
+        self.assertNotIn("cargo", _TABELAS_UPSERT)
 
     def test_funcionario_sistema_perfil_na_ordem_e_upsert(self) -> None:
         """Perfil de sistema participa da ordem de carga e usa upsert."""
