@@ -1,4 +1,6 @@
 from django.db import models
+from django.db.models import F, Q
+from django.db.models.functions import Cast
 
 from apps.core.models import ModeloBase
 
@@ -193,6 +195,11 @@ class AtribuicaoComponente(ModeloBase):
                     "ano_letivo",
                 ],
                 name="idx_ac_turma_prof_comp_ano",
+            ),
+            models.Index(
+                fields=["turma_codigo", "componente_codigo"],
+                condition=Q(dt_cancelamento__isnull=True),
+                name="idx_ac_turma_componente_ativa",
             ),
         ]
 
@@ -486,6 +493,10 @@ class Turma(ModeloBase):
             ),
             models.Index(fields=["tipo_turma"], name="idx_turma_tipo"),
             models.Index(fields=["ano_letivo"], name="idx_turma_ano_letivo"),
+            models.Index(
+                Cast(F("codigo"), output_field=models.CharField()),
+                name="idx_turma_codigo_varchar",
+            ),
         ]
 
     def __str__(self) -> str:
