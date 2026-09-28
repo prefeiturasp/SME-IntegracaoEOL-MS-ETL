@@ -113,6 +113,11 @@ class ResponsavelAluno(models.Model):
                 fields=["cpf", "data_fim_vinculo", "aluno"],
                 name="idx_resp_cpf_fim_aluno",
             ),
+            models.Index(
+                fields=["aluno", "tipo_responsavel", "codigo_responsavel"],
+                condition=models.Q(data_fim_vinculo__isnull=True),
+                name="idx_resp_aluno_prioritario",
+            ),
         ]
 
     def __str__(self) -> str:
@@ -263,6 +268,11 @@ class MatriculaTurma(models.Model):
                 ],
                 condition=models.Q(codigo_tipo_turma=1),
                 name="idx_mt_regular_ue_ano_origem",
+            ),
+            models.Index(
+                fields=["codigo_ue_turma", "ano_letivo_turma"],
+                condition=models.Q(origem_atual=True),
+                name="idx_mt_atual_ue_ano",
             ),
         ]
 
