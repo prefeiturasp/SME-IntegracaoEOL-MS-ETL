@@ -46,6 +46,26 @@ class Professor(models.Model):
         return f"{self.codigo_rf} - {self.nome}"
 
 
+class Cargo(models.Model):
+    """Cargo cadastrado no EOL para contratos legados."""
+
+    codigo_cargo = models.IntegerField(primary_key=True)
+    nome_cargo = models.CharField(max_length=100)
+    dt_cancelamento = models.DateField(null=True, blank=True)
+
+    class Meta:
+        app_label = "professores"
+        db_table = "cargo"
+        verbose_name = "cargo"
+        verbose_name_plural = "cargos"
+        indexes = [
+            models.Index(fields=["dt_cancelamento"], name="idx_cargo_cancel"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.codigo_cargo} - {self.nome_cargo}"
+
+
 class CargoBaseServidor(models.Model):
     """Nomeação/cargo base do servidor no quadro funcional."""
 

@@ -8,6 +8,7 @@ if TYPE_CHECKING:
         AtribuicaoAulaOut,
         AtribuicaoExternoOut,
         CargoBaseServidorOut,
+        CargoOut,
         CargoSobrepostoServidorOut,
         ContratoExternoOut,
         DisciplinaTurmaAtribuidaUeOut,
@@ -51,6 +52,29 @@ class ProfessorIn:
             cpf=(
                 str(self.cd_cpf_pessoa).strip() if self.cd_cpf_pessoa else None
             ),
+        )
+
+
+@dataclass(slots=True)
+class CargoIn:
+    """Dados da tabela `cargo` do EOL."""
+
+    cd_cargo: Any
+    dc_cargo: Any
+    dt_cancelamento: Any
+
+    def to_domain(self) -> "CargoOut":
+        """Retorna dados normalizados do cargo.
+
+        Returns:
+            Dados do cargo para persistência.
+        """
+        from apps.professores.dtos.model_out import CargoOut
+
+        return CargoOut(
+            codigo_cargo=self.cd_cargo,
+            nome_cargo=self.dc_cargo,
+            dt_cancelamento=self.dt_cancelamento,
         )
 
 
