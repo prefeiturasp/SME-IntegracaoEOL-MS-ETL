@@ -1,0 +1,1940 @@
+"""Testes de _row_to_*, _full_refresh e EtlProfessoresService."""
+
+import datetime
+from typing import Any, cast
+from unittest.mock import MagicMock, patch
+from uuid import UUID
+
+from django.db.models.query import QuerySet
+from django.test import TestCase
+from django.utils import timezone
+
+from apps.core.libs.base_etl_service import PhaseConfig
+from apps.professores.dtos.model_in import (
+    CargoIn,
+    FuncionarioSistemaPerfilIn,
+    FuncionarioUnidadeEducacionalIn,
+)
+from apps.professores.models import (
+    Cargo,
+    FuncionarioSistemaPerfil,
+    FuncionarioUnidadeEducacional,
+    Professor,
+)
+from apps.professores.queries import (
+    CARGOS_PROFESSOR,
+    SQL_ATRIBUICOES_AULA,
+    SQL_CARGOS,
+    SQL_DISCIPLINAS_TURMAS_ATRIBUIDAS_UE,
+    SQL_FUNCIONARIO_SISTEMA_PERFIL,
+    SQL_FUNCIONARIOS_CONECTA_FORMACAO,
+    SQL_FUNCIONARIOS_CONECTA_MODALIDADE_ESCOLA,
+    SQL_FUNCIONARIOS_UNIDADE_EDUCACIONAL,
+    SQL_FUNCIONARIOS_VINCULOS_FUNCIONAIS,
+    SQL_TURMAS_ATRIBUIDAS_UE,
+)
+from apps.professores.services import (
+    EtlProfessoresService,
+    _full_refresh,
+    _params_cargo,
+    _row_to_atribuicao_aula,
+    _row_to_atribuicao_externo,
+    _row_to_cargo_base,
+    _row_to_cargo_sobreposto,
+    _row_to_contrato_externo,
+    _row_to_funcao_atividade,
+    _row_to_funcionario,
+    _row_to_funcionario_cargo,
+    _row_to_funcionario_conecta_formacao,
+    _row_to_funcionario_conecta_modalidade_escola,
+    _row_to_funcionario_sistema_perfil,
+    _row_to_funcionario_vinculo_funcional,
+    _row_to_laudo,
+    _row_to_lotacao,
+    _row_to_pessoa,
+    _row_to_professor,
+    _upsert_incremental,
+)
+
+_BulkCreateChamadas = list[
+    tuple[list[FuncionarioUnidadeEducacional], dict[str, object]]
+]
+
+
+def _capturar_bulk_create_funcionario() -> tuple[_BulkCreateChamadas, Any]:
+    """Captura bulk_create de funcionario e preserva hashes reais."""
+    original_bulk_create = QuerySet.bulk_create
+    chamadas: _BulkCreateChamadas = []
+
+    def fake_bulk_create(
+        queryset: QuerySet,
+        objs: list[object],
+        *args: object,
+        **kwargs: object,
+    ) -> list[object]:
+        if isinstance(objs[0], FuncionarioUnidadeEducacional):
+            chamadas.append(
+                (cast(list[FuncionarioUnidadeEducacional], objs), kwargs)
+            )
+            return []
+        return cast(
+            list[object],
+            original_bulk_create(queryset, objs, *args, **kwargs),
+        )
+
+    return chamadas, patch.object(
+        QuerySet,
+        "bulk_create",
+        autospec=True,
+        side_effect=fake_bulk_create,
+    )
+
+
+class EtlProfessoresServiceFiltroAnoLetivoTest(TestCase):
+    """Testes do filtro de ano letivo nas consultas."""
+
+    def test_sem_ano_letivo_remove_marcadores(self) -> None:
+        """Valida consulta sem restrição quando ano não é informado."""
+        srv = EtlProfessoresService(eol=MagicMock())
+
+        sql = srv._sql_com_filtro_ano_letivo(SQL_TURMAS_ATRIBUIDAS_UE)
+
+        self.assertNotIn("FILTRO_ANO_LETIVO_TURMAS_ATRIBUIDAS_UE", sql)
+        self.assertNotIn("AnoLetivo IN (2025, 2026)", sql)
+        self.assertNotIn("AnoLetivo =", sql)
+
+    def test_anos_letivos_aplica_filtro_in(self) -> None:
+        """Valida filtro pelos anos informados."""
+        srv = EtlProfessoresService(eol=MagicMock(), anos_letivos=[2025, 2026])
+
+        sql_turmas = srv._sql_com_filtro_ano_letivo(SQL_TURMAS_ATRIBUIDAS_UE)
+        sql_disciplinas = srv._sql_com_filtro_ano_letivo(
+            SQL_DISCIPLINAS_TURMAS_ATRIBUIDAS_UE
+        )
+        sql_atribuicoes = srv._sql_com_filtro_ano_letivo(SQL_ATRIBUICOES_AULA)
+
+        self.assertIn("AND AnoLetivo IN (2025, 2026)", sql_turmas)
+        self.assertIn("AND tau.AnoLetivo IN (2025, 2026)", sql_disciplinas)
+        self.assertIn("AND aa.an_atribuicao IN (2025, 2026)", sql_atribuicoes)
+        self.assertNotIn("AnoLetivo = 2026", sql_turmas)
+        self.assertNotIn("AnoLetivo >= 2026", sql_turmas)
+
+
+class RowToProfessorTest(TestCase):
+    """Testes para a função _row_to_professor."""
+
+    def test_campos(self) -> None:
+        """Verifica que os campos do professor são extraídos corretamente."""
+        row = ("012345", "ANA SILVA", "Ana", "123.456.789-00")
+        r = _row_to_professor(row)
+        self.assertEqual(r["codigo_rf"], "012345")
+        self.assertEqual(r["nome"], "ANA SILVA")
+        self.assertEqual(r["nome_social"], "Ana")
+        self.assertEqual(r["cpf"], "123.456.789-00")
+
+    def test_nome_social_none(self) -> None:
+        """Verifica que nome_social None é preservado."""
+        row = ("012345", "ANA SILVA", None, None)
+        r = _row_to_professor(row)
+        self.assertIsNone(r["nome_social"])
+        self.assertIsNone(r["cpf"])
+
+
+class FuncionarioSistemaPerfilDtoTest(TestCase):
+    """Testes de DTO de perfil de sistema do funcionario."""
+
+    def test_normaliza_campos(self) -> None:
+        """Normaliza texto, UUID e inteiro."""
+        dto = FuncionarioSistemaPerfilIn(
+            "  123456  ",
+            "  ANA SILVA  ",
+            "  123.456.789-00  ",
+            "  ana@sme.prefeitura.sp.gov.br  ",
+            "11111111-1111-1111-1111-111111111111",
+            "000001",
+            "1000",
+        ).to_domain()
+
+        self.assertEqual(dto.login, "123456")
+        self.assertEqual(dto.nome_servidor, "ANA SILVA")
+        self.assertEqual(dto.cpf, "123.456.789-00")
+        self.assertEqual(dto.email, "ana@sme.prefeitura.sp.gov.br")
+        self.assertEqual(dto.uad_codigo, "000001")
+        self.assertEqual(
+            dto.perfil, UUID("11111111-1111-1111-1111-111111111111")
+        )
+        self.assertEqual(dto.sis_id, 1000)
+
+    def test_nome_servidor_nulo(self) -> None:
+        """Preserva nome do servidor como nulo."""
+        dto = FuncionarioSistemaPerfilIn(
+            "123456",
+            None,
+            None,
+            None,
+            UUID("11111111-1111-1111-1111-111111111111"),
+            None,
+            1000,
+        ).to_domain()
+
+        self.assertIsNone(dto.nome_servidor)
+        self.assertIsNone(dto.cpf)
+        self.assertIsNone(dto.email)
+        self.assertIsNone(dto.uad_codigo)
+
+
+class FuncionarioSistemaPerfilQueryTest(TestCase):
+    """Testes da consulta de perfis de sistema do funcionario."""
+
+    def test_consolida_uad_codigo_sem_gerar_linha_nula_duplicada(
+        self,
+    ) -> None:
+        """Agrupa por login, perfil e sistema, priorizando UAD preenchida."""
+        self.assertIn(
+            "MAX(uad_codigo) AS uad_codigo",
+            SQL_FUNCIONARIO_SISTEMA_PERFIL,
+        )
+        self.assertIn("MAX(cpf) AS cpf", SQL_FUNCIONARIO_SISTEMA_PERFIL)
+        self.assertIn(
+            "GROUP BY login, perfil, sis_id",
+            SQL_FUNCIONARIO_SISTEMA_PERFIL,
+        )
+        self.assertIn(
+            "G.sis_id IN (1000, 1007)",
+            SQL_FUNCIONARIO_SISTEMA_PERFIL,
+        )
+        self.assertNotIn(
+            "GROUP BY login, perfil, uad_codigo, sis_id",
+            SQL_FUNCIONARIO_SISTEMA_PERFIL,
+        )
+
+
+class RowToFuncionarioSistemaPerfilTest(TestCase):
+    """Testes para a função _row_to_funcionario_sistema_perfil."""
+
+    def test_persiste_uad_codigo(self) -> None:
+        """Mapeia a linha persistindo uad_codigo."""
+        row = (
+            "123456",
+            "ANA SILVA",
+            "123.456.789-00",
+            "ana@sme.prefeitura.sp.gov.br",
+            "11111111-1111-1111-1111-111111111111",
+            "000001",
+            1000,
+        )
+
+        resultado = _row_to_funcionario_sistema_perfil(row)
+
+        self.assertEqual(resultado["login"], "123456")
+        self.assertEqual(resultado["nome_servidor"], "ANA SILVA")
+        self.assertEqual(resultado["cpf"], "123.456.789-00")
+        self.assertEqual(resultado["email"], "ana@sme.prefeitura.sp.gov.br")
+        self.assertEqual(resultado["uad_codigo"], "000001")
+        self.assertEqual(
+            resultado["perfil"],
+            UUID("11111111-1111-1111-1111-111111111111"),
+        )
+        self.assertEqual(resultado["sis_id"], 1000)
+
+    def test_rf_stripped(self) -> None:
+        """Verifica que o código RF tem espaços removidos."""
+        row = ("  012345  ", "ANA SILVA", None, None)
+        r = _row_to_professor(row)
+        self.assertEqual(r["codigo_rf"], "012345")
+
+
+class RowToCargoBaseTest(TestCase):
+    """Testes para a função _row_to_cargo_base."""
+
+    def test_campos(self) -> None:
+        """Verifica que os campos do cargo base são extraídos corretamente."""
+        dt = datetime.date(2020, 1, 1)
+        row = (
+            1001,
+            "012345",
+            3239,
+            "PROF DE EDUC BASICA I",
+            6,
+            dt,
+            None,
+            None,
+        )
+        r = _row_to_cargo_base(row)
+        self.assertEqual(r["id"], 1001)
+        self.assertEqual(r["professor_id"], "012345")
+        self.assertEqual(r["codigo_cargo"], 3239)
+        self.assertEqual(r["descricao_cargo"], "PROF DE EDUC BASICA I")
+        self.assertEqual(r["situacao_funcional"], 6)
+        self.assertEqual(r["dt_posse"], dt)
+
+    def test_descricao_cargo_none(self) -> None:
+        """Verifica que dc_cargo None resulta em descricao_cargo None."""
+        dt = datetime.date(2020, 1, 1)
+        row = (1002, "012346", 3247, None, 6, dt, None, None)
+        r = _row_to_cargo_base(row)
+        self.assertIsNone(r["descricao_cargo"])
+
+    def test_situacao_funcional_none(self) -> None:
+        """Verifica que situacao_funcional None é preservado."""
+        dt = datetime.date(2020, 1, 1)
+        row = (1002, "012346", 3247, "PROF BASICA II", None, dt, None, None)
+        r = _row_to_cargo_base(row)
+        self.assertIsNone(r["situacao_funcional"])
+
+    def test_ignora_campos_excedentes(self) -> None:
+        """Verifica leitura de linha com campos complementares."""
+        dt = datetime.date(2020, 1, 1)
+        row = (
+            1001,
+            "012345",
+            3239,
+            "PROF DE EDUC BASICA I",
+            6,
+            dt,
+            None,
+            None,
+            "extra-1",
+            "extra-2",
+            "extra-3",
+            "extra-4",
+            "extra-5",
+            "extra-6",
+            "extra-7",
+            "extra-8",
+            "extra-9",
+            "extra-10",
+            "extra-11",
+            "extra-12",
+        )
+
+        r = _row_to_cargo_base(row)
+
+        self.assertEqual(r["id"], 1001)
+        self.assertEqual(r["professor_id"], "012345")
+        self.assertEqual(r["codigo_cargo"], 3239)
+
+
+class RowToLotacaoTest(TestCase):
+    """Testes para a função _row_to_lotacao."""
+
+    def test_campos(self) -> None:
+        """Verifica que os campos da lotação são extraídos corretamente."""
+        row = (1001, "000001", "108100", datetime.date(2020, 1, 1), None)
+        r = _row_to_lotacao(row)
+        self.assertEqual(r["cargo_base_id"], 1001)
+        self.assertEqual(r["codigo_unidade_educacao"], "000001")
+        self.assertEqual(r["codigo_dre"], "108100")
+        self.assertIsNone(r["dt_fim"])
+
+
+class RowToCargoSobrepostoTest(TestCase):
+    """Testes para a função _row_to_cargo_sobreposto."""
+
+    def test_campos(self) -> None:
+        """Verifica que os campos do cargo sobreposto são extraídos."""
+        row = (1001, 3247, "000001", datetime.date(2024, 12, 31))
+        r = _row_to_cargo_sobreposto(row)
+        self.assertEqual(r["cargo_base_id"], 1001)
+        self.assertEqual(r["codigo_cargo"], 3247)
+        self.assertEqual(r["codigo_unidade_local_servico"], "000001")
+
+
+class RowToFuncaoAtividadeTest(TestCase):
+    """Testes para a função _row_to_funcao_atividade."""
+
+    def test_campos(self) -> None:
+        """Verifica que os campos da função de atividade são extraídos."""
+        row = (1001, "000001", datetime.date(2024, 6, 30))
+        r = _row_to_funcao_atividade(row)
+        self.assertEqual(r["cargo_base_id"], 1001)
+        self.assertEqual(r["codigo_unidade_local_servico"], "000001")
+
+
+class RowToLaudoTest(TestCase):
+    """Testes para a função _row_to_laudo."""
+
+    def test_campos(self) -> None:
+        """Verifica que os campos do laudo médico são extraídos."""
+        row = (1001,)
+        r = _row_to_laudo(row)
+        self.assertEqual(r["cargo_base_id"], 1001)
+
+
+class RowToPessoaTest(TestCase):
+    """Testes para a função _row_to_pessoa."""
+
+    def test_campos(self) -> None:
+        """Verifica que os campos da pessoa são extraídos corretamente."""
+        data_nascimento = datetime.date(1980, 5, 10)
+        row = (
+            500,
+            "123.456.789-00",
+            "JOSE",
+            None,
+            " PAI ",
+            " MAE ",
+            data_nascimento,
+            " 12.345.678-9 ",
+            " 123456789012 ",
+            " 123.45678.90-1 ",
+        )
+        r = _row_to_pessoa(row)
+        self.assertEqual(r["codigo_pessoa"], 500)
+        self.assertEqual(r["cpf"], "123.456.789-00")
+        self.assertEqual(r["nome"], "JOSE")
+        self.assertIsNone(r["nome_social"])
+        self.assertEqual(r["nome_pai"], "PAI")
+        self.assertEqual(r["nome_mae"], "MAE")
+        self.assertEqual(r["data_nascimento"], data_nascimento)
+        self.assertEqual(r["rg"], "12.345.678-9")
+        self.assertEqual(r["titulo_eleitoral"], "123456789012")
+        self.assertEqual(r["pis_pasep"], "123.45678.90-1")
+
+
+class RowToFuncionarioCargoTest(TestCase):
+    """Testes para a função _row_to_funcionario_cargo."""
+
+    def test_campos(self) -> None:
+        """Verifica que os campos do funcionário por cargo são extraídos."""
+        dt = datetime.date(2024, 2, 1)
+        row = (
+            "MARIA",
+            "1234567",
+            dt,
+            None,
+            "PROFESSOR",
+            3239,
+        )
+        r = _row_to_funcionario_cargo(row)
+        self.assertEqual(r["nome"], "MARIA")
+        self.assertEqual(r["codigo_rf"], "1234567")
+        self.assertEqual(r["data_inicio"], dt)
+        self.assertIsNone(r["data_fim"])
+        self.assertEqual(r["cargo"], "PROFESSOR")
+        self.assertEqual(r["codigo_cargo"], 3239)
+
+
+class RowToFuncionarioVinculoFuncionalTest(TestCase):
+    """Testes para a função _row_to_funcionario_vinculo_funcional."""
+
+    def test_campos(self) -> None:
+        """Verifica que os campos do vínculo funcional são extraídos."""
+        dt = datetime.datetime(2024, 1, 1, 7, 30)
+        row = (
+            "7654321",
+            "12345678900",
+            3360,
+            "DIRETOR DE ESCOLA - v1",
+            "108100",
+            "000532",
+            "ESCOLA TESTE",
+            1,
+            dt,
+            3352,
+            "SUPERVISOR ESCOLAR - v1",
+            "108100",
+            "000533",
+            "ESCOLA SOBREPOSTA",
+            1,
+            dt,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+
+        resultado = _row_to_funcionario_vinculo_funcional(row)
+
+        self.assertEqual(resultado["rf"], "7654321")
+        self.assertEqual(resultado["cd_cargo_base"], 3360)
+        self.assertEqual(resultado["cargo_base"], "DIRETOR DE ESCOLA - v1")
+        self.assertEqual(resultado["cd_ue_cargo_sobreposto"], "000533")
+        self.assertIsNone(resultado["cd_funcao_atividade"])
+        self.assertIsNone(resultado["dt_cancelamento_funcao_atividade"])
+        self.assertIsNone(resultado["dt_fim_funcao_atividade"])
+
+
+class FuncionarioVinculoFuncionalQueryTest(TestCase):
+    """Testes da consulta de vínculos funcionais."""
+
+    def test_query_documentada_e_sem_filtro_de_professor(self) -> None:
+        """Verifica que a consulta materializa vínculos por RF."""
+        sql = SQL_FUNCIONARIOS_VINCULOS_FUNCIONAIS
+
+        self.assertIn("v_cargo_base_cotic", sql)
+        self.assertIn("cargo_sobreposto_servidor", sql)
+        self.assertIn("funcao_atividade_cargo_servidor", sql)
+        self.assertIn("funcao.dt_cancelamento AS DtCancelamento", sql)
+        self.assertIn("funcao.dt_fim_funcao_atividade AS DtFim", sql)
+        self.assertNotIn("cd_cargo IN", sql)
+
+
+class RowToFuncionarioConectaFormacaoTest(TestCase):
+    """Testes para a função _row_to_funcionario_conecta_formacao."""
+
+    def test_campos(self) -> None:
+        """Verifica que os campos do Conecta Formação são extraídos."""
+        row = (
+            "7654321",
+            "Ana Servidora",
+            "12345678900",
+            3360,
+            "DIRETOR DE ESCOLA",
+            "108100",
+            "000532",
+            None,
+            None,
+            None,
+            None,
+            1,
+            5,
+            "6",
+            512,
+            1,
+        )
+
+        resultado = _row_to_funcionario_conecta_formacao(row)
+
+        self.assertEqual(resultado["rf"], "7654321")
+        self.assertEqual(resultado["nome"], "Ana Servidora")
+        self.assertEqual(resultado["cargo_codigo"], 3360)
+        self.assertEqual(resultado["codigo_modalidade"], 5)
+        self.assertTrue(resultado["eh_tipo_jornada_jeif"])
+
+
+class RowToFuncionarioConectaModalidadeEscolaTest(TestCase):
+    """Testes para a função de modalidade por unidade."""
+
+    def test_campos(self) -> None:
+        """Verifica que os campos da modalidade são extraídos."""
+        resultado = _row_to_funcionario_conecta_modalidade_escola(
+            ("000532", 5)
+        )
+
+        self.assertEqual(resultado["codigo_ue"], "000532")
+        self.assertEqual(resultado["codigo_modalidade"], 5)
+
+
+class FuncionarioConectaFormacaoQueryTest(TestCase):
+    """Testes da consulta de funcionários do Conecta Formação."""
+
+    def test_query_usa_fontes_do_conecta_formacao(self) -> None:
+        """Verifica fontes usadas para consulta consolidada."""
+        sql = SQL_FUNCIONARIOS_CONECTA_FORMACAO
+
+        self.assertIn("v_cargo_base_cotic", sql)
+        self.assertIn("jornada_cargo_servidor", sql)
+        self.assertIn("atribuicao_aula", sql)
+        self.assertIn("funcao_atividade_cargo_servidor", sql)
+
+    def test_query_modalidade_escola_usa_grade_da_unidade(self) -> None:
+        """Verifica fontes da consulta de modalidade por unidade."""
+        sql = SQL_FUNCIONARIOS_CONECTA_MODALIDADE_ESCOLA
+
+        self.assertIn("turma_escola", sql)
+        self.assertIn("serie_turma_grade", sql)
+        self.assertIn("etapa_ensino", sql)
+        self.assertNotIn("atribuicao_aula", sql)
+
+
+class RowToContratoExternoTest(TestCase):
+    """Testes para a função _row_to_contrato_externo."""
+
+    def test_campos(self) -> None:
+        """Verifica que os campos do contrato externo são extraídos."""
+        row = (800, 500, 10, "000001", None, None)
+        r = _row_to_contrato_externo(row)
+        self.assertEqual(r["codigo_contrato"], 800)
+        self.assertEqual(r["pessoa_id"], 500)
+        self.assertEqual(r["codigo_tipo_funcao"], 10)
+        self.assertEqual(r["codigo_unidade_educacao"], "000001")
+
+
+class RowToAtribuicaoAulaTest(TestCase):
+    """Testes para a função _row_to_atribuicao_aula."""
+
+    def test_campos(self) -> None:
+        """Verifica que os campos da atribuição de aula são extraídos."""
+        dt = datetime.date(2024, 2, 1)
+        dt_inicio_turma = datetime.date(2024, 2, 5)
+        row = (
+            9001,
+            1001,
+            "000001",
+            9999,
+            "1A",
+            None,
+            100,
+            10,
+            "MATEMATICA",
+            200,
+            "1",
+            2024,
+            1,
+            dt,
+            dt_inicio_turma,
+            dt,
+            None,
+            None,
+            None,
+            "108600",
+            "DRE PENHA",
+            "PE",
+            "EMEF TESTE",
+            1,
+            2,
+            "Fundamental",
+            5,
+            0,
+            5,
+            1,
+        )
+        r = _row_to_atribuicao_aula(row)
+        self.assertEqual(r["id"], 9001)
+        self.assertEqual(r["cargo_base_id"], 1001)
+        self.assertEqual(r["codigo_turma_escola"], 9999)
+        self.assertEqual(r["ano_atribuicao"], 2024)
+        self.assertEqual(r["descricao_turma_escola"], "1A")
+        self.assertEqual(r["descricao_componente_curricular"], "MATEMATICA")
+        self.assertEqual(r["ano_escolar"], "1")
+        self.assertEqual(r["codigo_etapa_ensino"], 1)
+        self.assertEqual(r["dt_inicio_turma"], dt_inicio_turma)
+        self.assertIsNone(r["dt_cancelamento"])
+        self.assertEqual(r["codigo_dre"], "108600")
+        self.assertEqual(r["nome_dre"], "DRE PENHA")
+        self.assertEqual(r["abreviacao_dre"], "PE")
+        self.assertEqual(r["nome_unidade_educacional"], "EMEF TESTE")
+        self.assertEqual(r["codigo_tipo_escola"], 1)
+        self.assertEqual(r["codigo_tipo_turma"], 2)
+        self.assertEqual(r["modalidade"], "Fundamental")
+        self.assertEqual(r["codigo_modalidade"], 5)
+        self.assertEqual(r["semestre"], 0)
+        self.assertEqual(r["duracao_turno"], 5)
+        self.assertEqual(r["tipo_turno"], 1)
+
+    def test_campos_sem_dados_de_abrangencia(self) -> None:
+        """Verifica leitura da linha sem dados complementares."""
+        dt = datetime.date(2024, 2, 1)
+        dt_inicio_turma = datetime.date(2024, 2, 5)
+        row = (
+            9001,
+            1001,
+            "000001",
+            9999,
+            "1A",
+            None,
+            100,
+            10,
+            "MATEMATICA",
+            200,
+            "1",
+            2024,
+            1,
+            dt,
+            dt_inicio_turma,
+            dt,
+            None,
+            None,
+        )
+
+        r = _row_to_atribuicao_aula(row)
+
+        self.assertEqual(r["id"], 9001)
+        self.assertEqual(r["codigo_turma_escola"], 9999)
+        self.assertIsNone(r["dt_cancelamento"])
+        self.assertIsNone(r["codigo_dre"])
+        self.assertIsNone(r["codigo_tipo_turma"])
+
+
+class RowToAtribuicaoExternoTest(TestCase):
+    """Testes para a função _row_to_atribuicao_externo."""
+
+    def test_campos(self) -> None:
+        """Verifica que os campos da atribuição externo são extraídos."""
+        dt = datetime.date(2024, 2, 1)
+        dt_inicio_turma = datetime.date(2024, 2, 5)
+        row = (
+            9002,
+            800,
+            "000001",
+            5555,
+            "EXT",
+            100,
+            10,
+            "PORTUGUES",
+            200,
+            None,
+            "2",
+            2024,
+            1,
+            dt,
+            dt_inicio_turma,
+            dt,
+            None,
+            None,
+            None,
+        )
+        r = _row_to_atribuicao_externo(row)
+        self.assertEqual(r["id"], 9002)
+        self.assertEqual(r["contrato_externo_id"], 800)
+        self.assertEqual(r["codigo_turma_escola"], 5555)
+        self.assertEqual(r["ano_atribuicao"], 2024)
+        self.assertEqual(r["descricao_turma_escola"], "EXT")
+        self.assertEqual(r["descricao_componente_curricular"], "PORTUGUES")
+        self.assertEqual(r["ano_escolar"], "2")
+        self.assertEqual(r["codigo_etapa_ensino"], 1)
+        self.assertEqual(r["dt_inicio_turma"], dt_inicio_turma)
+        self.assertIsNone(r["dt_cancelamento"])
+
+    def test_codigo_turma_escola_none(self) -> None:
+        """Verifica que codigo_turma_escola None é preservado."""
+        dt = datetime.date(2024, 2, 1)
+        row = (
+            9003,
+            801,
+            "000002",
+            None,
+            None,
+            101,
+            11,
+            "CIENCIAS",
+            201,
+            None,
+            "2",
+            2024,
+            1,
+            dt,
+            None,
+            dt,
+            None,
+            None,
+            None,
+        )
+        r = _row_to_atribuicao_externo(row)
+        self.assertIsNone(r["codigo_turma_escola"])
+        self.assertIsNone(r["dt_cancelamento"])
+
+    def test_campos_sem_cancelamento(self) -> None:
+        """Verifica leitura da linha sem cancelamento."""
+        dt = datetime.date(2024, 2, 1)
+        row = (
+            9002,
+            800,
+            "000001",
+            5555,
+            "EXT",
+            100,
+            10,
+            "PORTUGUES",
+            200,
+            None,
+            "2",
+            2024,
+            1,
+            dt,
+            None,
+            dt,
+            None,
+            None,
+        )
+
+        r = _row_to_atribuicao_externo(row)
+
+        self.assertEqual(r["id"], 9002)
+        self.assertIsNone(r["dt_cancelamento"])
+
+
+class RowToFuncionarioTest(TestCase):
+    """Testes para a funcao _row_to_funcionario."""
+
+    def test_model_in_permite_campos_nulos(self) -> None:
+        """Permite que o DTO de entrada propague nulos da origem."""
+        dto = FuncionarioUnidadeEducacionalIn(
+            "ANA",
+            None,
+            None,
+            "7506988",
+            "019372",
+            None,
+            timezone.now(),
+            None,
+            None,
+            None,
+            "lotacao",
+            None,
+            None,
+            None,
+            0,
+            0,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        ).to_domain()
+
+        self.assertIsNone(dto.data_fim)
+        self.assertIsNone(dto.dt_fim_nomeacao)
+        self.assertIsNone(dto.dt_fim_funcao_atividade)
+        self.assertEqual(dto.origem_vinculo, "lotacao")
+        self.assertIsNone(dto.codigo_cargo)
+        self.assertIsNone(dto.codigo_tipo_funcao_atividade)
+        self.assertIsNone(dto.pessoa_id)
+        self.assertIsNone(dto.nome_ue)
+        self.assertIsNone(dto.tipo_funcionario_externo)
+        self.assertIsNone(dto.dc_funcao_externo)
+        self.assertFalse(dto.supervisor_dre)
+
+    def test_campos_normalizados_e_hash(self) -> None:
+        """Verifica normalizacao, defaults e chave SHA-256."""
+        dt = datetime.datetime(2026, 2, 1, 7, 30)
+        row = (
+            " ANA ",
+            " Ana ",
+            " 123 ",
+            " 7506988 ",
+            " 019372 ",
+            " 108100 ",
+            dt,
+            None,
+            None,
+            None,
+            "lotacao",
+            3239,
+            " PROFESSOR ",
+            None,
+            1,
+            0,
+            None,
+            None,
+            500,
+            " EMEF TESTE ",
+            " CONTRATADO ",
+            " PROFESSOR CONTRATADO ",
+            1,
+        )
+
+        r = _row_to_funcionario(row)
+
+        self.assertNotIn("id", r)
+        self.assertEqual(r["nome"], "ANA")
+        self.assertEqual(r["nome_social"], "Ana")
+        self.assertEqual(r["cpf"], "123")
+        self.assertEqual(r["codigo_rf"], "7506988")
+        self.assertEqual(r["codigo_ue"], "019372")
+        self.assertEqual(r["codigo_dre"], "108100")
+        self.assertTrue(timezone.is_aware(r["data_inicio"]))
+        self.assertIsNone(r["data_fim"])
+        self.assertIsNone(r["dt_fim_nomeacao"])
+        self.assertIsNone(r["dt_fim_funcao_atividade"])
+        self.assertEqual(r["origem_vinculo"], "lotacao")
+        self.assertEqual(r["codigo_cargo"], 3239)
+        self.assertEqual(r["cargo"], "PROFESSOR")
+        self.assertEqual(r["codigo_tipo_funcao_atividade"], 0)
+        self.assertEqual(r["pessoa_id"], 500)
+        self.assertEqual(r["nome_ue"], "EMEF TESTE")
+        self.assertEqual(r["tipo_funcionario_externo"], "CONTRATADO")
+        self.assertEqual(r["dc_funcao_externo"], "PROFESSOR CONTRATADO")
+        self.assertTrue(r["supervisor_dre"])
+        self.assertTrue(r["eh_professor"])
+        self.assertFalse(r["esta_afastado"])
+        self.assertEqual(r["funcao_externo"], 0)
+        self.assertEqual(r["tipo_funcao_externo"], 0)
+
+    def test_normaliza_bool_texto_e_preserva_datetime_aware(self) -> None:
+        """Cobre indicadores textuais e datas ja aware."""
+        dt = timezone.now()
+        row = (
+            "ANA",
+            None,
+            None,
+            "7506988",
+            "019372",
+            None,
+            dt,
+            None,
+            None,
+            None,
+            "lotacao",
+            None,
+            None,
+            None,
+            "sim",
+            "false",
+            "",
+            "",
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+
+        r = _row_to_funcionario(row)
+
+        self.assertIs(r["data_inicio"], dt)
+        self.assertIsNone(r["data_fim"])
+        self.assertIsNone(r["dt_fim_nomeacao"])
+        self.assertIsNone(r["dt_fim_funcao_atividade"])
+        self.assertEqual(r["origem_vinculo"], "lotacao")
+        self.assertIsNone(r["codigo_cargo"])
+        self.assertIsNone(r["pessoa_id"])
+        self.assertFalse(r["supervisor_dre"])
+        self.assertTrue(r["eh_professor"])
+        self.assertFalse(r["esta_afastado"])
+
+
+class ParamsCargoTest(TestCase):
+    """Testes para a função _params_cargo."""
+
+    def test_retorna_lista(self) -> None:
+        """Verifica que _params_cargo retorna uma lista."""
+        params = _params_cargo()
+        self.assertIsInstance(params, list)
+        self.assertTrue(len(params) > 0)
+
+    def test_valores_sao_cargos_professor(self) -> None:
+        """Verifica que os valores correspondem à lista CARGOS_PROFESSOR."""
+        params = _params_cargo()
+        self.assertEqual(params, list(CARGOS_PROFESSOR))
+
+
+class FullRefreshTest(TestCase):
+    """Testes para a função _full_refresh."""
+
+    databases = ["default", "professores_db"]
+
+    def test_lista_vazia_retorna_zero(self) -> None:
+        """Verifica que _full_refresh retorna zero para lista vazia."""
+        from apps.professores.models import Professor
+
+        resultado = _full_refresh(Professor, [])
+        self.assertEqual(resultado, 0)
+
+    def test_cria_registros(self) -> None:
+        """Verifica que _full_refresh cria os registros fornecidos."""
+        from apps.professores.models import Professor
+
+        objs = [Professor(codigo_rf="T01", nome="TESTE")]
+        resultado = _full_refresh(Professor, objs)
+        self.assertEqual(resultado, 1)
+        self.assertEqual(Professor.objects.using("professores_db").count(), 1)
+
+    def test_substitui_registros_existentes(self) -> None:
+        """_full_refresh substitui completamente os registros existentes."""
+        from apps.professores.models import Professor
+
+        _full_refresh(Professor, [Professor(codigo_rf="T01", nome="ANTIGA")])
+        resultado = _full_refresh(
+            Professor, [Professor(codigo_rf="T02", nome="NOVA")]
+        )
+        self.assertEqual(resultado, 1)
+        self.assertFalse(
+            Professor.objects.using("professores_db")
+            .filter(codigo_rf="T01")
+            .exists()
+        )
+        self.assertTrue(
+            Professor.objects.using("professores_db")
+            .filter(codigo_rf="T02")
+            .exists()
+        )
+
+
+class UpsertIncrementalTest(TestCase):
+    """Testes do upsert incremental."""
+
+    databases = ["default", "professores_db"]
+
+    @patch("apps.professores.services.EtlAuditoriaLinha.objects.bulk_create")
+    @patch("apps.professores.services.Professor.objects")
+    def test_remove_chave_primaria_dos_campos_de_update(
+        self,
+        mock_manager: MagicMock,
+        mock_hash_bulk_create: MagicMock,
+    ) -> None:
+        """Evita erro do Django ao atualizar conflito pela propria PK."""
+        mock_manager.using.return_value.bulk_create.return_value = None
+        mock_filter = MagicMock()
+        mock_filter.values_list.return_value = []
+        mock_manager.filter.return_value = mock_filter
+
+        total = _upsert_incremental(
+            Professor,
+            "professor",
+            [
+                {
+                    "codigo_rf": "7506988",
+                    "nome": "ANA",
+                    "nome_social": None,
+                    "cpf": None,
+                }
+            ],
+            ["codigo_rf", "nome", "nome_social", "cpf"],
+        )
+
+        self.assertEqual(total, 1)
+        _, kwargs = mock_manager.using.return_value.bulk_create.call_args
+        self.assertEqual(kwargs["unique_fields"], ["codigo_rf"])
+        self.assertEqual(
+            kwargs["update_fields"], ["nome", "nome_social", "cpf"]
+        )
+        mock_hash_bulk_create.assert_called_once()
+
+    @patch("apps.professores.services.EtlAuditoriaLinha.objects.bulk_create")
+    @patch("apps.professores.services.FuncionarioUnidadeEducacional.objects")
+    def test_usa_chave_natural_composta_para_funcionario(
+        self,
+        mock_manager: MagicMock,
+        mock_hash_bulk_create: MagicMock,
+    ) -> None:
+        """Permite o mesmo RF e UE com cargos distintos no upsert."""
+        dt = timezone.now()
+        dt_fim = dt + datetime.timedelta(days=1)
+        mock_manager.using.return_value.bulk_create.return_value = None
+        mock_filter = MagicMock()
+        mock_filter.values_list.return_value = []
+        mock_manager.filter.return_value = mock_filter
+
+        total = _upsert_incremental(
+            FuncionarioUnidadeEducacional,
+            "funcionario_unidade_educacional",
+            [
+                {
+                    "codigo_rf": "7506988",
+                    "codigo_ue": "019372",
+                    "codigo_cargo": 3239,
+                    "codigo_tipo_funcao_atividade": 0,
+                    "data_inicio": dt,
+                    "data_fim": dt_fim,
+                    "funcao_externo": 0,
+                    "tipo_funcao_externo": 0,
+                    "nome": "ANA",
+                },
+                {
+                    "codigo_rf": "7506988",
+                    "codigo_ue": "019372",
+                    "codigo_cargo": 3247,
+                    "codigo_tipo_funcao_atividade": 0,
+                    "data_inicio": dt,
+                    "data_fim": dt_fim,
+                    "funcao_externo": 0,
+                    "tipo_funcao_externo": 0,
+                    "nome": "ANA",
+                },
+            ],
+            [
+                "codigo_rf",
+                "codigo_ue",
+                "codigo_cargo",
+                "codigo_tipo_funcao_atividade",
+                "data_inicio",
+                "data_fim",
+                "funcao_externo",
+                "tipo_funcao_externo",
+                "nome",
+            ],
+            [
+                "codigo_rf",
+                "codigo_ue",
+                "codigo_cargo",
+                "codigo_tipo_funcao_atividade",
+                "data_inicio",
+                "data_fim",
+                "funcao_externo",
+                "tipo_funcao_externo",
+            ],
+        )
+
+        self.assertEqual(total, 2)
+        _, kwargs = mock_manager.using.return_value.bulk_create.call_args
+        self.assertEqual(
+            kwargs["unique_fields"],
+            [
+                "codigo_rf",
+                "codigo_ue",
+                "codigo_cargo",
+                "codigo_tipo_funcao_atividade",
+                "data_inicio",
+                "data_fim",
+                "funcao_externo",
+                "tipo_funcao_externo",
+            ],
+        )
+        self.assertEqual(kwargs["update_fields"], ["nome"])
+        mock_hash_bulk_create.assert_called_once()
+
+    def test_reinsere_chave_composta_quando_destino_sumiu(self) -> None:
+        """Reinsere registro quando hash existe mas destino foi removido."""
+        dt = timezone.now()
+        row = {
+            "codigo_rf": "7506988",
+            "codigo_ue": "019372",
+            "codigo_cargo": 3239,
+            "codigo_tipo_funcao_atividade": 0,
+            "data_inicio": dt,
+            "data_fim": None,
+            "funcao_externo": 0,
+            "tipo_funcao_externo": 0,
+            "nome": "ANA",
+        }
+        update_fields = [
+            "codigo_rf",
+            "codigo_ue",
+            "codigo_cargo",
+            "codigo_tipo_funcao_atividade",
+            "data_inicio",
+            "data_fim",
+            "funcao_externo",
+            "tipo_funcao_externo",
+            "nome",
+        ]
+        unique_fields = [
+            "codigo_rf",
+            "codigo_ue",
+            "codigo_cargo",
+            "codigo_tipo_funcao_atividade",
+            "data_inicio",
+            "data_fim",
+            "funcao_externo",
+            "tipo_funcao_externo",
+        ]
+
+        chamadas_bulk, mock_bulk_create = _capturar_bulk_create_funcionario()
+        with mock_bulk_create:
+            queryset = FuncionarioUnidadeEducacional.objects.using(
+                "professores_db"
+            )
+            queryset.all().delete()
+
+            _upsert_incremental(
+                FuncionarioUnidadeEducacional,
+                "funcionario_unidade_educacional",
+                [row],
+                update_fields,
+                unique_fields,
+            )
+
+            total = _upsert_incremental(
+                FuncionarioUnidadeEducacional,
+                "funcionario_unidade_educacional",
+                [row],
+                update_fields,
+                unique_fields,
+            )
+
+        self.assertEqual(total, 1)
+        self.assertEqual(len(chamadas_bulk), 2)
+        obj_reinserido = chamadas_bulk[-1][0][0]
+        self.assertEqual(obj_reinserido.codigo_rf, row["codigo_rf"])
+        self.assertEqual(obj_reinserido.data_fim, row["data_fim"])
+
+    def test_mantem_funcoes_distintas_na_mesma_ue_e_cargo(self) -> None:
+        """Persiste duas funcoes para o mesmo funcionario, UE e cargo."""
+        base = {
+            "codigo_rf": "7506988",
+            "codigo_ue": "019372",
+            "codigo_cargo": 3239,
+            "data_inicio": timezone.now(),
+            "data_fim": timezone.now(),
+            "funcao_externo": 0,
+            "tipo_funcao_externo": 0,
+            "nome": "ANA",
+        }
+        rows = [
+            {
+                **base,
+                "codigo_tipo_funcao_atividade": 0,
+                "cargo": "PROFESSOR",
+            },
+            {
+                **base,
+                "codigo_tipo_funcao_atividade": 10,
+                "cargo": "PROFESSOR",
+            },
+        ]
+        update_fields = [
+            "codigo_rf",
+            "codigo_ue",
+            "codigo_cargo",
+            "codigo_tipo_funcao_atividade",
+            "data_inicio",
+            "data_fim",
+            "funcao_externo",
+            "tipo_funcao_externo",
+            "nome",
+            "cargo",
+        ]
+
+        unique_fields = [
+            "codigo_rf",
+            "codigo_ue",
+            "codigo_cargo",
+            "codigo_tipo_funcao_atividade",
+            "data_inicio",
+            "data_fim",
+            "funcao_externo",
+            "tipo_funcao_externo",
+        ]
+
+        chamadas_bulk, mock_bulk_create = _capturar_bulk_create_funcionario()
+        with mock_bulk_create:
+            total = _upsert_incremental(
+                FuncionarioUnidadeEducacional,
+                "funcionario_unidade_educacional",
+                rows,
+                update_fields,
+                unique_fields,
+            )
+
+        self.assertEqual(total, 2)
+        objs, kwargs = chamadas_bulk[-1]
+        funcoes = {obj.codigo_tipo_funcao_atividade for obj in objs}
+        self.assertEqual(funcoes, {0, 10})
+        self.assertEqual(kwargs["unique_fields"], unique_fields)
+
+    def test_mantem_funcoes_externas_distintas_na_mesma_ue(self) -> None:
+        """Persiste funcoes externas distintas para o mesmo CPF e UE."""
+        base = {
+            "codigo_rf": "12345678900",
+            "codigo_ue": "019372",
+            "codigo_cargo": None,
+            "codigo_tipo_funcao_atividade": 0,
+            "data_inicio": timezone.now(),
+            "data_fim": None,
+            "nome": "ANA",
+        }
+        rows = [
+            {
+                **base,
+                "funcao_externo": 101,
+                "tipo_funcao_externo": 1,
+            },
+            {
+                **base,
+                "funcao_externo": 102,
+                "tipo_funcao_externo": 1,
+            },
+        ]
+        campos_chave = [
+            "codigo_rf",
+            "codigo_ue",
+            "codigo_cargo",
+            "codigo_tipo_funcao_atividade",
+            "data_inicio",
+            "data_fim",
+            "funcao_externo",
+            "tipo_funcao_externo",
+        ]
+
+        chamadas_bulk, mock_bulk_create = _capturar_bulk_create_funcionario()
+        with mock_bulk_create:
+            total = _upsert_incremental(
+                FuncionarioUnidadeEducacional,
+                "funcionario_unidade_educacional",
+                rows,
+                [*campos_chave, "nome"],
+                campos_chave,
+            )
+
+        self.assertEqual(total, 2)
+        objs, kwargs = chamadas_bulk[-1]
+        funcoes = {obj.funcao_externo for obj in objs}
+        self.assertEqual(funcoes, {101, 102})
+        self.assertEqual(kwargs["unique_fields"], campos_chave)
+
+
+_EOL_PATCH = "apps.professores.services.EOLService"
+_UPSERT_PATCH = "apps.professores.services._upsert_incremental"
+_FULL_REFRESH_PATCH = "apps.professores.services._full_refresh_por_lote"
+
+
+class EtlProfessoresServiceFase1Test(TestCase):
+    """Testes dos métodos de população da fase 1 do EtlProfessoresService."""
+
+    databases = ["default", "professores_db"]
+
+    def test_fases_padronizadas_usam_phase_config(self) -> None:
+        """Fases simples são descritas por PhaseConfig."""
+        srv = EtlProfessoresService(eol=MagicMock(), core_sso=MagicMock())
+        fases = {fase.nome: fase for fase in srv._fases}
+
+        self.assertIsInstance(fases["professor"], PhaseConfig)
+        self.assertEqual(fases["professor"].modo_escrita, "upsert")
+        self.assertEqual(fases["professor"].unique_fields, ("codigo_rf",))
+        self.assertEqual(fases["cargo"].modo_escrita, "full_refresh")
+        self.assertIs(fases["cargo"].model_class, Cargo)
+        self.assertEqual(
+            fases["lotacao_servidor"].modo_escrita, "full_refresh"
+        )
+        self.assertNotIn("administrador_escola", fases)
+        self.assertNotIn("professor_escola_ano", fases)
+
+    @patch(_UPSERT_PATCH, return_value=4)
+    @patch(_EOL_PATCH)
+    def test_popular_professores(
+        self, mock_eol: MagicMock, mock_upsert: MagicMock
+    ) -> None:
+        """Verifica que popular_professores retorna a contagem correta."""
+        mock_eol.return_value.iter_query.return_value = [
+            [("012345", "ANA SILVA", None, "123.456.789-00")]
+        ]
+        srv = EtlProfessoresService()
+        resultado = srv.popular_professores()
+        self.assertEqual(resultado, 4)
+        self.assertEqual(mock_upsert.call_args.args[4], ["codigo_rf"])
+
+    def test_cargo_in_normaliza_campos(self) -> None:
+        """Verifica normalização dos dados de cargo."""
+        cancelamento = datetime.date(2024, 1, 1)
+
+        cargo = CargoIn("3360", " DIRETOR ", cancelamento).to_domain()
+
+        self.assertEqual(
+            cargo.to_dict(),
+            {
+                "codigo_cargo": 3360,
+                "nome_cargo": "DIRETOR",
+                "dt_cancelamento": cancelamento,
+            },
+        )
+
+    @patch(_FULL_REFRESH_PATCH, return_value=2)
+    @patch(_EOL_PATCH)
+    def test_popular_cargos(
+        self, mock_eol: MagicMock, mock_refresh: MagicMock
+    ) -> None:
+        """Verifica que popular_cargos executa full refresh do catálogo."""
+        srv = EtlProfessoresService()
+
+        resultado = srv.popular_cargos()
+
+        self.assertEqual(resultado, 2)
+        mock_eol.return_value.iter_query.assert_called_once_with(
+            SQL_CARGOS, None
+        )
+        self.assertIs(mock_refresh.call_args.args[0], Cargo)
+
+    @patch(_UPSERT_PATCH, return_value=1)
+    @patch(_EOL_PATCH)
+    def test_popular_pessoas(
+        self, mock_eol: MagicMock, mock_upsert: MagicMock
+    ) -> None:
+        """Verifica que popular_pessoas retorna a contagem correta."""
+        data_nascimento = datetime.date(1980, 5, 10)
+        mock_eol.return_value.iter_query.return_value = [
+            [
+                (
+                    500,
+                    "123.456.789-00",
+                    "JOSE",
+                    None,
+                    " PAI ",
+                    " MAE ",
+                    data_nascimento,
+                    " 12.345.678-9 ",
+                    " 123456789012 ",
+                    " 123.45678.90-1 ",
+                )
+            ]
+        ]
+        srv = EtlProfessoresService()
+        resultado = srv.popular_pessoas()
+        self.assertEqual(resultado, 1)
+        self.assertEqual(
+            mock_upsert.call_args.args[3],
+            [
+                "cpf",
+                "nome",
+                "nome_social",
+                "nome_pai",
+                "nome_mae",
+                "data_nascimento",
+                "rg",
+                "titulo_eleitoral",
+                "pis_pasep",
+            ],
+        )
+
+
+class EtlProfessoresServiceFase2Test(TestCase):
+    """Testes dos métodos de população da fase 2 do EtlProfessoresService."""
+
+    databases = ["default", "professores_db"]
+
+    @patch(_UPSERT_PATCH, return_value=10)
+    @patch(_EOL_PATCH)
+    def test_popular_cargos_base(
+        self, mock_eol: MagicMock, mock_upsert: MagicMock
+    ) -> None:
+        """Verifica que popular_cargos_base retorna a contagem correta."""
+        dt = datetime.date(2020, 1, 1)
+        mock_eol.return_value.iter_query.return_value = [
+            [
+                (
+                    1001,
+                    "012345",
+                    3239,
+                    "PROF DE EDUC BASICA I",
+                    6,
+                    dt,
+                    None,
+                    None,
+                    None,
+                    "108600",
+                    "DRE PENHA",
+                    "PE",
+                    "EMEF TESTE",
+                    1,
+                    2,
+                    "Fundamental",
+                    5,
+                    0,
+                    5,
+                    1,
+                )
+            ]
+        ]
+        srv = EtlProfessoresService()
+        resultado = srv.popular_cargos_base()
+        self.assertEqual(resultado, 10)
+
+    @patch(_UPSERT_PATCH, return_value=3)
+    @patch(_EOL_PATCH)
+    def test_popular_contratos_externos(
+        self, mock_eol: MagicMock, mock_upsert: MagicMock
+    ) -> None:
+        """Verifica que popular_contratos_externos retorna contagem correta."""
+        mock_eol.return_value.iter_query.return_value = [
+            [(800, 500, 10, "000001", None, None)]
+        ]
+        srv = EtlProfessoresService()
+        resultado = srv.popular_contratos_externos()
+        self.assertEqual(resultado, 3)
+
+
+class EtlProfessoresServiceFase3Test(TestCase):
+    """Testes dos métodos de população da fase 3 do EtlProfessoresService."""
+
+    databases = ["default", "professores_db"]
+
+    @patch(_FULL_REFRESH_PATCH, return_value=5)
+    @patch(_EOL_PATCH)
+    def test_popular_lotacoes(
+        self, mock_eol: MagicMock, mock_refresh: MagicMock
+    ) -> None:
+        """Verifica que popular_lotacoes retorna a contagem correta."""
+        srv = EtlProfessoresService()
+        resultado = srv.popular_lotacoes()
+        self.assertEqual(resultado, 5)
+
+    @patch(_FULL_REFRESH_PATCH, return_value=3)
+    @patch(_EOL_PATCH)
+    def test_popular_cargos_sobrepostos(
+        self, mock_eol: MagicMock, mock_refresh: MagicMock
+    ) -> None:
+        """Verifica que popular_cargos_sobrepostos retorna contagem correta."""
+        srv = EtlProfessoresService()
+        resultado = srv.popular_cargos_sobrepostos()
+        self.assertEqual(resultado, 3)
+
+    @patch(_FULL_REFRESH_PATCH, return_value=4)
+    @patch(_EOL_PATCH)
+    def test_popular_funcoes_atividade(
+        self, mock_eol: MagicMock, mock_refresh: MagicMock
+    ) -> None:
+        """Verifica que popular_funcoes_atividade retorna contagem correta."""
+        srv = EtlProfessoresService()
+        resultado = srv.popular_funcoes_atividade()
+        self.assertEqual(resultado, 4)
+
+    @patch(_FULL_REFRESH_PATCH, return_value=1)
+    @patch(_EOL_PATCH)
+    def test_popular_laudos(
+        self, mock_eol: MagicMock, mock_refresh: MagicMock
+    ) -> None:
+        """Verifica que popular_laudos retorna a contagem correta."""
+        srv = EtlProfessoresService()
+        resultado = srv.popular_laudos()
+        self.assertEqual(resultado, 1)
+
+    @patch(_UPSERT_PATCH, return_value=20)
+    @patch(_EOL_PATCH)
+    def test_popular_atribuicoes_aula(
+        self, mock_eol: MagicMock, mock_upsert: MagicMock
+    ) -> None:
+        """Verifica que popular_atribuicoes_aula retorna a contagem correta."""
+        dt = datetime.date(2024, 2, 1)
+        mock_eol.return_value.iter_query.return_value = [
+            [
+                (
+                    9001,
+                    1001,
+                    "000001",
+                    9999,
+                    "1A",
+                    None,
+                    100,
+                    10,
+                    "MATEMATICA",
+                    200,
+                    "1",
+                    2024,
+                    1,
+                    dt,
+                    dt,
+                    dt,
+                    None,
+                    None,
+                    None,
+                    "108600",
+                    "DRE PENHA",
+                    "PE",
+                    "EMEF TESTE",
+                    1,
+                    2,
+                    "Fundamental",
+                    5,
+                    0,
+                    5,
+                    1,
+                )
+            ]
+        ]
+        srv = EtlProfessoresService()
+        resultado = srv.popular_atribuicoes_aula()
+        self.assertEqual(resultado, 20)
+
+    @patch(_UPSERT_PATCH, return_value=8)
+    @patch(_EOL_PATCH)
+    def test_popular_atribuicoes_externo(
+        self, mock_eol: MagicMock, mock_upsert: MagicMock
+    ) -> None:
+        """Verifica popular_atribuicoes_externo retorna contagem correta."""
+        dt = datetime.date(2024, 2, 1)
+        mock_eol.return_value.iter_query.return_value = [
+            [
+                (
+                    9002,
+                    800,
+                    "000001",
+                    5555,
+                    "EXT",
+                    100,
+                    10,
+                    "PORTUGUES",
+                    200,
+                    None,
+                    "2",
+                    2024,
+                    1,
+                    dt,
+                    dt,
+                    dt,
+                    None,
+                    None,
+                )
+            ]
+        ]
+        srv = EtlProfessoresService()
+        resultado = srv.popular_atribuicoes_externo()
+        self.assertEqual(resultado, 8)
+
+
+class EtlProfessoresServiceFase4Test(TestCase):
+    """Testes da fase final de funcionarios."""
+
+    databases = ["default", "professores_db"]
+
+    @patch(_UPSERT_PATCH, return_value=2)
+    @patch(_EOL_PATCH)
+    def test_popular_funcionarios(
+        self, mock_eol: MagicMock, mock_upsert: MagicMock
+    ) -> None:
+        """Verifica query, parametros e persistencia incremental."""
+        dt = datetime.datetime(2026, 2, 1, 7, 30)
+        mock_eol.return_value.iter_query.return_value = [
+            [
+                (
+                    "ANA",
+                    None,
+                    None,
+                    "7506988",
+                    "019372",
+                    "108100",
+                    dt,
+                    None,
+                    None,
+                    None,
+                    "lotacao",
+                    3239,
+                    "PROFESSOR",
+                    0,
+                    1,
+                    0,
+                    0,
+                    0,
+                    500,
+                    None,
+                    None,
+                    None,
+                    1,
+                )
+            ]
+        ]
+
+        srv = EtlProfessoresService()
+        resultado = srv.popular_funcionarios()
+
+        self.assertEqual(resultado, 2)
+        mock_eol.return_value.iter_query.assert_called_once_with(
+            SQL_FUNCIONARIOS_UNIDADE_EDUCACIONAL, _params_cargo()
+        )
+        self.assertEqual(
+            mock_upsert.call_args.args[1],
+            "funcionario_unidade_educacional",
+        )
+        self.assertEqual(
+            mock_upsert.call_args.args[4],
+            [
+                "codigo_rf",
+                "codigo_ue",
+                "codigo_cargo",
+                "codigo_tipo_funcao_atividade",
+                "data_inicio",
+                "data_fim",
+                "funcao_externo",
+                "tipo_funcao_externo",
+            ],
+        )
+        self.assertEqual(
+            mock_upsert.call_args.args[3],
+            [
+                "nome",
+                "nome_social",
+                "cpf",
+                "codigo_ue",
+                "codigo_dre",
+                "data_inicio",
+                "data_fim",
+                "dt_fim_nomeacao",
+                "dt_fim_funcao_atividade",
+                "origem_vinculo",
+                "codigo_cargo",
+                "cargo",
+                "codigo_tipo_funcao_atividade",
+                "pessoa_id",
+                "nome_ue",
+                "tipo_funcionario_externo",
+                "dc_funcao_externo",
+                "supervisor_dre",
+                "eh_professor",
+                "esta_afastado",
+                "funcao_externo",
+                "tipo_funcao_externo",
+            ],
+        )
+
+    @patch(_UPSERT_PATCH, return_value=1)
+    def test_popular_funcionarios_sistema_perfil(
+        self, mock_upsert: MagicMock
+    ) -> None:
+        """Verifica CoreSSO e upsert dos perfis de sistema."""
+        mock_eol = MagicMock()
+        mock_core_sso = MagicMock()
+        mock_core_sso.factory.executar_consulta.return_value = [
+            [
+                "123456",
+                "ANA SILVA",
+                "123.456.789-00",
+                "ana@sme.prefeitura.sp.gov.br",
+                "11111111-1111-1111-1111-111111111111",
+                "000001",
+                1000,
+            ]
+        ]
+        srv = EtlProfessoresService(eol=mock_eol, core_sso=mock_core_sso)
+
+        resultado = srv.popular_funcionarios_sistema_perfil()
+
+        self.assertEqual(resultado, 1)
+        mock_core_sso.factory.executar_consulta.assert_called_once_with(
+            SQL_FUNCIONARIO_SISTEMA_PERFIL
+        )
+        mock_eol.iter_query.assert_not_called()
+        self.assertEqual(
+            mock_upsert.call_args.args[0], FuncionarioSistemaPerfil
+        )
+        self.assertEqual(
+            mock_upsert.call_args.args[1],
+            "funcionario_sistema_perfil",
+        )
+        self.assertEqual(
+            mock_upsert.call_args.args[2],
+            [
+                {
+                    "login": "123456",
+                    "nome_servidor": "ANA SILVA",
+                    "cpf": "123.456.789-00",
+                    "email": "ana@sme.prefeitura.sp.gov.br",
+                    "uad_codigo": "000001",
+                    "perfil": UUID("11111111-1111-1111-1111-111111111111"),
+                    "sis_id": 1000,
+                }
+            ],
+        )
+        self.assertEqual(
+            mock_upsert.call_args.args[3],
+            ["nome_servidor", "cpf", "email", "uad_codigo"],
+        )
+        self.assertEqual(
+            mock_upsert.call_args.args[4],
+            ["login", "perfil", "sis_id"],
+        )
+
+
+class EtlProfessoresServiceExecutarTest(TestCase):
+    """Testes para o método executar do EtlProfessoresService."""
+
+    databases = ["default", "professores_db"]
+
+    def _make_service_com_populares_mockados(
+        self, retorno: int = 0
+    ) -> EtlProfessoresService:
+        """Cria serviço com todos os métodos popular_* mockados."""
+        with patch(_EOL_PATCH):
+            srv = EtlProfessoresService()
+        metodos_popular = [m for m in dir(srv) if m.startswith("popular_")]
+        for nome in metodos_popular:
+            setattr(srv, nome, MagicMock(return_value=retorno))
+        return srv
+
+    def test_executar_fase1_completa_todas_as_fases(self) -> None:
+        """Verifica que executar com fase_inicial=1 completa todas as fases."""
+        srv = self._make_service_com_populares_mockados(1)
+        resultado = srv.executar(fase_inicial=1)
+        self.assertEqual(srv.ultima_fase_concluida, 4)
+        self.assertIn("professor", resultado)
+        self.assertIn("atribuicao_aula", resultado)
+        self.assertIn("funcionario_unidade_educacional", resultado)
+
+    def test_executar_fase2_pula_fase1(self) -> None:
+        """Verifica que executar com fase_inicial=2 pula os dados da fase 1."""
+        srv = self._make_service_com_populares_mockados(1)
+        resultado = srv.executar(fase_inicial=2)
+        self.assertEqual(srv.ultima_fase_concluida, 4)
+        self.assertNotIn("professor", resultado)
+        self.assertIn("cargo_base_servidor", resultado)
+
+    def test_executar_fase3_pula_fases_1_e_2(self) -> None:
+        """Verifica que executar com fase_inicial=3 pula as fases 1 e 2."""
+        srv = self._make_service_com_populares_mockados(1)
+        resultado = srv.executar(fase_inicial=3)
+        self.assertNotIn("professor", resultado)
+        self.assertNotIn("cargo_base_servidor", resultado)
+        self.assertIn("atribuicao_aula", resultado)
+
+    def test_executar_fase4_pula_fases_anteriores(self) -> None:
+        """Verifica que fase 4 executa apenas tabelas finais."""
+        srv = self._make_service_com_populares_mockados(1)
+
+        resultado = srv.executar(fase_inicial=4)
+
+        self.assertEqual(srv.ultima_fase_concluida, 4)
+        self.assertEqual(
+            resultado,
+            {
+                "funcionario_unidade_educacional": 1,
+                "funcionario_cargo": 1,
+                "funcionario_vinculo_funcional": 1,
+                "funcionario_conecta_modalidade_escola": 1,
+                "funcionario_conecta_formacao": 1,
+                "funcionario_sistema_perfil": 1,
+                "turma_atribuida_ue": 1,
+                "disciplina_turma_atribuida_ue": 1,
+                "professor_escola_ano": 1,
+            },
+        )
+
+    def test_executar_retorna_soma_de_registros(self) -> None:
+        """Verifica que executar retorna a soma de registros por tabela."""
+        srv = self._make_service_com_populares_mockados(3)
+        resultado = srv.executar(fase_inicial=1)
+        self.assertTrue(all(v == 3 for v in resultado.values()))
+
+    def test_iter_lotes_aplica_offset_e_callback(self) -> None:
+        """Verifica lotes ignorados e callback na iteracao rastreada."""
+        srv = self._make_service_com_populares_mockados()
+        original = MagicMock(return_value=iter([["lote-1"], ["lote-2"]]))
+        lotes: list[tuple[str, int]] = []
+        contador = [1]
+
+        resultado = list(
+            srv._iter_lotes(
+                "select 1",
+                None,
+                original,
+                1,
+                "professor",
+                contador,
+                lambda tabela, lote: lotes.append((tabela, lote)),
+            )
+        )
+
+        self.assertEqual(resultado, [["lote-2"]])
+        self.assertEqual(lotes, [("professor", 2)])
+
+    def test_executar_com_lote_inicial_rastreia_iter_query(self) -> None:
+        """Retomada por lote substitui iter_query durante a tabela."""
+        srv = self._make_service_com_populares_mockados(0)
+        srv.eol.iter_query = MagicMock(  # type: ignore[method-assign]
+            return_value=iter([[1], [2]])
+        )
+        lotes: list[tuple[str, int]] = []
+        tabelas: list[tuple[str, int]] = []
+
+        def popular_professores() -> int:
+            return sum(len(chunk) for chunk in srv.eol.iter_query("sql"))
+
+        srv.popular_professores = popular_professores  # type: ignore[method-assign]
+
+        resultado = srv.executar(
+            fase_inicial=1,
+            lote_inicial=1,
+            on_lote=lambda tabela, lote: lotes.append((tabela, lote)),
+            on_tabela_concluida=lambda tabela, linhas: tabelas.append(
+                (tabela, linhas)
+            ),
+        )
+
+        self.assertEqual(resultado["professor"], 1)
+        self.assertIn(("professor", 2), lotes)
+        self.assertIn(("professor", 1), tabelas)
+        self.assertIsInstance(srv.eol.iter_query, MagicMock)
+
+    def test_executar_pula_ate_tabela_informada(self) -> None:
+        """Retomada por tabela pula ate a tabela concluida."""
+        srv = self._make_service_com_populares_mockados(1)
+
+        resultado = srv.executar(fase_inicial=1, pular_ate="professor")
+
+        self.assertNotIn("professor", resultado)
+        self.assertIn("pessoa", resultado)
+
+
+class SincronizarAdministradoresSgpTest(TestCase):
+    """Testes da sincronização de administradores SGP."""
+
+    databases = ["default", "professores_db"]
+
+    @patch("apps.professores.services.RepositorioCoreSSO")
+    def test_sincroniza_administradores_com_sucesso(
+        self, mock_repo_class: MagicMock
+    ) -> None:
+        """Valida sincronização completa de administradores SGP."""
+        from apps.professores.models import AdministradorEscola
+        from apps.professores.services import EtlProfessoresService
+
+        mock_repo = MagicMock()
+        mock_repo.factory.executar_consulta.return_value = [
+            ("019465", "1234567"),
+            ("019465", "7654321"),
+            ("000191", "9999999"),
+        ]
+        mock_repo_class.return_value = mock_repo
+
+        servico = EtlProfessoresService()
+        total = servico.popular_administradores_sgp()
+
+        self.assertEqual(total, 3)
+        mock_repo.factory.executar_consulta.assert_called_once()
+        self.assertEqual(AdministradorEscola.objects.count(), 3)
+        self.assertTrue(
+            AdministradorEscola.objects.filter(
+                codigo_ue="019465", rf_login="1234567"
+            ).exists()
+        )
+
+    @patch("apps.professores.services.RepositorioCoreSSO")
+    def test_deleta_registros_antigos_antes_de_sincronizar(
+        self, mock_repo_class: MagicMock
+    ) -> None:
+        """Valida que registros antigos são deletados."""
+        from apps.professores.models import AdministradorEscola
+        from apps.professores.services import EtlProfessoresService
+
+        AdministradorEscola.objects.create(
+            codigo_ue="999999", rf_login="OLD_RF"
+        )
+
+        mock_repo = MagicMock()
+        mock_repo.factory.executar_consulta.return_value = [
+            ("019465", "NEW_RF")
+        ]
+        mock_repo_class.return_value = mock_repo
+
+        servico = EtlProfessoresService()
+        servico.popular_administradores_sgp()
+
+        self.assertFalse(
+            AdministradorEscola.objects.filter(rf_login="OLD_RF").exists()
+        )
+        self.assertTrue(
+            AdministradorEscola.objects.filter(rf_login="NEW_RF").exists()
+        )
+
+    @patch("apps.professores.services.RepositorioCoreSSO")
+    def test_erro_quando_falha_conexao_coresso(
+        self, mock_repo_class: MagicMock
+    ) -> None:
+        """Valida que retorna 0 quando há erro na conexão."""
+        from apps.professores.services import EtlProfessoresService
+
+        mock_repo = MagicMock()
+        mock_repo.factory.executar_consulta.side_effect = Exception(
+            "Connection failed"
+        )
+        mock_repo_class.return_value = mock_repo
+
+        servico = EtlProfessoresService()
+        total = servico.popular_administradores_sgp()
+
+        self.assertEqual(total, 0)
+
+    @patch(
+        "apps.professores.services._full_refresh",
+        side_effect=Exception("DB Error"),
+    )
+    @patch("apps.professores.services.RepositorioCoreSSO")
+    def test_rollback_quando_erro_no_bulk_create(
+        self, mock_repo_class: MagicMock, mock_full_refresh: MagicMock
+    ) -> None:
+        """Valida que retorna 0 em caso de erro."""
+        from apps.professores.models import AdministradorEscola
+        from apps.professores.services import EtlProfessoresService
+
+        AdministradorEscola.objects.create(
+            codigo_ue="999999", rf_login="KEEP_ME"
+        )
+
+        mock_repo = MagicMock()
+        mock_repo.factory.executar_consulta.return_value = [
+            ("019465", "NEW_RF")
+        ]
+        mock_repo_class.return_value = mock_repo
+
+        servico = EtlProfessoresService()
+        total = servico.popular_administradores_sgp()
+
+        self.assertEqual(total, 0)
+        self.assertTrue(
+            AdministradorEscola.objects.filter(rf_login="KEEP_ME").exists()
+        )

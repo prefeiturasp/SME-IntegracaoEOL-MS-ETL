@@ -1,0 +1,28 @@
+"""Comando Django para executar dominios ativos."""
+
+from typing import Any
+
+from django.core.management import call_command
+from django.core.management.base import BaseCommand
+
+
+class Command(BaseCommand):
+    """Executa todos os dominios ativos no momento."""
+
+    help = "Executa dominios ativos: institucional"
+
+    def add_arguments(self, parser: Any) -> None:
+        """Adiciona argumentos ao comando."""
+        parser.add_argument("--continuar", action="store_true")
+
+    def handle(self, *args: Any, **options: Any) -> None:
+        """Executa todos os dominios ativos no momento."""
+        continuar = options["continuar"]
+
+        argumentos = [
+            "--dominio",
+            "institucional",
+        ]
+        if continuar:
+            argumentos.append("--continuar")
+        call_command("executar_dominio", *argumentos)
