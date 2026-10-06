@@ -285,6 +285,6 @@ e até 3 tentativas HTTP com intervalo de 5 segundos.
 
 Exemplo de cron a cada 30 minutos:
 
-```cron
+```text
 */30 * * * * cd /app && ./scripts/recuperar_etl.sh >> /var/log/etl_recovery.log 2>&1
 ```
