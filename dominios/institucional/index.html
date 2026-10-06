@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+
+<html lang="pt" data-content_root="../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Domínio Institucional &#8212; SME-INTEGRACAOEOL-MS-ETL</title>
+    <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../../_static/alabaster.css?v=27fed22d" />
+    <link rel="stylesheet" type="text/css" href="../../_static/graphviz.css?v=4ae1632d" />
+    <script src="../../_static/documentation_options.js?v=c4403577"></script>
+    <script src="../../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/translations.js?v=beaedd51"></script>
+    <link rel="index" title="Índice" href="../../genindex.html" />
+    <link rel="search" title="Pesquisar" href="../../search.html" />
+    <link rel="next" title="Visão Geral do Domínio Institucional" href="visao_geral.html" />
+    <link rel="prev" title="Verificação de Compatibilidade — Professores" href="../professores/compatibilidade.html" />
+   
+  <link rel="stylesheet" href="../../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="dominio-institucional">
+<h1>Domínio Institucional<a class="headerlink" href="#dominio-institucional" title="Link to this heading">¶</a></h1>
+<p>Documentação completa do domínio <code class="docutils literal notranslate"><span class="pre">apps.institucional</span></code> com base no código atual.</p>
+<hr class="docutils" />
+<section id="conteudo">
+<h2>Conteúdo<a class="headerlink" href="#conteudo" title="Link to this heading">¶</a></h2>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="visao_geral.html">Visão Geral do Domínio Institucional</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="visao_geral.html#objetivo">Objetivo</a></li>
+<li class="toctree-l2"><a class="reference internal" href="visao_geral.html#origem-dos-dados-e-enriquecimento-sso-e-eol">Origem dos Dados e Enriquecimento (SSO e EOL)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="visao_geral.html#classe-principal">Classe principal</a></li>
+<li class="toctree-l2"><a class="reference internal" href="visao_geral.html#total-de-modelos-do-app">Total de modelos do app</a></li>
+<li class="toctree-l2"><a class="reference internal" href="visao_geral.html#fases-implementadas">Fases implementadas</a></li>
+<li class="toctree-l2"><a class="reference internal" href="visao_geral.html#fluxo">Fluxo</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="mapeamento_etl.html">Mapeamento do ETL Institucional</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="mapeamento_etl.html#fase-1">Fase 1</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mapeamento_etl.html#fase-2-sem-dependencia">Fase 2 — sem dependência</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mapeamento_etl.html#fase-3-sem-dependencia">Fase 3 — sem dependência</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mapeamento_etl.html#fase-4-depende-das-fase-1-2-e-3">Fase 4 — depende das Fase 1, 2 e 3</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mapeamento_etl.html#fase-5-dres-de-abrangencia">Fase 5 — DREs de abrangência</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="ordem_carga.html">Ordem de Carga</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="ordem_carga.html#fase-1-sem-dependencias-internas">Fase 1 — sem dependências internas</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ordem_carga.html#fase-2">Fase 2</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ordem_carga.html#fase-3">Fase 3</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ordem_carga.html#fase-4-depende-das-fases-anteriores">Fase 4 — depende das Fases anteriores</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ordem_carga.html#fase-5-read-model-de-compatibilidade">Fase 5 — read model de compatibilidade</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ordem_carga.html#diagrama">Diagrama</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="estrategia.html">Estratégia por Tabela</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="estrategia.html#incremental-upsert-incremental">Incremental (<code class="docutils literal notranslate"><span class="pre">_upsert_incremental</span></code>)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="estrategia.html#full-refresh-full-refresh">Full Refresh (<code class="docutils literal notranslate"><span class="pre">_full_refresh</span></code>)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="estrategia.html#regras-do-codigo">Regras do código</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="hash.html">Hash por Linha</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="hash.html#implementacao-real">Implementação real</a></li>
+<li class="toctree-l2"><a class="reference internal" href="hash.html#fluxo">Fluxo</a></li>
+<li class="toctree-l2"><a class="reference internal" href="hash.html#formato-do-identificador">Formato do identificador</a></li>
+<li class="toctree-l2"><a class="reference internal" href="hash.html#beneficios-reais-no-codigo">Benefícios reais no código</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="modelos.html">Glossário de Modelos do Domínio Institucional</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="modelos.html#dre-diretoria-regional-de-educacao">1. DRE (Diretoria Regional de Educação)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="modelos.html#tipoescola">2. TipoEscola</a></li>
+<li class="toctree-l2"><a class="reference internal" href="modelos.html#subprefeitura">3. SubPrefeitura</a></li>
+<li class="toctree-l2"><a class="reference internal" href="modelos.html#unidadeeducacional">4. UnidadeEducacional</a></li>
+<li class="toctree-l2"><a class="reference internal" href="modelos.html#dreabrangencia">5. DREAbrangencia</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="comando.html">Comando <code class="docutils literal notranslate"><span class="pre">etl_institucional</span></code></a><ul>
+<li class="toctree-l2"><a class="reference internal" href="comando.html#argumentos-suportados">Argumentos suportados</a></li>
+<li class="toctree-l2"><a class="reference internal" href="comando.html#comportamento-real">Comportamento real</a></li>
+<li class="toctree-l2"><a class="reference internal" href="comando.html#estrategia-de-log">Estratégia de log</a></li>
+<li class="toctree-l2"><a class="reference internal" href="comando.html#exemplo">Exemplo</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="orquestracao.html">Orquestração Atual do Projeto</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="orquestracao.html#situacao-atual-do-codigo">Situação atual do código</a></li>
+<li class="toctree-l2"><a class="reference internal" href="orquestracao.html#fluxo-atual">Fluxo atual</a></li>
+<li class="toctree-l2"><a class="reference internal" href="orquestracao.html#observacao-importante">Observação importante</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="retomada.html">Retomada por Fase</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="retomada.html#regra-real-do-comando">Regra real do comando</a></li>
+<li class="toctree-l2"><a class="reference internal" href="retomada.html#em-caso-de-erro">Em caso de erro</a></li>
+<li class="toctree-l2"><a class="reference internal" href="retomada.html#em-caso-de-sucesso">Em caso de sucesso</a></li>
+<li class="toctree-l2"><a class="reference internal" href="retomada.html#diagrama">Diagrama</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../index.html">SME-INTEGRACAOEOL-MS-ETL</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Ir" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navegação</h3>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../../arquitetura/visao_geral.html">Visão Geral da Arquitetura</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../arquitetura/der.html">DER e Mapa de Dados</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../professores/index.html">Domínio Professores</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Domínio Institucional</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#conteudo">Conteúdo</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../programas/index.html">Domínio Programas</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../pedagogico/index.html">Domínio Pedagógico</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../auditoria/index.html">Auditoria e Controle de Execução</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="../professores/compatibilidade.html" title="capítulo anterior">Verificação de Compatibilidade — Professores</a></li>
+      <li>Next: <a href="visao_geral.html" title="próximo capítulo">Visão Geral do Domínio Institucional</a></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 8.2.3</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="../../_sources/dominios/institucional/index.md.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

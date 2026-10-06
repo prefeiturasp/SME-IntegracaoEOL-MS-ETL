@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+
+<html lang="pt" data-content_root="../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Tasks Celery &#8212; SME-INTEGRACAOEOL-MS-ETL</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=27fed22d" />
+    <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=4ae1632d" />
+    <script src="../_static/documentation_options.js?v=c4403577"></script>
+    <script src="../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/translations.js?v=beaedd51"></script>
+    <link rel="index" title="Índice" href="../genindex.html" />
+    <link rel="search" title="Pesquisar" href="../search.html" />
+    <link rel="next" title="Comandos de Controle/Auditoria" href="comandos.html" />
+    <link rel="prev" title="API de Auditoria" href="api.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="tasks-celery">
+<h1>Tasks Celery<a class="headerlink" href="#tasks-celery" title="Link to this heading">¶</a></h1>
+<p>Arquivo: <code class="docutils literal notranslate"><span class="pre">apps/controle_auditoria/libs/tasks.py</span></code></p>
+<p>Broker: KeyDB/Redis. Fila padrão: <code class="docutils literal notranslate"><span class="pre">fila_etl_padrao</span></code> (prioridade 0–9).</p>
+<hr class="docutils" />
+<section id="verificar-saude">
+<h2><code class="docutils literal notranslate"><span class="pre">verificar_saude</span></code><a class="headerlink" href="#verificar-saude" title="Link to this heading">¶</a></h2>
+<p>Task mínima para validar worker e broker. Retorna <code class="docutils literal notranslate"><span class="pre">&quot;ok&quot;</span></code>.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">name</span><span class="o">=</span><span class="s2">"etl.verificacao_saude"</span>
+</pre></div>
+</div>
+</section>
+<hr class="docutils" />
+<section id="executar-dominio-task">
+<h2><code class="docutils literal notranslate"><span class="pre">executar_dominio_task</span></code><a class="headerlink" href="#executar-dominio-task" title="Link to this heading">¶</a></h2>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">name</span><span class="o">=</span><span class="s2">"etl.executar_dominio"</span>
+<span class="n">bind</span><span class="o">=</span><span class="kc">True</span>
+<span class="n">max_retries</span><span class="o">=</span><span class="mi">5</span>
+</pre></div>
+</div>
+<p><strong>Parâmetros:</strong></p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Nome</p></th>
+<th class="head"><p>Tipo</p></th>
+<th class="head"><p>Padrão</p></th>
+<th class="head"><p>Descrição</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">dominio</span></code></p></td>
+<td><p>str</p></td>
+<td><p>obrigatório</p></td>
+<td><p>Nome do domínio ETL</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">continuar</span></code></p></td>
+<td><p>bool</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">False</span></code></p></td>
+<td><p>Retomada por checkpoint</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">fases</span></code></p></td>
+<td><p>list[str]</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">None</span></code></p></td>
+<td><p>Fases específicas do domínio</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">anos_letivos</span></code></p></td>
+<td><p>list[int]</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">None</span></code></p></td>
+<td><p>Anos letivos usados como recorte</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">parametros_disparo</span></code></p></td>
+<td><p>dict</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">None</span></code></p></td>
+<td><p>Metadados do disparo, como origem, prioridade e agendamento</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Fluxo do loop interno:</strong></p>
+<ol class="arabic simple">
+<li><p>Lê <code class="docutils literal notranslate"><span class="pre">EtlCheckpointDominio(dominio)</span></code> → extrai <code class="docutils literal notranslate"><span class="pre">token_antes</span></code>.</p></li>
+<li><p>Monta argumentos para <code class="docutils literal notranslate"><span class="pre">executar_dominio</span></code>; adiciona <code class="docutils literal notranslate"><span class="pre">--continuar</span></code> se <code class="docutils literal notranslate"><span class="pre">continuar_execucao=True</span></code>.</p></li>
+<li><p>Chama <code class="docutils literal notranslate"><span class="pre">call_command(&quot;executar_dominio&quot;,</span> <span class="pre">--dominio</span> <span class="pre">&lt;dominio&gt;,</span> <span class="pre">...)</span></code>.</p></li>
+<li><p>Lê checkpoint novamente → extrai <code class="docutils literal notranslate"><span class="pre">token_depois</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">linhas</span> <span class="pre">=</span> <span class="pre">max(token_depois</span> <span class="pre">−</span> <span class="pre">token_antes,</span> <span class="pre">0)</span></code>.</p></li>
+<li><p>Retorna <code class="docutils literal notranslate"><span class="pre">f&quot;ok:{linhas}&quot;</span></code>.</p></li>
+</ol>
+<p><strong>Em exceção (retry):</strong></p>
+<ul class="simple">
+<li><p>Chama <code class="docutils literal notranslate"><span class="pre">self.retry(exc=erro,</span> <span class="pre">countdown=60,</span> <span class="pre">kwargs={...,</span> <span class="pre">&quot;continuar&quot;:</span> <span class="pre">True})</span></code>.</p></li>
+<li><p>Máximo de 5 tentativas. Após esgotar, a task falha definitivamente.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">continuar=True</span></code> garante retomada da fase seguinte no checkpoint.</p></li>
+</ul>
+<p><strong>Observação sobre <code class="docutils literal notranslate"><span class="pre">token_parada</span></code>:</strong></p>
+<p>O <code class="docutils literal notranslate"><span class="pre">token_parada</span></code> do <code class="docutils literal notranslate"><span class="pre">EtlCheckpointDominio</span></code> registra o ponto salvo pelo ETL,
+normalmente derivado do total de linhas lidas na fase atual. O delta entre
+leituras antes/depois de cada chamada a <code class="docutils literal notranslate"><span class="pre">executar_dominio</span></code> é o sinal que o
+loop usa para decidir se continua ou para.</p>
+</section>
+<hr class="docutils" />
+<section id="parametros-da-execucao">
+<h2>Parâmetros da execução<a class="headerlink" href="#parametros-da-execucao" title="Link to this heading">¶</a></h2>
+<p>Cada nova linha de <code class="docutils literal notranslate"><span class="pre">EtlExecucao</span></code> grava o campo JSON <code class="docutils literal notranslate"><span class="pre">parametros</span></code>.</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">parametros.execucao</span></code> guarda o que o comando ETL recebeu de fato:
+<code class="docutils literal notranslate"><span class="pre">continuar</span></code>, <code class="docutils literal notranslate"><span class="pre">fase</span></code>, <code class="docutils literal notranslate"><span class="pre">fase_inicial</span></code>, <code class="docutils literal notranslate"><span class="pre">fases</span></code>, <code class="docutils literal notranslate"><span class="pre">anos_letivos</span></code>,
+<code class="docutils literal notranslate"><span class="pre">carga_inicial</span></code> e <code class="docutils literal notranslate"><span class="pre">celery</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">parametros.disparo</span></code> guarda metadados da camada que enfileirou a task, quando
+existirem: <code class="docutils literal notranslate"><span class="pre">origem</span></code>, <code class="docutils literal notranslate"><span class="pre">prioridade</span></code> e <code class="docutils literal notranslate"><span class="pre">executar_em</span></code>.</p></li>
+</ul>
+<p>Esse campo alimenta o dashboard/kanban e evita inferir anos ou fases a partir
+do último checkpoint.</p>
+<p>Quando uma execução é reenfileirada pelo recovery, <code class="docutils literal notranslate"><span class="pre">parametros.disparo</span></code> recebe:</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">  </span><span class="nt">"origem"</span><span class="p">:</span><span class="w"> </span><span class="s2">"recovery"</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">"execucao_origem"</span><span class="p">:</span><span class="w"> </span><span class="s2">"&lt;uuid da primeira execução com erro&gt;"</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">"execucao_erro"</span><span class="p">:</span><span class="w"> </span><span class="s2">"&lt;uuid da execução reprocessada&gt;"</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">"tentativa"</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">"prioridade"</span><span class="p">:</span><span class="w"> </span><span class="mi">3</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">"continuar"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>Durante a execução da task, o worker acrescenta metadados do Celery ao mesmo
+bloco:</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">  </span><span class="nt">"celery_task_id"</span><span class="p">:</span><span class="w"> </span><span class="s2">"&lt;id da task&gt;"</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">"celery_worker"</span><span class="p">:</span><span class="w"> </span><span class="s2">"&lt;hostname do worker&gt;"</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">"celery_retries"</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>O campo <code class="docutils literal notranslate"><span class="pre">execucao_origem</span></code> permite limitar tentativas mesmo quando uma tentativa
+de recovery também falha e gera uma nova execução em erro.</p>
+</section>
+<hr class="docutils" />
+<section id="recovery-automatico">
+<h2>Recovery automático<a class="headerlink" href="#recovery-automatico" title="Link to this heading">¶</a></h2>
+<p>O script <code class="docutils literal notranslate"><span class="pre">scripts/recuperar_etl.sh</span></code> implementa o fluxo recomendado de recovery:</p>
+<ol class="arabic simple">
+<li><p>Chama <code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">/api/v1/execucoes/limpar-orfas/</span></code>.</p></li>
+<li><p>Consulta tasks <code class="docutils literal notranslate"><span class="pre">active</span></code>, <code class="docutils literal notranslate"><span class="pre">reserved</span></code> e <code class="docutils literal notranslate"><span class="pre">scheduled</span></code> no Celery.</p></li>
+<li><p>Preserva execuções cujo <code class="docutils literal notranslate"><span class="pre">celery_task_id</span></code> ainda aparece vivo no Celery.</p></li>
+<li><p>Marca como <code class="docutils literal notranslate"><span class="pre">interrompido</span></code> execuções <code class="docutils literal notranslate"><span class="pre">em_execucao</span></code> ou <code class="docutils literal notranslate"><span class="pre">em_andamento</span></code> sem
+task viva no Celery.</p></li>
+<li><p>Chama <code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">/api/v1/execucoes/retomar/</span></code>.</p></li>
+<li><p>Localiza a última execução de cada domínio.</p></li>
+<li><p>Mantém apenas as que estão em <code class="docutils literal notranslate"><span class="pre">interrompido</span></code>.</p></li>
+<li><p>Reaproveita <code class="docutils literal notranslate"><span class="pre">fases</span></code> e <code class="docutils literal notranslate"><span class="pre">anos_letivos</span></code> gravados em <code class="docutils literal notranslate"><span class="pre">parametros.execucao</span></code>.</p></li>
+<li><p>Força <code class="docutils literal notranslate"><span class="pre">continuar=true</span></code>.</p></li>
+<li><p>Conta tentativas anteriores com base em <code class="docutils literal notranslate"><span class="pre">parametros.disparo.execucao_origem</span></code>.</p></li>
+<li><p>Agenda uma nova <code class="docutils literal notranslate"><span class="pre">etl.executar_dominio</span></code> quando o limite não foi atingido.</p></li>
+</ol>
+<p>Execuções em <code class="docutils literal notranslate"><span class="pre">erro</span></code> não entram no fluxo automático; elas ficam para retry do
+Celery ou para o endpoint manual <code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">/api/v1/execucoes/reprocessar-erros/</span></code>.</p>
+<p>O script adiciona timeout e retry HTTP ao acionamento dos endpoints, mas não
+executa ETL diretamente.</p>
+<p>Payload fixo usado pelo script:</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">  </span><span class="nt">"max_tentativas"</span><span class="p">:</span><span class="w"> </span><span class="mi">3</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>A retomada é sempre feita por checkpoint, portanto <code class="docutils literal notranslate"><span class="pre">continuar=true</span></code> não precisa
+ser enviado no body. O recovery usa prioridade <code class="docutils literal notranslate"><span class="pre">3</span></code> e analisa até 25 domínios
+por chamada.</p>
+</section>
+<hr class="docutils" />
+<section id="progresso-operacional">
+<h2>Progresso operacional<a class="headerlink" href="#progresso-operacional" title="Link to this heading">¶</a></h2>
+<p>A tabela <code class="docutils literal notranslate"><span class="pre">etl_progresso_execucao</span></code> registra o ponto atual de uma execução em
+andamento. Ela não substitui o checkpoint: o objetivo é alimentar dashboard e
+kanban com uma visão viva da fase/chunk atual.</p>
+<p>O ETL grava no máximo uma linha por execução/fase e atualiza essa linha com
+throttle. O intervalo padrão é controlado por:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>ETL_PROGRESS_INTERVAL_SECONDS=15
+</pre></div>
+</div>
+<p>Campos principais:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Campo</p></th>
+<th class="head"><p>Uso</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">fase_numero</span></code> / <code class="docutils literal notranslate"><span class="pre">total_fases</span></code></p></td>
+<td><p>Posição da fase no pipeline</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">fase_nome</span></code></p></td>
+<td><p>Nome da fase atual</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">etapa</span></code></p></td>
+<td><p>Estado operacional: <code class="docutils literal notranslate"><span class="pre">fase_iniciada</span></code>, <code class="docutils literal notranslate"><span class="pre">processando_chunk</span></code>, <code class="docutils literal notranslate"><span class="pre">fase_concluida</span></code> ou <code class="docutils literal notranslate"><span class="pre">erro</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">chunk_atual</span></code></p></td>
+<td><p>Número do chunk já processado na fase</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">linhas_lidas</span></code></p></td>
+<td><p>Total lido até o momento na fase</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">linhas_escritas</span></code></p></td>
+<td><p>Total escrito até o momento na fase</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">linhas_ignoradas</span></code></p></td>
+<td><p>Total ignorado por hash igual até o momento</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../index.html">SME-INTEGRACAOEOL-MS-ETL</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Ir" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navegação</h3>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../arquitetura/visao_geral.html">Visão Geral da Arquitetura</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../arquitetura/der.html">DER e Mapa de Dados</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../dominios/professores/index.html">Domínio Professores</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../dominios/institucional/index.html">Domínio Institucional</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../dominios/programas/index.html">Domínio Programas</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../dominios/pedagogico/index.html">Domínio Pedagógico</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">Auditoria e Controle de Execução</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="modelos.html">Modelos de Auditoria</a></li>
+<li class="toctree-l2"><a class="reference internal" href="repositorio.html">Repositório de Auditoria</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api.html">API de Auditoria</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Tasks Celery</a></li>
+<li class="toctree-l2"><a class="reference internal" href="comandos.html">Comandos de Controle/Auditoria</a></li>
+<li class="toctree-l2"><a class="reference internal" href="manutencao.html">Manutenção da tabela de auditoria de linhas</a></li>
+</ul>
+</li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+  <li><a href="index.html">Auditoria e Controle de Execução</a><ul>
+      <li>Previous: <a href="api.html" title="capítulo anterior">API de Auditoria</a></li>
+      <li>Next: <a href="comandos.html" title="próximo capítulo">Comandos de Controle/Auditoria</a></li>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 8.2.3</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="../_sources/auditoria/tasks.md.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

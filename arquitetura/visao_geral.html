@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+
+<html lang="pt" data-content_root="../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Visão Geral da Arquitetura &#8212; SME-INTEGRACAOEOL-MS-ETL</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=27fed22d" />
+    <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=4ae1632d" />
+    <script src="../_static/documentation_options.js?v=c4403577"></script>
+    <script src="../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/translations.js?v=beaedd51"></script>
+    <link rel="index" title="Índice" href="../genindex.html" />
+    <link rel="search" title="Pesquisar" href="../search.html" />
+    <link rel="next" title="DER e Mapa de Dados" href="der.html" />
+    <link rel="prev" title="SME-IntegracaoEOL-MS-ETL" href="../index.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="visao-geral-da-arquitetura">
+<h1>Visão Geral da Arquitetura<a class="headerlink" href="#visao-geral-da-arquitetura" title="Link to this heading">¶</a></h1>
+<section id="bancos-configurados">
+<h2>Bancos configurados<a class="headerlink" href="#bancos-configurados" title="Link to this heading">¶</a></h2>
+<p>Pelo arquivo <code class="docutils literal notranslate"><span class="pre">config/settings.py</span></code>, o projeto define:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">default</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">institucional_db</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">professores_db</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">alunos_db</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">pedagogico_db</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">programas_db</span></code></p></li>
+</ul>
+</section>
+<section id="roteamento-por-app">
+<h2>Roteamento por app<a class="headerlink" href="#roteamento-por-app" title="Link to this heading">¶</a></h2>
+<p>O arquivo <code class="docutils literal notranslate"><span class="pre">config/db_router.py</span></code> roteia:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">institucional</span></code> → <code class="docutils literal notranslate"><span class="pre">institucional_db</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">professores</span></code> → <code class="docutils literal notranslate"><span class="pre">professores_db</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">alunos</span></code> → <code class="docutils literal notranslate"><span class="pre">alunos_db</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">pedagogico</span></code> → <code class="docutils literal notranslate"><span class="pre">pedagogico_db</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">programas</span></code> → <code class="docutils literal notranslate"><span class="pre">programas_db</span></code></p></li>
+</ul>
+<p>Apps não mapeados explicitamente continuam em <code class="docutils literal notranslate"><span class="pre">default</span></code>.</p>
+</section>
+<hr class="docutils" />
+<section id="fluxo-logico">
+<h2>Fluxo lógico<a class="headerlink" href="#fluxo-logico" title="Link to this heading">¶</a></h2>
+digraph G {
+    rankdir=LR;
+    node [shape=box, style=&quot;rounded&quot;];
+
+    SRC [label=&quot;Origens&quot;];
+    ETL [label=&quot;Services + Commands&quot;];
+    ROUTER [label=&quot;DominioRouter&quot;];
+    INST [label=&quot;institucional_db&quot;];
+    PROF [label=&quot;professores_db&quot;];
+    ALU [label=&quot;alunos_db&quot;];
+    PED [label=&quot;pedagogico_db&quot;];
+    PROG [label=&quot;programas_db&quot;];
+    AUD [label=&quot;default&quot;];
+
+    SRC -&gt; ETL -&gt; ROUTER;
+    ROUTER -&gt; INST;
+    ROUTER -&gt; PROF;
+    ROUTER -&gt; ALU;
+    ROUTER -&gt; PED;
+    ROUTER -&gt; PROG;
+    ETL -&gt; AUD;
+}</section>
+<hr class="docutils" />
+<section id="principio-de-separacao-de-dominios">
+<h2>Princípio de separação de domínios<a class="headerlink" href="#principio-de-separacao-de-dominios" title="Link to this heading">¶</a></h2>
+<p>Cada domínio ETL é autossuficiente: <strong>não replica tabelas de outros domínios</strong>.
+Referências externas (DRE, Cargo, ComponenteCurricular, etc.) são armazenadas apenas como IDs (<code class="docutils literal notranslate"><span class="pre">IntegerField</span></code> / <code class="docutils literal notranslate"><span class="pre">CharField</span></code>).</p>
+<p>Descrições e nomes são resolvidos em tempo de resposta pelo <strong>Transition Gateway</strong> — serviço que enriquece as respostas consultando os domínios de origem.</p>
+<blockquote>
+<div><p><strong>Regra prática:</strong> um campo descritivo (<code class="docutils literal notranslate"><span class="pre">dc_*</span></code>) só é persistido se aparecer em cláusula <code class="docutils literal notranslate"><span class="pre">WHERE</span></code> de alguma query do domínio. Caso contrário, não é armazenado.
+A exceção atual é a descrição contextual de Território do Saber em
+<code class="docutils literal notranslate"><span class="pre">pedagogico.componente_turma</span></code>: <code class="docutils literal notranslate"><span class="pre">desc_territorio_saber</span></code> e
+<code class="docutils literal notranslate"><span class="pre">desc_experiencia_pedagogica</span></code> são materializados porque dependem da turma/grade
+e não apenas do catálogo de componente curricular.</p>
+</div></blockquote>
+</section>
+<hr class="docutils" />
+<section id="execucao-atual">
+<h2>Execução atual<a class="headerlink" href="#execucao-atual" title="Link to this heading">¶</a></h2>
+<p>A estrutura atual do projeto inclui:</p>
+<ul class="simple">
+<li><p>execução síncrona via <code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">manage.py</span> <span class="pre">etl_professores</span></code></p></li>
+<li><p>execução indireta via <code class="docutils literal notranslate"><span class="pre">executar_dominio</span></code></p></li>
+<li><p>task assíncrona <code class="docutils literal notranslate"><span class="pre">executar_dominio_task</span></code></p></li>
+<li><p>agendamento com <code class="docutils literal notranslate"><span class="pre">agendar_dominio</span></code></p></li>
+</ul>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../index.html">SME-INTEGRACAOEOL-MS-ETL</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Ir" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navegação</h3>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Visão Geral da Arquitetura</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#bancos-configurados">Bancos configurados</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#roteamento-por-app">Roteamento por app</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#fluxo-logico">Fluxo lógico</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#principio-de-separacao-de-dominios">Princípio de separação de domínios</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#execucao-atual">Execução atual</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="der.html">DER e Mapa de Dados</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../dominios/professores/index.html">Domínio Professores</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../dominios/institucional/index.html">Domínio Institucional</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../dominios/programas/index.html">Domínio Programas</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../dominios/pedagogico/index.html">Domínio Pedagógico</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../auditoria/index.html">Auditoria e Controle de Execução</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="../index.html" title="capítulo anterior">SME-IntegracaoEOL-MS-ETL</a></li>
+      <li>Next: <a href="der.html" title="próximo capítulo">DER e Mapa de Dados</a></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 8.2.3</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="../_sources/arquitetura/visao_geral.md.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

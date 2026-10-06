@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+
+<html lang="pt" data-content_root="../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Visão Geral do Domínio Professores &#8212; SME-INTEGRACAOEOL-MS-ETL</title>
+    <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../../_static/alabaster.css?v=27fed22d" />
+    <link rel="stylesheet" type="text/css" href="../../_static/graphviz.css?v=4ae1632d" />
+    <script src="../../_static/documentation_options.js?v=c4403577"></script>
+    <script src="../../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/translations.js?v=beaedd51"></script>
+    <link rel="index" title="Índice" href="../../genindex.html" />
+    <link rel="search" title="Pesquisar" href="../../search.html" />
+    <link rel="next" title="Mapeamento ETL (Origem -&gt; Destino)" href="mapeamento_etl.html" />
+    <link rel="prev" title="Domínio Professores" href="index.html" />
+   
+  <link rel="stylesheet" href="../../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="visao-geral-do-dominio-professores">
+<h1>Visão Geral do Domínio Professores<a class="headerlink" href="#visao-geral-do-dominio-professores" title="Link to this heading">¶</a></h1>
+<section id="objetivo">
+<h2>Objetivo<a class="headerlink" href="#objetivo" title="Link to this heading">¶</a></h2>
+<p>Popular <code class="docutils literal notranslate"><span class="pre">professores_db</span></code> com dados do domínio de professores, mantendo o banco autossuficiente
+e sem dependências de runtime com outros domínios.</p>
+</section>
+<section id="principio-de-separacao-de-dominios">
+<h2>Princípio de separação de domínios<a class="headerlink" href="#principio-de-separacao-de-dominios" title="Link to this heading">¶</a></h2>
+<p>O domínio professores <strong>não replica</strong> tabelas de outros domínios (DRE, Escola, Componente, Cargo, etc.).
+Referências externas são armazenadas somente como IDs (<code class="docutils literal notranslate"><span class="pre">IntegerField</span></code> / <code class="docutils literal notranslate"><span class="pre">CharField</span></code>).
+Descrições e nomes são resolvidos em tempo de resposta pelo <strong>Transition Gateway</strong>.</p>
+<blockquote>
+<div><p><strong>Regra prática:</strong> um campo <code class="docutils literal notranslate"><span class="pre">dc_</span></code> (descrição) só é persistido se aparecer em cláusula <code class="docutils literal notranslate"><span class="pre">WHERE</span></code>
+de alguma query deste domínio. Caso contrário, não é armazenado.</p>
+</div></blockquote>
+</section>
+<section id="orquestracao">
+<h2>Orquestração<a class="headerlink" href="#orquestracao" title="Link to this heading">¶</a></h2>
+<p>A carga é organizada por fases para preservar a ordem natural entre servidores,
+vínculos, atribuições e consultas consolidadas.</p>
+</section>
+<section id="total-de-modelos-do-app">
+<h2>Total de modelos do app<a class="headerlink" href="#total-de-modelos-do-app" title="Link to this heading">¶</a></h2>
+<p>O código atual define <strong>11 modelos</strong> em <code class="docutils literal notranslate"><span class="pre">apps/professores/models.py</span></code>.</p>
+</section>
+<section id="fases-implementadas">
+<h2>Fases implementadas<a class="headerlink" href="#fases-implementadas" title="Link to this heading">¶</a></h2>
+<section id="fase-1-sem-dependencias-internas">
+<h3>Fase 1 — sem dependências internas<a class="headerlink" href="#fase-1-sem-dependencias-internas" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">Professor</span></code> — servidores com cargo de professor</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">Pessoa</span></code> — pessoas físicas (externos ativos)</p></li>
+</ul>
+</section>
+<section id="fase-2-dependem-da-fase-1">
+<h3>Fase 2 — dependem da Fase 1<a class="headerlink" href="#fase-2-dependem-da-fase-1" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">CargoBaseServidor</span></code> — cargo base do Professor (código cargo como ID)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">ContratoExterno</span></code> — contrato da Pessoa (tipo funcao como ID)</p></li>
+</ul>
+</section>
+<section id="fase-3-dependem-da-fase-2">
+<h3>Fase 3 — dependem da Fase 2<a class="headerlink" href="#fase-3-dependem-da-fase-2" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">LotacaoServidor</span></code> — lotação do CargoBaseServidor</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">CargoSobrepostoServidor</span></code> — cargo sobreposto do CargoBaseServidor (código cargo como ID)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">FuncaoAtividadeCargoServidor</span></code> — função de atividade do CargoBaseServidor</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">LaudoMedico</span></code> — laudo impedindo atribuição do CargoBaseServidor</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">AtribuicaoAula</span></code> — atribuição de aulas ao CargoBaseServidor</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">AtribuicaoExterno</span></code> — atribuição de aulas ao ContratoExterno</p></li>
+</ul>
+</section>
+<section id="fase-4-dependem-das-fases-13">
+<h3>Fase 4 — dependem das Fases 1–3<a class="headerlink" href="#fase-4-dependem-das-fases-13" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">FuncionarioUnidadeEducacional</span></code> — consulta consolidada por unidade educacional</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">TurmaAtribuidaUe</span></code> — turmas sob abrangência de unidade</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">DisciplinaTurmaAtribuidaUe</span></code> — componentes das turmas sob abrangência de unidade</p></li>
+</ul>
+</section>
+</section>
+<section id="fluxo">
+<h2>Fluxo<a class="headerlink" href="#fluxo" title="Link to this heading">¶</a></h2>
+digraph G {
+    rankdir=TB;
+    node [shape=box, style=&quot;rounded&quot;];
+
+    F1 [label=&quot;Fase 1\nProfessor / Pessoa&quot;];
+    F2 [label=&quot;Fase 2\nCargoBase / Contrato&quot;];
+    F3 [label=&quot;Fase 3\nVinculos / Atribuicoes&quot;];
+    F4 [label=&quot;Fase 4\nConsultas consolidadas&quot;];
+
+    F1 -&gt; F2 -&gt; F3 -&gt; F4;
+}</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../index.html">SME-INTEGRACAOEOL-MS-ETL</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Ir" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navegação</h3>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../../arquitetura/visao_geral.html">Visão Geral da Arquitetura</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../arquitetura/der.html">DER e Mapa de Dados</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">Domínio Professores</a><ul class="current">
+<li class="toctree-l2 current"><a class="reference internal" href="index.html#conteudo">Conteúdo</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../institucional/index.html">Domínio Institucional</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../programas/index.html">Domínio Programas</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../pedagogico/index.html">Domínio Pedagógico</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../auditoria/index.html">Auditoria e Controle de Execução</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../index.html">Documentation overview</a><ul>
+  <li><a href="index.html">Domínio Professores</a><ul>
+      <li>Previous: <a href="index.html" title="capítulo anterior">Domínio Professores</a></li>
+      <li>Next: <a href="mapeamento_etl.html" title="próximo capítulo">Mapeamento ETL (Origem -&gt; Destino)</a></li>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 8.2.3</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="../../_sources/dominios/professores/visao_geral.md.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

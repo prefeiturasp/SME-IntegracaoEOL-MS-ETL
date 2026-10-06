@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+
+<html lang="pt" data-content_root="../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Glossário do Domínio Pedagógico &#8212; SME-INTEGRACAOEOL-MS-ETL</title>
+    <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../../_static/alabaster.css?v=27fed22d" />
+    <link rel="stylesheet" type="text/css" href="../../_static/graphviz.css?v=4ae1632d" />
+    <script src="../../_static/documentation_options.js?v=c4403577"></script>
+    <script src="../../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/translations.js?v=beaedd51"></script>
+    <link rel="index" title="Índice" href="../../genindex.html" />
+    <link rel="search" title="Pesquisar" href="../../search.html" />
+    <link rel="next" title="Auditoria e Controle de Execução" href="../../auditoria/index.html" />
+    <link rel="prev" title="Retomada por Fase" href="retomada.html" />
+   
+  <link rel="stylesheet" href="../../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="glossario-do-dominio-pedagogico">
+<h1>Glossário do Domínio Pedagógico<a class="headerlink" href="#glossario-do-dominio-pedagogico" title="Link to this heading">¶</a></h1>
+<p>Dicionário de termos, campos, regras de negócio e conceitos do legado EOL usados no ETL pedagógico. Serve de referência para quem está entrando no domínio ou precisando entender o que um campo ou tabela significa na prática.</p>
+<hr class="docutils" />
+<section id="conceitos-de-negocio">
+<h2>Conceitos de Negócio<a class="headerlink" href="#conceitos-de-negocio" title="Link to this heading">¶</a></h2>
+<section id="componente-curricular">
+<h3>Componente Curricular<a class="headerlink" href="#componente-curricular" title="Link to this heading">¶</a></h3>
+<p>O que é ensinado numa turma. Equivale ao que no dia a dia chamamos de «disciplina» — Língua Portuguesa, Matemática, Ciências, Arte, etc.</p>
+<p>No EOL, cada componente tem um <code class="docutils literal notranslate"><span class="pre">cd_componente_curricular</span></code> (inteiro). O nome fica em <code class="docutils literal notranslate"><span class="pre">dc_componente_curricular</span></code>.</p>
+<p><strong>No ETL:</strong></p>
+<ul class="simple">
+<li><p>A tabela <code class="docutils literal notranslate"><span class="pre">componente_curricular</span></code> é o catálogo base. Todos os outros modelos referenciam o código daqui.</p></li>
+<li><p>Um componente pode ser de <strong>regência</strong>. Essa flag fica no catálogo <code class="docutils literal notranslate"><span class="pre">componente_curricular</span></code>.</p></li>
+<li><p>Um componente pode fazer parte de <strong>território do saber</strong> em determinada turma; nesse caso, a informação aparece em <code class="docutils literal notranslate"><span class="pre">componente_turma.codigo_componente_territorio_saber</span></code>.</p></li>
+<li><p>A relação pai/filho de componentes não é calculada no ETL principal. Ela fica na tabela local <code class="docutils literal notranslate"><span class="pre">componente_curricular_hierarquia</span></code>, usada pelo microsserviço de consumo quando necessário.</p></li>
+</ul>
+</section>
+<hr class="docutils" />
+<section id="regencia">
+<h3>Regência<a class="headerlink" href="#regencia" title="Link to this heading">¶</a></h3>
+<p>Modalidade de ensino em que <strong>um único professor é responsável por todas ou várias disciplinas</strong> da turma — diferente do modelo em que cada disciplina tem um professor diferente.</p>
+<p>Típica do <strong>Ensino Fundamental I</strong> (1º ao 5º ano), onde o professor regente leciona Língua Portuguesa, Matemática, Ciências, História e Geografia para a mesma turma.</p>
+<p><strong>No ETL:</strong></p>
+<ul class="simple">
+<li><p>A flag <code class="docutils literal notranslate"><span class="pre">regencia</span></code> em <code class="docutils literal notranslate"><span class="pre">componente_curricular</span></code> indica que o componente é de regência.</p></li>
+<li><p>Determinada via lista hardcoded <code class="docutils literal notranslate"><span class="pre">_IDS_REGENCIA</span></code> em <code class="docutils literal notranslate"><span class="pre">queries.py</span></code> — 19 IDs fixos que representam os componentes de regência reconhecidos pelo sistema.</p></li>
+<li><p>Não é derivada de nenhuma tabela dinâmica: se o <code class="docutils literal notranslate"><span class="pre">cd_componente_curricular</span></code> está na lista, <code class="docutils literal notranslate"><span class="pre">regencia</span> <span class="pre">=</span> <span class="pre">True</span></code>.</p></li>
+</ul>
+<p><strong>Atenção:</strong> <code class="docutils literal notranslate"><span class="pre">regencia</span> <span class="pre">=</span> <span class="pre">True</span></code> não significa que o professor precisa planejar esse componente para uma turma específica. Para isso existe a configuração de planejamento de regência, mantida fora do ETL principal.</p>
+</section>
+<hr class="docutils" />
+<section id="planejamento-de-regencia">
+<h3>Planejamento de Regência<a class="headerlink" href="#planejamento-de-regencia" title="Link to this heading">¶</a></h3>
+<p>Refinamento de <code class="docutils literal notranslate"><span class="pre">regencia</span></code>: indica se o componente de regência <strong>entra efetivamente no planejamento de aulas</strong> do professor para aquela combinação de <strong>turno + ano escolar</strong>.</p>
+<p><strong>Por que existe essa distinção?</strong>
+Nem todo componente de regência se aplica a todas as séries e turnos. Por exemplo, um componente pode ser de regência apenas para turmas do 1º e 2º ano no turno da manhã. Para turmas do 5º ano ou de outro turno, o mesmo componente até existe, mas não entra no planejamento de regência.</p>
+<p><strong>No desenho atual:</strong></p>
+<ul class="simple">
+<li><p>O ETL não grava <code class="docutils literal notranslate"><span class="pre">planejamento_regencia</span></code> em <code class="docutils literal notranslate"><span class="pre">ComponenteTurma</span></code>.</p></li>
+<li><p>A configuração fica na tabela local <code class="docutils literal notranslate"><span class="pre">componente_curricular_planejamento_regencia</span></code>.</p></li>
+<li><p>A aplicação da regra é responsabilidade do microsserviço de consumo, que cruza componente, turno e ano escolar quando precisa montar a resposta de planejamento.</p></li>
+</ul>
+</section>
+<hr class="docutils" />
+<section id="territorio-do-saber">
+<h3>Território do Saber<a class="headerlink" href="#territorio-do-saber" title="Link to this heading">¶</a></h3>
+<p>Componentes curriculares especiais do programa <strong>Mais Educação</strong> / educação integral, como Dança, Teatro, Música, Esportes, etc. Esses componentes não seguem a grade curricular padrão — são associados a <strong>territórios</strong> (áreas temáticas) e <strong>experiências pedagógicas</strong>.</p>
+<p><strong>Valor sentinela — código 1 (<code class="docutils literal notranslate"><span class="pre">TERRITORIO_SABER_NAO_UTILIZADO</span></code>):</strong>
+O código <code class="docutils literal notranslate"><span class="pre">cd_territorio_saber</span> <span class="pre">=</span> <span class="pre">1</span></code> é um valor especial que significa «território não utilizado» — não representa um território real. O C# filtra explicitamente <code class="docutils literal notranslate"><span class="pre">CodigoTerritorioSaber</span> <span class="pre">!=</span> <span class="pre">1</span></code> antes de agrupar (<code class="docutils literal notranslate"><span class="pre">CargaDBAgrupamentosTerritorioSaberPorTurmaUseCase.cs:43</span></code>) e no service (<code class="docutils literal notranslate"><span class="pre">ComponenteCurricularService.cs:318</span></code>). <strong>Registros com território 1 devem ser ignorados no agrupamento.</strong></p>
+<p>Na carga principal, os agrupamentos são copiados da API EOL. Portanto, esse filtro já vem refletido em <code class="docutils literal notranslate"><span class="pre">agrupamentoatribuicaoterritoriosaber</span></code>. Na atribuição granular (<code class="docutils literal notranslate"><span class="pre">atribuicao_territorio_saber</span></code>), o dado ainda pode existir para apoiar diagnósticos e componentes individuais, mas o MS Pedagógico não deve tratar território <code class="docutils literal notranslate"><span class="pre">0</span></code>, <code class="docutils literal notranslate"><span class="pre">NULL</span></code> ou sentinela como agrupável.</p>
+<p><strong>No EOL:</strong></p>
+<ul class="simple">
+<li><p>A presença na tabela <code class="docutils literal notranslate"><span class="pre">turma_grade_territorio_experiencia</span></code> indica que o componente é de território.</p></li>
+<li><p>Cada componente de território pertence a um <code class="docutils literal notranslate"><span class="pre">cd_territorio_saber</span></code> e pode ter um <code class="docutils literal notranslate"><span class="pre">cd_experiencia_pedagogica</span></code> associado.</p></li>
+</ul>
+<p><strong>No ETL:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">ComponenteTurma</span></code> não guarda uma flag booleana <code class="docutils literal notranslate"><span class="pre">territorio_saber</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">SQL_COMPONENTE_TURMA</span></code> faz <code class="docutils literal notranslate"><span class="pre">LEFT</span> <span class="pre">JOIN</span></code> com <code class="docutils literal notranslate"><span class="pre">turma_grade_territorio_experiencia</span></code>.</p></li>
+<li><p>Quando o componente pertence a território, <code class="docutils literal notranslate"><span class="pre">codigo_componente_territorio_saber</span></code> recebe o próprio código do componente; caso contrário, fica <code class="docutils literal notranslate"><span class="pre">NULL</span></code>.</p></li>
+<li><p>Para componentes de território, <code class="docutils literal notranslate"><span class="pre">ComponenteTurma</span></code> também guarda
+<code class="docutils literal notranslate"><span class="pre">desc_territorio_saber</span></code> e <code class="docutils literal notranslate"><span class="pre">desc_experiencia_pedagogica</span></code>. Esses campos vêm de
+<code class="docutils literal notranslate"><span class="pre">território_saber</span></code> e <code class="docutils literal notranslate"><span class="pre">tipo_experiencia_pedagogica</span></code>, por meio da relação da
+turma/grade em <code class="docutils literal notranslate"><span class="pre">turma_grade_territorio_experiencia</span></code>.</p></li>
+</ul>
+<p><strong>Descrição exibida:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">ComponenteCurricular.descricao</span></code> é a descrição genérica do catálogo do
+componente.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">ComponenteTurma.desc_territorio_saber</span></code> +
+<code class="docutils literal notranslate"><span class="pre">desc_experiencia_pedagogica</span></code> é a descrição contextual do componente de
+Território do Saber naquela turma.</p></li>
+<li><p>O MS Pedagógico prioriza a descrição contextual quando
+<code class="docutils literal notranslate"><span class="pre">codigo_componente_territorio_saber</span></code> está preenchido. Por isso um componente
+como <code class="docutils literal notranslate"><span class="pre">1216</span></code> pode deixar de aparecer como <code class="docutils literal notranslate"><span class="pre">TERRIT</span> <span class="pre">SABER</span> <span class="pre">/</span> <span class="pre">EXP</span> <span class="pre">PEDAG</span> <span class="pre">3</span></code> e
+passar a aparecer como <code class="docutils literal notranslate"><span class="pre">III</span> <span class="pre">-</span> <span class="pre">ORIENTAÇÃO</span> <span class="pre">DE</span> <span class="pre">ESTUDOS</span> <span class="pre">E</span> <span class="pre">INVENÇÃO</span> <span class="pre">CRIATIVA</span> <span class="pre">-</span> <span class="pre">CLUBE</span> <span class="pre">DE</span> <span class="pre">CIENCIAS/INVESTIGACOES</span></code>, quando essa relação existir no EOL.</p></li>
+</ul>
+</section>
+<hr class="docutils" />
+<section id="agrupamento-de-territorio-do-saber">
+<h3>Agrupamento de Território do Saber<a class="headerlink" href="#agrupamento-de-territorio-do-saber" title="Link to this heading">¶</a></h3>
+<p>Quando um professor é atribuído a <strong>mais de um componente de território</strong> na mesma turma (ex: Dança + Teatro + Música, todos com o mesmo território e experiência), esses componentes formam um <strong>agrupamento</strong>.</p>
+<p>O agrupamento representa o conjunto como uma unidade: o professor planeja para o grupo todo, não componente a componente.</p>
+<p><strong>No ETL:</strong></p>
+<ul class="simple">
+<li><p>Tabela <code class="docutils literal notranslate"><span class="pre">agrupamento_atribuicao_territorio_saber</span></code>: o agrupamento como um todo — quem é o professor, qual a turma, qual território, período de atribuição, e a lista de componentes como CSV em <code class="docutils literal notranslate"><span class="pre">cod_componentes_curriculares</span></code>.</p></li>
+<li><p>A carga principal copia a tabela <code class="docutils literal notranslate"><span class="pre">agrupamentoatribuicaoterritoriosaber</span></code> da API EOL via <code class="docutils literal notranslate"><span class="pre">API_EOL_DB</span></code>, em <code class="docutils literal notranslate"><span class="pre">full_refresh</span></code>.</p></li>
+<li><p>Tabela <code class="docutils literal notranslate"><span class="pre">componente_curricular_agrupamento</span></code>: mantida para compatibilidade e para a fase backup de geração local. O fluxo principal dos endpoints lê os códigos do CSV em <code class="docutils literal notranslate"><span class="pre">cod_componentes_curriculares</span></code>.</p></li>
+<li><p><strong>Regra de domínio:</strong> somente grupos com 2 ou mais componentes distintos formam agrupamento. Atribuição isolada de um único componente de território permanece como componente individual.</p></li>
+</ul>
+<p><strong>Chave de agrupamento:</strong> a combinação <code class="docutils literal notranslate"><span class="pre">(turma,</span> <span class="pre">território,</span> <span class="pre">experiência</span> <span class="pre">pedagógica,</span> <span class="pre">professor,</span> <span class="pre">data</span> <span class="pre">de</span> <span class="pre">atribuição,</span> <span class="pre">componentes)</span></code> define a linha persistida. A data de disponibilização fica como atributo de vigência/encerramento, mas não deve colapsar professores ou composições diferentes.</p>
+<p><strong><code class="docutils literal notranslate"><span class="pre">cod_agrupamento</span></code>:</strong> ID público do agrupamento. Na carga principal, o ETL preserva o código recebido da API EOL. Ele pode se repetir em mais de uma linha física, por exemplo para outro professor ou outro recorte histórico.</p>
+</section>
+<hr class="docutils" />
+<section id="atribuicao-de-aula">
+<h3>Atribuição de Aula<a class="headerlink" href="#atribuicao-de-aula" title="Link to this heading">¶</a></h3>
+<p>Registro no EOL que indica que um professor foi designado para lecionar um componente específico numa turma/série/grade num determinado ano letivo.</p>
+<p>Existem dois tipos:</p>
+<ul class="simple">
+<li><p><strong>SME</strong> (<code class="docutils literal notranslate"><span class="pre">atribuicao_aula</span></code>): professor identificado por RF (Registro Funcional) via <code class="docutils literal notranslate"><span class="pre">v_servidor_cotic</span></code>.</p></li>
+<li><p><strong>Externo</strong> (<code class="docutils literal notranslate"><span class="pre">atribuicao_externo</span></code>): professor de escola conveniada/parceira, identificado por CPF via <code class="docutils literal notranslate"><span class="pre">contrato_externo</span></code> + <code class="docutils literal notranslate"><span class="pre">pessoa</span></code>.</p></li>
+</ul>
+<p><strong>Campos importantes:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">dt_atribuicao_aula</span></code> / <code class="docutils literal notranslate"><span class="pre">dt_atribuicao</span></code>: quando a atribuição começou.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">dt_disponibilizacao_aulas</span></code> / <code class="docutils literal notranslate"><span class="pre">dt_disponibilizacao</span></code>: quando a atribuição foi encerrada/disponibilizada. <code class="docutils literal notranslate"><span class="pre">NULL</span></code> = atribuição ativa.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cd_motivo_disponibilizacao</span></code>: por que foi encerrada. O código <code class="docutils literal notranslate"><span class="pre">26</span></code> = erro de cadastro (descartado). O código <code class="docutils literal notranslate"><span class="pre">34</span></code> = fim de ano letivo (tratado diferente — ainda aparece como válida em certas consultas).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">dt_cancelamento</span></code>: quando foi cancelada. Se preenchida, o registro é ignorado.</p></li>
+</ul>
+</section>
+<hr class="docutils" />
+<section id="disponibilizacao">
+<h3>Disponibilização<a class="headerlink" href="#disponibilizacao" title="Link to this heading">¶</a></h3>
+<p>Encerramento formal de uma atribuição. Quando <code class="docutils literal notranslate"><span class="pre">dt_disponibilizacao_aulas</span></code> está preenchida, significa que o professor <strong>saiu</strong> daquela turma/componente.</p>
+<p>O motivo importa:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">cd_motivo_disponibilizacao</span> <span class="pre">=</span> <span class="pre">26</span></code> (erro de cadastro): atribuição inválida — excluída das consultas.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cd_motivo_disponibilizacao</span> <span class="pre">=</span> <span class="pre">34</span></code> (fim de ano letivo): atribuição válida, encerrada naturalmente — incluída em alguns contextos.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">NULL</span></code> ou outros: atribuição ativa ou encerrada por outros motivos.</p></li>
+</ul>
+<p>No campo <code class="docutils literal notranslate"><span class="pre">fim_atribuicao</span></code> dos modelos, o valor é o <code class="docutils literal notranslate"><span class="pre">MAX(dt_disponibilizacao)</span></code> do grupo — a data mais recente de disponibilização dentre os registros do agrupamento.</p>
+</section>
+<hr class="docutils" />
+<section id="turno">
+<h3>Turno<a class="headerlink" href="#turno" title="Link to this heading">¶</a></h3>
+<p>Período do dia em que a turma funciona (manhã, tarde, noite, integral).</p>
+<p>No EOL, não é um campo texto — é representado por <code class="docutils literal notranslate"><span class="pre">qt_hora_duracao</span></code> da tabela <code class="docutils literal notranslate"><span class="pre">duracao_tipo_turno</span></code>, que armazena a <strong>quantidade de horas do turno</strong> (ex: 4h = tarde, 5h = manhã, etc.). Esse valor inteiro é o que o sistema usa como identificador de turno.</p>
+<p>O JOIN para obter o turno é sempre: <code class="docutils literal notranslate"><span class="pre">turma_escola.cd_tipo_turno</span> <span class="pre">+</span> <span class="pre">turma_escola.cd_duracao</span> <span class="pre">→</span> <span class="pre">duracao_tipo_turno.qt_hora_duracao</span></code>.</p>
+</section>
+<hr class="docutils" />
+<section id="ano-turma-ano-escolar-sg-resumida-serie">
+<h3>Ano Turma / Ano Escolar (<code class="docutils literal notranslate"><span class="pre">sg_resumida_serie</span></code>)<a class="headerlink" href="#ano-turma-ano-escolar-sg-resumida-serie" title="Link to this heading">¶</a></h3>
+<p>Série/ano escolar da turma — ex: «1», «2», «3», «4», «5» para o Ensino Fundamental I.</p>
+<p>No EOL, vem da tabela <code class="docutils literal notranslate"><span class="pre">serie_ensino</span></code> como <code class="docutils literal notranslate"><span class="pre">sg_resumida_serie</span></code> (sigla resumida). Pode ter valores como «EI» (Educação Infantil), «1» a «9» (EF), «1EM» (Ensino Médio), etc.</p>
+<p>No ETL, é sempre tratado como <strong>string</strong> — nunca convertido para inteiro, pois pode conter letras.</p>
+<p>Nos endpoints do SGP, o parâmetro <code class="docutils literal notranslate"><span class="pre">anoTurma</span></code> usa esses valores como filtro.</p>
+</section>
+<hr class="docutils" />
+<section id="grade-curricular">
+<h3>Grade Curricular<a class="headerlink" href="#grade-curricular" title="Link to this heading">¶</a></h3>
+<p>Estrutura que define quais componentes curriculares são obrigatórios para uma combinação de série + escola. No EOL: tabela <code class="docutils literal notranslate"><span class="pre">grade</span></code> + <code class="docutils literal notranslate"><span class="pre">grade_componente_curricular</span></code>.</p>
+<p>Cada escola pode ter uma grade diferente (escola particular conveniada pode ter componentes distintos da rede municipal). Por isso o JOIN passa por <code class="docutils literal notranslate"><span class="pre">escola_grade</span></code> antes de chegar na <code class="docutils literal notranslate"><span class="pre">grade</span></code>.</p>
+<p>Existe também a <strong>grade de programa</strong> (<code class="docutils literal notranslate"><span class="pre">turma_escola_grade_programa</span></code>), para turmas especiais que não seguem a grade da série — ex: turmas de aceleração, programas específicos. Nesse caso, o componente do programa tem prioridade sobre o da série (lógica do <code class="docutils literal notranslate"><span class="pre">IIF</span></code> nas queries).</p>
+</section>
+<hr class="docutils" />
+<section id="etapa-de-ensino">
+<h3>Etapa de Ensino<a class="headerlink" href="#etapa-de-ensino" title="Link to this heading">¶</a></h3>
+<p>Subdivisão formal do sistema educacional, definida pelo MEC. Exemplos: Anos Iniciais do EF, Anos Finais do EF, Ensino Médio, EJA Fundamental.</p>
+<p>No EOL: tabela <code class="docutils literal notranslate"><span class="pre">etapa_ensino</span></code>, campo <code class="docutils literal notranslate"><span class="pre">cd_etapa_ensino</span></code>. Cada <code class="docutils literal notranslate"><span class="pre">serie_ensino</span></code> pertence a uma etapa.</p>
+<p>O caminho de origem é: <code class="docutils literal notranslate"><span class="pre">turma_escola</span> <span class="pre">→</span> <span class="pre">serie_turma_grade</span> <span class="pre">→</span> <span class="pre">grade</span> <span class="pre">→</span> <span class="pre">serie_ensino</span> <span class="pre">→</span> <span class="pre">etapa_ensino</span></code>. Desde a migration <code class="docutils literal notranslate"><span class="pre">0011</span></code>, o ETL <strong>materializa o código cru de etapa na turma</strong> como <code class="docutils literal notranslate"><span class="pre">codigo_etapa_ensino</span></code> (1–17), para paridade com o <code class="docutils literal notranslate"><span class="pre">EtapaEnsino</span></code> do legado. Não confundir com <code class="docutils literal notranslate"><span class="pre">codigo_modalidade_etapa</span></code>, que é <em>bucket</em> derivado (ver <a class="reference internal" href="#modalidade-de-ensino">Modalidade de Ensino</a>).</p>
+</section>
+<hr class="docutils" />
+<section id="ciclo-de-ensino">
+<h3>Ciclo de Ensino<a class="headerlink" href="#ciclo-de-ensino" title="Link to this heading">¶</a></h3>
+<p>Agrupamento pedagógico de séries dentro de uma etapa (ex.: Ciclo de Alfabetização, Ciclo Interdisciplinar, Autoral).</p>
+<p>No EOL: campo <code class="docutils literal notranslate"><span class="pre">cd_ciclo_ensino</span></code> na tabela <code class="docutils literal notranslate"><span class="pre">serie_ensino</span></code> (descrição em <code class="docutils literal notranslate"><span class="pre">dc_ciclo_ensino</span></code>, tabela <code class="docutils literal notranslate"><span class="pre">ciclo_ensino</span></code>). Desde a migration <code class="docutils literal notranslate"><span class="pre">0011</span></code>, o ETL materializa o código cru na turma como <code class="docutils literal notranslate"><span class="pre">codigo_ciclo_ensino</span></code> (via <code class="docutils literal notranslate"><span class="pre">se.cd_ciclo_ensino</span></code> na <code class="docutils literal notranslate"><span class="pre">SQL_TURMAS</span></code>). A migration <code class="docutils literal notranslate"><span class="pre">0025</span></code> adiciona o catálogo completo <code class="docutils literal notranslate"><span class="pre">ciclo_ensino</span></code>, incluindo modalidade, etapa, descrição e data de atualização.</p>
+</section>
+<hr class="docutils" />
+<section id="serie-de-ensino">
+<h3>Série de Ensino<a class="headerlink" href="#serie-de-ensino" title="Link to this heading">¶</a></h3>
+<p>O ano/série escolar dentro de uma etapa. Ex: 1º ano, 2º ano, 3º ano do EF.</p>
+<p>No EOL: tabela <code class="docutils literal notranslate"><span class="pre">serie_ensino</span></code>. Campos relevantes:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">sg_resumida_serie</span></code>: sigla curta usada como filtro nos endpoints — ex: <code class="docutils literal notranslate"><span class="pre">&quot;1&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;2&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;1EM&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;EI&quot;</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">sg_serie_ensino</span></code>: nome completo da série.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cd_serie_ensino</span></code>: chave numérica.</p></li>
+</ul>
+<p><strong>Hierarquia completa no EOL:</strong></p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>Modalidade (derivada)
+  └── Etapa de Ensino (etapa_ensino)
+        └── Série (serie_ensino)
+              └── Grade (grade)           ← quais componentes são obrigatórios
+                    └── Componentes (grade_componente_curricular)
+              └── Turma (turma_escola)    ← vínculo via serie_turma_escola → serie_turma_grade
+</pre></div>
+</div>
+<hr class="docutils" />
+</section>
+<section id="modalidade-de-ensino">
+<span id="id1"></span><h3>Modalidade de Ensino<a class="headerlink" href="#modalidade-de-ensino" title="Link to this heading">¶</a></h3>
+<p>Categoria que agrupa etapas de ensino para fins de filtragem nos endpoints. Não existe como campo direto na turma — é <strong>derivada</strong> da etapa de ensino via <code class="docutils literal notranslate"><span class="pre">CASE</span></code> nas queries.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Código</p></th>
+<th class="head"><p>Modalidade</p></th>
+<th class="head"><p>Etapas / Tipo de Escola</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>1</p></td>
+<td><p>EI (Educação Infantil)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cd_etapa_ensino</span> <span class="pre">IN</span> <span class="pre">(1,</span> <span class="pre">10)</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>3</p></td>
+<td><p>EJA</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cd_etapa_ensino</span> <span class="pre">IN</span> <span class="pre">(2,</span> <span class="pre">3,</span> <span class="pre">7,</span> <span class="pre">11)</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>4</p></td>
+<td><p>CIEJA</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">tp_escola</span> <span class="pre">=</span> <span class="pre">13</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>5</p></td>
+<td><p>EF (Ensino Fundamental)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cd_etapa_ensino</span> <span class="pre">IN</span> <span class="pre">(4,</span> <span class="pre">5,</span> <span class="pre">12,</span> <span class="pre">13)</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>6</p></td>
+<td><p>EM (Ensino Médio)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cd_etapa_ensino</span> <span class="pre">IN</span> <span class="pre">(6,</span> <span class="pre">7,</span> <span class="pre">8,</span> <span class="pre">9,</span> <span class="pre">14,</span> <span class="pre">17)</span></code></p></td>
+</tr>
+</tbody>
+</table>
+<p>O CIEJA é identificado pelo <code class="docutils literal notranslate"><span class="pre">tp_escola</span></code> da escola (não pela etapa) porque suas turmas podem ter etapas variadas — o que define o CIEJA é o tipo da escola.</p>
+</section>
+<hr class="docutils" />
+<section id="pap-programa-de-apoio-e-acompanhamento-a-aprendizagem">
+<h3>PAP (Programa de Apoio e Acompanhamento à Aprendizagem)<a class="headerlink" href="#pap-programa-de-apoio-e-acompanhamento-a-aprendizagem" title="Link to this heading">¶</a></h3>
+<p>Programa de reforço escolar da rede municipal destinado a alunos com dificuldades de aprendizagem. As turmas PAP têm componentes curriculares próprios — distintos dos componentes regulares — que são usados para planejamento e registro de frequência.</p>
+<p><strong>No ETL:</strong></p>
+<ul class="simple">
+<li><p>A tabela local <code class="docutils literal notranslate"><span class="pre">componentecurricularpap</span></code> lista os IDs de componentes que pertencem ao PAP.</p></li>
+<li><p>Os IDs atualmente cadastrados são: <code class="docutils literal notranslate"><span class="pre">1033,</span> <span class="pre">1051,</span> <span class="pre">1052,</span> <span class="pre">1053,</span> <span class="pre">1054,</span> <span class="pre">1322,</span> <span class="pre">1770,</span> <span class="pre">1804,</span> <span class="pre">1805</span></code>.</p></li>
+<li><p>Essa lista é usada pelo endpoint <code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/turmas/{codigoTurma}/validar/pap</span></code> para verificar se uma turma possui componente PAP.</p></li>
+<li><p>No ETL, serve para identificar e tratar esses componentes de forma diferenciada quando necessário.</p></li>
+</ul>
+<p><strong>Fonte dos dados:</strong> tabela local Postgres <code class="docutils literal notranslate"><span class="pre">componentecurricularpap</span></code>, populada pelos scripts de migração <code class="docutils literal notranslate"><span class="pre">V18</span></code>, <code class="docutils literal notranslate"><span class="pre">V193</span></code> e <code class="docutils literal notranslate"><span class="pre">V194</span></code>.</p>
+</section>
+<hr class="docutils" />
+<section id="tipo-de-escola">
+<h3>Tipo de Escola<a class="headerlink" href="#tipo-de-escola" title="Link to this heading">¶</a></h3>
+<p>Campo <code class="docutils literal notranslate"><span class="pre">tp_escola</span></code> da tabela <code class="docutils literal notranslate"><span class="pre">escola</span></code>. Indica o tipo de vínculo/administração da escola.</p>
+<p>Tipos relevantes no ETL:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Código</p></th>
+<th class="head"><p>Descrição</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>11</p></td>
+<td><p>CEI_INDIR (Centro de Educação Infantil Indireto)</p></td>
+</tr>
+<tr class="row-odd"><td><p>12</p></td>
+<td><p>CRP_CONV (Conveniado)</p></td>
+</tr>
+<tr class="row-even"><td><p>13</p></td>
+<td><p>CIEJA</p></td>
+</tr>
+<tr class="row-odd"><td><p>32</p></td>
+<td><p>EMEFPFOM</p></td>
+</tr>
+<tr class="row-even"><td><p>33</p></td>
+<td><p>EMEIPFOM</p></td>
+</tr>
+</tbody>
+</table>
+<p>Os tipos 11, 12, 32 e 33 são os que admitem <strong>professor externo</strong> (identificado por CPF). Os demais aceitam apenas professor SME (RF).</p>
+</section>
+<hr class="docutils" />
+<section id="professor-sme-vs-professor-externo">
+<h3>Professor SME vs. Professor Externo<a class="headerlink" href="#professor-sme-vs-professor-externo" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><strong>SME:</strong> servidor da rede municipal, identificado por <strong>RF (Registro Funcional)</strong>. Atribuição em <code class="docutils literal notranslate"><span class="pre">atribuicao_aula</span></code>, professor em <code class="docutils literal notranslate"><span class="pre">v_servidor_cotic.cd_registro_funcional</span></code>.</p></li>
+<li><p><strong>Externo:</strong> professor de escola parceira/conveniada, identificado por <strong>CPF</strong>. Atribuição em <code class="docutils literal notranslate"><span class="pre">atribuicao_externo</span></code>, professor em <code class="docutils literal notranslate"><span class="pre">pessoa.cd_cpf_pessoa</span></code> via <code class="docutils literal notranslate"><span class="pre">contrato_externo</span></code>.</p></li>
+</ul>
+<p>O campo <code class="docutils literal notranslate"><span class="pre">atribuicao_externa</span></code> (0 ou 1) distingue os dois nos resultados das queries UNION ALL.</p>
+<p>No modelo, o campo <code class="docutils literal notranslate"><span class="pre">professor</span></code> armazena RF ou CPF — é uma string opaca, o tipo depende do contexto.</p>
+</section>
+<hr class="docutils" />
+<section id="dre-diretoria-regional-de-educacao">
+<h3>DRE (Diretoria Regional de Educação)<a class="headerlink" href="#dre-diretoria-regional-de-educacao" title="Link to this heading">¶</a></h3>
+<p>Instância administrativa intermediária entre a SME e as escolas. Cada escola pertence a uma DRE.</p>
+<p>No EOL, o JOIN para chegar na DRE passa por:
+<code class="docutils literal notranslate"><span class="pre">escola</span> <span class="pre">→</span> <span class="pre">v_cadastro_unidade_educacao</span> <span class="pre">→</span> <span class="pre">unidade_administrativa</span></code> com filtro <code class="docutils literal notranslate"><span class="pre">tp_unidade_administrativa</span> <span class="pre">=</span> <span class="pre">24</span></code> (constante <code class="docutils literal notranslate"><span class="pre">_TIPO_UNIDADE_ADMINISTRATIVA_DRE</span></code>).</p>
+</section>
+<hr class="docutils" />
+<section id="ano-letivo">
+<h3>Ano Letivo<a class="headerlink" href="#ano-letivo" title="Link to this heading">¶</a></h3>
+<p>O ano civil em que a turma/atribuição ocorre. Campo <code class="docutils literal notranslate"><span class="pre">an_letivo</span></code> em <code class="docutils literal notranslate"><span class="pre">turma_escola</span></code>.</p>
+<p>O ETL itera sobre todos os anos letivos distintos encontrados em <code class="docutils literal notranslate"><span class="pre">turma_escola</span></code> (query <code class="docutils literal notranslate"><span class="pre">SQL_ANOS_LETIVOS</span></code>) e processa cada fase por ano. A fase de agrupamentos de território é a exceção — processa todos os anos de uma vez.</p>
+</section>
+<hr class="docutils" />
+<section id="status-da-turma-st-turma-escola">
+<h3>Status da Turma (<code class="docutils literal notranslate"><span class="pre">st_turma_escola</span></code>)<a class="headerlink" href="#status-da-turma-st-turma-escola" title="Link to this heading">¶</a></h3>
+<p>Campo que indica o estado atual da turma:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Valor</p></th>
+<th class="head"><p>Significado</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">O</span></code></p></td>
+<td><p>Ativa (em operação)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">A</span></code></p></td>
+<td><p>Aberta</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">C</span></code></p></td>
+<td><p>Concluída</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">E</span></code></p></td>
+<td><p>Encerrada</p></td>
+</tr>
+</tbody>
+</table>
+<p>A maioria das queries filtra <code class="docutils literal notranslate"><span class="pre">IN</span> <span class="pre">('O',</span> <span class="pre">'A',</span> <span class="pre">'C',</span> <span class="pre">'E')</span></code> — todas as turmas não canceladas. Algumas excluem <code class="docutils literal notranslate"><span class="pre">'E'</span></code> dependendo do contexto.</p>
+</section>
+<hr class="docutils" />
+<section id="experiencia-pedagogica">
+<h3>Experiência Pedagógica<a class="headerlink" href="#experiencia-pedagogica" title="Link to this heading">¶</a></h3>
+<p>Subcategoria dentro de um território do saber. Por exemplo, dentro do território «Arte», a experiência pedagógica pode ser «Dança», «Teatro» ou «Artes Visuais».</p>
+<p>No EOL: tabela <code class="docutils literal notranslate"><span class="pre">tipo_experiencia_pedagogica</span></code>, campo <code class="docutils literal notranslate"><span class="pre">cd_experiencia_pedagogica</span></code>.</p>
+<p>Compõe a chave de agrupamento junto com <code class="docutils literal notranslate"><span class="pre">cd_territorio_saber</span></code>.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="campos-tecnicos">
+<h2>Campos Técnicos<a class="headerlink" href="#campos-tecnicos" title="Link to this heading">¶</a></h2>
+<section id="transferido-em">
+<h3><code class="docutils literal notranslate"><span class="pre">transferido_em</span></code><a class="headerlink" href="#transferido-em" title="Link to this heading">¶</a></h3>
+<p>Timestamp de quando o registro foi escrito pelo ETL. Equivale ao <code class="docutils literal notranslate"><span class="pre">timezone.now()</span></code> no início da execução. Não é um dado do EOL — é metadado de auditoria do ETL.</p>
+</section>
+<hr class="docutils" />
+<section id="cod-componentes-curriculares-csv">
+<h3><code class="docutils literal notranslate"><span class="pre">cod_componentes_curriculares</span></code> (CSV)<a class="headerlink" href="#cod-componentes-curriculares-csv" title="Link to this heading">¶</a></h3>
+<p>Campo de <code class="docutils literal notranslate"><span class="pre">AgrupamentoAtribuicaoTerritorioSaber</span></code> que armazena os IDs dos componentes do agrupamento separados por vírgula — ex: <code class="docutils literal notranslate"><span class="pre">&quot;508,511,1064&quot;</span></code>.</p>
+<p>No fluxo principal, o ETL copia esse CSV da API EOL e o MS Pedagógico faz o split quando precisa montar <code class="docutils literal notranslate"><span class="pre">codigosTerritoriosAgrupamento</span></code>. A tabela <code class="docutils literal notranslate"><span class="pre">componente_curricular_agrupamento</span></code> só é populada pela fase backup de geração local.</p>
+</section>
+<hr class="docutils" />
+<section id="codigo-componente-territorio-saber">
+<h3><code class="docutils literal notranslate"><span class="pre">codigo_componente_territorio_saber</span></code><a class="headerlink" href="#codigo-componente-territorio-saber" title="Link to this heading">¶</a></h3>
+<p>Em <code class="docutils literal notranslate"><span class="pre">ComponenteTurma</span></code>, esse campo recebe o próprio código do componente quando ele existe em <code class="docutils literal notranslate"><span class="pre">turma_grade_territorio_experiencia</span></code>. É uma redundância intencional para indexação cruzada nos endpoints — permite identificar componentes de território sem JOIN adicional.</p>
+<p>A descrição desse componente de território não deve ser inferida apenas de
+<code class="docutils literal notranslate"><span class="pre">ComponenteCurricular.descricao</span></code>. Quando disponíveis, os campos
+<code class="docutils literal notranslate"><span class="pre">desc_territorio_saber</span></code> e <code class="docutils literal notranslate"><span class="pre">desc_experiencia_pedagogica</span></code> de <code class="docutils literal notranslate"><span class="pre">ComponenteTurma</span></code>
+representam a descrição contextual da turma e devem ser usados pelo consumidor.</p>
+</section>
+<hr class="docutils" />
+<section id="codigo-componente-curricular-pai">
+<h3><code class="docutils literal notranslate"><span class="pre">codigo_componente_curricular_pai</span></code><a class="headerlink" href="#codigo-componente-curricular-pai" title="Link to this heading">¶</a></h3>
+<p>Alguns componentes são variações de um componente «pai» — ex: componentes filhos de Arte (513, 534, 535…) têm o componente 512 como pai.</p>
+<p><strong>No C# legado:</strong> a relação pai-filho é consultada dinamicamente na tabela <code class="docutils literal notranslate"><span class="pre">componentecurricularpai</span></code> da <code class="docutils literal notranslate"><span class="pre">ApiEolConnection</span></code> (Postgres), via LEFT JOIN com ordenação por <code class="docutils literal notranslate"><span class="pre">Id</span> <span class="pre">DESC</span></code>. A lógica distingue <code class="docutils literal notranslate"><span class="pre">CodigoComponentePai</span></code> de <code class="docutils literal notranslate"><span class="pre">CodigoComponentePaiVigencia</span></code> — o par mais recente por ordem de inserção é o vigente.</p>
+<p><strong>No ETL Python:</strong> essa regra não é mais aplicada em <code class="docutils literal notranslate"><span class="pre">ComponenteTurma</span></code>. A relação fica em <code class="docutils literal notranslate"><span class="pre">componente_curricular_hierarquia</span></code>, tabela local de apoio, e deve ser consultada pelo microsserviço de consumo quando precisar resolver pai/filho.</p>
+</section>
+<hr class="docutils" />
+<section id="cod-agrupamento">
+<h3><code class="docutils literal notranslate"><span class="pre">cod_agrupamento</span></code><a class="headerlink" href="#cod-agrupamento" title="Link to this heading">¶</a></h3>
+<p>Identificador público de um agrupamento de território usado nos contratos do legado e do MS. Não é unique físico da tabela <code class="docutils literal notranslate"><span class="pre">agrupamento_atribuicao_territorio_saber</span></code>.</p>
+<p>Quando há histórico equivalente, o ETL reutiliza o código legado. Para novos agrupamentos, usa IDs <code class="docutils literal notranslate"><span class="pre">&gt;=</span> <span class="pre">800.000</span></code> (piso definido pela constante <code class="docutils literal notranslate"><span class="pre">COMPONENTE_AGRUPAMENTO_TERRITORIO_SABER_ID_INICIAL</span></code> do legado C#, para não colidir com IDs de componentes curriculares reais do EOL).</p>
+</section>
+<hr class="docutils" />
+<section id="turno-turma">
+<h3><code class="docutils literal notranslate"><span class="pre">turno_turma</span></code><a class="headerlink" href="#turno-turma" title="Link to this heading">¶</a></h3>
+<p>Inteiro que representa as horas de duração do turno (<code class="docutils literal notranslate"><span class="pre">qt_hora_duracao</span></code> de <code class="docutils literal notranslate"><span class="pre">duracao_tipo_turno</span></code>). Não é um nome de turno — é um número de horas. O SGP interpreta esse número para derivar o período do dia.</p>
+</section>
+<hr class="docutils" />
+<section id="ano-turma">
+<h3><code class="docutils literal notranslate"><span class="pre">ano_turma</span></code><a class="headerlink" href="#ano-turma" title="Link to this heading">¶</a></h3>
+<p>String que representa a série/ano escolar da turma (<code class="docutils literal notranslate"><span class="pre">sg_resumida_serie</span></code> de <code class="docutils literal notranslate"><span class="pre">serie_ensino</span></code>). Valores típicos: <code class="docutils literal notranslate"><span class="pre">&quot;1&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;2&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;3&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;4&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;5&quot;</span></code> para EF1. Pode conter letras: <code class="docutils literal notranslate"><span class="pre">&quot;EI&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;1EM&quot;</span></code>, etc. Nunca converter para inteiro.</p>
+</section>
+<hr class="docutils" />
+<section id="motivo-disponibilizacao">
+<h3><code class="docutils literal notranslate"><span class="pre">motivo_disponibilizacao</span></code><a class="headerlink" href="#motivo-disponibilizacao" title="Link to this heading">¶</a></h3>
+<p>Código que explica por que uma atribuição foi encerrada:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Código</p></th>
+<th class="head"><p>Significado</p></th>
+<th class="head"><p>Comportamento no ETL</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">26</span></code></p></td>
+<td><p>Erro de cadastro</p></td>
+<td><p><strong>Excluído</strong> de todas as queries</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">34</span></code></p></td>
+<td><p>Fim de ano letivo</p></td>
+<td><p>Incluído (atribuição válida encerrada naturalmente)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">NULL</span></code></p></td>
+<td><p>Atribuição ainda ativa</p></td>
+<td><p>Incluído</p></td>
+</tr>
+<tr class="row-odd"><td><p>Outros</p></td>
+<td><p>Outros motivos de encerramento</p></td>
+<td><p>Incluído</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+<hr class="docutils" />
+<section id="tabelas-eol-relevantes">
+<h2>Tabelas EOL Relevantes<a class="headerlink" href="#tabelas-eol-relevantes" title="Link to this heading">¶</a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Tabela EOL</p></th>
+<th class="head"><p>O que representa</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">turma_escola</span></code></p></td>
+<td><p>Turmas (ano letivo, escola, turno, status)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">escola</span></code></p></td>
+<td><p>Escolas (código, tipo)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">componente_curricular</span></code></p></td>
+<td><p>Catálogo de componentes (código, descrição, cancelamento)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">grade</span></code></p></td>
+<td><p>Grade curricular (conjunto de componentes por série)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">grade_componente_curricular</span></code></p></td>
+<td><p>Componentes que fazem parte de uma grade</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">serie_ensino</span></code></p></td>
+<td><p>Séries/anos escolares com sigla resumida</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">serie_turma_escola</span></code></p></td>
+<td><p>Vínculo entre turma e série</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">serie_turma_grade</span></code></p></td>
+<td><p>Vínculo entre turma/série e grade</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">escola_grade</span></code></p></td>
+<td><p>Grade de uma escola específica</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">duracao_tipo_turno</span></code></p></td>
+<td><p>Horas de duração por tipo/turno</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">atribuicao_aula</span></code></p></td>
+<td><p>Atribuições SME (professor RF)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">atribuicao_externo</span></code></p></td>
+<td><p>Atribuições de professores externos (CPF)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">turma_grade_territorio_experiencia</span></code></p></td>
+<td><p>Componentes de território por série/grade</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">territorio_saber</span></code></p></td>
+<td><p>Territórios do saber (nome, código)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">tipo_experiencia_pedagogica</span></code></p></td>
+<td><p>Experiências pedagógicas dentro de território</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">v_servidor_cotic</span></code></p></td>
+<td><p>View de servidores SME (RF)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">v_cargo_base_cotic</span></code></p></td>
+<td><p>View de cargos de servidores</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">contrato_externo</span></code></p></td>
+<td><p>Contratos de professores externos</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">pessoa</span></code></p></td>
+<td><p>Pessoas físicas (CPF)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">v_cadastro_unidade_educacao</span></code></p></td>
+<td><p>View de unidades educacionais</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">unidade_administrativa</span></code></p></td>
+<td><p>DREs e outras unidades administrativas</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">etapa_ensino</span></code></p></td>
+<td><p>Etapas de ensino (EI, EF, EM, EJA…)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">ciclo_ensino</span></code></p></td>
+<td><p>Catálogo de ciclos de ensino, com modalidade e etapa</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">turma_escola_grade_programa</span></code></p></td>
+<td><p>Grade de programa para turmas especiais</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Tabelas locais (Postgres da API Pedagógico):</strong></p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Tabela</p></th>
+<th class="head"><p>O que representa</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">componente_curricular_planejamento_regencia</span></code></p></td>
+<td><p>Configuração global de quais componentes entram no planejamento de regência por turno e ano escolar. Triplas <code class="docutils literal notranslate"><span class="pre">(id_componente_curricular,</span> <span class="pre">turno,</span> <span class="pre">ano)</span></code> — quando <code class="docutils literal notranslate"><span class="pre">turno</span></code> e <code class="docutils literal notranslate"><span class="pre">ano</span></code> são <code class="docutils literal notranslate"><span class="pre">null</span></code>, o componente é genérico para qualquer turma.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">componente_curricular_hierarquia</span></code></p></td>
+<td><p>Relação entre componente filho e componente pai, com vigência.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">componentecurricularpap</span></code></p></td>
+<td><p>Lista de IDs de componentes curriculares pertencentes ao PAP. Usada para identificar turmas e componentes do programa.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<hr class="docutils" />
+<section id="relacao-entre-os-modelos-do-etl-e-tabelas-locais">
+<h2>Relação entre os Modelos do ETL e Tabelas Locais<a class="headerlink" href="#relacao-entre-os-modelos-do-etl-e-tabelas-locais" title="Link to this heading">¶</a></h2>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>ComponenteCurricular          ← catálogo base (fase 1)
+        │
+        ├── ComponenteTurma                      ← vínculo turma × componente (fase 2)
+        │       campo: codigo_componente_territorio_saber
+        │
+        ├── AtribuicaoComponente                 ← professor × turma × componente (fase 3)
+        │
+        ├── ComponenteCurricularAgrupamento       ← detalhe do agrupamento, 1 linha por componente (fase 4)
+        │       └── referencia AgrupamentoAtribuicaoTerritorioSaber
+        │
+        ├── AgrupamentoAtribuicaoTerritorioSaber  ← agrupamento de território como unidade (fase 4)
+        │
+        └── GradeComponenteCurricular             ← oferta de componentes por ano/modalidade (fase 5)
+
+Tabelas locais de apoio (fora do pipeline principal):
+        ├── ComponenteCurricularPlanejamentoRegencia ← configuração de planejamento de regência
+        ├── ComponenteCurricularHierarquia        ← relação componente pai/filho
+        └── ComponenteCurricularPAP               ← lista local de componentes PAP
+</pre></div>
+</div>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../index.html">SME-INTEGRACAOEOL-MS-ETL</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Ir" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navegação</h3>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../../arquitetura/visao_geral.html">Visão Geral da Arquitetura</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../arquitetura/der.html">DER e Mapa de Dados</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../professores/index.html">Domínio Professores</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../institucional/index.html">Domínio Institucional</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../programas/index.html">Domínio Programas</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">Domínio Pedagógico</a><ul class="current">
+<li class="toctree-l2 current"><a class="reference internal" href="index.html#conteudo">Conteúdo</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../auditoria/index.html">Auditoria e Controle de Execução</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../index.html">Documentation overview</a><ul>
+  <li><a href="index.html">Domínio Pedagógico</a><ul>
+      <li>Previous: <a href="retomada.html" title="capítulo anterior">Retomada por Fase</a></li>
+      <li>Next: <a href="../../auditoria/index.html" title="próximo capítulo">Auditoria e Controle de Execução</a></li>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 8.2.3</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="../../_sources/dominios/pedagogico/glossario.md.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+
+<html lang="pt" data-content_root="../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Comando etl_pedagogico &#8212; SME-INTEGRACAOEOL-MS-ETL</title>
+    <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../../_static/alabaster.css?v=27fed22d" />
+    <link rel="stylesheet" type="text/css" href="../../_static/graphviz.css?v=4ae1632d" />
+    <script src="../../_static/documentation_options.js?v=c4403577"></script>
+    <script src="../../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/translations.js?v=beaedd51"></script>
+    <link rel="index" title="Índice" href="../../genindex.html" />
+    <link rel="search" title="Pesquisar" href="../../search.html" />
+    <link rel="next" title="Orquestração do Domínio Pedagógico" href="orquestracao.html" />
+    <link rel="prev" title="Glossário de Modelos do Domínio Pedagógico" href="modelos.html" />
+   
+  <link rel="stylesheet" href="../../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="comando-etl-pedagogico">
+<h1>Comando <code class="docutils literal notranslate"><span class="pre">etl_pedagogico</span></code><a class="headerlink" href="#comando-etl-pedagogico" title="Link to this heading">¶</a></h1>
+<p>Arquivo: <code class="docutils literal notranslate"><span class="pre">apps/pedagogico/management/commands/etl_pedagogico.py</span></code></p>
+<p>Herda de <code class="docutils literal notranslate"><span class="pre">BaseEtlCommand</span></code>. Toda a lógica de argumentos, checkpoint e auditoria está no base.</p>
+<section id="argumentos-suportados">
+<h2>Argumentos suportados<a class="headerlink" href="#argumentos-suportados" title="Link to this heading">¶</a></h2>
+<p>Herdados de <code class="docutils literal notranslate"><span class="pre">BaseEtlCommand</span></code>:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">--continuar</span></code> — retoma a partir do último checkpoint salvo</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--primeiro-run</span></code> — sinaliza primeiro run (sem filtro incremental)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--anos-letivos</span> <span class="pre">ANO</span> <span class="pre">[ANO</span> <span class="pre">...]</span></code> — processa apenas os anos letivos informados</p></li>
+</ul>
+</section>
+<section id="comportamento">
+<h2>Comportamento<a class="headerlink" href="#comportamento" title="Link to this heading">¶</a></h2>
+<ol class="arabic simple">
+<li><p>Lê checkpoint se <code class="docutils literal notranslate"><span class="pre">--continuar</span></code></p></li>
+<li><p>Decide <code class="docutils literal notranslate"><span class="pre">fase_inicial</span></code></p></li>
+<li><p>Cria <code class="docutils literal notranslate"><span class="pre">id_execucao</span></code> via <code class="docutils literal notranslate"><span class="pre">RepositorioAuditoriaPostgres.iniciar_execucao</span></code></p></li>
+<li><p>Instancia <code class="docutils literal notranslate"><span class="pre">EtlPedagogicoService</span></code> e chama <code class="docutils literal notranslate"><span class="pre">executar(fase_inicial)</span></code></p></li>
+<li><p>Registra tabelas lidas e escritas em <code class="docutils literal notranslate"><span class="pre">EtlExecucaoTabelaEscrita</span></code></p></li>
+<li><p>Atualiza <code class="docutils literal notranslate"><span class="pre">token_parada</span></code></p></li>
+<li><p>Salva checkpoint como <code class="docutils literal notranslate"><span class="pre">concluido</span></code></p></li>
+<li><p>Em erro: salva checkpoint com <code class="docutils literal notranslate"><span class="pre">ultima_situacao=&quot;erro&quot;</span></code> e repropaga exceção</p></li>
+</ol>
+</section>
+<section id="modo-de-escrita">
+<h2>Modo de escrita<a class="headerlink" href="#modo-de-escrita" title="Link to this heading">¶</a></h2>
+<p>Documentação alvo do domínio:</p>
+<ul class="simple">
+<li><p>Fases do pipeline: <code class="docutils literal notranslate"><span class="pre">11</span></code></p></li>
+<li><p>Tabelas persistidas pelo ETL:</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">componente_curricular</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">componente_turma</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">atribuicao_componente</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">atribuicao_territorio_saber</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">componente_curricular_hierarquia</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">componente_curricular_pap</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">componente_curricular_planejamento_regencia</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">turma_itinerario_ensino_medio</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">agrupamento_atribuicao_territorio_saber</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">grade_componente_curricular</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">turma</span></code></p></li>
+</ul>
+</li>
+</ul>
+<p>Estado atual do código em <code class="docutils literal notranslate"><span class="pre">etl_pedagogico.py</span></code>:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">fase_final</span></code> está em <code class="docutils literal notranslate"><span class="pre">11</span></code>.</p></li>
+<li><p>O modo real de escrita de cada fase é definido no <code class="docutils literal notranslate"><span class="pre">PhaseConfig</span></code> do serviço.</p></li>
+<li><p>As tabelas auxiliares da API EOL e <code class="docutils literal notranslate"><span class="pre">agrupamento_atribuicao_territorio_saber</span></code> usam <code class="docutils literal notranslate"><span class="pre">full_refresh</span></code> no <code class="docutils literal notranslate"><span class="pre">PhaseConfig</span></code>.</p></li>
+<li><p>A fase backup <code class="docutils literal notranslate"><span class="pre">agrupamento_territorio_saber_gerado</span></code> só é executada quando selecionada explicitamente por nome.</p></li>
+</ul>
+</section>
+<section id="exemplos">
+<h2>Exemplos<a class="headerlink" href="#exemplos" title="Link to this heading">¶</a></h2>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>manage.py<span class="w"> </span>etl_pedagogico
+python<span class="w"> </span>manage.py<span class="w"> </span>etl_pedagogico<span class="w"> </span>--continuar
+python<span class="w"> </span>manage.py<span class="w"> </span>etl_pedagogico<span class="w"> </span>--primeiro-run
+python<span class="w"> </span>manage.py<span class="w"> </span>etl_pedagogico<span class="w"> </span>--fases<span class="w"> </span>agrupamento_atribuicao_territorio_saber
+python<span class="w"> </span>manage.py<span class="w"> </span>etl_pedagogico<span class="w"> </span>--anos-letivos<span class="w"> </span><span class="m">2025</span><span class="w"> </span><span class="m">2026</span>
+</pre></div>
+</div>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../index.html">SME-INTEGRACAOEOL-MS-ETL</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Ir" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navegação</h3>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../../arquitetura/visao_geral.html">Visão Geral da Arquitetura</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../arquitetura/der.html">DER e Mapa de Dados</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../professores/index.html">Domínio Professores</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../institucional/index.html">Domínio Institucional</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../programas/index.html">Domínio Programas</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">Domínio Pedagógico</a><ul class="current">
+<li class="toctree-l2 current"><a class="reference internal" href="index.html#conteudo">Conteúdo</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../auditoria/index.html">Auditoria e Controle de Execução</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../index.html">Documentation overview</a><ul>
+  <li><a href="index.html">Domínio Pedagógico</a><ul>
+      <li>Previous: <a href="modelos.html" title="capítulo anterior">Glossário de Modelos do Domínio Pedagógico</a></li>
+      <li>Next: <a href="orquestracao.html" title="próximo capítulo">Orquestração do Domínio Pedagógico</a></li>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 8.2.3</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="../../_sources/dominios/pedagogico/comando.md.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

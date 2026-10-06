@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+
+<html lang="pt" data-content_root="../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Mapeamento do ETL Pedagógico &#8212; SME-INTEGRACAOEOL-MS-ETL</title>
+    <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../../_static/alabaster.css?v=27fed22d" />
+    <link rel="stylesheet" type="text/css" href="../../_static/graphviz.css?v=4ae1632d" />
+    <script src="../../_static/documentation_options.js?v=c4403577"></script>
+    <script src="../../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/translations.js?v=beaedd51"></script>
+    <link rel="index" title="Índice" href="../../genindex.html" />
+    <link rel="search" title="Pesquisar" href="../../search.html" />
+    <link rel="next" title="Ordem de Carga" href="ordem_carga.html" />
+    <link rel="prev" title="Visão Geral do Domínio Pedagógico" href="visao_geral.html" />
+   
+  <link rel="stylesheet" href="../../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="mapeamento-do-etl-pedagogico">
+<h1>Mapeamento do ETL Pedagógico<a class="headerlink" href="#mapeamento-do-etl-pedagogico" title="Link to this heading">¶</a></h1>
+<p>Resumo de origem e destino por fase. As fases com origem no EOL SQL Server usam <code class="docutils literal notranslate"><span class="pre">EOLService</span></code>; as fases com origem na API EOL PostgreSQL usam <code class="docutils literal notranslate"><span class="pre">API_EOL_DB</span></code>.</p>
+<hr class="docutils" />
+<section id="fase-1-componentecurricular">
+<h2>Fase 1 — ComponenteCurricular<a class="headerlink" href="#fase-1-componentecurricular" title="Link to this heading">¶</a></h2>
+<p><strong>Query:</strong> <code class="docutils literal notranslate"><span class="pre">SQL_COMPONENTES_NAO_CANCELADOS</span></code> (sem parâmetro de ano)</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head text-left"><p>Campo EOL</p></th>
+<th class="head text-left"><p>Campo Destino</p></th>
+<th class="head text-left"><p>Transformação</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">cd_componente_curricular</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">codigo</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">int()</span></code></p></td>
+</tr>
+<tr class="row-odd"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">dc_componente_curricular</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">descricao</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">strip_str()</span></code></p></td>
+</tr>
+<tr class="row-even"><td class="text-left"><p>CASE sobre <code class="docutils literal notranslate"><span class="pre">_IDS_REGENCIA</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">regencia</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">bool()</span></code></p></td>
+</tr>
+<tr class="row-odd"><td class="text-left"><p>—</p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">transferido_em</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">timezone.now()</span></code></p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<hr class="docutils" />
+<section id="fase-2-componenteturma">
+<h2>Fase 2 — ComponenteTurma<a class="headerlink" href="#fase-2-componenteturma" title="Link to this heading">¶</a></h2>
+<p><strong>Query:</strong> <code class="docutils literal notranslate"><span class="pre">SQL_COMPONENTE_TURMA</span></code> (parâmetro <code class="docutils literal notranslate"><span class="pre">?</span></code> por ano letivo)</p>
+<p>Estrutura turma × componente, sem professor e sem regra de planejamento.
+Serve para dizer quais componentes existem em cada turma real do EOL. Para
+componentes de Território do Saber, também materializa a descrição contextual
+da turma, porque essa descrição vem da grade de território/experiência e não do
+catálogo base <code class="docutils literal notranslate"><span class="pre">componente_curricular</span></code>.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head text-left"><p>Campo Origem</p></th>
+<th class="head text-left"><p>Campo Destino</p></th>
+<th class="head text-left"><p>Transformação</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">cd_turma_escola</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">turma_codigo</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">str()</span></code> ou <code class="docutils literal notranslate"><span class="pre">None</span></code></p></td>
+</tr>
+<tr class="row-odd"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">cd_componente_curricular</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">componente_codigo</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">int()</span></code></p></td>
+</tr>
+<tr class="row-even"><td class="text-left"><p>presença em <code class="docutils literal notranslate"><span class="pre">turma_grade_territorio_experiencia</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">codigo_componente_territorio_saber</span></code></p></td>
+<td class="text-left"><p>código do componente ou <code class="docutils literal notranslate"><span class="pre">None</span></code></p></td>
+</tr>
+<tr class="row-odd"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">território_saber.dc_territorio_saber</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">desc_territorio_saber</span></code></p></td>
+<td class="text-left"><p>texto contextual do território ou <code class="docutils literal notranslate"><span class="pre">None</span></code></p></td>
+</tr>
+<tr class="row-even"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">tipo_experiencia_pedagogica.dc_experiencia_pedagogica</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">desc_experiencia_pedagogica</span></code></p></td>
+<td class="text-left"><p>texto contextual da experiência ou <code class="docutils literal notranslate"><span class="pre">None</span></code></p></td>
+</tr>
+<tr class="row-odd"><td class="text-left"><p>—</p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">transferido_em</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">timezone.now()</span></code></p></td>
+</tr>
+</tbody>
+</table>
+<p>Quando <code class="docutils literal notranslate"><span class="pre">codigo_componente_territorio_saber</span></code> está preenchido, o MS Pedagógico
+usa esses campos para compor a descrição exibida: <code class="docutils literal notranslate"><span class="pre">desc_territorio_saber</span> <span class="pre">-</span> <span class="pre">desc_experiencia_pedagogica</span></code>. Se a experiência pedagógica estiver ausente,
+usa apenas <code class="docutils literal notranslate"><span class="pre">desc_territorio_saber</span></code>.</p>
+</section>
+<hr class="docutils" />
+<section id="fase-3-atribuicaocomponente">
+<h2>Fase 3 — AtribuicaoComponente<a class="headerlink" href="#fase-3-atribuicaocomponente" title="Link to this heading">¶</a></h2>
+<p><strong>Query:</strong> <code class="docutils literal notranslate"><span class="pre">SQL_ATRIBUICAO_COMPONENTE</span></code> (parâmetro <code class="docutils literal notranslate"><span class="pre">?</span></code> por ano letivo)</p>
+<p>Relação professor × turma × componente. A query une atribuições SME e externas,
+ativas e históricas, excluindo motivo de disponibilização <code class="docutils literal notranslate"><span class="pre">26</span></code>.</p>
+<p>Branches contemplados:</p>
+<ul class="simple">
+<li><p>SME ativo por série.</p></li>
+<li><p>SME ativo por programa explícito.</p></li>
+<li><p>SME ativo por programa via <code class="docutils literal notranslate"><span class="pre">escola_grade</span></code>.</p></li>
+<li><p>Externo ativo por série.</p></li>
+<li><p>Externo ativo por programa.</p></li>
+<li><p>SME liberado por disponibilização.</p></li>
+<li><p>Externo liberado por disponibilização.</p></li>
+</ul>
+<p>Todos os branches consideram turmas com situação <code class="docutils literal notranslate"><span class="pre">O</span></code>, <code class="docutils literal notranslate"><span class="pre">A</span></code>, <code class="docutils literal notranslate"><span class="pre">C</span></code> ou <code class="docutils literal notranslate"><span class="pre">E</span></code>.
+Registros externos são limitados aos tipos de escola <code class="docutils literal notranslate"><span class="pre">11</span></code>, <code class="docutils literal notranslate"><span class="pre">12</span></code>, <code class="docutils literal notranslate"><span class="pre">32</span></code> e <code class="docutils literal notranslate"><span class="pre">33</span></code>.
+<code class="docutils literal notranslate"><span class="pre">professor</span> <span class="pre">=</span> <span class="pre">NULL</span></code> não é usado para representar ausência de professor; nesse
+caso a linha não deve existir.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head text-left"><p>Campo Origem</p></th>
+<th class="head text-left"><p>Campo Destino</p></th>
+<th class="head text-left"><p>Transformação</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">cd_turma_escola</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">turma_codigo</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">str()</span></code> ou <code class="docutils literal notranslate"><span class="pre">None</span></code></p></td>
+</tr>
+<tr class="row-odd"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">cd_componente_curricular</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">componente_codigo</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">int()</span></code></p></td>
+</tr>
+<tr class="row-even"><td class="text-left"><p>RF ou CPF</p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">professor</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">str()</span></code> ou <code class="docutils literal notranslate"><span class="pre">None</span></code></p></td>
+</tr>
+<tr class="row-odd"><td class="text-left"><p>branch externo</p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">atribuicao_externa</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">bool()</span></code></p></td>
+</tr>
+<tr class="row-even"><td class="text-left"><p>ano da atribuição</p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">ano_letivo</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">int()</span></code></p></td>
+</tr>
+<tr class="row-odd"><td class="text-left"><p>—</p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">transferido_em</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">timezone.now()</span></code></p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<hr class="docutils" />
+<section id="fase-4-atribuicaoterritoriosaber">
+<h2>Fase 4 — AtribuicaoTerritorioSaber<a class="headerlink" href="#fase-4-atribuicaoterritoriosaber" title="Link to this heading">¶</a></h2>
+<p><strong>Query:</strong> <code class="docutils literal notranslate"><span class="pre">SQL_ATRIBUICOES_TERRITORIO_SABER</span></code> (parâmetro <code class="docutils literal notranslate"><span class="pre">?</span></code> por ano letivo)</p>
+<p>Materializa a atribuição granular de Território do Saber. Cada linha representa um componente de território atribuído a um professor em uma turma, com território, experiência, datas e motivo de disponibilização.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head text-left"><p>Campo Origem</p></th>
+<th class="head text-left"><p>Campo Destino</p></th>
+<th class="head text-left"><p>Transformação</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">cd_componente_curricular</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">componente_codigo</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">int()</span></code></p></td>
+</tr>
+<tr class="row-odd"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">cd_turma_escola</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">turma_codigo</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">str()</span></code></p></td>
+</tr>
+<tr class="row-even"><td class="text-left"><p>RF ou CPF</p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">professor</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">str()</span></code></p></td>
+</tr>
+<tr class="row-odd"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">cd_territorio_saber</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">codigo_territorio_saber</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">int()</span></code></p></td>
+</tr>
+<tr class="row-even"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">cd_experiencia_pedagogica</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">codigo_experiencia_pedagogica</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">int()</span></code> ou <code class="docutils literal notranslate"><span class="pre">None</span></code></p></td>
+</tr>
+<tr class="row-odd"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">dc_territorio_saber</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">desc_territorio_saber</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">strip_str()</span></code></p></td>
+</tr>
+<tr class="row-even"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">dc_experiencia_pedagogica</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">desc_experiencia_pedagogica</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">strip_str()</span></code></p></td>
+</tr>
+<tr class="row-odd"><td class="text-left"><p>data de atribuição</p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">dt_atribuicao</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">make_aware()</span></code></p></td>
+</tr>
+<tr class="row-even"><td class="text-left"><p>data de disponibilização</p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">dt_disponibilizacao</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">make_aware()</span></code></p></td>
+</tr>
+<tr class="row-odd"><td class="text-left"><p>motivo de disponibilização</p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">cd_motivo_disponibilizacao</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">int()</span></code> ou <code class="docutils literal notranslate"><span class="pre">None</span></code></p></td>
+</tr>
+<tr class="row-even"><td class="text-left"><p>fim da turma</p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">dt_fim_turma</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">make_aware()</span></code></p></td>
+</tr>
+<tr class="row-odd"><td class="text-left"><p>branch externo</p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">atribuicao_externa</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">bool()</span></code></p></td>
+</tr>
+<tr class="row-even"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">ano_letivo</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">ano_letivo</span></code></p></td>
+<td class="text-left"><p>direto</p></td>
+</tr>
+<tr class="row-odd"><td class="text-left"><p>—</p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">transferido_em</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">timezone.now()</span></code></p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<hr class="docutils" />
+<section id="fase-5-componentecurricularapieol">
+<h2>Fase 5 — ComponenteCurricularApiEol<a class="headerlink" href="#fase-5-componentecurricularapieol" title="Link to this heading">¶</a></h2>
+<p><strong>Query:</strong> <code class="docutils literal notranslate"><span class="pre">SQL_API_EOL_COMPONENTE_CURRICULAR</span></code></p>
+<p>Materializa em <code class="docutils literal notranslate"><span class="pre">componente_curricular_api_eol</span></code> o resultado do <code class="docutils literal notranslate"><span class="pre">LEFT</span> <span class="pre">JOIN</span></code>
+entre <code class="docutils literal notranslate"><span class="pre">componentecurricular</span></code> e <code class="docutils literal notranslate"><span class="pre">componentecurricularpai</span></code> da API EOL. A carga
+preserva componentes sem pai e todas as relações históricas existentes.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head text-left"><p>Campo API EOL</p></th>
+<th class="head text-left"><p>Campo Destino</p></th>
+<th class="head text-left"><p>Transformação</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">ccp.id</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">id_relacao_origem</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">int_or_none()</span></code></p></td>
+</tr>
+<tr class="row-odd"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">cc.idcomponentecurricular</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">id_componente_curricular</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">int()</span></code></p></td>
+</tr>
+<tr class="row-even"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">cc.ehregencia</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">eh_regencia</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">bool()</span></code></p></td>
+</tr>
+<tr class="row-odd"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">cc.ehterritorio</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">eh_territorio</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">bool()</span></code></p></td>
+</tr>
+<tr class="row-even"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">cc.descricao</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">descricao</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">strip_str()</span></code> ou <code class="docutils literal notranslate"><span class="pre">None</span></code></p></td>
+</tr>
+<tr class="row-odd"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">ccp.idcomponentecurricularpai</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">id_componente_curricular_pai</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">int_or_none()</span></code></p></td>
+</tr>
+<tr class="row-even"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">ccp.vigencia</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">vigencia</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">aware_or_none()</span></code></p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Chave da linha:</strong> <code class="docutils literal notranslate"><span class="pre">(id_relacao_origem,</span> <span class="pre">id_componente_curricular)</span></code>, com
+<code class="docutils literal notranslate"><span class="pre">nulls_distinct=False</span></code> para identificar também componentes sem pai.</p>
+</section>
+<hr class="docutils" />
+<section id="fases-6-a-9-tabelas-auxiliares-da-api-eol">
+<h2>Fases 6 a 9 — tabelas auxiliares da API EOL<a class="headerlink" href="#fases-6-a-9-tabelas-auxiliares-da-api-eol" title="Link to this heading">¶</a></h2>
+<p>Todas usam <code class="docutils literal notranslate"><span class="pre">full_refresh</span></code> e <code class="docutils literal notranslate"><span class="pre">truncate_on_full_sync=True</span></code>.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head text-left"><p>Fase</p></th>
+<th class="head text-left"><p>Origem API EOL</p></th>
+<th class="head text-left"><p>Destino</p></th>
+<th class="head text-left"><p>Observação</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td class="text-left"><p>6</p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">componentecurricularpai</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">componente_curricular_hierarquia</span></code></p></td>
+<td class="text-left"><p>Hierarquia pai/filho de componentes.</p></td>
+</tr>
+<tr class="row-odd"><td class="text-left"><p>7</p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">componentecurricularpap</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">componente_curricular_pap</span></code></p></td>
+<td class="text-left"><p>Componentes PAP.</p></td>
+</tr>
+<tr class="row-even"><td class="text-left"><p>8</p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">regenciacomponentecurricular</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">componente_curricular_planejamento_regencia</span></code></p></td>
+<td class="text-left"><p>Planejamento de regência por componente, turno e ano.</p></td>
+</tr>
+<tr class="row-odd"><td class="text-left"><p>9</p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">turma_tipo_itinerario</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">turma_itinerario_ensino_medio</span></code></p></td>
+<td class="text-left"><p>Itinerários do Ensino Médio.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<hr class="docutils" />
+<section id="fase-10-agrupamentoatribuicaoterritoriosaber">
+<h2>Fase 10 — AgrupamentoAtribuicaoTerritorioSaber<a class="headerlink" href="#fase-10-agrupamentoatribuicaoterritoriosaber" title="Link to this heading">¶</a></h2>
+<p><strong>Query:</strong> <code class="docutils literal notranslate"><span class="pre">SQL_API_EOL_AGRUPAMENTO_ATRIBUICAO_TERRITORIO_SABER</span></code></p>
+<p>Copia a tabela <code class="docutils literal notranslate"><span class="pre">agrupamentoatribuicaoterritoriosaber</span></code> da API EOL em modo <code class="docutils literal notranslate"><span class="pre">full_refresh</span></code>. O ETL não recalcula o <code class="docutils literal notranslate"><span class="pre">cod_agrupamento</span></code> nesse fluxo principal; ele preserva o identificador público recebido da origem. A query cria <code class="docutils literal notranslate"><span class="pre">id_linha_api_eol</span></code> com <code class="docutils literal notranslate"><span class="pre">ROW_NUMBER()</span></code> apenas como chave técnica para processar todas as linhas, inclusive quando o mesmo <code class="docutils literal notranslate"><span class="pre">cod_agrupamento</span></code> aparece em mais de um recorte físico.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head text-left"><p>Campo Origem API EOL</p></th>
+<th class="head text-left"><p>Campo Destino</p></th>
+<th class="head text-left"><p>Transformação</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">codagrupamento</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">cod_agrupamento</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">int()</span></code></p></td>
+</tr>
+<tr class="row-odd"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">codterritoriosaber</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">cod_territorio_saber</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">int()</span></code></p></td>
+</tr>
+<tr class="row-even"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">codexperienciapedagogica</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">cod_experiencia_pedagogica</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">int()</span></code> ou <code class="docutils literal notranslate"><span class="pre">None</span></code></p></td>
+</tr>
+<tr class="row-odd"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">dtinicioatribuicao</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">dt_inicio_atribuicao</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">make_aware()</span></code></p></td>
+</tr>
+<tr class="row-even"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">anoatribuicao</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">ano_atribuicao</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">int()</span></code></p></td>
+</tr>
+<tr class="row-odd"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">dtfimatribuicao</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">dt_fim_atribuicao</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">make_aware()</span></code></p></td>
+</tr>
+<tr class="row-even"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">dtfimturma</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">dt_fim_turma</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">make_aware()</span></code></p></td>
+</tr>
+<tr class="row-odd"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">rfprofessor</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">rf_professor</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">str()</span></code></p></td>
+</tr>
+<tr class="row-even"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">codturma</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">cod_turma</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">str()</span></code></p></td>
+</tr>
+<tr class="row-odd"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">codcomponentescurriculares</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">cod_componentes_curriculares</span></code></p></td>
+<td class="text-left"><p>CSV recebido da origem</p></td>
+</tr>
+<tr class="row-even"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">anoletivo</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">ano_letivo</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">int()</span></code></p></td>
+</tr>
+<tr class="row-odd"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">codmotivodisponibilizacao</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">cod_motivo_disponibilizacao</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">int()</span></code> ou <code class="docutils literal notranslate"><span class="pre">None</span></code></p></td>
+</tr>
+<tr class="row-even"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">descterritoriosaber</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">desc_territorio_saber</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">strip_str()</span></code></p></td>
+</tr>
+<tr class="row-odd"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">descexperienciapedagogica</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">desc_experiencia_pedagogica</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">strip_str()</span></code></p></td>
+</tr>
+<tr class="row-even"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">encerramento_atribuicao_agrupamento_atualizado</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">encerramento_atribuicao_agrupamento_atualizado</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">bool()</span></code> ou <code class="docutils literal notranslate"><span class="pre">None</span></code></p></td>
+</tr>
+<tr class="row-odd"><td class="text-left"><p>—</p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">transferido_em</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">timezone.now()</span></code></p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Observação:</strong> <code class="docutils literal notranslate"><span class="pre">cod_agrupamento</span></code> deve ser tratado como ID de contrato, não como unique físico. A mesma numeração pode aparecer em mais de uma linha quando a origem registra outro professor ou histórico.</p>
+</section>
+<hr class="docutils" />
+<section id="fase-11-gradecomponentecurricular">
+<h2>Fase 11 — GradeComponenteCurricular<a class="headerlink" href="#fase-11-gradecomponentecurricular" title="Link to this heading">¶</a></h2>
+<p><strong>Query:</strong> <code class="docutils literal notranslate"><span class="pre">SQL_GRADE_COMPONENTE_CURRICULAR</span></code> (parâmetro <code class="docutils literal notranslate"><span class="pre">?</span></code> por ano letivo)</p>
+<p>Catálogo de oferta curricular por série, ano letivo e modalidade. Considera
+turmas abertas, aguardando abertura e continuadas (<code class="docutils literal notranslate"><span class="pre">O</span></code>, <code class="docutils literal notranslate"><span class="pre">A</span></code>, <code class="docutils literal notranslate"><span class="pre">C</span></code>), mas não
+turmas extintas. Exige série válida (<code class="docutils literal notranslate"><span class="pre">sg_resumida_serie</span> <span class="pre">IS</span> <span class="pre">NOT</span> <span class="pre">NULL</span></code>) e inclui
+ofertas de programas via <code class="docutils literal notranslate"><span class="pre">turma_escola_grade_programa</span></code>.</p>
+<p><strong>Chave de upsert:</strong> <code class="docutils literal notranslate"><span class="pre">(codigo_componente_curricular,</span> <span class="pre">ano_letivo,</span> <span class="pre">modalidade,</span> <span class="pre">codigo_serie_ensino)</span></code>.</p>
+<p><code class="docutils literal notranslate"><span class="pre">codigo_ano_turma</span></code> é atualizado como atributo de resposta, mas não compõe a
+identidade do registro. No legado, esse valor pode variar para a mesma série de
+ensino; por isso <code class="docutils literal notranslate"><span class="pre">codigo_serie_ensino</span></code> é a referência de identidade.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head text-left"><p>Campo EOL</p></th>
+<th class="head text-left"><p>Campo Destino</p></th>
+<th class="head text-left"><p>Transformação</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">CodigoComponenteCurricular</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">codigo_componente_curricular</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">int()</span></code></p></td>
+</tr>
+<tr class="row-odd"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">DescricaoComponenteCurricular</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">descricao_componente_curricular</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">strip_str()</span></code></p></td>
+</tr>
+<tr class="row-even"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">CodigoAnoTurma</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">codigo_ano_turma</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">str()</span></code> ou <code class="docutils literal notranslate"><span class="pre">None</span></code></p></td>
+</tr>
+<tr class="row-odd"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">DescricaoSerieEnsino</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">descricao_serie_ensino</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">strip_str()</span></code> ou <code class="docutils literal notranslate"><span class="pre">None</span></code></p></td>
+</tr>
+<tr class="row-even"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">CodigoSerieEnsino</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">codigo_serie_ensino</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">int()</span></code> ou <code class="docutils literal notranslate"><span class="pre">None</span></code></p></td>
+</tr>
+<tr class="row-odd"><td class="text-left"><p>CASE na query EOL</p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">modalidade</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">int()</span></code> ou <code class="docutils literal notranslate"><span class="pre">None</span></code></p></td>
+</tr>
+<tr class="row-even"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">AnoLetivo</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">ano_letivo</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">int()</span></code></p></td>
+</tr>
+<tr class="row-odd"><td class="text-left"><p>—</p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">transferido_em</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">timezone.now()</span></code></p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<hr class="docutils" />
+<section id="fase-12-turma">
+<h2>Fase 12 — Turma<a class="headerlink" href="#fase-12-turma" title="Link to this heading">¶</a></h2>
+<p><strong>Query:</strong> <code class="docutils literal notranslate"><span class="pre">SQL_TURMAS</span></code> (parâmetro <code class="docutils literal notranslate"><span class="pre">?</span></code> por ano letivo)</p>
+<p>Origem: <code class="docutils literal notranslate"><span class="pre">turma_escola</span></code> (NOLOCK) com joins em <code class="docutils literal notranslate"><span class="pre">escola</span></code>, <code class="docutils literal notranslate"><span class="pre">serie_turma_escola</span></code>, <code class="docutils literal notranslate"><span class="pre">serie_ensino</span></code> e <code class="docutils literal notranslate"><span class="pre">etapa_ensino</span></code>. Filtra <code class="docutils literal notranslate"><span class="pre">st_turma_escola</span> <span class="pre">IN</span> <span class="pre">('O',</span> <span class="pre">'A',</span> <span class="pre">'E',</span> <span class="pre">'C')</span></code>.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head text-left"><p>Campo EOL</p></th>
+<th class="head text-left"><p>Campo Destino</p></th>
+<th class="head text-left"><p>Transformação</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">cd_turma_escola</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">codigo</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">int()</span></code></p></td>
+</tr>
+<tr class="row-odd"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">an_letivo</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">ano_letivo</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">int()</span></code></p></td>
+</tr>
+<tr class="row-even"><td class="text-left"><p>CASE sobre <code class="docutils literal notranslate"><span class="pre">dc_turma_escola</span></code> (1º char numérico)</p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">ano</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">str()</span></code> ou <code class="docutils literal notranslate"><span class="pre">None</span></code></p></td>
+</tr>
+<tr class="row-odd"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">cd_tipo_turma</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">tipo_turma</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">int()</span></code></p></td>
+</tr>
+<tr class="row-even"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">dc_turma_escola</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">nome_turma</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">strip_str()</span></code></p></td>
+</tr>
+<tr class="row-odd"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">cd_duracao</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">duracao_turno</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">int()</span></code> ou <code class="docutils literal notranslate"><span class="pre">None</span></code></p></td>
+</tr>
+<tr class="row-even"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">cd_tipo_turno</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">tipo_turno</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">int()</span></code> ou <code class="docutils literal notranslate"><span class="pre">None</span></code></p></td>
+</tr>
+<tr class="row-odd"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">dt_inicio</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">data_inicio</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">make_aware()</span></code> ou <code class="docutils literal notranslate"><span class="pre">None</span></code> — <strong>coluna EOL diferente de <code class="docutils literal notranslate"><span class="pre">dt_inicio_turma</span></code></strong>; é a que o legado usa em <code class="docutils literal notranslate"><span class="pre">dataInicioTurma</span></code> da abrangência (<code class="docutils literal notranslate"><span class="pre">QueriesAbrangencia.cs</span></code>)</p></td>
+</tr>
+<tr class="row-even"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">dt_inicio_turma</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">data_inicio_turma</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">make_aware()</span></code> ou <code class="docutils literal notranslate"><span class="pre">None</span></code></p></td>
+</tr>
+<tr class="row-odd"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">dt_fim</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">data_fim</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">make_aware()</span></code> ou <code class="docutils literal notranslate"><span class="pre">None</span></code></p></td>
+</tr>
+<tr class="row-even"><td class="text-left"><p>CASE <code class="docutils literal notranslate"><span class="pre">st_turma_escola</span> <span class="pre">=</span> <span class="pre">'E'</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">extinta</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">bool()</span></code></p></td>
+</tr>
+<tr class="row-odd"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">st_turma_escola</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">situacao</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">str()</span></code> ou <code class="docutils literal notranslate"><span class="pre">None</span></code></p></td>
+</tr>
+<tr class="row-even"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">cd_escola</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">ue_codigo</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">str()</span></code> ou <code class="docutils literal notranslate"><span class="pre">None</span></code></p></td>
+</tr>
+<tr class="row-odd"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">dt_atualizacao_tabela</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">data_atualizacao</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">make_aware()</span></code> ou <code class="docutils literal notranslate"><span class="pre">None</span></code></p></td>
+</tr>
+<tr class="row-even"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">dt_status_turma_escola</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">data_status_turma_escola</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">make_aware()</span></code> ou <code class="docutils literal notranslate"><span class="pre">None</span></code></p></td>
+</tr>
+<tr class="row-odd"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">dc_serie_ensino</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">serie_ensino</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">strip_str()</span></code> ou <code class="docutils literal notranslate"><span class="pre">None</span></code></p></td>
+</tr>
+<tr class="row-even"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">cd_serie_ensino</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">codigo_serie_ensino</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">int()</span></code> ou <code class="docutils literal notranslate"><span class="pre">None</span></code></p></td>
+</tr>
+<tr class="row-odd"><td class="text-left"><p>CASE sobre <code class="docutils literal notranslate"><span class="pre">cd_etapa_ensino</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">modalidade</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">str()</span></code> (<code class="docutils literal notranslate"><span class="pre">'EJA'</span></code>, <code class="docutils literal notranslate"><span class="pre">'Fundamental'</span></code>, <code class="docutils literal notranslate"><span class="pre">'Médio'</span></code>, <code class="docutils literal notranslate"><span class="pre">'Infantil'</span></code>) ou <code class="docutils literal notranslate"><span class="pre">None</span></code></p></td>
+</tr>
+<tr class="row-even"><td class="text-left"><p>CASE sobre <code class="docutils literal notranslate"><span class="pre">cd_etapa_ensino</span></code> + <code class="docutils literal notranslate"><span class="pre">tp_escola</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">codigo_modalidade</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">int()</span></code> (1=EI, 3=EJA, 4=CIEJA, 5=EF, 6=EM)</p></td>
+</tr>
+<tr class="row-odd"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">cd_tipo_programa</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">codigo_tipo_programa</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">int()</span></code> ou <code class="docutils literal notranslate"><span class="pre">None</span></code></p></td>
+</tr>
+<tr class="row-even"><td class="text-left"><p>CASE sobre <code class="docutils literal notranslate"><span class="pre">COALESCE(cd_etapa_ensino,</span> <span class="pre">etapa</span> <span class="pre">do</span> <span class="pre">programa)</span></code> + <code class="docutils literal notranslate"><span class="pre">tp_escola</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">codigo_modalidade_etapa</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">int()</span></code> — <strong>bucket derivado</strong> (1/3/4/5/6), NÃO o <code class="docutils literal notranslate"><span class="pre">cd_etapa_ensino</span></code> cru</p></td>
+</tr>
+<tr class="row-odd"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">ee.cd_etapa_ensino</span></code> (cru)</p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">codigo_etapa_ensino</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">int_or_none()</span></code> — código de etapa do EOL (1–17), paridade com <code class="docutils literal notranslate"><span class="pre">EtapaEnsino</span></code> do legado</p></td>
+</tr>
+<tr class="row-even"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">se.cd_ciclo_ensino</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">codigo_ciclo_ensino</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">int_or_none()</span></code> — paridade com <code class="docutils literal notranslate"><span class="pre">CicloEnsino</span></code> do legado</p></td>
+</tr>
+<tr class="row-odd"><td class="text-left"><p>CASE EJA pelo mês de <code class="docutils literal notranslate"><span class="pre">dt_inicio_turma</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">semestre</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">int()</span></code> (1 ou 2 para EJA; 0 demais)</p></td>
+</tr>
+<tr class="row-even"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">cd_etapa_ensino</span> <span class="pre">=</span> <span class="pre">13</span></code> e <code class="docutils literal notranslate"><span class="pre">cd_modalidade_ensino</span> <span class="pre">=</span> <span class="pre">2</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">ensino_especial</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">bool()</span></code></p></td>
+</tr>
+<tr class="row-odd"><td class="text-left"><p>—</p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">transferido_em</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">timezone.now()</span></code></p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<hr class="docutils" />
+<section id="fase-13-turmaatribuidadreue">
+<h2>Fase 13 — TurmaAtribuidaDreUe<a class="headerlink" href="#fase-13-turmaatribuidadreue" title="Link to this heading">¶</a></h2>
+<p><strong>Query:</strong> <code class="docutils literal notranslate"><span class="pre">SQL_TURMAS_ATRIBUIDAS_DRE_UE</span></code> — montada em tempo de execução por
+<code class="docutils literal notranslate"><span class="pre">EtlPedagogicoService._sql_turmas_atribuidas_dre_ue()</span></code> (sem parâmetro <code class="docutils literal notranslate"><span class="pre">?</span></code>, roda
+1x por execução do ETL, não 1x por ano letivo).</p>
+<p><strong>Origem (20/08/2026):</strong> join ao vivo em <code class="docutils literal notranslate"><span class="pre">turma_escola</span></code>+<code class="docutils literal notranslate"><span class="pre">escola</span></code>+
+<code class="docutils literal notranslate"><span class="pre">v_cadastro_unidade_educacao</span></code>+<code class="docutils literal notranslate"><span class="pre">unidade_administrativa</span></code> no EOL, reimplementando
+<code class="docutils literal notranslate"><span class="pre">ObterEstruturaInstitucionalVigente</span></code> (<code class="docutils literal notranslate"><span class="pre">QueriesAbrangencia.cs</span></code> do legado) — <strong>não</strong>
+mais a view <code class="docutils literal notranslate"><span class="pre">turmas_atribuidas_dre_ue</span></code>, que só cobria <code class="docutils literal notranslate"><span class="pre">tp_escola</span></code> em
+<code class="docutils literal notranslate"><span class="pre">{1,3,4,13,16}</span></code> (bem mais estreito que o recorte real usado pelo legado).
+Sempre ano corrente (<code class="docutils literal notranslate"><span class="pre">YEAR(GETDATE())</span></code> no SQL Server, igual ao legado) — por
+isso a query não recebe <code class="docutils literal notranslate"><span class="pre">ano_letivo</span></code> como parâmetro.</p>
+<p>O recorte de <code class="docutils literal notranslate"><span class="pre">tp_escola</span></code>/etapas por modalidade vem de <code class="docutils literal notranslate"><span class="pre">parametros</span></code> (Postgres
+<code class="docutils literal notranslate"><span class="pre">api_eol_db</span></code>, mesma fonte que o legado chama de «ParametrosApiEol»), lido a
+cada execução via <code class="docutils literal notranslate"><span class="pre">_parametros_abrangencia()</span></code> — chaves <code class="docutils literal notranslate"><span class="pre">tipo_escola_sgp</span></code>,
+<code class="docutils literal notranslate"><span class="pre">tipo_escola_infantil_sgp</span></code>, <code class="docutils literal notranslate"><span class="pre">etapas_por_modalidade</span></code>. Os IDs de componente PAP
+usados no filtro de turma tipo 3 são constante fixa
+(<code class="docutils literal notranslate"><span class="pre">_IDS_COMPONENTES_PAP</span></code> em <code class="docutils literal notranslate"><span class="pre">queries.py</span></code>, espelha
+<code class="docutils literal notranslate"><span class="pre">ComponentesCurricularesConstants.IDS_COMPONENTES_CURRICULARES_PAP</span></code> do legado).</p>
+<p>A origem entrega a turma final, então a carga substitui o conteúdo do ano letivo
+sem detecção de mudança por linha. Linhas sem escola ou turma são descartadas.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head text-left"><p>Campo EOL</p></th>
+<th class="head text-left"><p>Campo Destino</p></th>
+<th class="head text-left"><p>Transformação</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">CodEscola</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">codigo_escola</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">strip_str()</span></code></p></td>
+</tr>
+<tr class="row-odd"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">CodTurma</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">codigo_turma</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">int()</span></code></p></td>
+</tr>
+<tr class="row-even"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">AnoLetivo</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">ano_letivo</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">int()</span></code></p></td>
+</tr>
+<tr class="row-odd"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">Modalidade</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">modalidade</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">strip_or_none()</span></code></p></td>
+</tr>
+<tr class="row-even"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">Semestre</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">semestre</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">int_or_none()</span></code></p></td>
+</tr>
+<tr class="row-odd"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">CodModalidade</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">codigo_modalidade</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">int_or_none()</span></code></p></td>
+</tr>
+<tr class="row-even"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">CodDre</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">codigo_dre</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">strip_str()</span></code></p></td>
+</tr>
+<tr class="row-odd"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">Dre</span></code> / <code class="docutils literal notranslate"><span class="pre">DreAbrev</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">dre</span></code> / <code class="docutils literal notranslate"><span class="pre">dre_abreviacao</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">strip_or_none()</span></code></p></td>
+</tr>
+<tr class="row-even"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">UE</span></code> / <code class="docutils literal notranslate"><span class="pre">UEAbrev</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">ue</span></code> / <code class="docutils literal notranslate"><span class="pre">ue_abreviacao</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">strip_or_none()</span></code></p></td>
+</tr>
+<tr class="row-odd"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">NomeTurma</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">nome_turma</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">strip_or_none()</span></code></p></td>
+</tr>
+<tr class="row-even"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">Ano</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">ano</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">strip_or_none()</span></code></p></td>
+</tr>
+<tr class="row-odd"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">TipoUE</span></code> / <code class="docutils literal notranslate"><span class="pre">CodTipoUE</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">tipo_ue</span></code> / <code class="docutils literal notranslate"><span class="pre">codigo_tipo_ue</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">strip_or_none()</span></code> / <code class="docutils literal notranslate"><span class="pre">int_or_none()</span></code></p></td>
+</tr>
+<tr class="row-even"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">CodTipoEscola</span></code> / <code class="docutils literal notranslate"><span class="pre">TipoEscola</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">codigo_tipo_escola</span></code> / <code class="docutils literal notranslate"><span class="pre">tipo_escola</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">int_or_none()</span></code> / <code class="docutils literal notranslate"><span class="pre">strip_or_none()</span></code></p></td>
+</tr>
+<tr class="row-odd"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">DuracaoTurno</span></code> / <code class="docutils literal notranslate"><span class="pre">TipoTurno</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">duracao_turno</span></code> / <code class="docutils literal notranslate"><span class="pre">tipo_turno</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">int_or_none()</span></code></p></td>
+</tr>
+<tr class="row-even"><td class="text-left"><p>—</p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">transferido_em</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">timezone.now()</span></code></p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<hr class="docutils" />
+<section id="fase-14-etapaensino">
+<h2>Fase 14 — EtapaEnsino<a class="headerlink" href="#fase-14-etapaensino" title="Link to this heading">¶</a></h2>
+<p><strong>Query:</strong> <code class="docutils literal notranslate"><span class="pre">SQL_ETAPA_ENSINO</span></code> (sem parâmetro de ano, <code class="docutils literal notranslate"><span class="pre">full_refresh</span></code> + <code class="docutils literal notranslate"><span class="pre">truncate_on_full_sync=True</span></code>)</p>
+<p>Catálogo estático de etapas de ensino (<code class="docutils literal notranslate"><span class="pre">etapa_ensino</span></code> no EOL), sem filtro
+<code class="docutils literal notranslate"><span class="pre">WHERE</span></code>. Alimenta o endpoint <code class="docutils literal notranslate"><span class="pre">modalidades_ensino</span></code> do domínio Pedagógico, que
+devolve as descrições como lista de strings.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head text-left"><p>Campo EOL</p></th>
+<th class="head text-left"><p>Campo Destino</p></th>
+<th class="head text-left"><p>Transformação</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">cd_etapa_ensino</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">codigo</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">int()</span></code></p></td>
+</tr>
+<tr class="row-odd"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">dc_etapa_ensino</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">descricao</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">strip_str()</span></code> (já com <code class="docutils literal notranslate"><span class="pre">LTRIM</span></code>/<code class="docutils literal notranslate"><span class="pre">RTRIM</span></code> na query)</p></td>
+</tr>
+<tr class="row-even"><td class="text-left"><p>—</p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">transferido_em</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">timezone.now()</span></code></p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<hr class="docutils" />
+<section id="fase-15-cicloensino">
+<h2>Fase 15 — CicloEnsino<a class="headerlink" href="#fase-15-cicloensino" title="Link to this heading">¶</a></h2>
+<p><strong>Query:</strong> <code class="docutils literal notranslate"><span class="pre">SQL_CICLO_ENSINO</span></code> (sem parâmetro de ano, <code class="docutils literal notranslate"><span class="pre">full_refresh</span></code> + <code class="docutils literal notranslate"><span class="pre">truncate_on_full_sync=True</span></code>)</p>
+<p>Catálogo completo de ciclos de ensino (<code class="docutils literal notranslate"><span class="pre">ciclo_ensino</span></code> no EOL), sem filtro
+<code class="docutils literal notranslate"><span class="pre">WHERE</span></code>. Alimenta o endpoint de abrangência <code class="docutils literal notranslate"><span class="pre">ciclo-ensino</span></code> do domínio
+Pedagógico.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head text-left"><p>Campo EOL</p></th>
+<th class="head text-left"><p>Campo Destino</p></th>
+<th class="head text-left"><p>Transformação</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">cd_modalidade_ensino</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">codigo_modalidade_ensino</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">int()</span></code></p></td>
+</tr>
+<tr class="row-odd"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">cd_etapa_ensino</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">codigo_etapa_ensino</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">int()</span></code></p></td>
+</tr>
+<tr class="row-even"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">cd_ciclo_ensino</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">codigo</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">int()</span></code></p></td>
+</tr>
+<tr class="row-odd"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">dc_ciclo_ensino</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">descricao</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">str_value_or_none()</span></code></p></td>
+</tr>
+<tr class="row-even"><td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">dt_atualizacao_tabela</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">data_atualizacao</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">aware_or_none()</span></code></p></td>
+</tr>
+<tr class="row-odd"><td class="text-left"><p>—</p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">transferido_em</span></code></p></td>
+<td class="text-left"><p><code class="docutils literal notranslate"><span class="pre">timezone.now()</span></code></p></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../index.html">SME-INTEGRACAOEOL-MS-ETL</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Ir" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navegação</h3>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../../arquitetura/visao_geral.html">Visão Geral da Arquitetura</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../arquitetura/der.html">DER e Mapa de Dados</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../professores/index.html">Domínio Professores</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../institucional/index.html">Domínio Institucional</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../programas/index.html">Domínio Programas</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">Domínio Pedagógico</a><ul class="current">
+<li class="toctree-l2 current"><a class="reference internal" href="index.html#conteudo">Conteúdo</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../auditoria/index.html">Auditoria e Controle de Execução</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../index.html">Documentation overview</a><ul>
+  <li><a href="index.html">Domínio Pedagógico</a><ul>
+      <li>Previous: <a href="visao_geral.html" title="capítulo anterior">Visão Geral do Domínio Pedagógico</a></li>
+      <li>Next: <a href="ordem_carga.html" title="próximo capítulo">Ordem de Carga</a></li>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 8.2.3</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="../../_sources/dominios/pedagogico/mapeamento_etl.md.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

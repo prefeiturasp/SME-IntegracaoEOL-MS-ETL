@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+
+<html lang="pt" data-content_root="../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Estratégia por Tabela &#8212; SME-INTEGRACAOEOL-MS-ETL</title>
+    <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../../_static/alabaster.css?v=27fed22d" />
+    <link rel="stylesheet" type="text/css" href="../../_static/graphviz.css?v=4ae1632d" />
+    <script src="../../_static/documentation_options.js?v=c4403577"></script>
+    <script src="../../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/translations.js?v=beaedd51"></script>
+    <link rel="index" title="Índice" href="../../genindex.html" />
+    <link rel="search" title="Pesquisar" href="../../search.html" />
+    <link rel="next" title="Hash por Linha" href="hash.html" />
+    <link rel="prev" title="Ordem de Carga ETL — Domínio Programas" href="ordem_carga.html" />
+   
+  <link rel="stylesheet" href="../../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="estrategia-por-tabela">
+<h1>Estratégia por Tabela<a class="headerlink" href="#estrategia-por-tabela" title="Link to this heading">¶</a></h1>
+<section id="incremental-upsert-por-hash">
+<h2>Incremental (upsert por hash)<a class="headerlink" href="#incremental-upsert-por-hash" title="Link to this heading">¶</a></h2>
+<p><strong>Todas as 8 fases do domínio <code class="docutils literal notranslate"><span class="pre">programas</span></code> usam <code class="docutils literal notranslate"><span class="pre">modo_escrita=&quot;upsert&quot;</span></code>.</strong> Não há
+tabelas com carga <code class="docutils literal notranslate"><span class="pre">full_refresh</span></code> hoje.</p>
+<p>A escrita é feita por <code class="docutils literal notranslate"><span class="pre">bulk_create(update_conflicts=True,</span> <span class="pre">...)</span></code> com controle de
+hash SHA-256 por linha, encapsulado em <code class="docutils literal notranslate"><span class="pre">BaseEtlService._upsert_incremental</span></code> —
+herdado pelo <code class="docutils literal notranslate"><span class="pre">EtlProgramasService</span></code>.</p>
+<p>Tabelas em modo upsert:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">tipo_programa</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">componente_curricular_programa</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">turma_programa</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">turma_programa_componente_curricular</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">matricula_turma_programa</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">matricula_turma_programa_historico</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">aluno_pap_ano_letivo</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">aluno_pap_ano_letivo_historico</span></code></p></li>
+</ul>
+</section>
+<section id="full-refresh-nao-usado-atualmente">
+<h2>Full Refresh (não usado atualmente)<a class="headerlink" href="#full-refresh-nao-usado-atualmente" title="Link to this heading">¶</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">BaseEtlCommand</span></code> suporta <code class="docutils literal notranslate"><span class="pre">modo_escrita=&quot;full_refresh&quot;</span></code>, e o <code class="docutils literal notranslate"><span class="pre">etl_programas.Command.get_modo_escrita()</span></code> retorna <code class="docutils literal notranslate"><span class="pre">&quot;full_refresh&quot;</span></code> para qualquer tabela <strong>fora</strong> do set <code class="docutils literal notranslate"><span class="pre">_TABELAS_UPSERT</span></code>. Hoje todas as tabelas do domínio estão em <code class="docutils literal notranslate"><span class="pre">_TABELAS_UPSERT</span></code>, então nenhuma cai nesse caminho.</p>
+<p>Se, no futuro, uma fase nova for adicionada e precisar de carga destrutiva (ex.: tabela pequena sem chave natural estável), basta não incluí-la em <code class="docutils literal notranslate"><span class="pre">_TABELAS_UPSERT</span></code> — o comando passará a registrar <code class="docutils literal notranslate"><span class="pre">modo_escrita=&quot;full_refresh&quot;</span></code> na auditoria automaticamente.</p>
+</section>
+<section id="regras-do-codigo">
+<h2>Regras do código<a class="headerlink" href="#regras-do-codigo" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">_upsert_incremental</span></code> (em <code class="docutils literal notranslate"><span class="pre">apps/core/libs/base_etl_service.py</span></code>, herdado pelo
+<code class="docutils literal notranslate"><span class="pre">EtlProgramasService</span></code>):</p>
+<ol class="arabic simple">
+<li><p>Calcula hash SHA-256 dos <code class="docutils literal notranslate"><span class="pre">update_fields</span></code> declarados no <code class="docutils literal notranslate"><span class="pre">PhaseConfig</span></code>
+(excluindo o <code class="docutils literal notranslate"><span class="pre">timestamp_field</span></code>, se houver).</p></li>
+<li><p>Deduplica os objetos pela chave natural (<code class="docutils literal notranslate"><span class="pre">unique_fields</span></code>), mantendo o
+último em caso de duplicata da origem.</p></li>
+<li><p>Monta <code class="docutils literal notranslate"><span class="pre">id_destino</span> <span class="pre">=</span> <span class="pre">&quot;{tabela}:{pk1}:{pk2}...&quot;</span></code>.</p></li>
+<li><p>Consulta hashes existentes em <code class="docutils literal notranslate"><span class="pre">EtlAuditoriaLinha</span></code> (banco <code class="docutils literal notranslate"><span class="pre">default</span></code>).</p></li>
+<li><p>Filtra apenas o que mudou ou é novo.</p></li>
+<li><p>Atualiza <code class="docutils literal notranslate"><span class="pre">timestamp_field</span></code> (<code class="docutils literal notranslate"><span class="pre">atualizado_em</span></code>) nos registros alterados,
+quando o modelo possui o campo.</p></li>
+<li><p>Faz <code class="docutils literal notranslate"><span class="pre">bulk_create(update_conflicts=True,</span> <span class="pre">...)</span></code> no <code class="docutils literal notranslate"><span class="pre">programas_db</span></code>.</p></li>
+<li><p>Grava os novos hashes de volta em <code class="docutils literal notranslate"><span class="pre">EtlAuditoriaLinha</span></code>.</p></li>
+</ol>
+</li>
+<li><p>O comando registra <code class="docutils literal notranslate"><span class="pre">modo_escrita=&quot;upsert&quot;</span></code> em <code class="docutils literal notranslate"><span class="pre">EtlExecucaoTabelaEscrita</span></code> para
+todas as tabelas do domínio.</p></li>
+</ul>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../index.html">SME-INTEGRACAOEOL-MS-ETL</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Ir" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navegação</h3>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../../arquitetura/visao_geral.html">Visão Geral da Arquitetura</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../arquitetura/der.html">DER e Mapa de Dados</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../professores/index.html">Domínio Professores</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../institucional/index.html">Domínio Institucional</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">Domínio Programas</a><ul class="current">
+<li class="toctree-l2 current"><a class="reference internal" href="index.html#conteudo">Conteúdo</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../pedagogico/index.html">Domínio Pedagógico</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../auditoria/index.html">Auditoria e Controle de Execução</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../index.html">Documentation overview</a><ul>
+  <li><a href="index.html">Domínio Programas</a><ul>
+      <li>Previous: <a href="ordem_carga.html" title="capítulo anterior">Ordem de Carga ETL — Domínio Programas</a></li>
+      <li>Next: <a href="hash.html" title="próximo capítulo">Hash por Linha</a></li>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 8.2.3</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="../../_sources/dominios/programas/estrategia.md.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

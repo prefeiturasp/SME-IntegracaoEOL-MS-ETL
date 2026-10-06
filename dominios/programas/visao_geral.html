@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+
+<html lang="pt" data-content_root="../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Visão Geral — Domínio Programas &#8212; SME-INTEGRACAOEOL-MS-ETL</title>
+    <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../../_static/alabaster.css?v=27fed22d" />
+    <link rel="stylesheet" type="text/css" href="../../_static/graphviz.css?v=4ae1632d" />
+    <script src="../../_static/documentation_options.js?v=c4403577"></script>
+    <script src="../../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/translations.js?v=beaedd51"></script>
+    <link rel="index" title="Índice" href="../../genindex.html" />
+    <link rel="search" title="Pesquisar" href="../../search.html" />
+    <link rel="next" title="Mapeamento do ETL — Domínio Programas" href="mapeamento_etl.html" />
+    <link rel="prev" title="Domínio Programas" href="index.html" />
+   
+  <link rel="stylesheet" href="../../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="visao-geral-dominio-programas">
+<h1>Visão Geral — Domínio Programas<a class="headerlink" href="#visao-geral-dominio-programas" title="Link to this heading">¶</a></h1>
+<p>O domínio <strong>Programas</strong> consolida os dados dos programas de apoio da rede municipal —
+<strong>PAP</strong> (Programa de Apoio Pedagógico) e <strong>PAEE</strong> (Programa de Atendimento Educacional
+Especializado / SRM) — extraídos do EOL (SQL Server) e persistidos no banco
+<code class="docutils literal notranslate"><span class="pre">programas_db</span></code> (PostgreSQL).</p>
+<section id="banco-de-dados">
+<h2>Banco de dados<a class="headerlink" href="#banco-de-dados" title="Link to this heading">¶</a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Parâmetro</p></th>
+<th class="head"><p>Valor</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Alias Django</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">programas_db</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>Variável de ambiente</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">URL_BANCO_PROGRAMAS</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>App label</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">programas</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>Router</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">DominioRouter</span></code> em <code class="docutils literal notranslate"><span class="pre">config/db_router.py</span></code></p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="modelos">
+<h2>Modelos<a class="headerlink" href="#modelos" title="Link to this heading">¶</a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Modelo</p></th>
+<th class="head"><p>Tabela</p></th>
+<th class="head"><p>Tipo de carga</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">TipoPrograma</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">tipo_programa</span></code></p></td>
+<td><p>Seed/configuração (upsert)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">ComponenteCurricularPrograma</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">componente_curricular_programa</span></code></p></td>
+<td><p>Seed/configuração (upsert)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">TurmaPrograma</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">turma_programa</span></code></p></td>
+<td><p>ETL incremental (upsert)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">TurmaProgramaComponenteCurricular</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">turma_programa_componente_curricular</span></code></p></td>
+<td><p>ETL incremental (upsert)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">MatriculaTurmaPrograma</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">matricula_turma_programa</span></code></p></td>
+<td><p>ETL incremental (upsert)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">MatriculaTurmaProgramaHistorico</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">matricula_turma_programa_historico</span></code></p></td>
+<td><p>ETL incremental (upsert)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">AlunoPapAnoLetivo</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">aluno_pap_ano_letivo</span></code></p></td>
+<td><p>ETL incremental (upsert, pré-agregado live)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">AlunoPapAnoLetivoHistorico</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">aluno_pap_ano_letivo_historico</span></code></p></td>
+<td><p>ETL incremental (upsert, pré-agregado histórico)</p></td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<div><p><code class="docutils literal notranslate"><span class="pre">MatriculaTurmaPrograma</span></code> e <code class="docutils literal notranslate"><span class="pre">MatriculaTurmaProgramaHistorico</span></code> compartilham a classe
+abstrata <code class="docutils literal notranslate"><span class="pre">MatriculaTurmaProgramaBase</span></code> em <code class="docutils literal notranslate"><span class="pre">apps/programas/models.py</span></code>.</p>
+</div></blockquote>
+</section>
+<section id="categorias">
+<h2>Categorias<a class="headerlink" href="#categorias" title="Link to this heading">¶</a></h2>
+<p>O campo <code class="docutils literal notranslate"><span class="pre">categoria</span></code> (<code class="docutils literal notranslate"><span class="pre">&quot;PAP&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;PAEE&quot;</span></code> ou <code class="docutils literal notranslate"><span class="pre">&quot;OUTROS&quot;</span></code>) aparece em quatro modelos
+(<code class="docutils literal notranslate"><span class="pre">TipoPrograma</span></code>, <code class="docutils literal notranslate"><span class="pre">ComponenteCurricularPrograma</span></code>, <code class="docutils literal notranslate"><span class="pre">TurmaPrograma</span></code>,
+<code class="docutils literal notranslate"><span class="pre">MatriculaTurmaPrograma</span></code> / <code class="docutils literal notranslate"><span class="pre">MatriculaTurmaProgramaHistorico</span></code>) e é desnormalizado
+para permitir filtros diretos sem JOIN.</p>
+<p>A derivação de categoria difere por modelo:</p>
+<ul class="simple">
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">TipoPrograma</span></code></strong>: via <code class="docutils literal notranslate"><span class="pre">TipoProgramaEOL.categoria_por_sigla(sigla,</span> <span class="pre">descricao)</span></code>
+(varre as strings em busca de <code class="docutils literal notranslate"><span class="pre">&quot;PAEE&quot;</span></code>/<code class="docutils literal notranslate"><span class="pre">&quot;SRM&quot;</span></code> ou <code class="docutils literal notranslate"><span class="pre">&quot;PAP&quot;</span></code>).</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">ComponenteCurricularPrograma</span></code></strong> e matrículas: via
+<code class="docutils literal notranslate"><span class="pre">ComponenteCurricularEOL.categoria(cd_componente_curricular)</span></code>.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">TurmaPrograma</span></code></strong>: resolvida diretamente na SQL (<code class="docutils literal notranslate"><span class="pre">CASE</span> <span class="pre">WHEN</span></code>) cruzando os
+componentes curriculares vinculados à turma (PAEE se existir o componente
+<code class="docutils literal notranslate"><span class="pre">PAEE_SALA_RECURSOS_MULTIFUNCIONAIS</span></code>; senão PAP se houver algum componente
+PAP conhecido; caso contrário <code class="docutils literal notranslate"><span class="pre">OUTROS</span></code>).</p></li>
+</ul>
+</section>
+<section id="referencias-cruzadas">
+<h2>Referências cruzadas<a class="headerlink" href="#referencias-cruzadas" title="Link to this heading">¶</a></h2>
+<p>Nenhum modelo usa <code class="docutils literal notranslate"><span class="pre">ForeignKey</span></code> física. Todas as referências a outros bancos
+são FK lógicas, com integridade garantida pela ordem de carga do ETL.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Campo</p></th>
+<th class="head"><p>Destino lógico</p></th>
+<th class="head"><p>Banco</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">codigo_turma</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">turma_programa.codigo_turma</span></code></p></td>
+<td><p>mesmo banco</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">codigo_componente_curricular</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">componente_curricular_programa</span></code></p></td>
+<td><p>mesmo banco</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">codigo_aluno</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">aluno.codigo_aluno</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">PEDAGOGICO_DB</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">codigo_ue</span></code> / <code class="docutils literal notranslate"><span class="pre">codigo_dre</span></code></p></td>
+<td><p>escola / unidade administrativa</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">PEDAGOGICO_DB</span></code></p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="componentes-do-dominio">
+<h2>Componentes do domínio<a class="headerlink" href="#componentes-do-dominio" title="Link to this heading">¶</a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Módulo</p></th>
+<th class="head"><p>Responsabilidade</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">apps/programas/models.py</span></code></p></td>
+<td><p>8 modelos persistidos no <code class="docutils literal notranslate"><span class="pre">programas_db</span></code> (5 concretos + 1 abstrato base + 2 pré-agregados)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">apps/programas/enums.py</span></code></p></td>
+<td><p>Enums centralizando constantes do EOL — <code class="docutils literal notranslate"><span class="pre">CategoriaPrograma</span></code>, <code class="docutils literal notranslate"><span class="pre">TipoProgramaEOL</span></code>, <code class="docutils literal notranslate"><span class="pre">ComponenteCurricularEOL</span></code>, <code class="docutils literal notranslate"><span class="pre">SituacaoTurma</span></code>, <code class="docutils literal notranslate"><span class="pre">SituacaoMatricula</span></code>. Ver <a class="reference internal" href="enums.html"><span class="doc">Enums do Domínio Programas</span></a></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">apps/programas/dtos/model_in.py</span></code></p></td>
+<td><p>Dataclasses (<code class="docutils literal notranslate"><span class="pre">&#64;dataclass(slots=True)</span></code>) que mapeiam posicionalmente as tuplas brutas do cursor e expõem <code class="docutils literal notranslate"><span class="pre">to_domain()</span></code> — centraliza strip, conversão de tipos e derivação de categoria/descricao via enums</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">apps/programas/services.py</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">EtlProgramasService</span></code> — herda de <code class="docutils literal notranslate"><span class="pre">BaseEtlService</span></code> e define 8 fases via <code class="docutils literal notranslate"><span class="pre">PhaseConfig</span></code> com <code class="docutils literal notranslate"><span class="pre">modo_escrita=&quot;upsert&quot;</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">apps/programas/orquestrador.py</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">EtlProgramasOrquestrador</span></code> — herda de <code class="docutils literal notranslate"><span class="pre">GenericEtlOrquestrador</span></code> (Celery, async)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">apps/programas/management/commands/etl_programas.py</span></code></p></td>
+<td><p>Comando Django herdando de <code class="docutils literal notranslate"><span class="pre">BaseEtlCommand</span></code> (síncrono ou Celery)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">apps/programas/api/views.py</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">HealthProgramasView</span></code> — health check do banco <code class="docutils literal notranslate"><span class="pre">programas_db</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">apps/programas/api/urls.py</span></code></p></td>
+<td><p>Rota <code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/api/v1/programas/health/</span></code></p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="health-check">
+<h2>Health check<a class="headerlink" href="#health-check" title="Link to this heading">¶</a></h2>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>curl<span class="w"> </span>http://localhost:8068/api/v1/programas/health/
+</pre></div>
+</div>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">200</span> <span class="pre">OK</span></code> com <code class="docutils literal notranslate"><span class="pre">{&quot;status&quot;:</span> <span class="pre">&quot;healthy&quot;}</span></code> — quando <code class="docutils literal notranslate"><span class="pre">URL_BANCO_PROGRAMAS</span></code> está setada e o banco responde</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">503</span> <span class="pre">Service</span> <span class="pre">Unavailable</span></code> com <code class="docutils literal notranslate"><span class="pre">{&quot;status&quot;:</span> <span class="pre">&quot;unhealthy&quot;}</span></code> — sem a variável ou com erro de conexão</p></li>
+</ul>
+</section>
+<section id="endpoints-cobertos">
+<h2>Endpoints cobertos<a class="headerlink" href="#endpoints-cobertos" title="Link to this heading">¶</a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Endpoint (Pedagogico-API)</p></th>
+<th class="head"><p>Modelo(s) principal(is)</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">turmas-pap/{anoLetivo}/ues/{codigoEscola}</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">TurmaPrograma</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">srm-paee/aluno/{codigoAluno}</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">MatriculaTurmaPrograma</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">paee/turma-srm-e-regular/aluno/{cod}</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">MatriculaTurmaPrograma</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">alunos-pap/{anoLetivo}</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">AlunoPapAnoLetivo</span></code> / <code class="docutils literal notranslate"><span class="pre">AlunoPapAnoLetivoHistorico</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">pap/ano-letivo/{anoLetivo}</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">AlunoPapAnoLetivo</span></code> / <code class="docutils literal notranslate"><span class="pre">AlunoPapAnoLetivoHistorico</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">{codigoAluno}/turmas-programa/{anoLetivo}/componentes-curriculares</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">TurmaProgramaComponenteCurricular</span></code></p></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../index.html">SME-INTEGRACAOEOL-MS-ETL</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Ir" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navegação</h3>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../../arquitetura/visao_geral.html">Visão Geral da Arquitetura</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../arquitetura/der.html">DER e Mapa de Dados</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../professores/index.html">Domínio Professores</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../institucional/index.html">Domínio Institucional</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">Domínio Programas</a><ul class="current">
+<li class="toctree-l2 current"><a class="reference internal" href="index.html#conteudo">Conteúdo</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../pedagogico/index.html">Domínio Pedagógico</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../auditoria/index.html">Auditoria e Controle de Execução</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../index.html">Documentation overview</a><ul>
+  <li><a href="index.html">Domínio Programas</a><ul>
+      <li>Previous: <a href="index.html" title="capítulo anterior">Domínio Programas</a></li>
+      <li>Next: <a href="mapeamento_etl.html" title="próximo capítulo">Mapeamento do ETL — Domínio Programas</a></li>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 8.2.3</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="../../_sources/dominios/programas/visao_geral.md.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

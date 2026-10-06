@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+
+<html lang="pt" data-content_root="../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Orquestração do ETL — Domínio Programas &#8212; SME-INTEGRACAOEOL-MS-ETL</title>
+    <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../../_static/alabaster.css?v=27fed22d" />
+    <link rel="stylesheet" type="text/css" href="../../_static/graphviz.css?v=4ae1632d" />
+    <script src="../../_static/documentation_options.js?v=c4403577"></script>
+    <script src="../../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/translations.js?v=beaedd51"></script>
+    <link rel="index" title="Índice" href="../../genindex.html" />
+    <link rel="search" title="Pesquisar" href="../../search.html" />
+    <link rel="next" title="Retomada de Execução — Domínio Programas" href="retomada.html" />
+    <link rel="prev" title="Comando etl_programas" href="comando.html" />
+   
+  <link rel="stylesheet" href="../../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="orquestracao-do-etl-dominio-programas">
+<h1>Orquestração do ETL — Domínio Programas<a class="headerlink" href="#orquestracao-do-etl-dominio-programas" title="Link to this heading">¶</a></h1>
+<section id="fluxo-geral">
+<h2>Fluxo geral<a class="headerlink" href="#fluxo-geral" title="Link to this heading">¶</a></h2>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>API (POST /executar/)
+    └── Task Celery (despachada via EtlProgramasOrquestrador)
+            └── management command etl_programas
+                    └── EtlProgramasService.executar()
+                            ├── Fase 1: tipo_programa
+                            ├── Fase 2: componente_curricular_programa
+                            ├── Fase 3: turma_programa
+                            ├── Fase 4: turma_programa_componente_curricular
+                            ├── Fase 5: matricula_turma_programa
+                            ├── Fase 6: matricula_turma_programa_historico
+                            ├── Fase 7: aluno_pap_ano_letivo
+                            └── Fase 8: aluno_pap_ano_letivo_historico
+</pre></div>
+</div>
+</section>
+<section id="etlprogramasservice">
+<h2>EtlProgramasService<a class="headerlink" href="#etlprogramasservice" title="Link to this heading">¶</a></h2>
+<p>Classe: <code class="docutils literal notranslate"><span class="pre">apps.programas.services.EtlProgramasService</span></code> — herda de
+<code class="docutils literal notranslate"><span class="pre">apps.core.libs.base_etl_service.BaseEtlService</span></code>.</p>
+<section id="construcao-e-injecao-de-dependencia">
+<h3>Construção e injeção de dependência<a class="headerlink" href="#construcao-e-injecao-de-dependencia" title="Link to this heading">¶</a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">EtlProgramasService</span><span class="p">(</span>
+    <span class="n">db_alias</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">id_execucao</span><span class="p">:</span> <span class="n">UUID</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">repositorio_auditoria</span><span class="p">:</span> <span class="n">Any</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">primeiro_run</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">eol</span><span class="p">:</span> <span class="n">EOLService</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p>A assinatura espelha <code class="docutils literal notranslate"><span class="pre">BaseEtlService</span></code> e adiciona <code class="docutils literal notranslate"><span class="pre">eol</span></code>. O service injeta um
+<code class="docutils literal notranslate"><span class="pre">EOLService</span></code> real por padrão — testes passam um mock.</p>
+<p>Exemplo:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Produção — via BaseEtlCommand._handle_sync</span>
+<span class="n">service</span> <span class="o">=</span> <span class="n">EtlProgramasService</span><span class="p">(</span>
+    <span class="n">db_alias</span><span class="o">=</span><span class="s2">"programas_db"</span><span class="p">,</span>
+    <span class="n">id_execucao</span><span class="o">=</span><span class="n">id_execucao</span><span class="p">,</span>
+    <span class="n">repositorio_auditoria</span><span class="o">=</span><span class="n">repositorio</span><span class="p">,</span>
+    <span class="n">primeiro_run</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="c1"># Testes</span>
+<span class="n">service</span> <span class="o">=</span> <span class="n">EtlProgramasService</span><span class="p">(</span><span class="n">db_alias</span><span class="o">=</span><span class="s2">"programas_db"</span><span class="p">,</span> <span class="n">eol</span><span class="o">=</span><span class="n">EOLServiceMock</span><span class="p">())</span>
+</pre></div>
+</div>
+</section>
+<section id="fases-init-fases">
+<h3>Fases (<code class="docutils literal notranslate"><span class="pre">_init_fases</span></code>)<a class="headerlink" href="#fases-init-fases" title="Link to this heading">¶</a></h3>
+<p>Retorna uma lista de <code class="docutils literal notranslate"><span class="pre">PhaseConfig</span></code> ordenada — cada entrada declara:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">nome</span></code>, <code class="docutils literal notranslate"><span class="pre">sql</span></code>, <code class="docutils literal notranslate"><span class="pre">table_name</span></code>, <code class="docutils literal notranslate"><span class="pre">source_table</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">model_class</span></code>, <code class="docutils literal notranslate"><span class="pre">dto_in</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">pk_field</span></code>, <code class="docutils literal notranslate"><span class="pre">unique_fields</span></code>, <code class="docutils literal notranslate"><span class="pre">update_fields</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">modo_escrita=&quot;upsert&quot;</span></code></p></li>
+</ul>
+<p>A execução por fase é tratada pelo <code class="docutils literal notranslate"><span class="pre">BaseEtlService.executar()</span></code> — ele
+itera as <code class="docutils literal notranslate"><span class="pre">PhaseConfig</span></code>, lê chunks via <code class="docutils literal notranslate"><span class="pre">_iter_chunks(sql)</span></code> (que internamente chama
+<code class="docutils literal notranslate"><span class="pre">self.eol.iter_query(sql)</span></code>), aplica <code class="docutils literal notranslate"><span class="pre">dto_in.to_domain()</span></code> e chama
+<code class="docutils literal notranslate"><span class="pre">_upsert_incremental</span></code> com a configuração da fase.</p>
+</section>
+<section id="chunks-da-origem">
+<h3>Chunks da origem<a class="headerlink" href="#chunks-da-origem" title="Link to this heading">¶</a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">_iter_chunks</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sql</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Iterator</span><span class="p">[</span><span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">]]:</span>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">eol</span><span class="o">.</span><span class="n">iter_query</span><span class="p">(</span><span class="n">sql</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>A leitura é feita em lotes pelo <code class="docutils literal notranslate"><span class="pre">EOLService</span></code> (cursor pyodbc).</p>
+</section>
+</section>
+<section id="etlprogramasorquestrador">
+<h2>EtlProgramasOrquestrador<a class="headerlink" href="#etlprogramasorquestrador" title="Link to this heading">¶</a></h2>
+<p>Classe: <code class="docutils literal notranslate"><span class="pre">apps.programas.orquestrador.EtlProgramasOrquestrador</span></code> — herda de
+<code class="docutils literal notranslate"><span class="pre">apps.core.libs.base_etl_orquestrador.GenericEtlOrquestrador</span></code>. É a forma assíncrona
+do pipeline:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">class</span><span class="w"> </span><span class="nc">EtlProgramasOrquestrador</span><span class="p">(</span><span class="n">GenericEtlOrquestrador</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="n">kwargs</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="s2">"dominio"</span><span class="p">,</span> <span class="s2">"programas"</span><span class="p">)</span>
+        <span class="n">kwargs</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="s2">"service_class"</span><span class="p">,</span> <span class="n">EtlProgramasService</span><span class="p">)</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>As tasks Celery genéricas reaproveitadas:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">processar_chunk_programas</span> <span class="o">=</span> <span class="n">processar_chunk</span>
+<span class="n">finalizar_fase_programas</span> <span class="o">=</span> <span class="n">finalizar_fase</span>
+</pre></div>
+</div>
+<p>São aliases de <code class="docutils literal notranslate"><span class="pre">apps.core.tasks.processar_chunk</span></code> e <code class="docutils literal notranslate"><span class="pre">apps.core.tasks.finalizar_fase</span></code>
+— expostos com nome de domínio para facilitar o roteamento via filas Celery por
+domínio.</p>
+</section>
+<section id="controle-incremental-por-hash">
+<h2>Controle incremental por hash<a class="headerlink" href="#controle-incremental-por-hash" title="Link to this heading">¶</a></h2>
+<p>Cada fase usa <code class="docutils literal notranslate"><span class="pre">_upsert_incremental</span></code>, que:</p>
+<ol class="arabic simple">
+<li><p>Calcula SHA-256 dos campos de conteúdo (<code class="docutils literal notranslate"><span class="pre">update_fields</span></code> sem o timestamp).</p></li>
+<li><p>Consulta <code class="docutils literal notranslate"><span class="pre">EtlAuditoriaLinha</span></code> (banco <code class="docutils literal notranslate"><span class="pre">default</span></code>) para obter hashes anteriores.</p></li>
+<li><p>Filtra apenas registros novos ou alterados.</p></li>
+<li><p>Executa <code class="docutils literal notranslate"><span class="pre">bulk_create(update_conflicts=True)</span></code> no <code class="docutils literal notranslate"><span class="pre">programas_db</span></code>.</p></li>
+<li><p>Atualiza <code class="docutils literal notranslate"><span class="pre">EtlAuditoriaLinha</span></code> com os novos hashes.</p></li>
+</ol>
+<p>Ver <a class="reference internal" href="hash.html"><span class="doc">Hash por Linha</span></a> para detalhes.</p>
+</section>
+<section id="registro-de-auditoria">
+<h2>Registro de auditoria<a class="headerlink" href="#registro-de-auditoria" title="Link to this heading">¶</a></h2>
+<p>O comando <code class="docutils literal notranslate"><span class="pre">etl_programas</span></code> (via <code class="docutils literal notranslate"><span class="pre">BaseEtlCommand</span></code>) registra:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">EtlExecucao</span></code> — início, fim, status e total de linhas alteradas.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">EtlExecucaoTabelaLeitura</span></code> — linhas lidas por tabela do EOL.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">EtlExecucaoTabelaEscrita</span></code> — linhas escritas por tabela destino,
+com <code class="docutils literal notranslate"><span class="pre">modo_escrita</span></code> definido por <code class="docutils literal notranslate"><span class="pre">Command.get_modo_escrita()</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">EtlCheckpoint</span></code> — fase atual para suporte a retomada.</p></li>
+</ul>
+</section>
+<section id="exemplo-de-execucao-via-api">
+<h2>Exemplo de execução via API<a class="headerlink" href="#exemplo-de-execucao-via-api" title="Link to this heading">¶</a></h2>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Execução imediata</span>
+curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:8068/api/v1/dominios/programas/executar/<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-H<span class="w"> </span><span class="s2">"X-API-Key: sua_chave"</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-H<span class="w"> </span><span class="s2">"Content-Type: application/json"</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-d<span class="w"> </span><span class="s1">'{}'</span>
+
+<span class="c1"># Agendada</span>
+curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:8068/api/v1/dominios/programas/executar/<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-H<span class="w"> </span><span class="s2">"X-API-Key: sua_chave"</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-H<span class="w"> </span><span class="s2">"Content-Type: application/json"</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-d<span class="w"> </span><span class="s1">'{"executar_em": "2026-06-09T02:00:00-03:00"}'</span>
+</pre></div>
+</div>
+</section>
+<section id="exemplo-de-execucao-direta-dev">
+<h2>Exemplo de execução direta (dev)<a class="headerlink" href="#exemplo-de-execucao-direta-dev" title="Link to this heading">¶</a></h2>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>docker<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>sme_sgp_ms_etl_web_debug<span class="w"> </span>python<span class="w"> </span>manage.py<span class="w"> </span>etl_programas
+docker<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>sme_sgp_ms_etl_web_debug<span class="w"> </span>python<span class="w"> </span>manage.py<span class="w"> </span>etl_programas<span class="w"> </span>--continuar
+</pre></div>
+</div>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../index.html">SME-INTEGRACAOEOL-MS-ETL</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Ir" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navegação</h3>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../../arquitetura/visao_geral.html">Visão Geral da Arquitetura</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../arquitetura/der.html">DER e Mapa de Dados</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../professores/index.html">Domínio Professores</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../institucional/index.html">Domínio Institucional</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">Domínio Programas</a><ul class="current">
+<li class="toctree-l2 current"><a class="reference internal" href="index.html#conteudo">Conteúdo</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../pedagogico/index.html">Domínio Pedagógico</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../auditoria/index.html">Auditoria e Controle de Execução</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../index.html">Documentation overview</a><ul>
+  <li><a href="index.html">Domínio Programas</a><ul>
+      <li>Previous: <a href="comando.html" title="capítulo anterior">Comando <code class="docutils literal notranslate"><span class="pre">etl_programas</span></code></a></li>
+      <li>Next: <a href="retomada.html" title="próximo capítulo">Retomada de Execução — Domínio Programas</a></li>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 8.2.3</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="../../_sources/dominios/programas/orquestracao.md.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

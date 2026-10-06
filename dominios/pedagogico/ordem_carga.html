@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+
+<html lang="pt" data-content_root="../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Ordem de Carga &#8212; SME-INTEGRACAOEOL-MS-ETL</title>
+    <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../../_static/alabaster.css?v=27fed22d" />
+    <link rel="stylesheet" type="text/css" href="../../_static/graphviz.css?v=4ae1632d" />
+    <script src="../../_static/documentation_options.js?v=c4403577"></script>
+    <script src="../../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/translations.js?v=beaedd51"></script>
+    <link rel="index" title="Índice" href="../../genindex.html" />
+    <link rel="search" title="Pesquisar" href="../../search.html" />
+    <link rel="next" title="Estratégia por Tabela" href="estrategia.html" />
+    <link rel="prev" title="Mapeamento do ETL Pedagógico" href="mapeamento_etl.html" />
+   
+  <link rel="stylesheet" href="../../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="ordem-de-carga">
+<h1>Ordem de Carga<a class="headerlink" href="#ordem-de-carga" title="Link to this heading">¶</a></h1>
+<p>A ordem abaixo é exatamente a que o método <code class="docutils literal notranslate"><span class="pre">executar</span></code> aplica em <code class="docutils literal notranslate"><span class="pre">EtlPedagogicoService</span></code>.</p>
+<section id="fase-1-sem-dependencias-internas">
+<h2>Fase 1 — sem dependências internas<a class="headerlink" href="#fase-1-sem-dependencias-internas" title="Link to this heading">¶</a></h2>
+<ol class="arabic simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">componente_curricular</span></code></p></li>
+</ol>
+</section>
+<section id="fase-2-sem-dependencias-internas">
+<h2>Fase 2 — sem dependências internas<a class="headerlink" href="#fase-2-sem-dependencias-internas" title="Link to this heading">¶</a></h2>
+<ol class="arabic simple" start="2">
+<li><p><code class="docutils literal notranslate"><span class="pre">componente_turma</span></code></p></li>
+</ol>
+</section>
+<section id="fase-3-sem-dependencias-internas">
+<h2>Fase 3 — sem dependências internas<a class="headerlink" href="#fase-3-sem-dependencias-internas" title="Link to this heading">¶</a></h2>
+<ol class="arabic simple" start="3">
+<li><p><code class="docutils literal notranslate"><span class="pre">atribuicao_componente</span></code></p></li>
+</ol>
+</section>
+<section id="fase-4-sem-dependencias-internas">
+<h2>Fase 4 — sem dependências internas<a class="headerlink" href="#fase-4-sem-dependencias-internas" title="Link to this heading">¶</a></h2>
+<ol class="arabic simple" start="4">
+<li><p><code class="docutils literal notranslate"><span class="pre">atribuicao_territorio_saber</span></code></p></li>
+</ol>
+</section>
+<section id="fases-5-a-9-api-eol-full-refresh">
+<h2>Fases 5 a 9 — API EOL (<code class="docutils literal notranslate"><span class="pre">full_refresh</span></code>)<a class="headerlink" href="#fases-5-a-9-api-eol-full-refresh" title="Link to this heading">¶</a></h2>
+<ol class="arabic simple" start="5">
+<li><p><code class="docutils literal notranslate"><span class="pre">componente_curricular_api_eol</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">componente_curricular_hierarquia</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">componente_curricular_pap</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">componente_curricular_planejamento_regencia</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">turma_itinerario_ensino_medio</span></code></p></li>
+</ol>
+</section>
+<section id="fase-10-api-eol-full-refresh">
+<h2>Fase 10 — API EOL (<code class="docutils literal notranslate"><span class="pre">full_refresh</span></code>)<a class="headerlink" href="#fase-10-api-eol-full-refresh" title="Link to this heading">¶</a></h2>
+<ol class="arabic simple" start="10">
+<li><p><code class="docutils literal notranslate"><span class="pre">agrupamento_atribuicao_territorio_saber</span></code></p></li>
+</ol>
+</section>
+<section id="fase-11-sem-dependencias-internas">
+<h2>Fase 11 — sem dependências internas<a class="headerlink" href="#fase-11-sem-dependencias-internas" title="Link to this heading">¶</a></h2>
+<ol class="arabic simple" start="11">
+<li><p><code class="docutils literal notranslate"><span class="pre">grade_componente_curricular</span></code></p></li>
+</ol>
+</section>
+<section id="fase-12-sem-dependencias-internas">
+<h2>Fase 12 — sem dependências internas<a class="headerlink" href="#fase-12-sem-dependencias-internas" title="Link to this heading">¶</a></h2>
+<ol class="arabic simple" start="12">
+<li><p><code class="docutils literal notranslate"><span class="pre">turma</span></code></p></li>
+</ol>
+</section>
+<section id="fase-13-sem-dependencias-internas">
+<h2>Fase 13 — sem dependências internas<a class="headerlink" href="#fase-13-sem-dependencias-internas" title="Link to this heading">¶</a></h2>
+<ol class="arabic simple" start="13">
+<li><p><code class="docutils literal notranslate"><span class="pre">turma_atribuida_dre_ue</span></code></p></li>
+</ol>
+</section>
+<section id="fases-14-e-15-catalogos-do-eol-full-refresh">
+<h2>Fases 14 e 15 — catálogos do EOL (<code class="docutils literal notranslate"><span class="pre">full_refresh</span></code>)<a class="headerlink" href="#fases-14-e-15-catalogos-do-eol-full-refresh" title="Link to this heading">¶</a></h2>
+<ol class="arabic simple" start="14">
+<li><p><code class="docutils literal notranslate"><span class="pre">etapa_ensino</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">ciclo_ensino</span></code></p></li>
+</ol>
+<hr class="docutils" />
+<blockquote>
+<div><p><strong>Nota:</strong> as fases 2 a 15 são independentes entre si no banco de destino. A ordem é mantida por conveniência operacional e por compatibilidade com a auditoria por fase.
+A fase <code class="docutils literal notranslate"><span class="pre">agrupamento_territorio_saber_gerado</span></code> é backup selecionável e não faz parte da execução padrão.</p>
+</div></blockquote>
+</section>
+<section id="diagrama">
+<h2>Diagrama<a class="headerlink" href="#diagrama" title="Link to this heading">¶</a></h2>
+digraph G {
+    rankdir=LR;
+    node [shape=box, style=&quot;rounded&quot;];
+
+    F1 [label=&quot;Fase 1\ncomponente_curricular&quot;];
+    F2 [label=&quot;Fase 2\ncomponente_turma&quot;];
+    F3 [label=&quot;Fase 3\natribuicao_componente&quot;];
+    F4 [label=&quot;Fase 4\natribuicao_territorio_saber&quot;];
+    F5 [label=&quot;Fases 5-9\napoio API EOL&quot;];
+    F10 [label=&quot;Fase 10\nagrupamentos TS\nAPI EOL&quot;];
+    F11 [label=&quot;Fase 11\ngrade_componente_curricular&quot;];
+    F12 [label=&quot;Fase 12\nturma&quot;];
+    F13 [label=&quot;Fase 13\nturma_atribuida_dre_ue&quot;];
+    F14 [label=&quot;Fase 14\netapa_ensino&quot;];
+    F15 [label=&quot;Fase 15\nciclo_ensino&quot;];
+
+    F1 -&gt; F2 -&gt; F3 -&gt; F4 -&gt; F5 -&gt; F10 -&gt; F11 -&gt; F12 -&gt; F13 -&gt; F14 -&gt; F15;
+}</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../index.html">SME-INTEGRACAOEOL-MS-ETL</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Ir" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navegação</h3>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../../arquitetura/visao_geral.html">Visão Geral da Arquitetura</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../arquitetura/der.html">DER e Mapa de Dados</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../professores/index.html">Domínio Professores</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../institucional/index.html">Domínio Institucional</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../programas/index.html">Domínio Programas</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">Domínio Pedagógico</a><ul class="current">
+<li class="toctree-l2 current"><a class="reference internal" href="index.html#conteudo">Conteúdo</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../auditoria/index.html">Auditoria e Controle de Execução</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../index.html">Documentation overview</a><ul>
+  <li><a href="index.html">Domínio Pedagógico</a><ul>
+      <li>Previous: <a href="mapeamento_etl.html" title="capítulo anterior">Mapeamento do ETL Pedagógico</a></li>
+      <li>Next: <a href="estrategia.html" title="próximo capítulo">Estratégia por Tabela</a></li>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 8.2.3</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="../../_sources/dominios/pedagogico/ordem_carga.md.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

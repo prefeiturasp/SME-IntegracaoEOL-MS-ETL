@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+
+<html lang="pt" data-content_root="../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Repositório de Auditoria &#8212; SME-INTEGRACAOEOL-MS-ETL</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=27fed22d" />
+    <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=4ae1632d" />
+    <script src="../_static/documentation_options.js?v=c4403577"></script>
+    <script src="../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/translations.js?v=beaedd51"></script>
+    <link rel="index" title="Índice" href="../genindex.html" />
+    <link rel="search" title="Pesquisar" href="../search.html" />
+    <link rel="next" title="API de Auditoria" href="api.html" />
+    <link rel="prev" title="Modelos de Auditoria" href="modelos.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="repositorio-de-auditoria">
+<h1>Repositório de Auditoria<a class="headerlink" href="#repositorio-de-auditoria" title="Link to this heading">¶</a></h1>
+<p>Classe: <code class="docutils literal notranslate"><span class="pre">RepositorioAuditoriaPostgres</span></code>
+Arquivo: <code class="docutils literal notranslate"><span class="pre">apps/controle_auditoria/libs/repositorio_auditoria.py</span></code></p>
+<p>Todas as operações usam o banco <code class="docutils literal notranslate"><span class="pre">default</span></code> via ORM Django.</p>
+<hr class="docutils" />
+<section id="metodos">
+<h2>Métodos<a class="headerlink" href="#metodos" title="Link to this heading">¶</a></h2>
+<section id="iniciar-execucao-dominio-str-uuid">
+<h3><code class="docutils literal notranslate"><span class="pre">iniciar_execucao(dominio:</span> <span class="pre">str)</span> <span class="pre">→</span> <span class="pre">UUID</span></code><a class="headerlink" href="#iniciar-execucao-dominio-str-uuid" title="Link to this heading">¶</a></h3>
+<p>Cria um registro <code class="docutils literal notranslate"><span class="pre">EtlExecucao</span></code> com <code class="docutils literal notranslate"><span class="pre">situacao=&quot;em_execucao&quot;</span></code> e <code class="docutils literal notranslate"><span class="pre">iniciado_em=now()</span></code>.
+Retorna o <code class="docutils literal notranslate"><span class="pre">id_execucao</span></code> (UUID v4) gerado.</p>
+</section>
+<hr class="docutils" />
+<section id="finalizar-execucao-id-execucao-situacao-mensagem-erro-none-none">
+<h3><code class="docutils literal notranslate"><span class="pre">finalizar_execucao(id_execucao,</span> <span class="pre">situacao,</span> <span class="pre">mensagem_erro=None)</span> <span class="pre">→</span> <span class="pre">None</span></code><a class="headerlink" href="#finalizar-execucao-id-execucao-situacao-mensagem-erro-none-none" title="Link to this heading">¶</a></h3>
+<p>Atualiza <code class="docutils literal notranslate"><span class="pre">EtlExecucao</span></code> com <code class="docutils literal notranslate"><span class="pre">situacao</span></code>, <code class="docutils literal notranslate"><span class="pre">finalizado_em=now()</span></code> e <code class="docutils literal notranslate"><span class="pre">mensagem_erro</span></code>.</p>
+<p>Situações possíveis: <code class="docutils literal notranslate"><span class="pre">&quot;concluido&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;erro&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;cancelado&quot;</span></code>.</p>
+</section>
+<hr class="docutils" />
+<section id="registrar-tabela-lida-id-execucao-tabela-origem-numero-pagina-linhas-lidas-none">
+<h3><code class="docutils literal notranslate"><span class="pre">registrar_tabela_lida(id_execucao,</span> <span class="pre">tabela_origem,</span> <span class="pre">numero_pagina,</span> <span class="pre">linhas_lidas)</span> <span class="pre">→</span> <span class="pre">None</span></code><a class="headerlink" href="#registrar-tabela-lida-id-execucao-tabela-origem-numero-pagina-linhas-lidas-none" title="Link to this heading">¶</a></h3>
+<p>Cria <code class="docutils literal notranslate"><span class="pre">EtlExecucaoTabelaLida</span></code>. Chamado pelo comando <code class="docutils literal notranslate"><span class="pre">etl_professores</span></code> após cada tabela
+do resultado do serviço.</p>
+</section>
+<hr class="docutils" />
+<section id="registrar-tabela-escrita-id-execucao-tabela-destino-linhas-escritas-modo-escrita-upsert-none">
+<h3><code class="docutils literal notranslate"><span class="pre">registrar_tabela_escrita(id_execucao,</span> <span class="pre">tabela_destino,</span> <span class="pre">linhas_escritas,</span> <span class="pre">modo_escrita=&quot;upsert&quot;)</span> <span class="pre">→</span> <span class="pre">None</span></code><a class="headerlink" href="#registrar-tabela-escrita-id-execucao-tabela-destino-linhas-escritas-modo-escrita-upsert-none" title="Link to this heading">¶</a></h3>
+<p>Cria <code class="docutils literal notranslate"><span class="pre">EtlExecucaoTabelaEscrita</span></code>. O campo <code class="docutils literal notranslate"><span class="pre">modo_escrita</span></code> recebe <code class="docutils literal notranslate"><span class="pre">&quot;upsert&quot;</span></code> ou <code class="docutils literal notranslate"><span class="pre">&quot;full_refresh&quot;</span></code>
+conforme a constante <code class="docutils literal notranslate"><span class="pre">_TABELAS_UPSERT</span></code> do comando <code class="docutils literal notranslate"><span class="pre">etl_professores</span></code>.</p>
+</section>
+<hr class="docutils" />
+<section id="obter-checkpoint-dominio-dominio-str-dict-none">
+<h3><code class="docutils literal notranslate"><span class="pre">obter_checkpoint_dominio(dominio:</span> <span class="pre">str)</span> <span class="pre">→</span> <span class="pre">dict</span> <span class="pre">|</span> <span class="pre">None</span></code><a class="headerlink" href="#obter-checkpoint-dominio-dominio-str-dict-none" title="Link to this heading">¶</a></h3>
+<p>Retorna o registro <code class="docutils literal notranslate"><span class="pre">EtlCheckpointDominio</span></code> do domínio como dicionário com os campos:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">dominio</span><span class="p">,</span> <span class="n">ultimo_id_execucao</span><span class="p">,</span> <span class="n">ultima_pagina</span><span class="p">,</span> <span class="n">token_parada</span><span class="p">,</span>
+<span class="n">indice_sincronizacao</span><span class="p">,</span> <span class="n">ultima_situacao</span><span class="p">,</span> <span class="n">ultimo_sucesso_em</span><span class="p">,</span> <span class="n">atualizado_em</span>
+</pre></div>
+</div>
+<p>Retorna <code class="docutils literal notranslate"><span class="pre">None</span></code> se o domínio ainda não tiver checkpoint.</p>
+</section>
+<hr class="docutils" />
+<section id="atualizar-checkpoint-dominio-none">
+<h3><code class="docutils literal notranslate"><span class="pre">atualizar_checkpoint_dominio(...)</span> <span class="pre">→</span> <span class="pre">None</span></code><a class="headerlink" href="#atualizar-checkpoint-dominio-none" title="Link to this heading">¶</a></h3>
+<p>Executa upsert transacional (<code class="docutils literal notranslate"><span class="pre">select_for_update</span></code> + <code class="docutils literal notranslate"><span class="pre">get_or_create</span></code>) no
+<code class="docutils literal notranslate"><span class="pre">EtlCheckpointDominio</span></code>.</p>
+<p><strong>Parâmetros:</strong></p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Nome</p></th>
+<th class="head"><p>Tipo</p></th>
+<th class="head"><p>Descrição</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">dominio</span></code></p></td>
+<td><p>str</p></td>
+<td><p>Chave única do checkpoint</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">ultimo_id_execucao</span></code></p></td>
+<td><p>UUID</p></td>
+<td><p>UUID da execução recém-concluída</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">ultima_pagina</span></code></p></td>
+<td><p>int</p></td>
+<td><p>Número da última fase concluída</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">token_parada</span></code></p></td>
+<td><p>str | None</p></td>
+<td><p>Total acumulado de linhas alteradas (como string)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">indice_sincronizacao</span></code></p></td>
+<td><p>str | None</p></td>
+<td><p>Reservado (sempre <code class="docutils literal notranslate"><span class="pre">None</span></code> para professores)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">ultima_situacao</span></code></p></td>
+<td><p>str</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">&quot;concluido&quot;</span></code> ou <code class="docutils literal notranslate"><span class="pre">&quot;erro&quot;</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">sucesso</span></code></p></td>
+<td><p>bool</p></td>
+<td><p>Se <code class="docutils literal notranslate"><span class="pre">True</span></code>, atualiza <code class="docutils literal notranslate"><span class="pre">ultimo_sucesso_em</span> <span class="pre">=</span> <span class="pre">now()</span></code></p></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+<hr class="docutils" />
+<section id="papel-no-dominio-professores">
+<h2>Papel no domínio professores<a class="headerlink" href="#papel-no-dominio-professores" title="Link to this heading">¶</a></h2>
+<p>O comando <code class="docutils literal notranslate"><span class="pre">etl_professores</span></code> usa este repositório para:</p>
+<ol class="arabic simple">
+<li><p>Gerar <code class="docutils literal notranslate"><span class="pre">id_execucao</span></code> antes de executar o serviço.</p></li>
+<li><p>Registrar logs de leitura e escrita por tabela após a execução.</p></li>
+<li><p>Atualizar o checkpoint com a fase atingida e o novo <code class="docutils literal notranslate"><span class="pre">token_parada</span></code>.</p></li>
+<li><p>Em caso de erro: persistir o checkpoint antes de propagar a exceção,
+permitindo retomada precisa na próxima tentativa.</p></li>
+</ol>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../index.html">SME-INTEGRACAOEOL-MS-ETL</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Ir" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navegação</h3>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../arquitetura/visao_geral.html">Visão Geral da Arquitetura</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../arquitetura/der.html">DER e Mapa de Dados</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../dominios/professores/index.html">Domínio Professores</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../dominios/institucional/index.html">Domínio Institucional</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../dominios/programas/index.html">Domínio Programas</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../dominios/pedagogico/index.html">Domínio Pedagógico</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">Auditoria e Controle de Execução</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="modelos.html">Modelos de Auditoria</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Repositório de Auditoria</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api.html">API de Auditoria</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tasks.html">Tasks Celery</a></li>
+<li class="toctree-l2"><a class="reference internal" href="comandos.html">Comandos de Controle/Auditoria</a></li>
+<li class="toctree-l2"><a class="reference internal" href="manutencao.html">Manutenção da tabela de auditoria de linhas</a></li>
+</ul>
+</li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+  <li><a href="index.html">Auditoria e Controle de Execução</a><ul>
+      <li>Previous: <a href="modelos.html" title="capítulo anterior">Modelos de Auditoria</a></li>
+      <li>Next: <a href="api.html" title="próximo capítulo">API de Auditoria</a></li>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 8.2.3</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="../_sources/auditoria/repositorio.md.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

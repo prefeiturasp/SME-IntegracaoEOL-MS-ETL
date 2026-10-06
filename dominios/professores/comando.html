@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+
+<html lang="pt" data-content_root="../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Comando etl_professores &#8212; SME-INTEGRACAOEOL-MS-ETL</title>
+    <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../../_static/alabaster.css?v=27fed22d" />
+    <link rel="stylesheet" type="text/css" href="../../_static/graphviz.css?v=4ae1632d" />
+    <script src="../../_static/documentation_options.js?v=c4403577"></script>
+    <script src="../../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/translations.js?v=beaedd51"></script>
+    <link rel="index" title="Índice" href="../../genindex.html" />
+    <link rel="search" title="Pesquisar" href="../../search.html" />
+    <link rel="next" title="Orquestração Atual do Projeto" href="orquestracao.html" />
+    <link rel="prev" title="Modelos do App professores" href="modelos.html" />
+   
+  <link rel="stylesheet" href="../../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="comando-etl-professores">
+<h1>Comando <code class="docutils literal notranslate"><span class="pre">etl_professores</span></code><a class="headerlink" href="#comando-etl-professores" title="Link to this heading">¶</a></h1>
+<p>Arquivo: <code class="docutils literal notranslate"><span class="pre">apps/professores/management/commands/etl_professores.py</span></code></p>
+<section id="argumentos-suportados">
+<h2>Argumentos suportados<a class="headerlink" href="#argumentos-suportados" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">--continuar</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--anos-letivos</span> <span class="pre">ANO</span> <span class="pre">[ANO</span> <span class="pre">...]</span></code> — processa apenas os anos letivos informados
+nas fases com recorte anual. Sem o argumento, faz carga completa.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--skip-audit-hash</span></code> (alias <code class="docutils literal notranslate"><span class="pre">--skip-salvar-dados-auditoria</span></code>) — pula a gravação dos
+hashes de auditoria por linha. Útil em recargas amplas em que a auditoria por
+linha não é necessária.</p></li>
+</ul>
+</section>
+<section id="comportamento-real">
+<h2>Comportamento real<a class="headerlink" href="#comportamento-real" title="Link to this heading">¶</a></h2>
+<ol class="arabic simple">
+<li><p>lê checkpoint se <code class="docutils literal notranslate"><span class="pre">--continuar</span></code></p></li>
+<li><p>decide <code class="docutils literal notranslate"><span class="pre">fase_inicial</span></code></p></li>
+<li><p>cria <code class="docutils literal notranslate"><span class="pre">id_execucao</span></code> via <code class="docutils literal notranslate"><span class="pre">RepositorioAuditoriaPostgres.iniciar_execucao</span></code></p></li>
+<li><p>executa <code class="docutils literal notranslate"><span class="pre">EtlProfessoresService.executar</span></code></p></li>
+<li><p>registra tabelas lidas e escritas</p></li>
+<li><p>soma <code class="docutils literal notranslate"><span class="pre">total_alterado</span></code></p></li>
+<li><p>atualiza <code class="docutils literal notranslate"><span class="pre">token_parada</span></code></p></li>
+<li><p>atualiza checkpoint como <code class="docutils literal notranslate"><span class="pre">concluido</span></code></p></li>
+<li><p>em erro, salva checkpoint com <code class="docutils literal notranslate"><span class="pre">ultima_situacao=&quot;erro&quot;</span></code> e repropaga exceção</p></li>
+</ol>
+</section>
+<section id="estrategia-de-log">
+<h2>Estratégia de log<a class="headerlink" href="#estrategia-de-log" title="Link to this heading">¶</a></h2>
+<p>As tabelas em <code class="docutils literal notranslate"><span class="pre">_TABELAS_UPSERT</span></code> recebem <code class="docutils literal notranslate"><span class="pre">modo_escrita=&quot;upsert&quot;</span></code>; as demais, <code class="docutils literal notranslate"><span class="pre">full_refresh</span></code>.</p>
+</section>
+<section id="exemplo">
+<h2>Exemplo<a class="headerlink" href="#exemplo" title="Link to this heading">¶</a></h2>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>manage.py<span class="w"> </span>etl_professores
+python<span class="w"> </span>manage.py<span class="w"> </span>etl_professores<span class="w"> </span>--continuar
+python<span class="w"> </span>manage.py<span class="w"> </span>etl_professores<span class="w"> </span>--anos-letivos<span class="w"> </span><span class="m">2025</span><span class="w"> </span><span class="m">2026</span>
+</pre></div>
+</div>
+</section>
+<section id="funcionariounidadeeducacional">
+<h2>FuncionarioUnidadeEducacional<a class="headerlink" href="#funcionariounidadeeducacional" title="Link to this heading">¶</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">funcionario_unidade_educacional</span></code> e carregada na fase final por
+<code class="docutils literal notranslate"><span class="pre">popular_funcionarios</span></code>, usa
+<code class="docutils literal notranslate"><span class="pre">upsert</span></code> incremental e registra leitura, escrita e checkpoint como as demais
+tabelas incrementais do dominio.</p>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../index.html">SME-INTEGRACAOEOL-MS-ETL</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Ir" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navegação</h3>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../../arquitetura/visao_geral.html">Visão Geral da Arquitetura</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../arquitetura/der.html">DER e Mapa de Dados</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">Domínio Professores</a><ul class="current">
+<li class="toctree-l2 current"><a class="reference internal" href="index.html#conteudo">Conteúdo</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../institucional/index.html">Domínio Institucional</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../programas/index.html">Domínio Programas</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../pedagogico/index.html">Domínio Pedagógico</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../auditoria/index.html">Auditoria e Controle de Execução</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../index.html">Documentation overview</a><ul>
+  <li><a href="index.html">Domínio Professores</a><ul>
+      <li>Previous: <a href="modelos.html" title="capítulo anterior">Modelos do App <code class="docutils literal notranslate"><span class="pre">professores</span></code></a></li>
+      <li>Next: <a href="orquestracao.html" title="próximo capítulo">Orquestração Atual do Projeto</a></li>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 8.2.3</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="../../_sources/dominios/professores/comando.md.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

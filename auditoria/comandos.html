@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+
+<html lang="pt" data-content_root="../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Comandos de Controle/Auditoria &#8212; SME-INTEGRACAOEOL-MS-ETL</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=27fed22d" />
+    <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=4ae1632d" />
+    <script src="../_static/documentation_options.js?v=c4403577"></script>
+    <script src="../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/translations.js?v=beaedd51"></script>
+    <link rel="index" title="Índice" href="../genindex.html" />
+    <link rel="search" title="Pesquisar" href="../search.html" />
+    <link rel="next" title="Manutenção da tabela de auditoria de linhas" href="manutencao.html" />
+    <link rel="prev" title="Tasks Celery" href="tasks.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="comandos-de-controle-auditoria">
+<h1>Comandos de Controle/Auditoria<a class="headerlink" href="#comandos-de-controle-auditoria" title="Link to this heading">¶</a></h1>
+<section id="executar-dominio">
+<h2><code class="docutils literal notranslate"><span class="pre">executar_dominio</span></code><a class="headerlink" href="#executar-dominio" title="Link to this heading">¶</a></h2>
+<p>Executa um domínio específico.</p>
+<p>Suporta:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">institucional</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">professores</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">alunos</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">pedagogico</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">programas</span></code></p></li>
+</ul>
+</section>
+<section id="executar-dominios">
+<h2><code class="docutils literal notranslate"><span class="pre">executar_dominios</span></code><a class="headerlink" href="#executar-dominios" title="Link to this heading">¶</a></h2>
+<p>Executa os domínios ativos definidos hoje no comando.</p>
+</section>
+<section id="executar-dominios-loop">
+<h2><code class="docutils literal notranslate"><span class="pre">executar_dominios_loop</span></code><a class="headerlink" href="#executar-dominios-loop" title="Link to this heading">¶</a></h2>
+<p>Presente no projeto para execução em loop.</p>
+</section>
+<section id="agendar-dominio">
+<h2><code class="docutils literal notranslate"><span class="pre">agendar_dominio</span></code><a class="headerlink" href="#agendar-dominio" title="Link to this heading">¶</a></h2>
+<p>Enfileira ou agenda uma execução na fila Celery.</p>
+<p>Parâmetros relevantes:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">--dominio</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--continuar</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">--executar-em</span></code></p></li>
+</ul>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../index.html">SME-INTEGRACAOEOL-MS-ETL</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Ir" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navegação</h3>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../arquitetura/visao_geral.html">Visão Geral da Arquitetura</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../arquitetura/der.html">DER e Mapa de Dados</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../dominios/professores/index.html">Domínio Professores</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../dominios/institucional/index.html">Domínio Institucional</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../dominios/programas/index.html">Domínio Programas</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../dominios/pedagogico/index.html">Domínio Pedagógico</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">Auditoria e Controle de Execução</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="modelos.html">Modelos de Auditoria</a></li>
+<li class="toctree-l2"><a class="reference internal" href="repositorio.html">Repositório de Auditoria</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api.html">API de Auditoria</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tasks.html">Tasks Celery</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Comandos de Controle/Auditoria</a></li>
+<li class="toctree-l2"><a class="reference internal" href="manutencao.html">Manutenção da tabela de auditoria de linhas</a></li>
+</ul>
+</li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+  <li><a href="index.html">Auditoria e Controle de Execução</a><ul>
+      <li>Previous: <a href="tasks.html" title="capítulo anterior">Tasks Celery</a></li>
+      <li>Next: <a href="manutencao.html" title="próximo capítulo">Manutenção da tabela de auditoria de linhas</a></li>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 8.2.3</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="../_sources/auditoria/comandos.md.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

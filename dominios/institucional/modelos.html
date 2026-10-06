@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+
+<html lang="pt" data-content_root="../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Glossário de Modelos do Domínio Institucional &#8212; SME-INTEGRACAOEOL-MS-ETL</title>
+    <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../../_static/alabaster.css?v=27fed22d" />
+    <link rel="stylesheet" type="text/css" href="../../_static/graphviz.css?v=4ae1632d" />
+    <script src="../../_static/documentation_options.js?v=c4403577"></script>
+    <script src="../../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/translations.js?v=beaedd51"></script>
+    <link rel="index" title="Índice" href="../../genindex.html" />
+    <link rel="search" title="Pesquisar" href="../../search.html" />
+    <link rel="next" title="Comando etl_institucional" href="comando.html" />
+    <link rel="prev" title="Hash por Linha" href="hash.html" />
+   
+  <link rel="stylesheet" href="../../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="glossario-de-modelos-do-dominio-institucional">
+<h1>Glossário de Modelos do Domínio Institucional<a class="headerlink" href="#glossario-de-modelos-do-dominio-institucional" title="Link to this heading">¶</a></h1>
+<p>Estes modelos residem em <code class="docutils literal notranslate"><span class="pre">apps/institucional/models.py</span></code> e são persistidos no banco de dados <code class="docutils literal notranslate"><span class="pre">institucional_db</span></code> (PostgreSQL).</p>
+<section id="dre-diretoria-regional-de-educacao">
+<h2>1. DRE (Diretoria Regional de Educação)<a class="headerlink" href="#dre-diretoria-regional-de-educacao" title="Link to this heading">¶</a></h2>
+<p>Diretorias Regionais de Educação da SME.</p>
+<ul class="simple">
+<li><p><strong>Tabela</strong>: <code class="docutils literal notranslate"><span class="pre">dre</span></code></p></li>
+<li><p><strong>PK</strong>: <code class="docutils literal notranslate"><span class="pre">codigo_dre</span></code> (CharField 20 - ex: «108900»)</p></li>
+<li><p><strong>Campos Principais</strong>: <code class="docutils literal notranslate"><span class="pre">nome</span></code>, <code class="docutils literal notranslate"><span class="pre">sigla</span></code>, <code class="docutils literal notranslate"><span class="pre">tipo_unidade_adm</span></code>.</p></li>
+</ul>
+</section>
+<section id="tipoescola">
+<h2>2. TipoEscola<a class="headerlink" href="#tipoescola" title="Link to this heading">¶</a></h2>
+<p>Classificação das unidades educacionais.</p>
+<ul class="simple">
+<li><p><strong>Tabela</strong>: <code class="docutils literal notranslate"><span class="pre">tipo_escola</span></code></p></li>
+<li><p><strong>PK</strong>: <code class="docutils literal notranslate"><span class="pre">codigo_tipo_escola</span></code> (Integer)</p></li>
+<li><p><strong>Campos Principais</strong>: <code class="docutils literal notranslate"><span class="pre">sigla</span></code> (ex: EMEF, CEI), <code class="docutils literal notranslate"><span class="pre">descricao</span></code>.</p></li>
+</ul>
+</section>
+<section id="subprefeitura">
+<h2>3. SubPrefeitura<a class="headerlink" href="#subprefeitura" title="Link to this heading">¶</a></h2>
+<p>Municípios onde a unidade educacional está localizada.</p>
+<ul class="simple">
+<li><p><strong>Tabela</strong>: <code class="docutils literal notranslate"><span class="pre">sub_prefeitura</span></code></p></li>
+<li><p><strong>PK</strong>: <code class="docutils literal notranslate"><span class="pre">codigo_sub_prefeitura</span></code> (Integer)</p></li>
+<li><p><strong>Campos Principais</strong>: <code class="docutils literal notranslate"><span class="pre">sg_sub_prefeitura</span></code>, <code class="docutils literal notranslate"><span class="pre">nome</span></code>.</p></li>
+</ul>
+</section>
+<section id="unidadeeducacional">
+<h2>4. UnidadeEducacional<a class="headerlink" href="#unidadeeducacional" title="Link to this heading">¶</a></h2>
+<p>A entidade principal do domínio, representando a escola.</p>
+<ul class="simple">
+<li><p><strong>Tabela</strong>: <code class="docutils literal notranslate"><span class="pre">unidade_educacional</span></code></p></li>
+<li><p><strong>PK</strong>: <code class="docutils literal notranslate"><span class="pre">codigo_ue</span></code> (CharField 20 - ex: «001089»)</p></li>
+<li><p><strong>RP</strong>: <code class="docutils literal notranslate"><span class="pre">codigo_ue_integracao</span></code> (UUID do SSO legado) — <em>Crucial para integração com sistemas legados (Core SSO).</em></p></li>
+<li><p><strong>Relacionamentos</strong>:</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">dre_id</span></code>: Vinculação administrativa.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tipo_escola_id</span></code>: Classificação da unidade.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">subprefeitura_id</span></code>: Localização municipal.</p></li>
+</ul>
+</li>
+<li><p><strong>Indicadores</strong>: Armazena capacidade de vagas (<code class="docutils literal notranslate"><span class="pre">vagas_matutino</span></code>, <code class="docutils literal notranslate"><span class="pre">vagas_total</span></code>) e contagem de funcionários da extração do EOL.</p></li>
+</ul>
+</section>
+<section id="dreabrangencia">
+<h2>5. DREAbrangencia<a class="headerlink" href="#dreabrangencia" title="Link to this heading">¶</a></h2>
+<p>Projeção das DREs que possuem oferta educacional válida para abrangência.</p>
+<ul class="simple">
+<li><p><strong>Tabela</strong>: <code class="docutils literal notranslate"><span class="pre">dre_abrangencia</span></code></p></li>
+<li><p><strong>PK</strong>: <code class="docutils literal notranslate"><span class="pre">codigo_dre</span></code> (CharField 20)</p></li>
+<li><p><strong>Campos Principais</strong>: <code class="docutils literal notranslate"><span class="pre">nome</span></code>, <code class="docutils literal notranslate"><span class="pre">abreviacao</span></code>, <code class="docutils literal notranslate"><span class="pre">ordem</span></code>.</p></li>
+</ul>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../index.html">SME-INTEGRACAOEOL-MS-ETL</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Ir" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navegação</h3>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../../arquitetura/visao_geral.html">Visão Geral da Arquitetura</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../arquitetura/der.html">DER e Mapa de Dados</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../professores/index.html">Domínio Professores</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">Domínio Institucional</a><ul class="current">
+<li class="toctree-l2 current"><a class="reference internal" href="index.html#conteudo">Conteúdo</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../programas/index.html">Domínio Programas</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../pedagogico/index.html">Domínio Pedagógico</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../auditoria/index.html">Auditoria e Controle de Execução</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../index.html">Documentation overview</a><ul>
+  <li><a href="index.html">Domínio Institucional</a><ul>
+      <li>Previous: <a href="hash.html" title="capítulo anterior">Hash por Linha</a></li>
+      <li>Next: <a href="comando.html" title="próximo capítulo">Comando <code class="docutils literal notranslate"><span class="pre">etl_institucional</span></code></a></li>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 8.2.3</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="../../_sources/dominios/institucional/modelos.md.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
