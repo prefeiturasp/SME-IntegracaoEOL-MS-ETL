@@ -1,6 +1,6 @@
 # SME-IntegracaoEOL-MS-ETL
 
-Documentação técnica completa baseada na **estrutura atual do código**, com foco em **domínio professores** e **controle/auditoria**.
+Documentação técnica completa baseada na **estrutura atual do código**, com foco nos domínios ETL, roteamento de bancos e controle/auditoria.
 
 ---
 
@@ -30,12 +30,21 @@ digraph G {
     EOL [label="EOL SQL Server"];
     APIEOL [label="API EOL PostgreSQL"];
     ETL [label="SME-IntegracaoEOL-MS-ETL"];
+    INST [label="institucional_db"];
     PROF [label="professores_db"];
+    ALU [label="alunos_db"];
+    PED [label="pedagogico_db"];
+    PROG [label="programas_db"];
     AUD [label="default / auditoria_db"];
+    ROUTER [label="DominioRouter"];
 
-    EOL -> ETL;
+    EOL -> ETL -> ROUTER;
     APIEOL -> ETL;
-    ETL -> PROF;
+    ROUTER -> INST;
+    ROUTER -> PROF;
+    ROUTER -> ALU;
+    ROUTER -> PED;
+    ROUTER -> PROG;
     ETL -> AUD;
 }
 ```
@@ -45,8 +54,8 @@ digraph G {
 ## O que o projeto implementa hoje
 
 - múltiplos bancos por domínio via `DominioRouter`
-- domínio `professores` em banco dedicado `professores_db`
-- controle de execução em `default`
+- domínios `institucional`, `professores`, `alunos`, `pedagogico` e `programas` em bancos dedicados
+- controle de execução, auditoria e conexões auxiliares em `default`
 - checkpoint por domínio
 - hash por linha para incremental
 - execução via comando Django
@@ -64,5 +73,6 @@ arquitetura/der
 dominios/professores/index
 dominios/institucional/index
 dominios/programas/index
+dominios/pedagogico/index
 auditoria/index
 ```

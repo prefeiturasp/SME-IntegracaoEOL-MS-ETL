@@ -38,7 +38,7 @@ ou descrição do tipo.
 | `PAEE_COLABORATIVO` | 657 | PAEE |
 | `PAEE_ITINERANTE` | 658 | PAEE |
 
-### Métodos
+### Métodos de categoria
 
 - `TipoProgramaEOL.categoria_por_sigla(sigla, descricao) → CategoriaPrograma` —
   resolve PAP/PAEE/OUTROS a partir do conteúdo de `sg_tipo_programa` e
@@ -69,7 +69,7 @@ ou descrição do tipo.
 | `PAP_LEGADO_PORTUGUES` | 1054 | PAP | ✗ |
 | `PAEE_SALA_RECURSOS_MULTIFUNCIONAIS` | 1030 | PAEE | ✓ |
 
-### Métodos
+### Métodos de componente curricular
 
 - `ComponenteCurricularEOL.categoria(codigo) → CategoriaPrograma` — retorna `PAEE`,
   `PAP` ou `OUTROS` para qualquer `cd_componente_curricular` (códigos

@@ -5,3 +5,5 @@ ruff>=0.6,<1
 mypy>=1.11,<2
 coverage>=7.6,<8
 pre-commit>=3.8,<4
+sphinx>=8.1,<9
+myst-parser>=4.0,<5
