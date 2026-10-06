@@ -146,7 +146,7 @@ kanban com uma visão viva da fase/chunk atual.
 O ETL grava no máximo uma linha por execução/fase e atualiza essa linha com
 throttle. O intervalo padrão é controlado por:
 
-```env
+```text
 ETL_PROGRESS_INTERVAL_SECONDS=15
 ```
 
