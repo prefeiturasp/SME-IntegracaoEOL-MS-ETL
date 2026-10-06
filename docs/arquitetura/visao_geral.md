@@ -35,11 +35,19 @@ digraph G {
     SRC [label="Origens"];
     ETL [label="Services + Commands"];
     ROUTER [label="DominioRouter"];
+    INST [label="institucional_db"];
     PROF [label="professores_db"];
+    ALU [label="alunos_db"];
+    PED [label="pedagogico_db"];
+    PROG [label="programas_db"];
     AUD [label="default"];
 
     SRC -> ETL -> ROUTER;
+    ROUTER -> INST;
     ROUTER -> PROF;
+    ROUTER -> ALU;
+    ROUTER -> PED;
+    ROUTER -> PROG;
     ETL -> AUD;
 }
 ```

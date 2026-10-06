@@ -6,8 +6,6 @@ Dicionário de termos, campos, regras de negócio e conceitos do legado EOL usad
 
 ## Conceitos de Negócio
 
----
-
 ### Componente Curricular
 
 O que é ensinado numa turma. Equivale ao que no dia a dia chamamos de "disciplina" — Língua Portuguesa, Matemática, Ciências, Arte, etc.
@@ -206,6 +204,8 @@ Modalidade (derivada)
 
 ---
 
+(modalidade-de-ensino)=
+
 ### Modalidade de Ensino
 
 Categoria que agrupa etapas de ensino para fins de filtragem nos endpoints. Não existe como campo direto na turma — é **derivada** da etapa de ensino via `CASE` nas queries.
@@ -308,8 +308,6 @@ Compõe a chave de agrupamento junto com `cd_territorio_saber`.
 ---
 
 ## Campos Técnicos
-
----
 
 ### `transferido_em`
 
