@@ -559,6 +559,14 @@ class ViewsApiControleAuditoriaTestCase(TestCase):
             iniciado_em=timezone.now() - timedelta(hours=2),
             parametros={"disparo": {"celery_task_id": task_id}},
         )
+        EtlProgressoExecucao.objects.create(
+            id_execucao=id_exec,
+            dominio="programas",
+            fase_numero=1,
+            total_fases=8,
+            fase_nome="tipo_programa",
+            etapa="processando_chunk",
+        )
 
         resposta = self.client.post(
             "/api/v1/execucoes/limpar-orfas/",
@@ -575,6 +583,53 @@ class ViewsApiControleAuditoriaTestCase(TestCase):
         )
         execucao = EtlExecucao.objects.get(id_execucao=id_exec)
         self.assertEqual(execucao.situacao, "em_execucao")
+
+    @patch("apps.controle_auditoria.api.views.aplicacao_celery")
+    def test_deve_interromper_task_viva_sem_heartbeat(
+        self, celery_mock: Any
+    ) -> None:
+        """Limpeza interrompe task viva sem progresso recente."""
+        task_id = "task-travada"
+        celery_mock.control.inspect.return_value.active.return_value = {
+            "worker@1": [{"id": task_id, "name": "etl.executar_dominio"}]
+        }
+        celery_mock.control.inspect.return_value.reserved.return_value = {}
+        celery_mock.control.inspect.return_value.scheduled.return_value = {}
+        id_exec = uuid4()
+        EtlExecucao.objects.create(
+            id_execucao=id_exec,
+            dominio="professores",
+            situacao="em_execucao",
+            iniciado_em=timezone.now() - timedelta(hours=3),
+            parametros={"disparo": {"celery_task_id": task_id}},
+        )
+        progresso = EtlProgressoExecucao.objects.create(
+            id_execucao=id_exec,
+            dominio="professores",
+            fase_numero=1,
+            total_fases=4,
+            fase_nome="professor",
+            etapa="processando_chunk",
+        )
+        EtlProgressoExecucao.objects.filter(pk=progresso.pk).update(
+            atualizado_em=timezone.now() - timedelta(hours=3)
+        )
+
+        resposta = self.client.post(
+            "/api/v1/execucoes/limpar-orfas/",
+            data={},
+            format="json",
+            **self.headers,
+        )
+
+        self.assertEqual(resposta.status_code, 200)
+        self.assertEqual(resposta.json()["total_interrompido"], 1)
+        self.assertEqual(
+            resposta.json()["itens"][0]["motivo"],
+            "task_celery_viva_sem_heartbeat",
+        )
+        execucao = EtlExecucao.objects.get(id_execucao=id_exec)
+        self.assertEqual(execucao.situacao, "interrompido")
 
     @patch("apps.controle_auditoria.api.views.aplicacao_celery")
     def test_nao_deve_limpar_orfas_sem_resposta_do_celery(

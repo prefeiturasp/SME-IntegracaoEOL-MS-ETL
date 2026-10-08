@@ -1,5 +1,7 @@
 """Views DRF para controle e auditoria de execuções ETL."""
 
+import os
+from datetime import timedelta
 from typing import Any
 from uuid import uuid4
 
@@ -51,6 +53,9 @@ _LIMITE_EXECUCOES_KANBAN = 100
 _LIMITE_RECOVERY = 25
 _MAX_TENTATIVAS_RECOVERY = 3
 _STATUS_EM_EXECUCAO = frozenset({"em_execucao", "em_andamento"})
+_MAX_SEM_HEARTBEAT_MINUTOS = int(
+    os.getenv("ETL_RECOVERY_MAX_SEM_HEARTBEAT_MINUTOS", "30")
+)
 
 
 def _descricao_execucao_dominio() -> str:
@@ -297,6 +302,13 @@ def _ultimo_heartbeat_execucao(execucao: EtlExecucao) -> Any:
     return progresso or execucao.iniciado_em
 
 
+def _heartbeat_expirado(heartbeat: Any, limite_minutos: int) -> bool:
+    """Indica se a execução está sem progresso além do limite permitido."""
+    if limite_minutos <= 0 or not heartbeat:
+        return False
+    return timezone.now() - heartbeat > timedelta(minutes=limite_minutos)
+
+
 def _novo_task_id() -> str:
     """Gera task_id rastreável antes de enfileirar no Celery."""
     return str(uuid4())
@@ -540,6 +552,12 @@ class LimparOrfasView(APIView):
                 situacao__in=_STATUS_EM_EXECUCAO
             ).order_by("iniciado_em")
         )
+        limite_sem_heartbeat = int(
+            request.data.get(
+                "max_sem_heartbeat_minutos",
+                _MAX_SEM_HEARTBEAT_MINUTOS,
+            )
+        )
         task_ids_vivos, celery_disponivel = _ids_tasks_celery_vivas()
         if not celery_disponivel:
             return Response(
@@ -558,27 +576,41 @@ class LimparOrfasView(APIView):
         itens = []
         for execucao in execucoes:
             task_id = _task_id_execucao(execucao)
-            if task_id and task_id in task_ids_vivos:
-                itens.append(
-                    {
-                        "dominio": execucao.dominio,
-                        "id_execucao": str(execucao.id_execucao),
-                        "heartbeat": None,
-                        "task_id": task_id,
-                        "status": "preservado",
-                        "motivo": "task_celery_viva",
-                    }
-                )
-                continue
-
             heartbeat = _ultimo_heartbeat_execucao(execucao)
-            motivo = "task_celery_ausente" if task_id else "sem_task_id"
+            if task_id and task_id in task_ids_vivos:
+                if _heartbeat_expirado(heartbeat, limite_sem_heartbeat):
+                    motivo = "task_celery_viva_sem_heartbeat"
+                else:
+                    itens.append(
+                        {
+                            "dominio": execucao.dominio,
+                            "id_execucao": str(execucao.id_execucao),
+                            "heartbeat": (
+                                heartbeat.isoformat() if heartbeat else None
+                            ),
+                            "task_id": task_id,
+                            "status": "preservado",
+                            "motivo": "task_celery_viva",
+                        }
+                    )
+                    continue
+            else:
+                motivo = "task_celery_ausente" if task_id else "sem_task_id"
+
             agora = timezone.now()
             execucao.situacao = "interrompido"
             execucao.finalizado_em = agora
+            detalhe_erro = (
+                "task Celery viva sem atualização de progresso dentro do "
+                "limite configurado."
+                if motivo == "task_celery_viva_sem_heartbeat"
+                else (
+                    "task Celery não encontrada em active, reserved ou "
+                    "scheduled."
+                )
+            )
             execucao.mensagem_erro = (
-                "Execução interrompida automaticamente: "
-                "task Celery não encontrada em active, reserved ou scheduled."
+                f"Execução interrompida automaticamente: {detalhe_erro}"
             )
             execucao.save(
                 update_fields=["situacao", "finalizado_em", "mensagem_erro"]
