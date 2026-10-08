@@ -7,7 +7,7 @@ sys.path.insert(0, os.path.abspath(".."))
 
 project = "SME-INTEGRACAOEOL-MS-ETL"
 author = "Equipe SME"
-release = "1.0.0"
+release = "1.0.2"
 
 language = "pt"
 

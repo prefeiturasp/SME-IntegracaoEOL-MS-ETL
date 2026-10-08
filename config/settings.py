@@ -251,7 +251,7 @@ REST_FRAMEWORK = {
 SPECTACULAR_SETTINGS = {
     "TITLE": "SME-IntegracaoEOL-MS-ETL API",
     "DESCRIPTION": "API de controle e auditoria do ETL",
-    "VERSION": "1.0.0",
+    "VERSION": "1.0.2",
     "SERVE_INCLUDE_SCHEMA": False,
     "APPEND_COMPONENTS": {
         "securitySchemes": {
