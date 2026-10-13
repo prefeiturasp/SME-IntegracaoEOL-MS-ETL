@@ -1,9 +1,7 @@
-"""Remove o índice parcial `idx_resp_aluno_prioritario` de responsavel_aluno.
+"""Remove o índice parcial de responsavel_aluno por aluno.
 
-`idx_resp_aluno_tipo_cod` (0030) tem as mesmas colunas, sem o predicado
-`data_fim_vinculo IS NULL`, e atende também as consultas que só buscam
-vínculos vigentes: o filtro é aplicado sobre as poucas linhas de cada aluno.
-Manter os dois dobra o custo de escrita e de espaço em ~6 milhões de linhas.
+O índice não parcial de mesmas colunas já atende também as consultas de
+vínculos vigentes, tornando o parcial redundante.
 """
 
 from django.contrib.postgres.operations import RemoveIndexConcurrently

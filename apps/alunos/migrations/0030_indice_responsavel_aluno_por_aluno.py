@@ -1,10 +1,7 @@
-"""Índice não parcial em responsavel_aluno com `codigo_aluno` na frente.
+"""Índice não parcial em responsavel_aluno por aluno.
 
-O índice parcial `idx_resp_aluno_prioritario` (WHERE data_fim_vinculo IS
-NULL) não é usado por consultas que filtram só por aluno, como a listagem
-de responsáveis do Alunos-MS: o planner cai em varredura por
-`idx_resp_cpf_fim_aluno` (~240 ms por chamada em tabela de ~6 milhões de
-linhas). Este índice atende a consulta com busca direta por aluno.
+O índice parcial (data_fim_vinculo IS NULL) não atende consultas que
+filtram apenas por aluno, pois estas incluem vínculos encerrados.
 """
 
 from django.contrib.postgres.operations import AddIndexConcurrently
