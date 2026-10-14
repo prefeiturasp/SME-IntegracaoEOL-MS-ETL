@@ -695,6 +695,10 @@ class AtribuicaoAula(models.Model):
         verbose_name_plural = "atribuições de aulas"
         indexes = [
             models.Index(fields=["codigo_unidade_educacao"], name="idx_aa_ue"),
+            models.Index(
+                fields=["codigo_unidade_educacao", "ano_atribuicao"],
+                name="idx_aa_ue_ano",
+            ),
             models.Index(fields=["codigo_turma_escola"], name="idx_aa_turma"),
             models.Index(
                 fields=["codigo_componente_curricular"],
