@@ -115,8 +115,7 @@ class ResponsavelAluno(models.Model):
             ),
             models.Index(
                 fields=["aluno", "tipo_responsavel", "codigo_responsavel"],
-                condition=models.Q(data_fim_vinculo__isnull=True),
-                name="idx_resp_aluno_prioritario",
+                name="idx_resp_aluno_tipo_cod",
             ),
         ]
 
