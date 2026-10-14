@@ -128,7 +128,6 @@ def reaplicar_indices(
         )
         ocupados = {row[0] for row in cursor.fetchall()}
 
-    # Confere todos os candidatos antes de executar qualquer DDL.
     for nome, coluna in _INDICES:
         if nome in indices:
             _validar_indice(nome, coluna, indices[nome])
