@@ -217,7 +217,10 @@ class Command(BaseCommand):
 
         try:
             srv = EtlProfessoresService()
-            resultado_etl = srv.executar(fase_inicial=1)
+            resultado_etl = srv.executar(
+                fase_inicial=1,
+                carga_amostral=True,
+            )
             total = sum(resultado_etl.values())
             self.stdout.write(
                 self.style.SUCCESS(

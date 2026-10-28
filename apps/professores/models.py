@@ -1,6 +1,7 @@
 """Modelos do app professores - banco destino PROFESSORES_DB."""
 
 import datetime
+from uuid import uuid4
 
 from django.db import models
 from django.db.models import Q
@@ -14,6 +15,20 @@ _HELP_TURMA = "ID da turma escolar — ref. domínio pedagógico."
 def _data_chave_padrao() -> datetime.datetime:
     """Retorna data sentinela para chaves sem data informada."""
     return datetime.datetime(1900, 1, 1, tzinfo=datetime.UTC)
+
+
+class ControleCargaProfessores(models.Model):
+    """Representa a geração de dados e as cargas ainda em andamento."""
+
+    id = models.PositiveSmallIntegerField(primary_key=True, default=1)
+    geracao = models.UUIDField(default=uuid4)
+    cargas_ativas = models.JSONField(default=list)
+    falha = models.BooleanField(default=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        app_label = "professores"
+        db_table = "controle_carga_professores"
 
 
 class Professor(models.Model):

@@ -357,7 +357,10 @@ class CompatProfessoresRodarEtlTest(TestCase):
 
         out = StringIO()
         call_command(_CMD, "--rodar-etl", stdout=out)
-        mock_etl.executar.assert_called_once_with(fase_inicial=1)
+        mock_etl.executar.assert_called_once_with(
+            fase_inicial=1,
+            carga_amostral=True,
+        )
 
     @patch(_PATCH_EXECUTOR)
     @patch(_PATCH_EOL)

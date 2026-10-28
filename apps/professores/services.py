@@ -14,6 +14,7 @@ from apps.core.libs.base_etl_service import PhaseConfig
 from apps.core.libs.thread_processor import ThreadPoolProcessor
 from apps.eol_connection.libs.servico_eol import EOLService
 from apps.institucional.libs.repositorio_core_sso import RepositorioCoreSSO
+from apps.professores.controle_cache import registrar_carga
 from apps.professores.dtos.model_in import (
     AtribuicaoAulaIn,
     AtribuicaoExternoIn,
@@ -1397,8 +1398,50 @@ class EtlProfessoresService:
         on_lote: Callable[..., None] | None = None,
         on_tabela_iniciada: Callable[[str], None] | None = None,
         on_tabela_concluida: Callable[[str, int], None] | None = None,
+        *,
+        carga_amostral: bool = False,
     ) -> dict[str, int]:
-        """Executa ETL_PROFESSORES a partir de ``fase_inicial``."""
+        """Sincroniza os dados do domínio de professores.
+
+        Args:
+            fase_inicial: Primeira fase considerada na execução.
+            pular_ate: Última tabela já concluída na retomada.
+            lote_inicial: Último lote já concluído na tabela retomada.
+            on_lote: Recebe o progresso dos lotes processados.
+            on_tabela_iniciada: Recebe o nome da tabela iniciada.
+            on_tabela_concluida: Recebe a tabela e a quantidade registrada.
+            carga_amostral: Indica processamento limitado das fontes.
+
+        Returns:
+            Quantidades registradas por tabela processada.
+        """
+        amostral = carga_amostral or int(os.getenv("EOL_LOTE_MAXIMO", "0")) > 0
+        completa = (
+            fase_inicial == 1
+            and not pular_ate
+            and not lote_inicial
+            and not self._anos_letivos
+            and not amostral
+        )
+        with registrar_carga(completa=completa, amostral=amostral):
+            return self._executar_carga(
+                fase_inicial,
+                pular_ate,
+                lote_inicial,
+                on_lote,
+                on_tabela_iniciada,
+                on_tabela_concluida,
+            )
+
+    def _executar_carga(
+        self,
+        fase_inicial: int,
+        pular_ate: str | None,
+        lote_inicial: int,
+        on_lote: Callable[..., None] | None,
+        on_tabela_iniciada: Callable[[str], None] | None,
+        on_tabela_concluida: Callable[[str, int], None] | None,
+    ) -> dict[str, int]:
         r: dict[str, int] = {}
 
         logger.info(
